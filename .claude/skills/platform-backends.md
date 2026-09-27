@@ -314,6 +314,15 @@ end;
 
 ---
 
+## Compiler Switches and `{$ifdef FPC}` (R-21)
+
+Every unit starts with `{$I mormot.defines.inc}` after `interface` (by name, no relative path).
+
+- **Enum size does not reach the C libraries.** `mormot.defines.inc` sets `{$MINENUMSIZE 1}` and `{$PACKSET 1}`, but the bindings in `mormot.pdf.freetype`, `mormot.pdf.harfbuzz` and `mormot.pdf.hbsubset` declare every C enum as `integer` and hold no set. Keep it that way in new bindings.
+- **The `{$ifdef FPC}` branches that remain are real differences.** The seven in `mormot.ui.pdf` all come from the original (`reference/`): LCL against VCL units, the compatibility types, and four Windows API calls FPC declares differently — `EnumPrinters` (pointers), `GdiComment` (`var`), `EnumEnhMetaFile` (`RECT`), `CreateFontIndirectW` on a `const` parameter (FPC's `var` overload cannot take it). No mORMot2 function wraps them. `mormot.pdf.gdi` needs no branch: a local `var` fits both. The branches in `mormot.ui.core` and `mormot.ui.gdiplus` come with the mORMot2 originals; the one around all of `mormot.ui.report` is R-20.
+
+---
+
 ## Adding a New Platform
 
 1. Create new unit `mormot.pdf.<platform>.pas`

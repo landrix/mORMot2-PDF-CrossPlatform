@@ -84,7 +84,7 @@ examples/
   (each demo folder carries a short README.md; the source header of its .lpr
    says the same thing in two sentences)
 tests/
-  test_runner.lpr              runs every suite below (green: 237 assertions on Windows with FPC, 127 with Delphi 7 — layer 1 suites only; 294 on macOS; 268 on Linux before R-21 — both +2 since the zero-real test — the rest are skips)
+  test_runner.lpr              runs every suite below (green: 237 assertions on Windows with FPC, 127 with Delphi 7 — layer 1 suites only; 276 on Linux; 296 on macOS — the rest are skips)
   test_defines.inc             PDF_HASVCLCANVAS: the TCanvas bridge suites (FPC until R-20)
   build_delphi7.bat            dcc32 build of one project (R-19); delphi7_core.dpr is the core compile guard
   test_pdf_crossplatform.pas   platform backend, text shaper, TTC extraction
@@ -309,14 +309,13 @@ display (`xvfb-run` otherwise); on macOS Cocoa runs it headless.
   besides. `layer1_demo`'s figure is deliberately a set of shapes, not a
   chart. A chart example only on request (ROADMAP "Charts")
 - **Links in tagged output**: no `Link` role, `OBJR` or `/StructParent` for annotations — `CreateHyperLink` in tagged output fails veraPDF `ua1` on four 7.18 rules (measured). `TGDIPages.DrawLink` draws link-styled text as a `Span` and drops the URL: conformant, not clickable (roadmap R-18, only on request)
-- **Delphi** (R-19 done, R-21, R-23, R-20): layer 1 — `mormot.pdf.types`,
+- **Delphi** (R-19, R-21 and R-23 done, R-20): layer 1 — `mormot.pdf.types`,
   `mormot.ui.pdf`, GDI backend, Uniscribe — builds on Delphi 7, Win32;
   `test_runner` green with 127 assertions (the layer 1 suites), and the tagged
   Unicode test file passes PAC 2024 and veraPDF `ua1` from both compilers. R-21 done on
-  Windows and macOS: `{$I mormot.defines.inc}` in every unit; the Linux
-  assertion count is to record. R-23:
-  `layer1_demo`, the first demo that builds on Delphi 7 — built and compared
-  on Windows, PAC/veraPDF and the other platforms open.
+  all three platforms: `{$I mormot.defines.inc}` in every unit. R-23:
+  `layer1_demo`, the first demo that builds on Delphi 7, passes PAC 2024 and
+  veraPDF `ua1` on all three platforms.
   R-20, priority 2: the TCanvas bridge — `TPdfVclCanvas` relies on
   `override`, but Delphi 7's `TCanvas` drawing methods are static, so a call
   through a `TCanvas` reference bypasses the bridge. Never put `mORMot2/src/ui`

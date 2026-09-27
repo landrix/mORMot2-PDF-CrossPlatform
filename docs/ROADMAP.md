@@ -3,21 +3,22 @@
 Open work only. Finished work is in the git history, and the technical knowledge
 it produced in `.claude/skills/` — this file repeats neither.
 
-**State on 2026-09-26.** The engine is cross-platform, writes PDF 1.7, and its
+**State on 2026-09-27.** The engine is cross-platform, writes PDF 1.7, and its
 tagged output passes PAC 2024 with accepted warnings only (W-1, a hint on
 every Figure; W-2, e-mail addresses without links in `zugferd_demo`) and veraPDF
 `ua1`. PDF/A-3U with PDF/UA-1 is verified (R-17). Fonts are embedded and subset
 on all three platforms; tables carry `THead`/`TBody`/`TFoot` row groups. All
 three platforms build with FPC; `test_runner` is green with 237 assertions on
-Windows (after the zero-real fix of R-23), 294 on macOS (after R-21), 268 on
-Linux (before R-21) — the last two +2 with that fix.
+Windows, 276 on Linux and 296 on macOS, all after R-21 and the zero-real fix
+of R-23.
 **Layer 1 builds on Delphi 7** (R-19, done): 127 assertions on Win32, and the
 tagged Unicode test file passes PAC 2024 and veraPDF `ua1` from Delphi 7/Win32
 and FPC/Win64 alike. The macOS run found a heap-dependent `.ttc` defect in the
 FreeType backend, fixed (`fonts.md` §3). The Linux re-run is done up to
 veraPDF on its files (V), and its post-R-21 files pass veraPDF. R-21 is done
-on Windows and macOS; on Linux only the assertion count is missing. **Next:**
-R-23, then R-20.
+on all three platforms. R-23 is
+done: `layer1_demo` builds with FPC on all three platforms and with Delphi 7,
+and passes PAC 2024 and veraPDF `ua1` everywhere. **Next:** R-20.
 
 ---
 
@@ -82,109 +83,6 @@ comparison is valid **within** one platform only — see V below.
 
 ## Open
 
-### R-21 — Compiler Switches From `mormot.defines.inc` — Linux count open
-
-**Done on Windows, 2026-09-26** (`6e503a9` … `4eaaff0`, one commit per unit):
-every unit in `src/` and the seven test units `test_runner` builds start with
-`{$I mormot.defines.inc}` after `interface`, by name, without `..\`;
-`build_delphi7.bat` has no include path trick left. `test_runner` 231/231
-(FPC/Win64), 125/125 (Delphi 7); the seven demos give the same `pdftotext`
-output as before.
-
-- **Enum size — no risk after all.** The bindings of `mormot.pdf.freetype`,
-  `mormot.pdf.harfbuzz` and `mormot.pdf.hbsubset` declare every C enum as
-  `integer` and hold no set, so `{$MINENUMSIZE 1}` and `{$PACKSET 1}` do not
-  reach the libraries.
-- **`{$CODEPAGE UTF8}` did bite:** the default value `'• '` of
-  `DrawListItem` arrived as `'?'` (`TestListItemBullet`); the rule is in
-  `CLAUDE.md` (Coding Conventions).
-- **`{$ifdef FPC}` pass:** `CreateFontIndirectW` in `mormot.pdf.gdi` needs no
-  branch any more (a local `var`, and FPC has a `var` overload). The branches
-  in `mormot.ui.core` and `mormot.ui.gdiplus` come with the mORMot2 originals
-  and stay; the one around all of `mormot.ui.report` is R-20. The seven in
-  `mormot.ui.pdf` stay too: all are in the original (`reference/`), and each
-  is a real difference — LCL against VCL units, the compatibility types, and
-  four Windows API calls FPC declares differently (`EnumPrinters` with
-  pointers, `GdiComment` with `var`, `EnumEnhMetaFile` with `RECT`,
-  `CreateFontIndirectW` on a `const` parameter, which the `var` overload
-  cannot take). No mORMot2 function wraps these calls.
-- **Demos** (`e02df4d`) switched as well, and they are callers with non-ASCII
-  literals: same `pdftotext` output. `pdf_demo_windows.dpr`, the Delphi 7
-  golden master on the original library, kept its cp1252 literals; it was
-  removed on 2026-09-27 with its `.lpi` and the `peekpdf` tools — unused,
-  and a second library in the demo folder that kept causing confusion.
-
-**macOS, 2026-09-26:** the four Unix units (`d9b05a3` … `538f768`) compile;
-`test_runner` 294/294, all projects built with `-B`, the seven demo PDFs equal
-to the pre-R-21 run apart from dates and a reworded `markdown_demo` paragraph.
-
-**Open:**
-- `test_runner` count on Linux — expected 274. The Debian build ran (its PDFs
-  carry the post-R-21 file names and pass veraPDF, see V); the count is not
-  recorded yet
-- nothing else: `test_margins_analysis` and `test_wrap_analysis`, printing
-  programs without a check that no project built, are gone; what they asked
-  is now `TestParagraphWrapsWithinPageWidth` (and `TestA4WithMargins`)
-
-### R-23 — A Layer 1 Demo for Delphi — built, validators open
-
-**Why.** Layer 1 builds on Delphi 7 (R-19), but all seven demos go through
-layer 2 or 3 — `TPdfDocumentVcl` or `TGDIPages` — so none of them builds
-there. `test_runner` covers the engine; a Delphi user has nothing to start
-from.
-
-**Work.** A console demo on `TPdfDocument`/`TPdfCanvas` alone: text in an
-embedded TrueType face, lines and rectangles, tagged output (`H1`, `P`,
-`Figure` with alternate text). The source header states the coordinate system
-(PDF points, Y origin at the bottom). An image only if one path serves both
-compilers — `mormot.pdf.fpimage` is FPC-only. Built with FPC (`.lpi`, to
-`bin/<cpu-os>`) and Delphi 7 (`build_delphi7.bat`), writing
-`<demo>_<os>.pdf` like the other demos. Text goes in as the layer 1 API takes
-it, so the `string` encoding question stays with R-20.
-
-**Check:** veraPDF `ua1` and PAC on the files of both compilers, the same
-`pdftotext` output and structure tree.
-
-**Built on Windows, 2026-09-26:** `examples/layer1_demo/layer1_demo.dpr` (a
-`.dpr`, so the Delphi IDE opens it too; the `.lpi` points to it), two pages.
-Page 1: `H1`, two `H2`, three `P`, a `Figure` (rectangle, rounded rectangle,
-ellipse, Bézier curve, three line widths — no chart, see "Charts") with
-`/Alt`. Page 2:
-an `H2`, a `P` and a `Table` — `THead` with four `TH`, `TBody` with four rows,
-`TFoot` with the totals row and one empty `TD`, numbers right-aligned by
-`UnicodeTextWidth`, fills and rules drawn before it as artifacts. An outline
-entry per heading, a footer per page as artifact, text as UTF-8 through
-`Utf8ToSynUnicode` + `TextOutW`. The file is
-`layer1_demo_<os>_<cpu>_<compiler>.pdf`, like the tagged Unicode test file.
-FPC/Win64 and Delphi 7/Win32 give the same `pdftotext` output (umlauts and
-`€` included), the same four subset faces (Calibri, Calibri Bold, Cambria
-Italic, Consolas), the same roles (1 `H1`, 3 `H2`, 4 `P`, 1 `Figure`, 1
-`Table`, 6 `TR`, 4 `TH` with `/Scope /Column`, 20 `TD`) and the same Figure
-`/BBox`. Compared uncompressed, after the fix below, the files are the same
-apart from the dates and `/ID`. xpdf's
-`pdftotext -layout` shifts the Qty and Unit columns by a row; the content
-stream has them on the right baselines.
-
-**Found with it and fixed — a real 0 written as nothing under FPC.** FPC
-wrote the outline destinations as `/Dest[5 0 R/XYZ 0 802 ]`, Delphi 7 as
-`/XYZ 0 802 0`; ISO 32000-1 table 151 wants three operands after `/XYZ`.
-`TPdfWrite.Add(double)` cut the `.00` of `Str(Value:0:2)`, but FPC converts
-with Grisu (`DOUBLETOSHORT_USEGRISU` in `mormot.defines.inc`), which writes an
-exact 0 as `'0'` — and the cut left an empty string. Every `TPdfReal` of 0 was
-hit: the outline zoom (every FPC bookmark, `pdf_demo` and `TGDIPages`
-included), `/ca`/`/CA` at alpha 0, a `/Rect` or Figure `/BBox` edge at 0.
-veraPDF had not flagged it. The cut now needs a `.` before the digits;
-`TestZeroRealIsWritten` fails 2/2 without it. 237 (FPC/Win64) and 127
-(Delphi 7) assertions green.
-
-**PAC 2024, 2026-09-26:** both Windows files (FPC/Win64, Delphi 7) pass, with
-the Figure hint W-1 only.
-
-**Open:** veraPDF `ua1` on both files; the build on Linux and macOS.
-
-**For R-20:** the reference. A page drawn through the bridge under Delphi has
-to give the same text and structure as the same page through layer 1.
-
 ### R-20 — Delphi: the TCanvas Bridge and `TGDIPages` — priority 2
 
 **The obstacle, checked against the source 2026-09-25.** `TPdfVclCanvas =
@@ -227,6 +125,10 @@ references. Checking that needs a current Delphi, e.g. a Community Edition.
 **Rejected — option C**, the EMF route of the original `TPdfDocumentGdi`: EMF
 carries no structure, so there is no tagged output, and the original in
 `mORMot2/src/ui` already does this on Delphi 7.
+
+**The reference is `layer1_demo`** (R-23). A page drawn through the bridge
+under Delphi has to give the same text and structure as the same page through
+layer 1.
 
 ### R-22 — Source Comments Back to the Why — priority 3
 
@@ -304,10 +206,11 @@ GUI) stay manual. veraPDF runs on Java and could follow as a later step.
 ### V — Verification Outstanding
 
 All three platforms build and pass `test_runner` (237 assertions on Windows,
-294 on macOS, 268 on Linux — the last before R-21). The tagged demos pass veraPDF `ua1`
+276 on Linux, 296 on macOS). The tagged demos pass veraPDF `ua1`
 106/106 on all three and PAC 2024 — measured again on 2026-09-26 for the
 files of all three platforms, `zugferd_demo` also `3u` 148/148 and Mustang;
-`tagged_unicode` passes `ua1` from Linux, macOS, FPC/Win64 and Delphi 7. The
+`tagged_unicode` and `layer1_demo` pass `ua1` from Linux, macOS, FPC/Win64
+and Delphi 7. The
 structure trees (roles and their counts) and page counts match across the
 platforms for every tagged demo. That was the stated gate for a first version tag, and
 the project still has none.
@@ -319,7 +222,6 @@ the project still has none.
 | veraPDF in the routine runs | installed on macOS with `ua1`, `3a`, `3b`, `3u` (path in `CLAUDE.local.md`); run by hand on each platform's files, not scripted |
 | The `.ttc` fix on Linux | `TestTtcFaceExtraction` skips itself: the Linux machine has no `.ttc` installed (e.g. `fonts-noto-cjk` would bring one) |
 | Delphi beyond layer 1 | the TCanvas bridge and `TGDIPages` — R-20; only Delphi 7 has been built |
-| A build check after the demo and build changes | `abd8181`, `bfd3f30`, `2665675` touched project files, demo file names, titles, `{$R *.res}` and docs — no `src/`, so no validator re-run. Windows done. macOS done (every project with `-B`, `report_demo --export`, each demo writes `<demo>_osx.pdf`). **Linux:** the demo PDFs arrive under the new names; the `test_runner` count is the one thing to record (R-21). The Windows ZUGFeRD file came as `zugferd_invoice_windows.pdf`, not `zugferd_demo_windows.pdf` — renamed by hand or an older build |
 
 **Comparing the platforms — but not pixel by pixel.** The demos resolve
 different families (Calibri/Cambria/Consolas, Liberation, Trebuchet MS/Georgia/
