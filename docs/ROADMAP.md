@@ -106,17 +106,45 @@ reintroduces (`FillRect`, `Polyline`, `Polygon`, `StretchDraw`): this is why
 drawing on a real VCL canvas. The limit has to be documented: code that draws
 through a plain `TCanvas` reference writes nothing into the PDF.
 
-**Decide before starting — the encoding of `string` under Delphi.** The bridge
-decodes its `string` as UTF-8 (`TPdfVclCanvas.TextOut` → `UTF8Decode`), which
-is the LCL convention. In Delphi 7 a `string` literal is in the ANSI code page,
-so `'Größe'` would arrive garbled. Proposed: follow mORMot2 — under Delphi,
-`string` is converted from the ANSI code page (`StringToSynUnicode`), and
-Unicode comes in through a separately named `RawUtf8` method. Not an overload:
-under FPC both types are `AnsiString`, and the call would be ambiguous. FPC
-stays as it is.
+**`TGDIPages` does not exist under Delphi today.** `mormot.ui.report` is
+wrapped in `{$IFDEF FPC}`; under Delphi it is an empty stub pointing to the
+original in `mORMot2/src/ui`, which must never be on the search path. So R-20
+ports it: besides `LCLType`/`LazFileUtils`, `TFPGMap<string, …>` needs a
+replacement (Delphi 7 has no generics).
 
-Also: the GUI demos need a `.dfm` instead of the `.lfm` under Delphi; the
-`--export` path comes first.
+**Strings — decided 2026-09-27: `RawUtf8` inside, conversion at the GUI only.**
+1. **`TGDIPages` takes `RawUtf8`** wherever it takes text today as `string`:
+   the `Draw*` methods, `SetHeader`/`SetFooter`, the table rows (`array of
+   RawUtf8`), `Title`/`Author`/`Subject`, the `ExportPdf*` texts, font and
+   format names. `TDrawCommand` stores `RawUtf8`. FPC/LCL callers do not
+   change (their `string` holds UTF-8 already); a Delphi 7 caller converts
+   with `StringToUtf8`, otherwise non-ASCII arrives garbled without an error —
+   to be documented. No `string` overloads: under FPC the call would be
+   ambiguous. The original's `DrawText`/`DrawTextU`/`DrawTextW` triple is not
+   followed; our signatures differ from it anyway.
+2. **The bridge keeps `string`** where `TCanvas` dictates it (`TextOut`,
+   `TextWidth`, …) and reads it per compiler: FPC as UTF-8 bytes whatever
+   `DefaultSystemCodePage` says (like `Utf8AsLclString`), Delphi 7 from the
+   ANSI code page, Unicode Delphi as UTF-16. Beside them it gets `RawUtf8`
+   methods (`TextOutUtf8`, `TextWidthUtf8`, …, separately named), which
+   `TGDIPages` uses.
+   **Suspected defect, check first:** `TextOut` decodes with `UTF8Decode`,
+   but `TextWidth` and the font selection go through mORMot2's
+   `StringToUtf8`, which under FPC converts from `CurrentAnsiConvert` — set
+   once from `DefaultSystemCodePage` when `mormot.core.unicode` initialises.
+   If the LCL has not switched it to UTF-8 by then, non-ASCII is measured as
+   cp1252 on Windows while it is drawn as UTF-8. Not measured yet.
+3. **`TGDIPages` is split:** a core without GUI (recording, layout, PDF
+   export; `RawUtf8` throughout) and a preview control derived from
+   `TScrollBox` that converts only when it draws on the screen. The core
+   builds under Delphi first, the `--export` path of the GUI demos with it;
+   the preview and the `.dfm` of the GUI demos follow.
+4. **File names are `TFileName`** (`ExportPDF`, `OpenPdfFile`): a boundary to
+   the operating system, the mORMot2 convention.
+
+Optional, for consistency down to layer 1: a `TPdfCanvas.TextOutUtf8`, so
+callers need not go through `Utf8ToSynUnicode` + `TextOutW` as `layer1_demo`
+does.
 
 **Not part of R-20:** Delphi 2010 and later have `TCustomCanvas` with virtual
 drawing methods (not verified here), where overriding might work without typed
