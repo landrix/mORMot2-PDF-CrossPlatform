@@ -109,9 +109,10 @@ output as before.
   `CreateFontIndirectW` on a `const` parameter, which the `var` overload
   cannot take). No mORMot2 function wraps these calls.
 - **Demos** (`e02df4d`) switched as well, and they are callers with non-ASCII
-  literals: same `pdftotext` output. `pdf_demo_windows.dpr` stays — the
-  Delphi 7 golden master, with cp1252 literals FPC rejects under
-  `{$CODEPAGE UTF8}`.
+  literals: same `pdftotext` output. `pdf_demo_windows.dpr`, the Delphi 7
+  golden master on the original library, kept its cp1252 literals; it was
+  removed on 2026-09-27 with its `.lpi` and the `peekpdf` tools — unused,
+  and a second library in the demo folder that kept causing confusion.
 
 **macOS, 2026-09-26:** the four Unix units (`d9b05a3` … `538f768`) compile;
 `test_runner` 294/294, all projects built with `-B`, the seven demo PDFs equal

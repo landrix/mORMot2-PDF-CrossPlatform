@@ -17,9 +17,8 @@ unit mormot.ui.pdfcanvas;
       Windows:    TCanvas → TMetaFile (EMF) → TPdfEnum → TPdfCanvas → PDF
       CrossPlat:  TCanvas → TPdfVclCanvas  ──────────→ TPdfCanvas → PDF
 
-    The ~15 canvas methods that TPdfEnum handles for the golden-master demo
-    are all overridden here. State (pen color/width, brush color/style, font)
-    is synchronized lazily before each draw operation.
+    The TCanvas drawing methods are overridden here. State (pen color/width,
+    brush color/style, font) is synchronized lazily before each draw operation.
 
   *****************************************************************************
 }
