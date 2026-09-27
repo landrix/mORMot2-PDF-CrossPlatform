@@ -122,9 +122,13 @@ var
 
 { Table layout for the order list. Built at runtime instead of as a typed
   constant: Delphi 7 has no constants for dynamic array fields.
-  Empty font names and size 0 inherit the document font set before BeginTable. }
+  Empty font names and size 0 inherit the document font set before BeginTable.
+  Every field starts at zero, like the fields a typed constant leaves out:
+  the Footer* fields are left alone below and must read as "like the header" }
 function OrderTableLayout: TTableLayout;
 begin
+  Finalize(Result);
+  FillChar(Result, SizeOf(Result), 0);
   // widths in 1/100 mm; 18000 = A4 portrait (21000) minus the 2 x 15 mm margins
   SetLength(Result.ColumnWidths, 4);
   Result.ColumnWidths[0] := 1200;   // #
