@@ -21,5 +21,13 @@ by hand from header and data rows.
 
 ```bash
 lazbuild pdf_demo_crossplat.lpi -B      # Windows: "C:\lazarus\lazbuild.exe" …
-bin/<target>/pdf_demo_crossplat         # -> pdf_demo_<os>.pdf, next to the executable
+bin/<target>/pdf_demo_crossplat         # -> pdf_demo_<os>_<cpu>_<compiler>.pdf, next to the executable
+```
+
+Delphi 7 (Win32), from the repository root, with `MORMOT2` set to the mORMot2
+checkout:
+
+```bat
+tests\build_delphi7.bat examples\pdf_demo\pdf_demo_crossplat.lpr
+bin\d7\pdf_demo_crossplat\pdf_demo_crossplat.exe   &rem -> pdf_demo_windows_x86_delphi-7.pdf, next to it
 ```

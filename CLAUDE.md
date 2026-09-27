@@ -141,7 +141,7 @@ For interface and backend details: `.claude/skills/platform-backends.md`
 | chinese_demo | `TPdfDocumentVcl` | Console | CJK text, subset embedding |
 | rtl_demo | `TPdfDocumentVcl` | Console | Arabic RTL, HarfBuzz/Uniscribe shaping |
 | zugferd_demo | `TPdfDocumentVcl` | Console | PDF/A-3U + PDF/UA-1, `/AF` attachment, `PdfMetadataFacturX`, third-party invoice XML (KoSIT, Apache-2.0) |
-| layer1_demo | `TPdfDocument` | Console | Layer 1 only, PDF points (Y=0 bottom), tagged H1/H2/P/Figure and a Table with THead/TBody/TFoot, UTF-8 via `TextOutW`; builds with Delphi 7, as does markdown_demo |
+| layer1_demo | `TPdfDocument` | Console | Layer 1 only, PDF points (Y=0 bottom), tagged H1/H2/P/Figure and a Table with THead/TBody/TFoot, UTF-8 via `TextOutW`; builds with Delphi 7, as do all console demos |
 
 Detailed description with code examples: `docs/DEMOS.md`
 
@@ -320,11 +320,14 @@ display (`xvfb-run` otherwise); on macOS Cocoa runs it headless.
   `layer1_demo`, the first demo that builds on Delphi 7, passes PAC 2024 and
   veraPDF `ua1` on all three platforms.
   R-20, priority 2: the TCanvas bridge and the `TGDIPages` core build on
-  Delphi 7, `test_runner` 243/243 there, `markdown_demo` gives the same PDF
-  as FPC; the preview and the GUI demos are open. Delphi 7's `TCanvas`
+  Delphi 7, `test_runner` 243/243 there, and all six console demos build
+  there and give the same PDF as FPC; the preview and the GUI demos are
+  open. Delphi 7's `TCanvas`
   drawing methods are static: the bridge reintroduces them
   (`PDF_CANVASVIRTUAL` off), so draw through a `TPdfVclCanvas` reference —
-  `VclCanvas` has that type, `RenderPageToCanvas` casts. Never put
+  `VclCanvas` has that type, `RenderPageToCanvas` casts. Text beyond ASCII
+  goes through `TextOutUtf8` from a `RawUtf8` constant of UTF-8 bytes:
+  `TextOut` reads Delphi 7's `string` as ANSI. Never put
   `mORMot2/src/ui` on a Delphi search path: it holds the original
   `mormot.ui.pdf`/`report`/`core`
 

@@ -13,13 +13,15 @@ Demo 2 — report_demo      GUI preview + interactive export
 Demo 1 — pdf_demo         Direct TCanvas graphics
 ```
 
-**Output files.** Every demo writes `<demo>_<os>.pdf` next to its executable,
-whatever the current folder: `<os>` is mORMot2's `OS_NAME[OS_KIND]` in lower
-case — `windows`, `osx`, and on Linux the distribution (`debian`, `ubuntu`,
-…). The files of all platforms can so share one folder for checking. The GUI
-demos write it with `--export` and no file name. `layer1_demo`, which builds
-with two compilers, adds CPU and compiler:
-`layer1_demo_<os>_<cpu>_<compiler>.pdf`.
+**Output files.** Every demo writes `<demo>_<os>_<cpu>_<compiler>.pdf` next to
+its executable, whatever the current folder: `<os>` is mORMot2's
+`OS_NAME[OS_KIND]` in lower case — `windows`, `osx`, and on Linux the
+distribution (`debian`, `ubuntu`, …); `<cpu>` is `CPU_ARCH_TEXT` (`x64`,
+`x86`, `aarch64`, …) and `<compiler>` `COMPILER_VERSION` without its bitness,
+e.g. `pdf_demo_windows_x64_free-pascal-3.2.2.pdf` or
+`pdf_demo_windows_x86_delphi-7.pdf`. The files of all platforms and compilers
+can so share one folder for checking. The GUI demos write it with `--export`
+and no file name.
 
 ---
 
@@ -125,12 +127,12 @@ begin
     end;
   Doc.EndStructContent; // Table
 
-  Doc.SaveToFile(PdfFileName); // pdf_demo_<os>.pdf next to the executable
+  Doc.SaveToFile(PdfFileName); // pdf_demo_<os>_<cpu>_<compiler>.pdf next to the executable
   Doc.Free;
 end;
 ```
 
-**Output:** `pdf_demo_<os>.pdf` (3 pages: fonts, vector graphics, table)
+**Output:** `pdf_demo_<os>_<cpu>_<compiler>.pdf` (3 pages: fonts, vector graphics, table)
 
 **Build & run:**
 ```bash
@@ -221,7 +223,7 @@ examples/report_demo/
 examples/report_demo/bin/x86_64-win64/report_demo.exe
 
 # batch export, without the GUI - for automated checks (pdffonts, rendering):
-examples/report_demo/bin/aarch64-linux/report_demo --export   # -> report_demo_<os>.pdf
+examples/report_demo/bin/aarch64-linux/report_demo --export   # -> report_demo_<os>_<cpu>_<compiler>.pdf
 ```
 
 The batch mode still needs a display, because `TGDIPages` is an LCL control;
@@ -310,7 +312,7 @@ begin
 
   MS := TMemoryStream.Create;
   if Report.ExportPdfStream(MS) then
-    MS.SaveToFile(PdfFileName); // markdown_demo_<os>.pdf
+    MS.SaveToFile(PdfFileName); // markdown_demo_<os>_<cpu>_<compiler>.pdf
 end;
 ```
 
@@ -318,7 +320,7 @@ end;
 ```bash
 lazbuild examples/markdown_demo/markdown_demo.lpi -B
 examples/markdown_demo/bin/x86_64-linux/markdown_demo
-# -> produces markdown_demo_<os>.pdf
+# -> produces markdown_demo_<os>_<cpu>_<compiler>.pdf
 ```
 
 **Next step:** Demo 4 replaces the static sample data with real ORM data from a SQLite database.
@@ -340,7 +342,7 @@ Shows `TGDIPages` with `TTableLayout` (the same as Demo 3), but the data comes f
 - Empty-table handling (placeholder row)
 - `DrawHeading(1..2, ...)` for headings with PDF bookmarks
 - Tagged PDF/UA export (`ExportPdfTagged`), set before the first draw command
-- Batch export without the GUI: `mormot_demo --export [<file.pdf>]`, by default `mormot_demo_<os>.pdf`
+- Batch export without the GUI: `mormot_demo --export [<file.pdf>]`, by default `mormot_demo_<os>_<cpu>_<compiler>.pdf`
 
 **Architecture:**
 
@@ -476,18 +478,18 @@ begin
   C.Font.Style := [];
   C.TextOut(40, 175, CJK_NUMBERS);
 
-  Doc.SaveToFile(PdfFileName); // chinese_demo_<os>.pdf
+  Doc.SaveToFile(PdfFileName); // chinese_demo_<os>_<cpu>_<compiler>.pdf
   Doc.Free;
 end;
 ```
 
-**Output:** `chinese_demo_<os>.pdf` (1 page with Chinese headings, greetings, numerals, sentences)
+**Output:** `chinese_demo_<os>_<cpu>_<compiler>.pdf` (1 page with Chinese headings, greetings, numerals, sentences)
 
 **Build & run:**
 ```bash
 lazbuild examples/chinese_demo/chinese_demo.lpi -B
 examples/chinese_demo/bin/x86_64-linux/chinese_demo
-# -> produces chinese_demo_<os>.pdf (~40 KB: only the glyphs drawn are embedded)
+# -> produces chinese_demo_<os>_<cpu>_<compiler>.pdf (~40 KB: only the glyphs drawn are embedded)
 ```
 
 **Note:** With `EmbeddedWholeTtf := True` the same document comes out at roughly 24 MB, because YaHei / WQY covers 28,000+ CJK glyphs. Subsetting is safe for CJK on every platform now that the Windows keep list is a glyph list (R-15) rather than a list of code points — measured on Windows: 23,924,686 B → 39,279 B with byte-identical `pdftotext` output.
@@ -561,18 +563,18 @@ begin
   C.TextOut(500, 604, ARABIC_HOUSE);   // بيت
 
   PdfC.RightToLeftText := False;       // restore for Latin labels
-  Doc.SaveToFile(PdfFileName); // rtl_demo_<os>.pdf
+  Doc.SaveToFile(PdfFileName); // rtl_demo_<os>_<cpu>_<compiler>.pdf
   Doc.Free;
 end;
 ```
 
-**Output:** `rtl_demo_<os>.pdf` (1 page, 4 sections: isolated-letter CMAP test, advance-width test, single shaped char, shaped words)
+**Output:** `rtl_demo_<os>_<cpu>_<compiler>.pdf` (1 page, 4 sections: isolated-letter CMAP test, advance-width test, single shaped char, shaped words)
 
 **Build & run:**
 ```bash
 lazbuild examples/rtl_demo/rtl_demo.lpi -B
 examples/rtl_demo/bin/x86_64-linux/rtl_demo
-# -> produces rtl_demo_<os>.pdf
+# -> produces rtl_demo_<os>_<cpu>_<compiler>.pdf
 ```
 
 **Note:** On Linux without `libharfbuzz`, Section 2 still runs but Arabic letters appear as isolated forms (no contextual shaping). Install `libharfbuzz0b` and `fonts-noto-core` for correct connected letter output.
@@ -634,7 +636,7 @@ begin
   Doc.CreateFileAttachmentFrom(Xml, 'factur-x.xml', 'Factur-X invoice data',
     'text/xml', Now, Now, nil, afrAlternative);
   Doc.PdfAMetadaExtension := PdfMetadataFacturX('EN 16931');
-  Doc.SaveToFile(PdfFileName); // zugferd_demo_<os>.pdf
+  Doc.SaveToFile(PdfFileName); // zugferd_demo_<os>_<cpu>_<compiler>.pdf
   Doc.Free;
 end;
 ```
@@ -643,7 +645,7 @@ end;
 `--untagged` the structure tree — to tell the sources of a checker failure
 apart.
 
-**Output:** `zugferd_demo_<os>.pdf` (1 page). Verified on Windows, Linux and
+**Output:** `zugferd_demo_<os>_<cpu>_<compiler>.pdf` (1 page). Verified on Windows, Linux and
 macOS with veraPDF (`3u` 148/148, `ua1` 106/106), Mustang-CLI and PAC 2024.
 PAC keeps one accepted quality hint, e-mail addresses without a link element
 (ROADMAP W-2).
@@ -653,7 +655,7 @@ levels above the executable (the demo folder); the PDF goes next to the executab
 ```bash
 lazbuild examples/zugferd_demo/zugferd_demo.lpi -B
 examples/zugferd_demo/bin/<target>/zugferd_demo
-# -> produces zugferd_demo_<os>.pdf
+# -> produces zugferd_demo_<os>_<cpu>_<compiler>.pdf
 ```
 
 ---
@@ -664,8 +666,8 @@ examples/zugferd_demo/bin/<target>/zugferd_demo
 
 Draws two tagged pages with `TPdfDocument` and `TPdfCanvas`, without the
 TCanvas bridge and without `TGDIPages`: text and a figure, then a table. It
-builds with Delphi 7 (Win32), and so does `markdown_demo`; the GUI demos and
-the preview are FPC-only until roadmap R-20 is done.
+builds with Delphi 7 (Win32), and so do the other five console demos; the GUI demos
+and the preview are FPC-only until roadmap R-20 is done.
 
 **What you learn:**
 - PDF points, with Y counted from the bottom edge: a text line at Y = 780 is

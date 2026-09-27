@@ -21,5 +21,13 @@ H1-H6, paragraphs, quotes, list items, captions, inline runs (`DrawStrong`,
 
 ```bash
 lazbuild markdown_demo.lpi -B
-bin/<target>/markdown_demo      # -> markdown_demo_<os>.pdf, next to the executable
+bin/<target>/markdown_demo      # -> markdown_demo_<os>_<cpu>_<compiler>.pdf, next to the executable
+```
+
+Delphi 7 (Win32), from the repository root, with `MORMOT2` set to the mORMot2
+checkout:
+
+```bat
+tests\build_delphi7.bat examples\markdown_demo\markdown_demo.lpr
+bin\d7\markdown_demo\markdown_demo.exe   &rem -> markdown_demo_windows_x86_delphi-7.pdf, next to it
 ```

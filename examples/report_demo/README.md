@@ -22,7 +22,7 @@ export from the form in `uMainForm.pas`.
 ```bash
 lazbuild report_demo.lpi -B
 bin/<target>/report_demo                    # GUI
-bin/<target>/report_demo --export           # batch -> report_demo_<os>.pdf, next to the executable
+bin/<target>/report_demo --export           # batch -> report_demo_<os>_<cpu>_<compiler>.pdf, next to the executable
 bin/<target>/report_demo --export out.pdf   # batch to a file of your choice
 ```
 

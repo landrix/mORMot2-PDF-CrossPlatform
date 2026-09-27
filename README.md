@@ -157,7 +157,7 @@ that. `EmbeddedWholeTtf := True` always embeds the complete face.
 | Latin text | subset | subset |
 | CJK, shaped Arabic | subset | subset |
 | Tagged output | subset | subset |
-| `markdown_demo_<os>.pdf` | 46 KB | 230 KB |
+| `markdown_demo_<os>_<cpu>_<compiler>.pdf` | 46 KB | 230 KB |
 
 Both subsetters keep the original glyph numbering — `libharfbuzz-subset` by
 retaining glyph IDs, `CreateFontPackage` through a glyph keep list

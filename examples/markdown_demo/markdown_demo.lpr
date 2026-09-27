@@ -332,12 +332,18 @@ begin
     Format('Page: %s — Markdown-style formatting with automatic spacing.', [Config.PageLabel]));
 end;
 
-{ <demo>_<os>.pdf next to the executable: the runs of all platforms can then
-  share one folder for checking. OS_KIND names the distribution on Linux }
+{ <demo>_<os>_<cpu>_<compiler>.pdf next to the executable, e.g.
+  markdown_demo_windows_x64_free-pascal-3.2.2.pdf or ..._x86_delphi-7.pdf: the runs
+  of all platforms and compilers can then share one folder for checking.
+  OS_KIND names the distribution on Linux }
 function PdfFileName: TFileName;
+var
+  compiler: RawUtf8;
 begin
-  result := Executable.ProgramFilePath + 'markdown_demo_' +
-    Utf8ToString(LowerCase(ShortStringToAnsi7String(OS_NAME[OS_KIND]))) + '.pdf';
+  compiler := StringReplaceAll(COMPILER_VERSION, [' 32 bit', '', ' 64 bit', '']);
+  result := Executable.ProgramFilePath + Utf8ToString(LowerCase('markdown_demo_' +
+    ShortStringToAnsi7String(OS_NAME[OS_KIND]) + '_' + CPU_ARCH_TEXT + '_' +
+    StringReplaceAll(compiler, ' ', '-') + '.pdf'));
 end;
 
 procedure DemoMarkdownFormatting;

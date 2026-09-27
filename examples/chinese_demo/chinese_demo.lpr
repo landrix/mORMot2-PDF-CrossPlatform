@@ -3,6 +3,8 @@
 // subset on every platform.
 //
 // Worth noting:
+// - builds with FPC and Delphi 7: the canvas is held as TPdfVclCanvas and the
+//   text goes through TextOutUtf8, the same on every compiler
 // - CJK has no contextual shaping, so UseUniscribe stays false
 // - subsetting is what keeps the file small: the whole face costs about 24 MB
 //   against roughly 39 KB for the glyphs actually drawn
@@ -44,29 +46,38 @@ const
   {$endif DARWIN}
   {$endif MSWINDOWS}
 
-  // UTF-8 encoded Chinese string constants
-  CJK_TITLE     = #$E4#$B8#$AD#$E6#$96#$87#$E6#$BC#$94#$E7#$A4#$BA;
+  // UTF-8 encoded strings, drawn with TextOutUtf8: TextOut reads a string as
+  // the compiler holds it, the ANSI code page on Delphi 7
+  CJK_TITLE: RawUtf8 = #$E4#$B8#$AD#$E6#$96#$87#$E6#$BC#$94#$E7#$A4#$BA;
   // 中文演示  (Chinese Demo)
-  CJK_HELLO     = #$E4#$BD#$A0#$E5#$A5#$BD#$EF#$BC#$8C#$E4#$B8#$96#$E7#$95#$8C#$EF#$BC#$81;
+  CJK_HELLO: RawUtf8 = #$E4#$BD#$A0#$E5#$A5#$BD#$EF#$BC#$8C#$E4#$B8#$96#$E7#$95#$8C#$EF#$BC#$81;
   // 你好，世界！  (Hello, World!)
-  CJK_NUMBERS   = #$E4#$B8#$80#$E4#$BA#$8C#$E4#$B8#$89#$E5#$9B#$9B#$E4#$BA#$94#$E5#$85#$AD#$E4#$B8#$83#$E5#$85#$AB#$E4#$B9#$9D#$E5#$8D#$81;
+  CJK_NUMBERS: RawUtf8 = #$E4#$B8#$80#$E4#$BA#$8C#$E4#$B8#$89#$E5#$9B#$9B#$E4#$BA#$94#$E5#$85#$AD#$E4#$B8#$83#$E5#$85#$AB#$E4#$B9#$9D#$E5#$8D#$81;
   // 一二三四五六七八九十  (1–10 as Chinese numerals)
-  CJK_FONT_TEST = #$E5#$AD#$97#$E4#$BD#$93#$E5#$B5#$8C#$E5#$85#$A5#$E6#$B5#$8B#$E8#$AF#$95;
+  CJK_FONT_TEST: RawUtf8 = #$E5#$AD#$97#$E4#$BD#$93#$E5#$B5#$8C#$E5#$85#$A5#$E6#$B5#$8B#$E8#$AF#$95;
   // 字体嵌入测试  (Font embedding test)
-  CJK_SENTENCE  = #$E8#$BF#$99#$E6#$98#$AF#$E4#$B8#$80#$E4#$B8#$AA#$E6#$B5#$8B#$E8#$AF#$95#$E3#$80#$82;
+  CJK_SENTENCE: RawUtf8 = #$E8#$BF#$99#$E6#$98#$AF#$E4#$B8#$80#$E4#$B8#$AA#$E6#$B5#$8B#$E8#$AF#$95#$E3#$80#$82;
   // 这是一个测试。  (This is a test.)
+  // "Chinese PDF Demo  <em dash>  Font: "
+  HEADER_TEXT: RawUtf8 = 'Chinese PDF Demo  '#$E2#$80#$94'  Font: ';
 
-{ <demo>_<os>.pdf next to the executable: the runs of all platforms can then
-  share one folder for checking. OS_KIND names the distribution on Linux }
+{ <demo>_<os>_<cpu>_<compiler>.pdf next to the executable, e.g.
+  chinese_demo_windows_x64_free-pascal-3.2.2.pdf or ..._x86_delphi-7.pdf: the runs
+  of all platforms and compilers can then share one folder for checking.
+  OS_KIND names the distribution on Linux }
 function PdfFileName: TFileName;
+var
+  compiler: RawUtf8;
 begin
-  result := Executable.ProgramFilePath + 'chinese_demo_' +
-    Utf8ToString(LowerCase(ShortStringToAnsi7String(OS_NAME[OS_KIND]))) + '.pdf';
+  compiler := StringReplaceAll(COMPILER_VERSION, [' 32 bit', '', ' 64 bit', '']);
+  result := Executable.ProgramFilePath + Utf8ToString(LowerCase('chinese_demo_' +
+    ShortStringToAnsi7String(OS_NAME[OS_KIND]) + '_' + CPU_ARCH_TEXT + '_' +
+    StringReplaceAll(compiler, ' ', '-') + '.pdf'));
 end;
 
 var
   Doc:                  TPdfDocumentVcl;
-  C:                    TCanvas;
+  C:                    TPdfVclCanvas;
   SansFont, SerifFont,
   MonoFont:             string;
   PdfSize:              Int64;
@@ -93,30 +104,30 @@ begin
     C.Font.Size  := 14;
     C.Font.Style := [fsBold];
     C.Font.Color := clBlack;
-    C.TextOut(40, 30, 'Chinese PDF Demo  —  Font: ' + CJK_FONT);
+    C.TextOutUtf8(40, 30, HEADER_TEXT + CJK_FONT);
 
     // Chinese title, large
     C.Font.Name  := CJK_FONT;
     C.Font.Size  := 36;
     C.Font.Style := [fsBold];
-    C.TextOut(40, 65, CJK_TITLE);
+    C.TextOutUtf8(40, 65, CJK_TITLE);
 
     // Hello, World!
     C.Font.Style := [];
     C.Font.Size  := 28;
-    C.TextOut(40, 125, CJK_HELLO);
+    C.TextOutUtf8(40, 125, CJK_HELLO);
 
     // Chinese numerals 1–10
     C.Font.Size  := 22;
-    C.TextOut(40, 175, CJK_NUMBERS);
+    C.TextOutUtf8(40, 175, CJK_NUMBERS);
 
     // Font embedding label
     C.Font.Size  := 18;
-    C.TextOut(40, 215, CJK_FONT_TEST);
+    C.TextOutUtf8(40, 215, CJK_FONT_TEST);
 
     // A short sentence
     C.Font.Size  := 16;
-    C.TextOut(40, 250, CJK_SENTENCE);
+    C.TextOutUtf8(40, 250, CJK_SENTENCE);
 
     Doc.SaveToFile(PdfFileName);
   finally

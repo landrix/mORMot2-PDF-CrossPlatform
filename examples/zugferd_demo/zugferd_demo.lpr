@@ -14,6 +14,8 @@
 // - Tagged := True comes after it and before the first AddPage, as always
 // - the attachment goes through CreateFileAttachmentFrom, the only overload
 //   that takes an /AFRelationship
+// - builds with FPC and Delphi 7: the canvas is held as TPdfVclCanvas and the
+//   text goes through TextOutUtf8, the same on every compiler
 // - verified on all three platforms: veraPDF 3u and ua1, Mustang, PAC 2024
 //   (one accepted quality hint, roadmap W-2)
 //
@@ -50,18 +52,24 @@ const
   COL_UNIT = 540;
   COL_VAT  = 610;
   COL_SUM  = RIGHT_X - 6;
+  // the text is RawUtf8 and drawn with TextOutUtf8: TextOut reads a string as
+  // the compiler holds it, the ANSI code page on Delphi 7, and a non-ASCII
+  // literal in this UTF-8 file would reach Delphi 7 as ANSI - hence the bytes
+  ELLIPSIS: RawUtf8 = #$E2#$80#$A6; // "…"
+  AUML: RawUtf8 = #$C3#$A4;         // "ä"
+  UUML_CAP: RawUtf8 = #$C3#$9C;     // "Ü"
   // the content of factur-x.xml, as the page shows it
-  ITEMS: array[0..1, 0..4] of string = (
+  ITEMS: array[0..1, 0..4] of RawUtf8 = (
     ('Zeitschrift [...], Art.-Nr. 246', '1', '288,79', '7 %', '288,79'),
     ('Porto + Versandkosten',           '1', '26,07',  '7 %', '26,07'));
-  TOTALS: array[0..2, 0..1] of string = (
+  TOTALS: array[0..2, 0..1] of RawUtf8 = (
     ('Summe netto',            '314,86'),
     ('Umsatzsteuer 7 % auf 314,86', '22,04'),
     ('Gesamtbetrag (EUR)',     '336,90'));
 
 var
   Doc: TPdfDocumentVcl;
-  C: TCanvas;
+  C: TPdfVclCanvas;
   WithAttachment, WithTags: boolean;
   SansFont, SerifFont, MonoFont: string;
   Xml: RawByteString;
@@ -80,12 +88,18 @@ begin
     Doc.EndStructContent;
 end;
 
-{ <demo>_<os>.pdf next to the executable: the runs of all platforms can then
-  share one folder for checking. OS_KIND names the distribution on Linux }
+{ <demo>_<os>_<cpu>_<compiler>.pdf next to the executable, e.g.
+  zugferd_demo_windows_x64_free-pascal-3.2.2.pdf or ..._x86_delphi-7.pdf: the runs
+  of all platforms and compilers can then share one folder for checking.
+  OS_KIND names the distribution on Linux }
 function PdfFileName: TFileName;
+var
+  compiler: RawUtf8;
 begin
-  result := Executable.ProgramFilePath + 'zugferd_demo_' +
-    Utf8ToString(LowerCase(ShortStringToAnsi7String(OS_NAME[OS_KIND]))) + '.pdf';
+  compiler := StringReplaceAll(COMPILER_VERSION, [' 32 bit', '', ' 64 bit', '']);
+  result := Executable.ProgramFilePath + Utf8ToString(LowerCase('zugferd_demo_' +
+    ShortStringToAnsi7String(OS_NAME[OS_KIND]) + '_' + CPU_ARCH_TEXT + '_' +
+    StringReplaceAll(compiler, ' ', '-') + '.pdf'));
 end;
 
 // factur-x.xml sits beside the .lpr; the executable is two levels below it
@@ -98,20 +112,20 @@ begin
 end;
 
 // text right-aligned against x = Right, for the amount columns
-procedure TextRight(Right, Top: integer; const s: string);
+procedure TextRight(Right, Top: integer; const s: RawUtf8);
 begin
-  C.TextOut(Right - C.TextWidth(s), Top, s);
+  C.TextOutUtf8(Right - round(C.TextWidthUtf8(s)), Top, s);
 end;
 
 // one paragraph of pre-broken lines, advancing Y past it
-procedure Paragraph(const Lines: array of string);
+procedure Paragraph(const Lines: array of RawUtf8);
 var
   l: integer;
 begin
   Open(psrP);
   for l := 0 to high(Lines) do
   begin
-    C.TextOut(LEFT_X, Y, Lines[l]);
+    C.TextOutUtf8(LEFT_X, Y, Lines[l]);
     Inc(Y, LINE_HEIGHT);
   end;
   Close;
@@ -119,7 +133,7 @@ begin
 end;
 
 // one table row: the description left-aligned, the other cells right-aligned
-procedure TableRow(Cell: TPdfStructRole; const Values: array of string);
+procedure TableRow(Cell: TPdfStructRole; const Values: array of RawUtf8);
 const
   RIGHT_EDGE: array[1..4] of integer = (COL_QTY, COL_UNIT, COL_VAT, COL_SUM);
 var
@@ -130,7 +144,7 @@ begin
   begin
     Open(Cell);
     if n = 0 then
-      C.TextOut(COL_TEXT, Y + 5, Values[0])
+      C.TextOutUtf8(COL_TEXT, Y + 5, Values[0])
     else if Values[n] <> '' then
       TextRight(RIGHT_EDGE[n], Y + 5, Values[n]);
     Close;
@@ -176,7 +190,7 @@ begin
     Open(psrH1);
     C.Font.Size := 22;
     C.Font.Style := [fsBold];
-    C.TextOut(LEFT_X, 60, 'Rechnung 123456XX');
+    C.TextOutUtf8(LEFT_X, 60, 'Rechnung 123456XX');
     Close;
     Doc.CreateOutline('Rechnung 123456XX', 1,
       Doc.DefaultPageHeight - 60 * 72 / 96);
@@ -187,14 +201,14 @@ begin
     Paragraph([
       '[Seller name] ([Seller trading name]), [Seller address line 1], ' +
         '12345 [Seller city], DE',
-      'USt-IdNr. DE 123456789, 123/456/7890, HRA-Eintrag in […]',
+      'USt-IdNr. DE 123456789, 123/456/7890, HRA-Eintrag in [' + ELLIPSIS + ']',
       'Kontakt: nicht vorhanden, Tel. +49 1234-5678, seller@email.de']);
     Paragraph([
       'An: [Buyer name] ([Buyer identifier]), [Buyer address line 1], ' +
         '12345 [Buyer city], DE, buyer@info.de']);
     Paragraph([
       'Rechnungsdatum: 04.04.2016',
-      'Käuferreferenz: 04011000-12345-03']);
+      'K' + AUML + 'uferreferenz: 04011000-12345-03']);
     // the items, as a table with header, body and totals
     Inc(Y, LINE_HEIGHT div 2);
     Open(psrTable);
@@ -246,10 +260,11 @@ begin
         'abgerechneten Abonnements erfolgt in 12/2016',
       'Lieferung erfolgt / erfolgte direkt vom Verlag']);
     Paragraph([
-      'Zahlbar sofort ohne Abzug. SEPA-Überweisung auf ' +
+      'Zahlbar sofort ohne Abzug. SEPA-' + UUML_CAP + 'berweisung auf ' +
         'IBAN DE79 0000 0000 1234 5678 90.']);
     Paragraph([
-      'Es gelten unsere Allgem. Geschäftsbedingungen, die Sie unter […] ' +
+      'Es gelten unsere Allgem. Gesch' + AUML + 'ftsbedingungen, die Sie unter [' +
+        ELLIPSIS + '] ' +
         'finden.']);
     // where the data comes from - also required by its license
     C.Font.Size := 8;

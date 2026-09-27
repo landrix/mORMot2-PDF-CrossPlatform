@@ -3,8 +3,9 @@
 Demo 8 of the [learning path](../../docs/DEMOS.md#demo-8--layer1_demo).
 
 Draws a two-page tagged PDF with the low-level API only: no TCanvas bridge and
-no report engine. That makes it the one demo that builds with Delphi 7 as well
-as with FPC. Page 1 holds text and a figure, page 2 a table.
+no report engine. It was the first demo that built with Delphi 7 as well as
+with FPC, and it is the reference the others are compared with. Page 1 holds
+text and a figure, page 2 a table.
 
 **What is special here**
 

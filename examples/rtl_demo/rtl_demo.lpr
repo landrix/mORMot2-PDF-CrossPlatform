@@ -8,6 +8,8 @@
 // - section 2 shapes: Uniscribe on Windows (UseUniscribe := true), HarfBuzz on
 //   Linux/macOS (mormot.pdf.harfbuzz registers PdfTextShaper at startup);
 //   both need RightToLeftText := true
+// - builds with FPC and Delphi 7: the canvas is held as TPdfVclCanvas and the
+//   Arabic goes through TextOutUtf8, the same on every compiler
 // - the face is embedded as a subset: both subsetters receive the shaped glyph
 //   IDs, so the GSUB output survives
 //
@@ -59,33 +61,43 @@ const
   {$endif DARWIN}
   {$endif MSWINDOWS}
 
-  // UTF-8 encoded Arabic string constants
+  // UTF-8 encoded strings, drawn with TextOutUtf8: TextOut reads a string as
+  // the compiler holds it, the ANSI code page on Delphi 7
   // U+0628 ARABIC LETTER BA — isolated form
-  ARABIC_BA     = #$D8#$A8;
+  ARABIC_BA: RawUtf8 = #$D8#$A8;
   // مرحبا  (marhaba = Hello)
   // م=U+0645 ر=U+0631 ح=U+062D ب=U+0628 ا=U+0627
-  ARABIC_HELLO  = #$D9#$85#$D8#$B1#$D8#$AD#$D8#$A8#$D8#$A7;
+  ARABIC_HELLO: RawUtf8 = #$D9#$85#$D8#$B1#$D8#$AD#$D8#$A8#$D8#$A7;
   // كتاب  (kitab = Book)
   // ك=U+0643 ت=U+062A ا=U+0627 ب=U+0628
-  ARABIC_BOOK   = #$D9#$83#$D8#$AA#$D8#$A7#$D8#$A8;
+  ARABIC_BOOK: RawUtf8 = #$D9#$83#$D8#$AA#$D8#$A7#$D8#$A8;
   // مدرسة  (madrasa = School)
   // م=U+0645 د=U+062F ر=U+0631 س=U+0633 ة=U+0629
-  ARABIC_SCHOOL = #$D9#$85#$D8#$AF#$D8#$B1#$D8#$B3#$D8#$A9;
+  ARABIC_SCHOOL: RawUtf8 = #$D9#$85#$D8#$AF#$D8#$B1#$D8#$B3#$D8#$A9;
   // بيت  (bayt = House)
   // ب=U+0628 ي=U+064A ت=U+062A
-  ARABIC_HOUSE  = #$D8#$A8#$D9#$8A#$D8#$AA;
+  ARABIC_HOUSE: RawUtf8 = #$D8#$A8#$D9#$8A#$D8#$AA;
+  // "Expected: U+0628 BA <em dash> same glyph as 1a, now via shaper path."
+  EXPECTED_2A: RawUtf8 = 'Expected: U+0628 BA '#$E2#$80#$94 +
+    ' same glyph as 1a, now via shaper path.';
 
-{ <demo>_<os>.pdf next to the executable: the runs of all platforms can then
-  share one folder for checking. OS_KIND names the distribution on Linux }
+{ <demo>_<os>_<cpu>_<compiler>.pdf next to the executable, e.g.
+  rtl_demo_windows_x64_free-pascal-3.2.2.pdf or ..._x86_delphi-7.pdf: the runs
+  of all platforms and compilers can then share one folder for checking.
+  OS_KIND names the distribution on Linux }
 function PdfFileName: TFileName;
+var
+  compiler: RawUtf8;
 begin
-  result := Executable.ProgramFilePath + 'rtl_demo_' +
-    Utf8ToString(LowerCase(ShortStringToAnsi7String(OS_NAME[OS_KIND]))) + '.pdf';
+  compiler := StringReplaceAll(COMPILER_VERSION, [' 32 bit', '', ' 64 bit', '']);
+  result := Executable.ProgramFilePath + Utf8ToString(LowerCase('rtl_demo_' +
+    ShortStringToAnsi7String(OS_NAME[OS_KIND]) + '_' + CPU_ARCH_TEXT + '_' +
+    StringReplaceAll(compiler, ' ', '-') + '.pdf'));
 end;
 
 var
   Doc:                  TPdfDocumentVcl;
-  C:                    TCanvas;
+  C:                    TPdfVclCanvas;
   PdfC:                 TPdfCanvas;
   SansFont, SerifFont,
   MonoFont:             string;
@@ -105,7 +117,7 @@ begin
 
     Doc.AddPage;
     C    := Doc.VclCanvas;
-    PdfC := (C as TPdfVclCanvas).PdfCanvas;
+    PdfC := C.PdfCanvas;
 
     // === Section 1: NoShaper path (isolated forms, no contextual shaping) ===
     Doc.UseUniscribe     := false;
@@ -121,7 +133,7 @@ begin
     C.Font.Name  := ARABIC_FONT;
     C.Font.Size  := 48;
     C.Font.Style := [];
-    C.TextOut(40, 52, ARABIC_BA);
+    C.TextOutUtf8(40, 52, ARABIC_BA);
 
     C.Font.Name  := SansFont;
     C.Font.Size  := 10;
@@ -138,10 +150,10 @@ begin
     C.Font.Name  := ARABIC_FONT;
     C.Font.Size  := 24;
     C.Font.Style := [];
-    C.TextOut(40, 162, ARABIC_HELLO);    // 5 isolated letters
-    C.TextOut(40, 196, ARABIC_BOOK);     // 4 isolated letters
-    C.TextOut(40, 230, ARABIC_SCHOOL);   // 5 isolated letters
-    C.TextOut(40, 264, ARABIC_HOUSE);    // 3 isolated letters
+    C.TextOutUtf8(40, 162, ARABIC_HELLO);    // 5 isolated letters
+    C.TextOutUtf8(40, 196, ARABIC_BOOK);     // 4 isolated letters
+    C.TextOutUtf8(40, 230, ARABIC_SCHOOL);   // 5 isolated letters
+    C.TextOutUtf8(40, 264, ARABIC_HOUSE);    // 3 isolated letters
 
     C.Font.Name  := SansFont;
     C.Font.Size  := 10;
@@ -186,13 +198,13 @@ begin
     C.Font.Name  := ARABIC_FONT;
     C.Font.Size  := 48;
     PdfC.RightToLeftText := true;
-    C.TextOut(500, 366, ARABIC_BA);   // single Ba via shaper
+    C.TextOutUtf8(500, 366, ARABIC_BA);   // single Ba via shaper
 
     C.Font.Name  := SansFont;
     C.Font.Size  := 10;
     C.Font.Color := $00808080;
     PdfC.RightToLeftText := false;
-    C.TextOut(40, 426, 'Expected: U+0628 BA — same glyph as 1a, now via shaper path.');
+    C.TextOutUtf8(40, 426, EXPECTED_2A);
 
     // --- 2b: Arabic words with shaper ---
     C.Font.Name  := SansFont;
@@ -205,10 +217,10 @@ begin
     C.Font.Name  := ARABIC_FONT;
     C.Font.Size  := 36;
     PdfC.RightToLeftText := true;
-    C.TextOut(500, 472, ARABIC_HELLO);    // مرحبا — connected contextual forms
-    C.TextOut(500, 516, ARABIC_BOOK);     // كتاب
-    C.TextOut(500, 560, ARABIC_SCHOOL);   // مدرسة
-    C.TextOut(500, 604, ARABIC_HOUSE);    // بيت
+    C.TextOutUtf8(500, 472, ARABIC_HELLO);    // مرحبا — connected contextual forms
+    C.TextOutUtf8(500, 516, ARABIC_BOOK);     // كتاب
+    C.TextOutUtf8(500, 560, ARABIC_SCHOOL);   // مدرسة
+    C.TextOutUtf8(500, 604, ARABIC_HOUSE);    // بيت
 
     // Latin labels for each word
     PdfC.RightToLeftText := false;
@@ -229,13 +241,13 @@ begin
   WriteLn('PDF saved : ', PdfFileName, '  (', PdfSize div 1024, ' KB)');
   WriteLn('Font used : ', ARABIC_FONT);
   WriteLn('');
-  WriteLn('Section 1a: isolated U+0628 BA — CMAP lookup (DEFAULT_CHARSET fix).');
-  WriteLn('Section 1b: multiple isolated chars — advance widths from CMAP (no overlap).');
+  WriteLn('Section 1a: isolated U+0628 BA - CMAP lookup (DEFAULT_CHARSET fix).');
+  WriteLn('Section 1b: multiple isolated chars - advance widths from CMAP (no overlap).');
   {$ifdef MSWINDOWS}
-  WriteLn('Section 2a: single char via Uniscribe — GetAndMarkGlyphAsUsed Step 2 fix.');
+  WriteLn('Section 2a: single char via Uniscribe - GetAndMarkGlyphAsUsed Step 2 fix.');
   WriteLn('Section 2b: Arabic words with Uniscribe shaping and RTL direction.');
   {$else}
-  WriteLn('Section 2a: single char via HarfBuzz — GetAndMarkGlyphAsUsedWithWidth.');
+  WriteLn('Section 2a: single char via HarfBuzz - GetAndMarkGlyphAsUsedWithWidth.');
   WriteLn('Section 2b: Arabic words with HarfBuzz shaping and RTL direction.');
   WriteLn('            Requires: libharfbuzz + ', ARABIC_FONT, ' font.');
   {$endif MSWINDOWS}

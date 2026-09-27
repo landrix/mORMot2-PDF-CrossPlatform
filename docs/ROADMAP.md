@@ -18,7 +18,8 @@ FreeType backend, fixed (`fonts.md` §3). The Linux re-run is done up to
 veraPDF on its files (V), and its post-R-21 files pass veraPDF. R-21 is done
 on all three platforms. R-23 is
 done: `layer1_demo` builds with FPC on all three platforms and with Delphi 7,
-and passes PAC 2024 and veraPDF `ua1` everywhere. **Next:** R-20.
+and passes PAC 2024 and veraPDF `ua1` everywhere. The six console demos
+build with Delphi 7 (R-20 step 5). **Next:** R-20, the GUI demos.
 
 ---
 
@@ -72,6 +73,11 @@ earlier post covered them.
   `TCanvas` writes nothing into the PDF. **`TPdfDocumentVcl.VclCanvas` now
   has the type `TPdfVclCanvas`** (was `TCanvas`); code that assigns it to a
   `TCanvas` variable still compiles
+- **All six console demos build with Delphi 7** (`pdf_demo`, `chinese_demo`,
+  `rtl_demo`, `zugferd_demo` besides `layer1_demo` and `markdown_demo`) and
+  write the same PDF as with FPC. **Every demo now names its PDF
+  `<demo>_<os>_<cpu>_<compiler>.pdf`**, as `layer1_demo` did (was
+  `<demo>_<os>.pdf`), so the files of all compilers share one folder
 - **Coming with R-20** (announce when done): the preview and the GUI demos
   on Delphi
 
@@ -259,9 +265,41 @@ roles. FPC: `test_runner` 243/243, the eight demo PDFs as after step 2.
 282/282 on Debian and 302/302 on macOS, all eight demos build and run; the
 tagged demos of all three platforms and the Delphi 7 `markdown_demo` pass
 veraPDF `ua1`, `zugferd_demo` also `3u` and Mustang. The Delphi 7
-`markdown_demo` file passes PAC 2024 too. **Next:** the
-preview and the GUI demos on Delphi (`.dfm`, VCL preview) — or first
-`report_demo --export`.
+`markdown_demo` file passes PAC 2024 too.
+
+**Remaining, in this order** (surveyed 2026-09-27, sources only):
+5. **The four TCanvas demos on Delphi 7** — `pdf_demo`, `chinese_demo`,
+   `rtl_demo`, `zugferd_demo`. All four hold the canvas in a `C: TCanvas`,
+   which compiles on Delphi 7 and leaves the PDF empty: it becomes
+   `TPdfVclCanvas`. Text beyond ASCII goes through `TextOutUtf8` — the UTF-8
+   byte constants of `chinese_demo` and `rtl_demo`, and the literals in the
+   source (`pdf_demo`'s "Special chars" line, the dash in `chinese_demo`'s
+   title), which Delphi 7 would read as ANSI. Each demo: FPC PDF unchanged,
+   the Delphi 7 PDF compared with it; they check CJK subsetting, Uniscribe
+   shaping and PDF/A-3U from Delphi 7.
+   **Done on Windows, 2026-09-27:** the four demos build with Delphi 7 as
+   well; `pdf_demo` drops its `TPdfDocumentGDI` branch (not ported, it would
+   not have compiled) and its `VC` cast. The FPC PDFs are the same as before
+   apart from date and `/ID`, and the Delphi 7 PDFs the same as the FPC ones
+   after inflating the streams and masking dates, `/ID`, subset prefixes and
+   offsets; `pdftotext` gives the umlauts, `€`, `…` from both. One byte-level
+   difference, in `chinese_demo` only: the `cmap` format 12 (3/10) subtable of
+   both Microsoft YaHei subsets carries `language` = `0x0008CA34` from Win32
+   and 0 from Win64, the same on every run (the other demos' subsets have no
+   format 12 and are byte-identical). The spec wants 0 there. It comes from
+   the 32-bit `CreateFontPackage` itself: the source face (`msyh.ttc`) has
+   0, we pass language 0, `ReduceTTF` copies the tables unchanged, and a
+   test run with `lpfnAllocate` filling its blocks with `$AA` left the value
+   as it was — so the DLL writes it, not our heap. No FPC for Win32 here to
+   confirm from a second compiler. Checkers on the Delphi 7 files: open.
+   Also since this step: every demo names its PDF
+   `<demo>_<os>_<cpu>_<compiler>.pdf`, as `layer1_demo` did.
+6. **`report_demo --export` and `mormot_demo --export`** on Delphi 7: the
+   export path without the form; `mormot_demo` brings the ORM and the static
+   SQLite for Win32.
+7. **`mormot.ui.reportpreview` on the VCL.**
+8. **The GUI demos with their forms on Delphi** — built in code or a `.dfm`
+   beside the `.lfm`, to be decided.
 
 **Not part of R-20:** Delphi 2010 and later have `TCustomCanvas` with virtual
 drawing methods (not verified here), where overriding might work without typed

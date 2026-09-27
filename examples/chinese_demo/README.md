@@ -18,7 +18,7 @@ subset goes to `/FontFile3` with `/Subtype /OpenType` rather than `/FontFile2`
 (roadmap R-15c). Before that was handled the file was ~10 MB; it is ~23 KB now.
 
 ```bash
-grep -a -oE "/BaseFont[ ]*/[A-Za-z0-9+,#_-]+" chinese_demo_<os>.pdf | sort -u
+grep -a -oE "/BaseFont[ ]*/[A-Za-z0-9+,#_-]+" chinese_demo_<os>_<cpu>_<compiler>.pdf | sort -u
 # HFCPMT+HiraginoSansGB  <- the six-letter prefix means subset
 ```
 
@@ -34,5 +34,13 @@ grep -a -oE "/BaseFont[ ]*/[A-Za-z0-9+,#_-]+" chinese_demo_<os>.pdf | sort -u
 
 ```bash
 lazbuild chinese_demo.lpi -B
-bin/<target>/chinese_demo      # -> chinese_demo_<os>.pdf, next to the executable
+bin/<target>/chinese_demo      # -> chinese_demo_<os>_<cpu>_<compiler>.pdf, next to the executable
+```
+
+Delphi 7 (Win32), from the repository root, with `MORMOT2` set to the mORMot2
+checkout:
+
+```bat
+tests\build_delphi7.bat examples\chinese_demo\chinese_demo.lpr
+bin\d7\chinese_demo\chinese_demo.exe   &rem -> chinese_demo_windows_x86_delphi-7.pdf, next to it
 ```

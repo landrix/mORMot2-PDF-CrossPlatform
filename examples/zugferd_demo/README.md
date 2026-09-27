@@ -46,15 +46,25 @@ two levels above the executable, i.e. in this folder:
 
 ```bash
 lazbuild zugferd_demo.lpi -B      # Windows: "C:\lazarus\lazbuild.exe" …
-bin/<target>/zugferd_demo         # -> zugferd_demo_<os>.pdf, next to the executable
+bin/<target>/zugferd_demo         # -> zugferd_demo_<os>_<cpu>_<compiler>.pdf, next to the executable
+```
+
+Delphi 7 (Win32), with `MORMOT2` set to the mORMot2 checkout: build from the
+repository root, run from this folder — the executable lands one level
+higher than the FPC one, so the second lookup misses:
+
+```bat
+tests\build_delphi7.bat examples\zugferd_demo\zugferd_demo.lpr
+cd examples\zugferd_demo
+..\..\bin\d7\zugferd_demo\zugferd_demo.exe   &rem -> zugferd_demo_windows_x86_delphi-7.pdf, next to it
 ```
 
 **Checking the output**
 
 ```bash
-verapdf -f 3u  zugferd_demo_<os>.pdf     # PDF/A-3U
-verapdf -f ua1 zugferd_demo_<os>.pdf     # PDF/UA-1
-java -jar Mustang-CLI-<version>.jar --action validate --source zugferd_demo_<os>.pdf
+verapdf -f 3u  zugferd_demo_<os>_<cpu>_<compiler>.pdf     # PDF/A-3U
+verapdf -f ua1 zugferd_demo_<os>_<cpu>_<compiler>.pdf     # PDF/UA-1
+java -jar Mustang-CLI-<version>.jar --action validate --source zugferd_demo_<os>_<cpu>_<compiler>.pdf
 ```
 
 **Other files here**

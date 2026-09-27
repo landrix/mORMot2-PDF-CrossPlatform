@@ -4,9 +4,11 @@
 //
 // Worth noting:
 // - the TCanvas drawing code is identical on all platforms and compilers
-// - FPC/Lazarus always uses TPdfDocumentVcl: the LCL metafile canvas does not
-//   record Brush state reliably, which would turn every fill black
-// - Delphi on Windows uses TPdfDocumentGDI (full GDI + Uniscribe feature set)
+// - every compiler uses TPdfDocumentVcl, and the canvas is held as
+//   TPdfVclCanvas: Delphi 7's TCanvas methods are static, a call through a
+//   TCanvas reference would not reach the PDF
+// - text beyond ASCII goes through TextOutUtf8: Delphi 7 would read a literal
+//   in this UTF-8 file as ANSI
 // - Tagged := True must be set before AddPage and before the font names are
 //   resolved; it raises FileFormat to pdf17 and selects the PDF/UA font mode
 // - the low-level API leaves the structure to the caller, so this demo opens
@@ -28,33 +30,35 @@ uses
   mormot.ui.pdf,
   mormot.ui.pdfcanvas;
 
-{ <demo>_<os>.pdf next to the executable: the runs of all platforms can then
-  share one folder for checking. OS_KIND names the distribution on Linux }
+{ <demo>_<os>_<cpu>_<compiler>.pdf next to the executable, e.g.
+  pdf_demo_windows_x64_free-pascal-3.2.2.pdf or ..._x86_delphi-7.pdf: the runs
+  of all platforms and compilers can then share one folder for checking.
+  OS_KIND names the distribution on Linux }
 function PdfFileName: TFileName;
+var
+  compiler: RawUtf8;
 begin
-  result := Executable.ProgramFilePath + 'pdf_demo_' +
-    Utf8ToString(LowerCase(ShortStringToAnsi7String(OS_NAME[OS_KIND]))) + '.pdf';
+  compiler := StringReplaceAll(COMPILER_VERSION, [' 32 bit', '', ' 64 bit', '']);
+  result := Executable.ProgramFilePath + Utf8ToString(LowerCase('pdf_demo_' +
+    ShortStringToAnsi7String(OS_NAME[OS_KIND]) + '_' + CPU_ARCH_TEXT + '_' +
+    StringReplaceAll(compiler, ' ', '-') + '.pdf'));
 end;
 
+const
+  // "ä ö ü Ä Ö Ü ß € § °"
+  SPECIAL_CHARS: RawUtf8 = 'Special chars: ' +
+    #$C3#$A4' '#$C3#$B6' '#$C3#$BC' '#$C3#$84' '#$C3#$96' '#$C3#$9C' ' +
+    #$C3#$9F' '#$E2#$82#$AC' '#$C2#$A7' '#$C2#$B0;
+
 var
-  // FPC/Lazarus: always use TPdfDocumentVcl — LCL metafile canvas does not
-  // record Brush/Pen state reliably, so TPdfDocumentGDI produces black fills.
-  // Delphi on Windows: TPdfDocumentGDI (full GDI+Uniscribe feature set).
-  {$if defined(FPC) or not defined(MSWINDOWS)}
   Doc: TPdfDocumentVcl;
-  {$else}
-  Doc: TPdfDocumentGDI;
-  {$ifend}
-  C: TCanvas;
+  C: TPdfVclCanvas;
   Row, Col, X, Y: Integer;
   ColWidths: array[0..3] of Integer;
   Headers:   array[0..3] of string;
   Data:      array[0..4, 0..3] of string;
   MyX, MyY:  Integer;
   MyXLoc:    Integer;
-  {$if defined(FPC) or not defined(MSWINDOWS)}
-  VC:        TPdfVclCanvas;  // sub-pixel text metrics (ROADMAP B-4)
-  {$ifend}
   MyString:  String;
   SansFont: String;
   SerifFont: String;
@@ -62,11 +66,7 @@ var
 begin
   // AUseOutlines = true: PDF/UA wants a bookmark per heading, and the
   // low-level API leaves the outline to the caller (TGDIPages builds its own)
-  {$if defined(FPC) or not defined(MSWINDOWS)}
   Doc := TPdfDocumentVcl.Create(true);
-  {$else}
-  Doc := TPdfDocumentGDI.Create(true);
-  {$ifend}
   try
     // Tagged PDF (ISO 32000-1 §14) — must be set BEFORE AddPage and before the
     // font names are resolved: Tagged := True auto-raises FileFormat to pdf17
@@ -123,7 +123,7 @@ begin
 
     C.Font.Name := SansFont;
     C.Font.Size := 10;
-    C.TextOut(40, 240, 'Special chars: ä ö ü Ä Ö Ü ß € § °');
+    C.TextOutUtf8(40, 240, SPECIAL_CHARS);
     Doc.EndStructContent;
 
     // --- Page 2: Vector graphics ---
@@ -176,16 +176,9 @@ begin
       C.TextOut(MyXLoc, MyY, MyString);
       // measure and draw the box in single precision: the integer TCanvas API
       // would snap both edges back to the 1 px (0.75 pt) grid
-      {$if defined(FPC) or not defined(MSWINDOWS)}
-      VC := TPdfVclCanvas(C);
-      VC.RectangleFrac(MyXLoc, MyY,
-        MyXLoc + VC.TextWidthFrac(MyString),
-        MyY + VC.TextHeightFrac(MyString));
-      {$else}
-      C.Rectangle(MyXLoc, MyY,
-        MyXLoc + C.TextWidth(MyString),
-        MyY + C.TextHeight(MyString));
-      {$ifend}
+      C.RectangleFrac(MyXLoc, MyY,
+        MyXLoc + C.TextWidthFrac(MyString),
+        MyY + C.TextHeightFrac(MyString));
       C.Font.Size := C.Font.Size + 2;
     end;
     Doc.EndStructContent; // Figure
@@ -210,7 +203,7 @@ begin
     // caller to open them (ROADMAP R-14).
     Doc.BeginStructContent(psrTable);
 
-    // Header-Zeile
+    // header row
     Doc.BeginStructContent(psrTHead);
     C.Brush.Color := $963232;
     C.Pen.Style   := psClear;
@@ -231,7 +224,7 @@ begin
     Doc.EndStructContent; // TR
     Doc.EndStructContent; // THead
 
-    // Datenzeilen
+    // data rows
     Doc.BeginStructContent(psrTBody);
     C.Font.Name  := SansFont;
     C.Font.Style := [];

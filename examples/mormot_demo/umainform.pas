@@ -425,6 +425,7 @@ end;
 function BatchExportFile(out AFileName: string): boolean;
 var
   i: Integer;
+  compiler: RawUtf8;
 begin
   result := false;
   AFileName := '';
@@ -434,9 +435,15 @@ begin
       if i < ParamCount then
         AFileName := ParamStr(i + 1)
       else
-        // <demo>_<os>.pdf next to the executable, as the console demos write it
-        AFileName := Executable.ProgramFilePath + 'mormot_demo_' +
-          Utf8ToString(LowerCase(ShortStringToAnsi7String(OS_NAME[OS_KIND]))) + '.pdf';
+      begin
+        // <demo>_<os>_<cpu>_<compiler>.pdf next to the executable, as the
+        // console demos write it
+        compiler := StringReplaceAll(COMPILER_VERSION,
+          [' 32 bit', '', ' 64 bit', '']);
+        AFileName := Executable.ProgramFilePath + Utf8ToString(LowerCase('mormot_demo_' +
+          ShortStringToAnsi7String(OS_NAME[OS_KIND]) + '_' + CPU_ARCH_TEXT + '_' +
+          StringReplaceAll(compiler, ' ', '-') + '.pdf'));
+      end;
       result := true;
       exit;
     end;

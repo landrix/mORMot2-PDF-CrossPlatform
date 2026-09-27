@@ -30,5 +30,13 @@ needed for section 2: `sudo apt install libharfbuzz0b` / `brew install harfbuzz`
 
 ```bash
 lazbuild rtl_demo.lpi -B
-bin/<target>/rtl_demo          # -> rtl_demo_<os>.pdf, next to the executable
+bin/<target>/rtl_demo          # -> rtl_demo_<os>_<cpu>_<compiler>.pdf, next to the executable
+```
+
+Delphi 7 (Win32), from the repository root, with `MORMOT2` set to the mORMot2
+checkout:
+
+```bat
+tests\build_delphi7.bat examples\rtl_demo\rtl_demo.lpr
+bin\d7\rtl_demo\rtl_demo.exe   &rem -> rtl_demo_windows_x86_delphi-7.pdf, next to it
 ```

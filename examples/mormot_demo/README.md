@@ -23,7 +23,7 @@ mORMot ORM.
 ```bash
 lazbuild mormot_demo.lpi -B
 bin/<target>/mormot_demo                    # GUI
-bin/<target>/mormot_demo --export           # batch -> mormot_demo_<os>.pdf, next to the executable
+bin/<target>/mormot_demo --export           # batch -> mormot_demo_<os>_<cpu>_<compiler>.pdf, next to the executable
 bin/<target>/mormot_demo --export out.pdf   # batch to a file of your choice; both need a display
 ```
 

@@ -8,7 +8,7 @@ FPImage adapter: `src/core/mormot.pdf.fpimage.pas`
 | Class | Coordinates | Dependency | When to use |
 |---|---|---|---|
 | `TPdfDocument` | PDF points (72 DPI), Y=0 bottom | mORMot2-Core + the LCL/VCL `Graphics` unit | Server/CLI, no TCanvas |
-| `TPdfDocumentVcl` | pixels (96 DPI), Y=0 top | + TCanvas bridge; LCL only, Delphi in R-20 | TCanvas-compatible code, GUI apps |
+| `TPdfDocumentVcl` | pixels (96 DPI), Y=0 top | + TCanvas bridge; LCL, and the VCL on Delphi 7 (R-20) | TCanvas-compatible code, GUI apps |
 
 `TPdfDocumentGdi` (Windows-only, Delphi) uses EMF/GDI — not ported.
 
