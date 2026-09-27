@@ -9,8 +9,7 @@ every Figure; W-2, e-mail addresses without links in `zugferd_demo`) and veraPDF
 `ua1`. PDF/A-3U with PDF/UA-1 is verified (R-17). Fonts are embedded and subset
 on all three platforms; tables carry `THead`/`TBody`/`TFoot` row groups. All
 three platforms build with FPC; `test_runner` is green with 243 assertions on
-Windows (after the second R-20 step), 280 on Linux and 300 on macOS (after the
-first).
+Windows, 282 on Linux and 302 on macOS (after the fourth R-20 step).
 **Layer 1 builds on Delphi 7** (R-19, done), and since R-20 step 4 the
 TCanvas bridge and the `TGDIPages` core too: 243 assertions on Win32, and the
 tagged Unicode test file passes PAC 2024 and veraPDF `ua1` from Delphi 7/Win32
@@ -225,7 +224,7 @@ Word splitting moved from `TStringList.DelimitedText` to
 Announce"); `TestParagraphKeepsQuotes` fails 1/2 on the old unit.
 `test_runner` 243/243. Seven demo PDFs are the same apart from date and
 `/ID`; `markdown_demo` differs only in the quote, now with its quotation
-marks. **Open:** Linux and macOS (+2 each expected: 282, 302).
+marks. Linux 282/282 and macOS 302/302 on 2026-09-27, as expected.
 
 **Step 3, point 3 — done on Windows, 2026-09-27:** `TGDIPages` is a
 non-visual `TComponent` — it was a `TScrollBox` nobody placed on a form. The
@@ -241,8 +240,8 @@ gave; `report_demo` passes its title. `ShowPreviewForm`, `PrintPages`,
 `ShowPrintDialog` (it printed without a dialog) and `OpenPdfFile` (empty)
 are gone. `test_runner` 243/243; the eight demo PDFs as after step 2,
 `/Creator` unchanged. The preview window was not opened — check it by hand
-(zoom, page keys, Ctrl+wheel). **Open:** the preview by hand; Linux and
-macOS for steps 2 and 3 together.
+(zoom, page keys, Ctrl+wheel). **Open:** the preview by hand. Linux and
+macOS: see step 4.
 
 **Step 4, points 1 and 3 — done on Windows, 2026-09-27:** the bridge and the
 `TGDIPages` core build on Delphi 7. The bridge reintroduces the static VCL
@@ -257,9 +256,13 @@ the way, `TestLineToWritesCompletePath`, found that `DoLineTo` has to skip
 `psClear` itself. `markdown_demo` from Delphi 7 and from FPC/Win64: same
 size, no difference after masking dates, `/ID` and subset prefixes, same
 roles. FPC: `test_runner` 243/243, the eight demo PDFs as after step 2.
-**Open:** Linux and macOS for steps 2 to 4; PAC/veraPDF on the Delphi 7
-`markdown_demo` file. **Next:** the preview and the GUI demos on Delphi
-(`.dfm`, VCL preview) — or first `report_demo --export`.
+**Linux and macOS for steps 2 to 4 — done, 2026-09-27:** `test_runner`
+282/282 on Debian and 302/302 on macOS, all eight demos build and run; the
+tagged demos of all three platforms and the Delphi 7 `markdown_demo` pass
+veraPDF `ua1`, `zugferd_demo` also `3u` and Mustang.
+**Open:** PAC 2024 on the Delphi 7 `markdown_demo` file. **Next:** the
+preview and the GUI demos on Delphi (`.dfm`, VCL preview) — or first
+`report_demo --export`.
 
 **Not part of R-20:** Delphi 2010 and later have `TCustomCanvas` with virtual
 drawing methods (not verified here), where overriding might work without typed
@@ -349,11 +352,11 @@ GUI) stay manual. veraPDF runs on Java and could follow as a later step.
 ### V — Verification Outstanding
 
 All three platforms build and pass `test_runner` (243 assertions on Windows,
-280 on Linux, 300 on macOS — after the first R-20 step). The tagged demos pass
+282 on Linux, 302 on macOS — after the fourth R-20 step). The tagged demos pass
 veraPDF `ua1` 106/106 on all three — measured again on 2026-09-27 — and PAC
 2024 (2026-09-26) for the files of all three platforms, `zugferd_demo` also `3u` 148/148 and Mustang;
 `tagged_unicode` and `layer1_demo` pass `ua1` from Linux, macOS, FPC/Win64
-and Delphi 7. The
+and Delphi 7, `markdown_demo` from Delphi 7 too. The
 structure trees (roles and their counts) and page counts match across the
 platforms for every tagged demo. That was the stated gate for a first version tag, and
 the project still has none.
