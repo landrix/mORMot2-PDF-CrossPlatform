@@ -10,7 +10,7 @@ Cross-platform PDF-Generierung für Windows, Linux und macOS, basierend auf der 
 | Plattform | Compiler | Backend | Status |
 |---|---|---|---|
 | Windows | FreePascal/Lazarus | GDI via Interfaces | Produktiv |
-| Windows (Win32) | Delphi 7 | GDI via Interfaces | Nur Ebene 1 — `TPdfDocument`/`TPdfCanvas`; Tests grün, getaggte Unicode-Ausgabe mit PAC geprüft. TCanvas-Brücke und `TGDIPages` brauchen vorerst FPC (Roadmap R-20) |
+| Windows (Win32) | Delphi 7 | GDI via Interfaces | Ebene 1, die TCanvas-Brücke und der Kern von `TGDIPages`; Tests grün, die sechs Konsolen-Demos und der `--export` der beiden GUI-Demos geben dasselbe PDF wie FPC. Vorschau und Demo-Fenster brauchen vorerst FPC (Roadmap R-20) |
 | Linux | FreePascal/Lazarus | FreeType2 | Produktiv |
 | macOS | FreePascal/Lazarus | FreeType2 | Produktiv |
 
@@ -248,7 +248,7 @@ lazbuild examples/zugferd_demo/zugferd_demo.lpi -B
 lazbuild tests/test_runner.lpi -B && tests/bin/<cpu-os>/test_runner
 ```
 
-**Delphi 7** (Win32, Ebene 1) baut von der Kommandozeile. `MORMOT2` zeigt auf
+**Delphi 7** (Win32: Ebene 1, die TCanvas-Brücke, der Kern von `TGDIPages`) baut von der Kommandozeile. `MORMOT2` zeigt auf
 den mORMot2-Checkout, `DELPHI7` ist standardmäßig der übliche
 Installationsordner; die Ausgabe landet in `bin\d7\<Projekt>\`:
 
@@ -269,7 +269,7 @@ automatisierten Prüfungen:
 examples/report_demo/bin/<target>/report_demo --export report.pdf
 ```
 
-`TGDIPages` ist ein LCL-Control, daher wird unter Linux/GTK2 trotzdem ein
+Die LCL misst den Text, daher wird unter Linux/GTK2 trotzdem ein
 Display gebraucht — auf einer Maschine ohne Bildschirm `xvfb-run` davorsetzen.
 Das Cocoa-Widgetset unter macOS exportiert auch ohne Display.
 
@@ -303,7 +303,7 @@ Fonts aus `/Library/Fonts`, `/System/Library/Fonts`, `~/Library/Fonts`.
 - **EMF/MetaFile:** Windows-only (`TPdfDocumentGdi`), nicht portierbar
 - **GDI+/Gradient Fills:** nur via EMF auf Windows verfügbar
 - **Tabellen-Pagination:** kein Zeilenumbruch innerhalb einer Zelle
-- **Delphi:** nur Ebene 1 unter Delphi 7 (Win32). Die TCanvas-Brücke überschreibt Methoden, die in der VCL von Delphi 7 nicht virtuell sind; sie kommt mit Roadmap R-20
+- **Delphi:** Delphi 7 (Win32) baut Ebene 1, die TCanvas-Brücke und den Kern von `TGDIPages`, alle sechs Konsolen-Demos und den Batch-Export der beiden GUI-Demos, noch nicht die Vorschau und die Demo-Fenster (Roadmap R-20). Die Zeichenmethoden von `TCanvas` sind unter Delphi 7 statisch: über eine `TPdfVclCanvas`-Referenz zeichnen (`Doc.VclCanvas` hat diesen Typ), nie über ein einfaches `TCanvas`, sonst kommt nichts im PDF an
 - **Links in getaggter Ausgabe:** `CreateHyperLink` in einem getaggten Dokument verletzt PDF/UA — es gibt kein `Link`-Strukturelement für Annotationen. `TGDIPages.DrawLink` bleibt konform, weil es nur formatierten Text zeichnet; seine URL ist nicht anklickbar (Roadmap R-18)
 
 Details und aktueller Prüfstand: [docs/ROADMAP.md](docs/ROADMAP.md)

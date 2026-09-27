@@ -268,6 +268,9 @@ tests\build_delphi7.bat tests\test_runner.lpr
 bin\d7\test_runner\test_runner.exe --noenter
 tests\build_delphi7.bat examples\layer1_demo\layer1_demo.dpr
 tests\build_delphi7.bat examples\markdown_demo\markdown_demo.lpr
+rem the other demos the same way, from their .lpr; the GUI demos as the
+rem batch export only (--export), zugferd_demo and mormot_demo run from their
+rem demo folder, where they find factur-x.xml and data\
 ```
 
 On Windows every test runner waits for Enter at the end unless it gets a
@@ -292,7 +295,8 @@ version` for the prebuilt mORMot2 units — noise, not an error. See
 
 The two GUI demos export without their window, which is how they are checked:
 `report_demo --export out.pdf`. On Linux/GTK2 this still needs a
-display (`xvfb-run` otherwise); on macOS Cocoa runs it headless.
+display (`xvfb-run` otherwise); on macOS Cocoa runs it headless. The report
+itself is in each demo's `uReport.pas`; the form only passes its options.
 
 ## Open Items
 
@@ -320,9 +324,10 @@ display (`xvfb-run` otherwise); on macOS Cocoa runs it headless.
   `layer1_demo`, the first demo that builds on Delphi 7, passes PAC 2024 and
   veraPDF `ua1` on all three platforms.
   R-20, priority 2: the TCanvas bridge and the `TGDIPages` core build on
-  Delphi 7, `test_runner` 243/243 there, and all six console demos build
-  there and give the same PDF as FPC; the preview and the GUI demos are
-  open. Delphi 7's `TCanvas`
+  Delphi 7, `test_runner` 243/243 there, and all six console demos and the
+  `--export` of the two GUI demos build there and give the same PDF as FPC
+  (the GUI demos build their report in `uReport.pas`, without a form); the
+  preview and the demo windows are open. Delphi 7's `TCanvas`
   drawing methods are static: the bridge reintroduces them
   (`PDF_CANVASVIRTUAL` off), so draw through a `TPdfVclCanvas` reference —
   `VclCanvas` has that type, `RenderPageToCanvas` casts. Text beyond ASCII

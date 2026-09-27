@@ -1,6 +1,6 @@
 /// Report Engine Demo — mORMot2 PDF Cross-Platform
 // A Lazarus GUI around TGDIPages: WYSIWYG preview, print and tagged PDF export
-// from the form in uMainForm.pas.
+// from the form in uMainForm.pas; the report itself is built in uReport.pas.
 //
 // Worth noting:
 // - the report is built once and rendered twice, to the preview and to the PDF,
@@ -8,38 +8,56 @@
 // - TTableLayout with DrawTableHeader/DrawTableRow/DrawTableFooter produces a
 //   real Table > THead|TBody|TFoot structure; the totals line is the TFoot row
 // - SetHeader/SetFooter repeat on continuation pages and are tagged as artifacts
-// - report_demo --export <file.pdf> builds and exports without showing
-//   the window; TGDIPages is an LCL control, so this still needs a display
+// - report_demo --export [<file.pdf>] builds and exports without showing the
+//   window; on Linux the LCL still needs a display for it
+// - Delphi 7 builds the batch export only, until the VCL form follows
+//   (roadmap R-20 step 8)
 program report_demo;
 
 {$I mormot.defines.inc}
+
+// the form is LCL-only for now, see above
+{$ifdef FPC}
+  {$define REPORTDEMO_FORM}
+{$endif FPC}
 
 uses
   {$IFDEF UNIX}
   cthreads,
   {$ENDIF}
+  {$ifdef REPORTDEMO_FORM}
   Interfaces, // LCL
   Forms,
-  uMainForm;
+  uMainForm,
+  {$endif REPORTDEMO_FORM}
+  SysUtils,
+  uReport;
 
 {$R *.res}
 
 var
-  PdfFile: string;
+  PdfFile: TFileName;
 begin
+  {$ifdef REPORTDEMO_FORM}
   RequireDerivedFormResource := True;
-  Application.Title:='mORMot2 Report Demo';
+  Application.Title:=REPORT_CREATOR;
   Application.Scaled:=True;
   Application.Initialize;
-  Application.CreateForm(TMainForm, MainForm);
-  // report_demo --export <file.pdf>: build and export, then quit
+  {$endif REPORTDEMO_FORM}
+  // report_demo --export [<file.pdf>]: build and export, then quit
   if BatchExportFile(PdfFile) then
   begin
-    MainForm.ExportToFile(PdfFile);
+    ExportReport(DefaultReportOptions, PdfFile);
     // a Windows GUI executable has no stdout: WriteLn raises I/O error 105
     if IsConsole then
       WriteLn('PDF exported: ', PdfFile);
     exit;
   end;
+  {$ifdef REPORTDEMO_FORM}
+  Application.CreateForm(TMainForm, MainForm);
   Application.Run;
+  {$else}
+  if IsConsole then
+    WriteLn('usage: report_demo --export [<file.pdf>]');
+  {$endif REPORTDEMO_FORM}
 end.

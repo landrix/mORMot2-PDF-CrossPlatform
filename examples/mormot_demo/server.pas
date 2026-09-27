@@ -37,6 +37,14 @@ type
     function GetInvoiceData(out Items: TDtoInvoiceRowDynArray): integer;
   end;
 
+/// the demo database: data/mormot_demo.db in the demo folder, two levels above
+// the executable - or below the current folder, for a build that lands
+// elsewhere (Delphi 7: bin/d7/mormot_demo, run from the demo folder)
+function DemoDatabaseFile: TFileName;
+
+/// opens the demo database and returns its invoice rows
+function ReadInvoiceData(out Items: TDtoInvoiceRowDynArray): integer;
+
 implementation
 
 { TDemoServer }
@@ -79,6 +87,35 @@ begin
     Table.Free;
   end;
   Result := Length(Items);
+end;
+
+function DemoDatabaseFile: TFileName;
+var
+  dir: TFileName;
+begin
+  dir := Executable.ProgramFilePath + '..' + PathDelim + '..' + PathDelim + 'data';
+  if not DirectoryExists(dir) then
+    dir := 'data';
+  result := dir + PathDelim + Executable.ProgramName + '.db';
+end;
+
+function ReadInvoiceData(out Items: TDtoInvoiceRowDynArray): integer;
+var
+  Model: TOrmModel;
+  Client: TRestClientDB;
+begin
+  Model := CreateModel;
+  try
+    Client := TRestClientDB.Create(Model, nil, DemoDatabaseFile, TDemoServer,
+      false, '');
+    try
+      result := TDemoServer(Client.Server).GetInvoiceData(Items);
+    finally
+      Client.Free;
+    end;
+  finally
+    Model.Free;
+  end;
 end;
 
 initialization

@@ -10,7 +10,7 @@ veraPDF (106/106) and PAC 2024 on all three platforms.
 | Platform | Compiler | Backend | Status |
 |---|---|---|---|
 | Windows | FreePascal/Lazarus | GDI via interfaces | Production |
-| Windows (Win32) | Delphi 7 | GDI via interfaces | Layer 1, the TCanvas bridge and the `TGDIPages` core; all tests green, `markdown_demo` gives the same PDF as FPC. The preview and the GUI demos need FPC for now (roadmap R-20) |
+| Windows (Win32) | Delphi 7 | GDI via interfaces | Layer 1, the TCanvas bridge and the `TGDIPages` core; all tests green, the six console demos and the `--export` of the two GUI demos give the same PDF as FPC. The preview and the demo windows need FPC for now (roadmap R-20) |
 | Linux | FreePascal/Lazarus | FreeType2 | Production |
 | macOS | FreePascal/Lazarus | FreeType2 | Production |
 
@@ -276,7 +276,7 @@ automated checks use:
 examples/report_demo/bin/<target>/report_demo --export report.pdf
 ```
 
-`TGDIPages` is an LCL control, so on Linux/GTK2 this still needs a display —
+The LCL measures the text, so on Linux/GTK2 this still needs a display —
 on a headless machine run it under `xvfb-run`. The macOS Cocoa widgetset
 exports without one.
 
@@ -310,7 +310,7 @@ Fonts from `/Library/Fonts`, `/System/Library/Fonts`, `~/Library/Fonts`.
 - **EMF/MetaFile:** Windows-only (`TPdfDocumentGdi`), not portable
 - **GDI+/Gradient fills:** available only via EMF on Windows
 - **Table pagination:** no row wrap within a cell
-- **Delphi:** Delphi 7 (Win32) builds layer 1, the TCanvas bridge and the `TGDIPages` core, not yet the preview or the GUI demos (roadmap R-20). Delphi 7's `TCanvas` drawing methods are static: draw through a `TPdfVclCanvas` reference (`Doc.VclCanvas` has that type), never through a plain `TCanvas`, or nothing reaches the PDF
+- **Delphi:** Delphi 7 (Win32) builds layer 1, the TCanvas bridge and the `TGDIPages` core, all six console demos and the batch export of the two GUI demos, not yet the preview or the demo windows (roadmap R-20). Delphi 7's `TCanvas` drawing methods are static: draw through a `TPdfVclCanvas` reference (`Doc.VclCanvas` has that type), never through a plain `TCanvas`, or nothing reaches the PDF
 - **Links in tagged output:** `CreateHyperLink` in a tagged document fails PDF/UA — there is no `Link` structure element for annotations. `TGDIPages.DrawLink` stays conformant by drawing styled text only; its URL is not clickable (roadmap R-18)
 
 Details and the current verification status: [docs/ROADMAP.md](docs/ROADMAP.md)

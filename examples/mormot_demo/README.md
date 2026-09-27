@@ -8,8 +8,9 @@ mORMot ORM.
 | File | Role |
 |---|---|
 | `data.pas` | `TOrmEmployee`, `TOrmCustomer`, `TOrmCustomerOrder` |
-| `server.pas` | `TDemoServer.GetInvoiceData` returning a DTO array |
-| `uMainForm.pas` | `BuildReport` → `DrawInvoiceTable` with `TTableLayout` |
+| `server.pas` | `TDemoServer.GetInvoiceData` returning a DTO array, `ReadInvoiceData` |
+| `uReport.pas` | `BuildReport` → `DrawInvoiceTable` with `TTableLayout`, `ExportReport` |
+| `uMainForm.pas` | the form: passes the options its controls show |
 
 **What is special here**
 
@@ -27,10 +28,21 @@ bin/<target>/mormot_demo --export           # batch -> mormot_demo_<os>_<cpu>_<c
 bin/<target>/mormot_demo --export out.pdf   # batch to a file of your choice; both need a display
 ```
 
+Delphi 7 (Win32), with `MORMOT2` set to the mORMot2 checkout: build from the
+repository root, run from this folder — the batch export only, the window
+follows with roadmap R-20:
+
+```bat
+tests\build_delphi7.bat examples\mormot_demo\mormot_demo.lpr
+cd examples\mormot_demo
+..\..\bin\d7\mormot_demo\mormot_demo.exe --export   &rem -> mormot_demo_windows_x86_delphi-7.pdf, next to it
+```
+
 **The database** is `data/mormot_demo.db` in this folder, found two levels
-above the executable. The sample database with the orders is not versioned
-(`.gitignore`); without it SQLite creates an empty one, and the table shows its
-placeholder row "No orders available". The `data/` folder itself has to exist:
+above the executable, or else below the current folder (the Delphi 7 build).
+The sample database with the orders is not versioned (`.gitignore`); without
+it SQLite creates an empty one, and the table shows its placeholder row "No
+orders available". The `data/` folder itself has to exist:
 a fresh clone has none, and the demo then stops with runtime error 217.
 
 The sample database is `Project10.db` in

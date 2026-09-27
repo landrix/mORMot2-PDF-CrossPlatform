@@ -19,7 +19,8 @@ veraPDF on its files (V), and its post-R-21 files pass veraPDF. R-21 is done
 on all three platforms. R-23 is
 done: `layer1_demo` builds with FPC on all three platforms and with Delphi 7,
 and passes PAC 2024 and veraPDF `ua1` everywhere. The six console demos
-build with Delphi 7 (R-20 step 5). **Next:** R-20, the GUI demos.
+build with Delphi 7 (R-20 step 5), and the batch export of the two GUI demos
+(step 6). **Next:** R-20, the preview on the VCL.
 
 ---
 
@@ -78,6 +79,10 @@ earlier post covered them.
   write the same PDF as with FPC. **Every demo now names its PDF
   `<demo>_<os>_<cpu>_<compiler>.pdf`**, as `layer1_demo` did (was
   `<demo>_<os>.pdf`), so the files of all compilers share one folder
+- **The GUI demos' `--export` builds with Delphi 7** as well: `report_demo`
+  and `mormot_demo` (ORM and static SQLite included) build their report in
+  a `uReport.pas` without a form — the pattern for a report that has to run
+  without a GUI
 - **Coming with R-20** (announce when done): the preview and the GUI demos
   on Delphi
 
@@ -297,6 +302,22 @@ veraPDF `ua1`, `zugferd_demo` also `3u` and Mustang. The Delphi 7
 6. **`report_demo --export` and `mormot_demo --export`** on Delphi 7: the
    export path without the form; `mormot_demo` brings the ORM and the static
    SQLite for Win32.
+   **Done on Windows, 2026-09-27:** each GUI demo got a `uReport.pas` that
+   builds and exports the report from a `TReportOptions` record, without a
+   form; `uMainForm` only fills the record from its controls (and
+   `mormot_demo`'s form no longer holds a client: `server.pas` has
+   `ReadInvoiceData` and `DemoDatabaseFile`, which falls back to `data/`
+   below the current folder). The `.lpr` builds the form under FPC only
+   (`REPORTDEMO_FORM`, `MORMOTDEMO_FORM`), so on Delphi 7 the program is the
+   batch export. Delphi 7 syntax on the way: `mormot_demo`'s `TTableLayout`
+   typed constant became a function, its `'—'` a UTF-8 constant, and
+   `mormot.uses.inc` is FPC-only — on Delphi 7 it only adds FastMM4. The ORM
+   and `static\delphi\sqlite3.obj` link as they are. Both demos: the FPC
+   `--export` PDF as before, the Delphi 7 one the same as FPC after masking
+   (fonts byte-identical, same `pdftotext`, the locale-dependent dates and
+   amounts included); `mormot_demo` with the sample database, 37 orders.
+   Checkers on the Delphi 7 files: open. Not checked here: the FPC GUI
+   itself (preview, print, export dialog) after the split.
 7. **`mormot.ui.reportpreview` on the VCL.**
 8. **The GUI demos with their forms on Delphi** — built in code or a `.dfm`
    beside the `.lfm`, to be decided.

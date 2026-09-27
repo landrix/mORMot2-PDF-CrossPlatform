@@ -214,7 +214,8 @@ end;
 ```
 examples/report_demo/
   report_demo.lpi    Lazarus project
-  uMainForm.pas      Main form with preview + export
+  uReport.pas        the report: BuildReport, ExportReport, --export
+  uMainForm.pas      Main form with preview + export, passes the options
 ```
 
 **Build & run:**
@@ -226,8 +227,15 @@ examples/report_demo/bin/x86_64-win64/report_demo.exe
 examples/report_demo/bin/aarch64-linux/report_demo --export   # -> report_demo_<os>_<cpu>_<compiler>.pdf
 ```
 
-The batch mode still needs a display, because `TGDIPages` is an LCL control;
-on a headless machine run it under `xvfb-run`.
+On Linux the batch mode still needs a display, because the LCL measures the
+text; on a headless machine run it under `xvfb-run`. The report is built in
+`uReport.pas`, without a form, so Delphi 7 builds the batch export too (the
+window follows with roadmap R-20):
+
+```bat
+tests\build_delphi7.bat examples\report_demo\report_demo.lpr
+bin\d7\report_demo\report_demo.exe --export
+```
 
 **Next step:** Demo 3 introduces semantic document layout (H1-H6, inline formatting, `TTableLayout`).
 
@@ -348,8 +356,10 @@ Shows `TGDIPages` with `TTableLayout` (the same as Demo 3), but the data comes f
 
 ```
 data.pas        TOrmEmployee, TOrmCustomer, TOrmCustomerOrder
-server.pas      TDemoServer with GetInvoiceData() -> TDtoInvoiceRowDynArray
-uMainForm.pas   BuildReport -> DrawInvoiceTable -> TTableLayout rendering
+server.pas      TDemoServer with GetInvoiceData() -> TDtoInvoiceRowDynArray,
+                ReadInvoiceData() opening the database
+uReport.pas     BuildReport -> DrawInvoiceTable -> TTableLayout rendering
+uMainForm.pas   the form, passes the options its controls show
 ```
 
 **Core pattern (data query + TTableLayout rendering):**
@@ -362,40 +372,35 @@ begin
   // -> fills Items array with TDtoInvoiceRow records
 end;
 
-// uMainForm.pas — rendering with TTableLayout:
-const
-  INVOICE_TABLE: TTableLayout = (
-    ColumnWidths:      [1000, 2500, 7000, 2200, 5300];  // 1/100mm; sum = 18000 (A4-2×15mm)
-    ColumnAligns:      [tcaRight, tcaLeft, tcaLeft, tcaRight, tcaRight];
-    HeaderFontStyle:   [fsBold];
-    HeaderBkColor:     $00AA5500;
-    AlternateRowColor: $00F0F0FF;
-    // FontName='' and FontSize=0 inherit the current document font
-  );
-
-procedure TMainForm.DrawInvoiceTable(Report: TGDIPages);
-var Items: TDtoInvoiceRowDynArray; Count, i: integer; Total: Currency;
+// uReport.pas — rendering with TTableLayout; the rows come in as DTOs,
+// InvoiceTableLayout fills a TTableLayout at runtime (Delphi 7 has no typed
+// constants for dynamic array fields); FontName='' and FontSize=0 inherit
+// the current document font
+procedure DrawInvoiceTable(Report: TGDIPages; const Options: TReportOptions;
+  const Items: TDtoInvoiceRowDynArray);
+var i: integer; Total: Currency;
 begin
-  Count := TDemoServer(Client.Server).GetInvoiceData(Items);
   Report.SetFont(SansFont, 9);
-  Report.BeginTable(INVOICE_TABLE);
+  Report.BeginTable(InvoiceTableLayout);
   Report.DrawTableHeader(['#', 'Order No.', 'Customer', 'Date', 'Amount']);
-  if Count = 0 then
-    Report.DrawTableRow(['—', 'No orders available', '', '', ''])
+  if Items = nil then
+    Report.DrawTableRow([NO_VALUE, 'No orders available', '', '', ''])
   else
-    for i := 0 to Count - 1 do
+    for i := 0 to High(Items) do
     begin
       Report.DrawTableRow([
-        IntToStr(i + 1),
-        Utf8ToString(Items[i].OrderNo),
-        Utf8ToString(Items[i].Company),
-        FormatDateTime('dd.mm.yyyy', Items[i].SaleDate),
-        FormatFloat('#,##0.00', Items[i].ItemsTotal)
+        Int32ToUtf8(i + 1),
+        Items[i].OrderNo,             // RawUtf8, as TGDIPages takes it
+        Items[i].Company,
+        StringToUtf8(FormatDateTime('dd.mm.yyyy', Items[i].SaleDate)),
+        StringToUtf8(FormatFloat('#,##0.00', Items[i].ItemsTotal))
       ]);
       Total := Total + Items[i].ItemsTotal;
     end;
+  // the totals line: a TFoot row
+  Report.DrawTableFooter(['', 'Total', '', '',
+    StringToUtf8(FormatFloat('#,##0.00 EUR', Total))]);
   Report.EndTable;
-  // ... totals row drawn manually below EndTable ...
 end;
 ```
 
@@ -406,15 +411,26 @@ The SQLite database is created automatically (`CreateMissingTables`). Demo data 
 ```
 examples/mormot_demo/
   mormot_demo.lpi     Lazarus project
-  uMainForm.pas       Main form
+  uReport.pas         the report: BuildReport, ExportReport, --export
+  uMainForm.pas       Main form, passes the options
   data.pas            ORM models (TOrmEmployee, TOrmCustomer, TOrmCustomerOrder)
-  server.pas          TDemoServer with GetInvoiceData()
+  server.pas          TDemoServer with GetInvoiceData(), ReadInvoiceData()
 ```
 
 **Build & run:**
 ```bash
 "C:\lazarus\lazbuild.exe" examples/mormot_demo/mormot_demo.lpi -B
 examples/mormot_demo/bin/x86_64-win64/mormot_demo.exe
+```
+
+Delphi 7 builds the batch export, ORM and static SQLite included (the window
+follows with roadmap R-20); run it from the demo folder, where it finds
+`data/`:
+
+```bat
+tests\build_delphi7.bat examples\mormot_demo\mormot_demo.lpr
+cd examples\mormot_demo
+..\..\bin\d7\mormot_demo\mormot_demo.exe --export
 ```
 
 ---
@@ -666,8 +682,9 @@ examples/zugferd_demo/bin/<target>/zugferd_demo
 
 Draws two tagged pages with `TPdfDocument` and `TPdfCanvas`, without the
 TCanvas bridge and without `TGDIPages`: text and a figure, then a table. It
-builds with Delphi 7 (Win32), and so do the other five console demos; the GUI demos
-and the preview are FPC-only until roadmap R-20 is done.
+builds with Delphi 7 (Win32), and so do the other five console demos and the
+batch export of the two GUI demos; their windows and the preview are FPC-only
+until roadmap R-20 is done.
 
 **What you learn:**
 - PDF points, with Y counted from the bottom edge: a text line at Y = 780 is

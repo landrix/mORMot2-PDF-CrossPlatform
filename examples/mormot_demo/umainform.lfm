@@ -8,7 +8,6 @@ object MainForm: TMainForm
   ClientWidth = 800
   LCLVersion = '4.6.0.0'
   OnCreate = FormCreate
-  OnDestroy = FormDestroy
   object ToolBar1: TToolBar
     Left = 0
     Height = 40
