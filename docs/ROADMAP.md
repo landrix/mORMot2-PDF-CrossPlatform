@@ -21,6 +21,32 @@ and passes PAC 2024 and veraPDF `ua1` everywhere. **Next:** R-20.
 
 ---
 
+## To Announce — the Next Forum Post
+
+Changes a user of the library notices: API, behaviour, fixed output. Collected
+here until the post is written, then the list is emptied. Candidates from
+before this list was started (2026-09-27) are marked "check": whether an
+earlier post covered them.
+
+- **Delphi 7** (check): layer 1 — `TPdfDocument`/`TPdfCanvas`, GDI backend,
+  Uniscribe — builds on Delphi 7, Win32 (R-19). `layer1_demo` is the first
+  demo for it, tagged and PDF/UA-conformant from both compilers (R-23)
+- **Fixed** (check): under FPC a `TPdfReal` of exactly 0 was written as
+  nothing — every outline destination (`/XYZ 0 802 ]`, one operand short),
+  alpha 0, a rectangle or `/BBox` edge at 0. Files with bookmarks from FPC
+  builds before the fix are affected
+- **`TPdfVclCanvas`**: new `TextOutUtf8` and `TextWidthUtf8` taking
+  `RawUtf8`, the same on every compiler. The `string` methods read `string`
+  as the compiler holds it (unchanged under FPC)
+- **Removed** (check): `pdf_demo_windows`, the Delphi 7 golden master on the
+  original library, with its `peekpdf` tools
+- **Coming with R-20** (announce when done): `TGDIPages` takes `RawUtf8` for
+  all text and `TFileName` for file names — FPC callers do not change, a
+  Delphi caller converts `string` with `StringToUtf8`; `TGDIPages` is split
+  into a core without GUI and a preview control
+
+---
+
 ## Working Method
 
 **One fix at a time.** Implement, verify, accept, then start the next. Changes
