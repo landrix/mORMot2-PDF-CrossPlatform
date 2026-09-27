@@ -123,17 +123,20 @@ replacement (Delphi 7 has no generics).
    ambiguous. The original's `DrawText`/`DrawTextU`/`DrawTextW` triple is not
    followed; our signatures differ from it anyway.
 2. **The bridge keeps `string`** where `TCanvas` dictates it (`TextOut`,
-   `TextWidth`, …) and reads it per compiler: FPC as UTF-8 bytes whatever
-   `DefaultSystemCodePage` says (like `Utf8AsLclString`), Delphi 7 from the
-   ANSI code page, Unicode Delphi as UTF-16. Beside them it gets `RawUtf8`
-   methods (`TextOutUtf8`, `TextWidthUtf8`, …, separately named), which
-   `TGDIPages` uses.
-   **Suspected defect, check first:** `TextOut` decodes with `UTF8Decode`,
-   but `TextWidth` and the font selection go through mORMot2's
-   `StringToUtf8`, which under FPC converts from `CurrentAnsiConvert` — set
-   once from `DefaultSystemCodePage` when `mormot.core.unicode` initialises.
-   If the LCL has not switched it to UTF-8 by then, non-ASCII is measured as
-   cp1252 on Windows while it is drawn as UTF-8. Not measured yet.
+   `TextWidth`, …) and reads it per compiler: FPC as UTF-8, Delphi 7 from the
+   ANSI code page, Unicode Delphi as UTF-16. mORMot2's `StringToUtf8` and
+   `StringToSynUnicode` do exactly that, so `TextOut` switches from
+   `UTF8Decode` (UTF-8 on every compiler) to `StringToSynUnicode`, as
+   `TextWidth` already uses `StringToUtf8`. Beside them the bridge gets
+   `RawUtf8` methods (`TextOutUtf8`, `TextWidthUtf8`, …, separately named),
+   which `TGDIPages` uses.
+   **Checked 2026-09-27, no defect:** `TextOut` (`UTF8Decode`) and
+   `TextWidth` (`StringToUtf8`) read the same UTF-8 under FPC, whatever the
+   unit order and with Windows on cp1252: `mormot.core.os` calls
+   `SetMultiByteConversionCodePage(CP_UTF8)` on FPC before
+   `mormot.core.unicode` sets `CurrentAnsiConvert`. Measured with two probe
+   programs (LCL first, mORMot2 first): both 65001, the same 46.008 pt for
+   "ÄÖÜ" in Arial 12.
 3. **`TGDIPages` is split:** a core without GUI (recording, layout, PDF
    export; `RawUtf8` throughout) and a preview control derived from
    `TScrollBox` that converts only when it draws on the screen. The core
