@@ -9,8 +9,7 @@ every Figure; W-2, e-mail addresses without links in `zugferd_demo`) and veraPDF
 `ua1`. PDF/A-3U with PDF/UA-1 is verified (R-17). Fonts are embedded and subset
 on all three platforms; tables carry `THead`/`TBody`/`TFoot` row groups. All
 three platforms build with FPC; `test_runner` is green with 241 assertions on
-Windows (after the first R-20 step), 276 on Linux and 296 on macOS (after R-21
-and the zero-real fix of R-23, before that step — +4 expected).
+Windows, 280 on Linux and 300 on macOS (after the first R-20 step).
 **Layer 1 builds on Delphi 7** (R-19, done): 127 assertions on Win32, and the
 tagged Unicode test file passes PAC 2024 and veraPDF `ua1` from Delphi 7/Win32
 and FPC/Win64 alike. The macOS run found a heap-dependent `.ttc` defect in the
@@ -154,7 +153,8 @@ does.
 `TextWidthFrac` delegates to `TextWidthUtf8`. `TestVclCanvasUtf8Text` (4
 assertions) fails 1/4 with the UTF-8 decoding of either method broken;
 `test_runner` 241/241. The eight demo PDFs are the same apart from date and
-`/ID`. **Open:** the Linux and macOS runs. **Next:** point 3, `TGDIPages` on
+`/ID`. Linux 280/280 and macOS 300/300 on 2026-09-27, the tagged demos of all
+three platforms pass veraPDF `ua1`. **Next:** point 3, `TGDIPages` on
 `RawUtf8`.
 
 **Not part of R-20:** Delphi 2010 and later have `TCustomCanvas` with virtual
@@ -245,9 +245,9 @@ GUI) stay manual. veraPDF runs on Java and could follow as a later step.
 ### V — Verification Outstanding
 
 All three platforms build and pass `test_runner` (241 assertions on Windows,
-276 on Linux, 296 on macOS — the last two before the first R-20 step). The tagged demos pass veraPDF `ua1`
-106/106 on all three and PAC 2024 — measured again on 2026-09-26 for the
-files of all three platforms, `zugferd_demo` also `3u` 148/148 and Mustang;
+280 on Linux, 300 on macOS — after the first R-20 step). The tagged demos pass
+veraPDF `ua1` 106/106 on all three — measured again on 2026-09-27 — and PAC
+2024 (2026-09-26) for the files of all three platforms, `zugferd_demo` also `3u` 148/148 and Mustang;
 `tagged_unicode` and `layer1_demo` pass `ua1` from Linux, macOS, FPC/Win64
 and Delphi 7. The
 structure trees (roles and their counts) and page counts match across the
