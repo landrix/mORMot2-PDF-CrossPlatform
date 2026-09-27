@@ -20,7 +20,9 @@ on all three platforms. R-23 is
 done: `layer1_demo` builds with FPC on all three platforms and with Delphi 7,
 and passes PAC 2024 and veraPDF `ua1` everywhere. The six console demos
 build with Delphi 7 (R-20 step 5), and the batch export of the two GUI demos
-(step 6). **Next:** R-20, the preview on the VCL.
+(step 6); their Delphi 7 files pass PAC 2024 and veraPDF `ua1`, and Linux and
+macOS were re-checked after step 6 (2026-09-28). **Next:** R-20, the preview
+on the VCL.
 
 ---
 
@@ -296,7 +298,11 @@ veraPDF `ua1`, `zugferd_demo` also `3u` and Mustang. The Delphi 7
    0, we pass language 0, `ReduceTTF` copies the tables unchanged, and a
    test run with `lpfnAllocate` filling its blocks with `$AA` left the value
    as it was — so the DLL writes it, not our heap. No FPC for Win32 here to
-   confirm from a second compiler. Checkers on the Delphi 7 files: open.
+   confirm from a second compiler. Checkers on the Delphi 7 files, done
+   2026-09-28: `pdf_demo` and `zugferd_demo` pass PAC 2024 and veraPDF `ua1`
+   106/106, `zugferd_demo` also `3u` 148/148 and Mustang; `chinese_demo` and
+   `rtl_demo` are untagged, so `ua1` does not apply (100/106 on every
+   platform, as before).
    Also since this step: every demo names its PDF
    `<demo>_<os>_<cpu>_<compiler>.pdf`, as `layer1_demo` did.
 6. **`report_demo --export` and `mormot_demo --export`** on Delphi 7: the
@@ -316,8 +322,17 @@ veraPDF `ua1`, `zugferd_demo` also `3u` and Mustang. The Delphi 7
    `--export` PDF as before, the Delphi 7 one the same as FPC after masking
    (fonts byte-identical, same `pdftotext`, the locale-dependent dates and
    amounts included); `mormot_demo` with the sample database, 37 orders.
-   Checkers on the Delphi 7 files: open. Not checked here: the FPC GUI
-   itself (preview, print, export dialog) after the split.
+   Checkers on the Delphi 7 files, done 2026-09-28: both pass PAC 2024 and
+   veraPDF `ua1` 106/106. Not checked here: the FPC GUI itself (preview,
+   print, export dialog) after the split.
+   **Linux and macOS for steps 5 and 6 — done, 2026-09-28:** `test_runner`
+   302/302 on macOS; all eight demos build and run there, `report_demo` and
+   `mormot_demo` with `--export` headless, their PDFs the same size as
+   before the two steps apart from the date. The Debian and the macOS files
+   pass veraPDF `ua1` 106/106 for every tagged demo, `zugferd_demo` also
+   `3u` 148/148 and Mustang. Page counts and structure trees (roles and
+   their counts) match across macOS, Debian, FPC/Win64 and Delphi 7 for all
+   nine files.
 7. **`mormot.ui.reportpreview` on the VCL.**
 8. **The GUI demos with their forms on Delphi** — built in code or a `.dfm`
    beside the `.lfm`, to be decided.
@@ -410,13 +425,14 @@ GUI) stay manual. veraPDF runs on Java and could follow as a later step.
 ### V — Verification Outstanding
 
 All three platforms build and pass `test_runner` (243 assertions on Windows,
-282 on Linux, 302 on macOS — after the fourth R-20 step). The tagged demos pass
-veraPDF `ua1` 106/106 on all three — measured again on 2026-09-27 — and PAC
-2024 (2026-09-26) for the files of all three platforms, `zugferd_demo` also `3u` 148/148 and Mustang;
-`tagged_unicode` and `layer1_demo` pass `ua1` from Linux, macOS, FPC/Win64
-and Delphi 7, `markdown_demo` from Delphi 7 too (and PAC 2024). The
-structure trees (roles and their counts) and page counts match across the
-platforms for every tagged demo. That was the stated gate for a first version tag, and
+282 on Linux, 302 on macOS — after the fourth R-20 step, macOS again after the
+sixth). The tagged demos pass veraPDF `ua1` 106/106 on all three and from
+Delphi 7 — the seven tagged files from Linux, macOS, FPC/Win64 and Delphi 7,
+measured again on 2026-09-28 after R-20 step 6 — and PAC 2024 for the files
+of all three platforms and of Delphi 7; `zugferd_demo` also `3u` 148/148 and
+Mustang. The structure trees (roles and their counts) and page counts match
+across the platforms and both compilers for every tagged demo. That was the
+stated gate for a first version tag, and
 the project still has none.
 
 | Open | Why it matters |
