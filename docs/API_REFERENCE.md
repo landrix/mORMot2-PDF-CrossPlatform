@@ -187,11 +187,15 @@ Report.ExportPdfStream(Stream);
 
 ## TGDIPages — Format System
 
+`TGDIPages` takes all text as `RawUtf8` and file names as `TFileName`. Under
+FPC a `string` holds UTF-8 and passes as it is; under Delphi convert it with
+`StringToUtf8`.
+
 ### TReportFormat Record
 
 ```pascal
 TReportFormat = record
-  FontName:         string;    // '' = inherit current document font
+  FontName:         RawUtf8;    // '' = inherit current document font
   FontSize:         Integer;   // 0 = proportional to current font
   FontStyle:        TFontStyles;
   Color:            TColor;
@@ -229,7 +233,7 @@ end;
 |---|---|---|---|
 | `LineHeightFactor` | `single` | `1.1` | Line-height multiplier applied to `FontTextHeight`; raise to e.g. `1.3` for more open layouts |
 | `ExportPdfTagged` | boolean | `false` | Wrap all drawing commands in Tagged PDF struct elements on export |
-| `ExportPdfLanguage` | string | `'en'` | BCP-47 language tag written to `/Lang` when `ExportPdfTagged = true` |
+| `ExportPdfLanguage` | RawUtf8 | `'en'` | BCP-47 language tag written to `/Lang` when `ExportPdfTagged = true` |
 
 ---
 
@@ -239,16 +243,16 @@ end;
 TTableLayout = record
   ColumnWidths:      array of Integer;           // 1/100mm per column
   ColumnAligns:      array of TTableColumnAlign;  // tcaLeft, tcaCenter, tcaRight
-  HeaderFontName:    string;   // '' = current document font
+  HeaderFontName:    RawUtf8;   // '' = current document font
   HeaderFontSize:    Integer;  // 0 = current font size
   HeaderFontStyle:   TFontStyles;
   HeaderBkColor:     TColor;
-  BodyFontName:      string;
+  BodyFontName:      RawUtf8;
   BodyFontSize:      Integer;
   BodyFontStyle:     TFontStyles;
   BodyBkColor:       TColor;
   AlternateRowColor: TColor;   // 0 = no alternation
-  FooterFontName:    string;   // closing row (DrawTableFooter); leave all
+  FooterFontName:    RawUtf8;   // closing row (DrawTableFooter); leave all
   FooterFontSize:    Integer;  // four Footer* fields at their default to
   FooterFontStyle:   TFontStyles; // make the footer look like the header
   FooterBkColor:     TColor;
@@ -284,7 +288,7 @@ All spacing and position values in `TGDIPages` use **1/100 millimetre**:
 
 ```pascal
 procedure GetReportFonts(Embedded: boolean;
-  out SansFont, SerifFont, MonoFont: string);
+  out SansFont, SerifFont, MonoFont: RawUtf8);
 ```
 
 `Embedded = True` → platform-specific TTF fonts:
@@ -300,10 +304,20 @@ procedure GetReportFonts(Embedded: boolean;
 ### TGDIPages.GetExportFonts (wrapper)
 
 ```pascal
-procedure TGDIPages.GetExportFonts(out SansFont, SerifFont, MonoFont: string);
+procedure TGDIPages.GetExportFonts(out SansFont, SerifFont, MonoFont: RawUtf8);
 ```
 
 Reads `ExportPdfEmbeddedTTF` internally and delegates to `GetReportFonts`. No parameter needed.
+
+### GetPdfFonts (`mormot.pdf.types`)
+
+The same names as `string`, for code that draws through `TPdfDocumentVcl` or
+`TPdfDocument` and does not use `TGDIPages`:
+
+```pascal
+procedure GetPdfFonts(Embedded: boolean;
+  out SansFont, SerifFont, MonoFont: string);
+```
 
 ---
 

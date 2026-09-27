@@ -4,6 +4,8 @@ Source: `src/core/mormot.ui.report.pas`
 
 `TGDIPages` is a high-level layout engine for multi-page documents. All drawing commands are recorded as a `TDrawCommand` array; actual rendering to canvas or PDF only happens when `RenderPageToCanvas()` is called.
 
+**Strings (R-20):** all text, font and format names are `RawUtf8` — parameters, records, `TDrawCommand`, the format registry; file names are `TFileName`. Conversion happens only at the boundaries: `Utf8ToString` for LCL fonts, captions, the preview's `TextOut` and layer 1's `string` API (`Info.*`, `CreateOutline`, `GetPdfFonts`); the PDF bridge gets `TextOutUtf8`. Words are split with `CsvToRawUtf8DynArray` at spaces only — `TStringList.DelimitedText` treated `"` as a quote and dropped it.
+
 ---
 
 ## Coordinate System
@@ -173,7 +175,7 @@ All elements have named formats that can be customised via `DefineFormat`.
 
 ```pascal
 type TReportFormat = record
-  FontName:   string;       // '' = current document font
+  FontName:   RawUtf8;       // '' = current document font
   FontSize:   Integer;      // 0 = proportional (e.g. 90% for Code)
   FontStyle:  TFontStyles;
   Color:      TColor;
@@ -338,7 +340,7 @@ Report.Subject := 'Subject';
 ### Font Selection for Export
 
 ```pascal
-var SansFont, SerifFont, MonoFont: string;
+var SansFont, SerifFont, MonoFont: RawUtf8;
 Report.ExportPdfEmbeddedTTF := True;
 Report.GetExportFonts(SansFont, SerifFont, MonoFont);
 // Windows: Calibri, Cambria, Consolas
@@ -384,7 +386,7 @@ function PixelsToMM(Pixels: Integer; DPI: Integer): Integer;
 // Get platform-default font names - an alias of GetPdfFonts() in
 // mormot.pdf.types, which layer 1 code uses without the report engine:
 procedure GetReportFonts(Embedded: boolean;
-  out SansFont, SerifFont, MonoFont: string);
+  out SansFont, SerifFont, MonoFont: RawUtf8);
 ```
 
 ---
@@ -412,19 +414,19 @@ Each recorded drawing operation:
 TDrawCommand = record
   Kind:         TDrawCmdKind;
   X, Y, X2, Y2: Integer;      // coordinates in 1/100mm
-  FontName:     string;
+  FontName:     RawUtf8;
   FontSize:     Integer;
   FontStyle:    TFontStyles;
   Color:        TColor;
   BkColor:      TColor;
-  Text:         string;
+  Text:         RawUtf8;
   TextWidthMM:  Integer;
   BitmapIndex:  Integer;
   LineWidth:    Integer;
   Align:        Integer;
-  FormatName:   string;        // name in format registry (H1, P, etc.)
+  FormatName:   RawUtf8;        // name in format registry (H1, P, etc.)
   HeadingLevel: Integer;
-  HeadingTitle: string;
+  HeadingTitle: RawUtf8;
   BlockId:      Integer;       // logical block: 0 = standalone, >0 = shared by
                                // all lines of one wrapped paragraph (B-2)
                                // or by all runs of one inline line (B-3)

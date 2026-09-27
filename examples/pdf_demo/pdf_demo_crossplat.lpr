@@ -26,8 +26,7 @@ uses
   mormot.core.unicode,
   mormot.pdf.types,   // TPdfStructRole: psrH1, psrP, psrFigure, psrTable, ...
   mormot.ui.pdf,
-  mormot.ui.pdfcanvas,
-  mormot.ui.report;   // for REPORT_FONT_SANS/SERIF/MONO constants
+  mormot.ui.pdfcanvas;
 
 { <demo>_<os>.pdf next to the executable: the runs of all platforms can then
   share one folder for checking. OS_KIND names the distribution on Linux }
@@ -76,7 +75,7 @@ begin
     Doc.Tagged          := True;
     Doc.DefaultLanguage := 'en';
     // asked afterwards, so the names match the mode Tagged just selected
-    GetReportFonts(Doc.EmbeddedTTF, SansFont, SerifFont, MonoFont);
+    GetPdfFonts(Doc.EmbeddedTTF, SansFont, SerifFont, MonoFont);
 
     Doc.Info.Title   := 'mORMot2 PDF Cross-Platform Demo';
     Doc.Info.Author  := 'Portierungsprojekt';

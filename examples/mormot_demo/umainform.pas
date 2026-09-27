@@ -116,9 +116,9 @@ const
   );
 
 var
-  SansFont: String;
-  SerifFont: String;
-  MonoFont: String;
+  SansFont: RawUtf8;
+  SerifFont: RawUtf8;
+  MonoFont: RawUtf8;
 
 { ============================================================
   TMainForm

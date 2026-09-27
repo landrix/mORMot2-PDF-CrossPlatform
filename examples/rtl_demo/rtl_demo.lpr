@@ -38,9 +38,9 @@ uses
   mormot.pdf.freetype,   // FreeType2 backend (must be before mormot.pdf.harfbuzz)
   mormot.pdf.harfbuzz,   // HarfBuzz shaper — registers PdfTextShaper at startup
   {$endif MSWINDOWS}
+  mormot.pdf.types,   // GetPdfFonts
   mormot.ui.pdf,
-  mormot.ui.pdfcanvas,
-  mormot.ui.report;
+  mormot.ui.pdfcanvas;
 
 {$R *.res}
 
@@ -101,7 +101,7 @@ begin
     Doc.EmbeddedWholeTtf := false;
     Doc.Info.Title       := 'Arabic RTL Demo';
     Doc.DefaultPaperSize := mormot.ui.pdf.psA4;
-    GetReportFonts(Doc.EmbeddedTTF, SansFont, SerifFont, MonoFont);
+    GetPdfFonts(Doc.EmbeddedTTF, SansFont, SerifFont, MonoFont);
 
     Doc.AddPage;
     C    := Doc.VclCanvas;

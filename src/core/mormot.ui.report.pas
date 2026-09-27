@@ -53,7 +53,7 @@ const
 // - When Embedded=true: returns platform-specific TTF fonts (REPORT_FONT_*)
 // - When Embedded=false: returns PDF standard Type1 fonts (Helvetica/Times/Courier)
 procedure GetReportFonts(Embedded: boolean;
-  out SansFont, SerifFont, MonoFont: string);
+  out SansFont, SerifFont, MonoFont: RawUtf8);
 
 type
   /// Re-export TPrinterOrientation from LCL Printers unit for TGDIPages.Orientation property
@@ -101,19 +101,19 @@ type
     Kind:        TDrawCmdKind;
     X, Y,
     X2, Y2:      Integer;    // position / extent in 1/100 mm
-    FontName:    string;
+    FontName:    RawUtf8;
     FontSize:    Integer;
     FontStyle:   TFontStyles;
     Color:       TColor;     // pen / text / fill color
     BkColor:     TColor;     // background color (reserved)
-    Text:        string;
+    Text:        RawUtf8;
     TextWidthMM: Integer;    // pre-measured text width in 1/100 mm (for alignment)
     BitmapIndex: Integer;    // index into TGDIPages.fBitmaps (-1 = none)
     LineWidth:   Integer;    // pen width in screen pixels (1 = hairline)
     Align:       Integer;    // 0=left, 1=right, 2=center (dckDrawText)
-    FormatName:  string;     // format registry key (H1, H2, P, Strong, Em, Code, etc. for dckDrawText/dckHeading)
+    FormatName:  RawUtf8;     // format registry key (H1, H2, P, Strong, Em, Code, etc. for dckDrawText/dckHeading)
     HeadingLevel: Integer;   // heading level 1..6 (for dckHeading)
-    HeadingTitle: string;    // heading text (for dckHeading)
+    HeadingTitle: RawUtf8;    // heading text (for dckHeading)
     BlockId:     Integer;    // logical block: 0 = standalone, >0 = all lines of
                              // one wrapped paragraph share the id (Tagged PDF)
     IsInline:    boolean;    // true = inline run continuing the current line
@@ -144,7 +144,7 @@ type
 
   /// font + color state for SaveLayout / RestoreLayout
   TSavedState = record
-    FontName:  string;
+    FontName:  RawUtf8;
     FontSize:  Integer;
     FontStyle: TFontStyles;
     TextColor: TColor;
@@ -154,7 +154,7 @@ type
   // - used for H1..H6 headings, P paragraphs, Strong/Em emphasis, etc.
   // - user can define custom formats via DefineFormat() and override defaults
   TReportFormat = record
-    FontName:    string;        // font name (e.g. 'Arial', 'Times New Roman')
+    FontName:    RawUtf8;        // font name (e.g. 'Arial', 'Times New Roman')
     FontSize:    Integer;       // font size in points (10, 12, 16, 24, etc.)
     FontStyle:   TFontStyles;   // styling (bold, italic, underline, strikethrough)
     Color:       TColor;        // text color (RGB)
@@ -168,16 +168,16 @@ type
   TTableLayout = record
     ColumnWidths: array of Integer;           // column widths in 1/100 mm
     ColumnAligns: array of TTableColumnAlign; // alignment per column
-    HeaderFontName: string;                   // font name for header row
+    HeaderFontName: RawUtf8;                   // font name for header row
     HeaderFontSize: Integer;                  // font size for header row (points)
     HeaderFontStyle: TFontStyles;             // font style for header row
     HeaderBkColor: TColor;                    // background color for header row
-    BodyFontName: string;                     // font name for data rows
+    BodyFontName: RawUtf8;                     // font name for data rows
     BodyFontSize: Integer;                    // font size for data rows (points)
     BodyFontStyle: TFontStyles;               // font style for data rows
     BodyBkColor: TColor;                      // background color for data rows
     AlternateRowColor: TColor;                // alternating row color (0 = off, else applies to odd rows)
-    FooterFontName: string;                   // font name for the footer row
+    FooterFontName: RawUtf8;                   // font name for the footer row
     FooterFontSize: Integer;                  // font size for the footer row (points)
     FooterFontStyle: TFontStyles;             // font style for the footer row
     FooterBkColor: TColor;                    // background color for the footer row
@@ -188,7 +188,7 @@ type
   /// heading information tracked for PDF outline generation
   THeadingInfo = record
     Level:    Integer;  // heading level 1..6
-    Title:    string;   // heading text
+    Title:    RawUtf8;   // heading text
     PageNum:  Integer;  // 1-based page number
     Y:        Integer;  // Y position in 1/100 mm
   end;
@@ -209,7 +209,7 @@ type
     fCurrCmds:     ^TDrawCommandList;    // points to current page's command list
 
     { --- current layout state --- }
-    fFontName:     string;
+    fFontName:     RawUtf8;
     fFontSize:     Integer;
     fFontStyle:    TFontStyles;
     fTextColor:    TColor;
@@ -229,13 +229,13 @@ type
     fCurrentX:     Integer;   // horizontal position within printable area (1/100 mm)
 
     { --- metadata --- }
-    fTitle:        string;
-    fAuthor:       string;
-    fSubject:      string;
+    fTitle:        RawUtf8;
+    fAuthor:       RawUtf8;
+    fSubject:      RawUtf8;
 
     { --- Phase 3: Header and Footer --- }
-    fHeaderText:   string;
-    fFooterText:   string;
+    fHeaderText:   RawUtf8;
+    fFooterText:   RawUtf8;
 
     { --- Phase 4: Table state --- }
     fTableStartY:      Integer;       // Y position where table started
@@ -245,7 +245,7 @@ type
     fTableRowStartY:   Integer;       // Y position of current row start
     fTableLayout:      TTableLayout;  // current table layout (column widths, fonts, colors)
     fTableRowIndex:    Integer;       // current row number (0-based, for alternating colors)
-    fTableSavedHeaders: TStringDynArray; // headers saved for continuation-page repetition
+    fTableSavedHeaders: TRawUtf8DynArray; // headers saved for continuation-page repetition
     fTableHeaderRepeat: boolean; // true while DrawTableRow repeats the header row
     // open THead/TBody/TFoot of the table being exported, psrTable = none:
     // a field, not a local of RenderPageToCanvas, because a table continues
@@ -267,7 +267,7 @@ type
     fSavedCount:   Integer;
 
     { --- Phase 5: Format registry (Markdown-style) --- }
-    fFormatRegistry: TFPGMap<string, TReportFormat>;  // H1..H6, Strong, Em, Code, etc.
+    fFormatRegistry: TFPGMap<RawUtf8, TReportFormat>;  // H1..H6, Strong, Em, Code, etc.
     fHeadings:       array of THeadingInfo;  // stores heading metadata for PDF outlines
     fHeadingCount:   Integer;  // count of headings in fHeadings array
     fCurrentHeadingLevel: Integer;  // tracks current heading level for auto-spacing in EndHeading
@@ -288,8 +288,8 @@ type
     fExportPdfLevel:       TPdfALevel;
     fExportPdfEmbeddedTTF: boolean;
     fExportPdfStandardFonts: boolean;
-    fExportPdfAuthor:      string;
-    fExportPdfSubject:     string;
+    fExportPdfAuthor:      RawUtf8;
+    fExportPdfSubject:     RawUtf8;
     fExportPdfFileFormat:  TPdfFileFormat;
     fExportPdfTagged:      boolean;
     fExportPdfLanguage:    RawUtf8;
@@ -314,7 +314,7 @@ type
     fWrappingWidthPx: Integer;      { Printable width in pixels @ 96 DPI }
 
     { --- Font-Metriken Cache (berechnet in SetFont) --- }
-    fCachedFontName: string;        { Tracked font name for cache validation }
+    fCachedFontName: RawUtf8;        { Tracked font name for cache validation }
     fCachedFontSize: Integer;       { Tracked font size for cache validation }
     fCachedFontStyle: TFontStyles;  { Tracked font style for cache validation }
     fCachedLineHeightPx: Integer;   { Zeilenhöhe in Pixeln @ 96 DPI }
@@ -353,20 +353,20 @@ type
     /// select the current font on fMeasurer; false = fall back to the LCL
     function  SetupPdfMeasureFont: boolean;
     /// advance width of S in PDF points, or -1 when the PDF metrics are absent
-    function  MeasureTextWidthPt(const S: string): single;
-    function  MeasureTextWidthPx(const S: string): Integer;
+    function  MeasureTextWidthPt(const S: RawUtf8): single;
+    function  MeasureTextWidthPx(const S: RawUtf8): Integer;
     function  LineHeightPx: Integer;
     function  LineHeightMM: Integer;
-    function  MeasureTextWidthMM(const S: string): Integer;
+    function  MeasureTextWidthMM(const S: RawUtf8): Integer;
     function  GetMeasureDPI: Integer;
     procedure RecordWrappedText(X: Integer; var Y: Integer;
-                                const S: string; MaxWidthMM: Integer);
-    procedure EmitTextCmd(X, Y: Integer; const S: string; Align: Integer);
+                                const S: RawUtf8; MaxWidthMM: Integer);
+    procedure EmitTextCmd(X, Y: Integer; const S: RawUtf8; Align: Integer);
     /// draw one fully styled table row - shared by DrawTableHeader/Footer
     // - ARowKind travels in dckBeginTR.Color: 1 = header, 2 = its repetition
     // on a continuation page (an artifact, B-11), 3 = footer
-    procedure DrawTableStyledRow(const Cells: array of string;
-      ARowKind: Integer; const AFontName: string; AFontSize: Integer;
+    procedure DrawTableStyledRow(const Cells: array of RawUtf8;
+      ARowKind: Integer; const AFontName: RawUtf8; AFontSize: Integer;
       AFontStyle: TFontStyles; ABkColor: TColor);
     procedure InitializeFormatRegistry;
     procedure AddHeadingsToOutline(PDF: TPdfDocumentVcl);
@@ -377,7 +377,7 @@ type
     function  ScaleYF(V: Integer): single;
     /// draw text keeping sub-pixel precision when ACanvas is the PDF bridge
     procedure EmitCanvasText(ACanvas: TCanvas; X, Y: Integer;
-                             const S: string);
+                             const S: RawUtf8);
     { Zentrale Skalierungsfunktionen - IMMER nutzen für Koordinaten-Umwandlung }
     function  ScaleX(V: Integer): Integer;  // Convert 1/100mm to render pixels
     function  ScaleY(V: Integer): Integer;  // Convert 1/100mm to render pixels
@@ -399,7 +399,7 @@ type
     { --- layout (Phase 1/2) --- }
     procedure SaveLayout;
     procedure RestoreLayout;
-    procedure SetFont(const Name: string; Size: Integer);
+    procedure SetFont(const Name: RawUtf8; Size: Integer);
     /// font styling (bold, italic, underline, strikethrough)
     property  FontStyle: TFontStyles read fFontStyle write SetFontStyleProperty;
     /// text color (RGB) for TextOut and other text operations
@@ -433,9 +433,9 @@ type
 
     { --- header/footer (Phase 3) --- }
     /// set page header text with placeholders: {#} = page number (1-based), {total} = total pages
-    procedure SetHeader(const AText: string);
+    procedure SetHeader(const AText: RawUtf8);
     /// set page footer text with placeholders: {#} = page number (1-based), {total} = total pages
-    procedure SetFooter(const AText: string);
+    procedure SetFooter(const AText: RawUtf8);
 
     { --- Phase 5: Format registry (Markdown-style) --- }
     /// define or override a named text format (H1, H2, P, Strong, Em, Code, etc.)
@@ -446,12 +446,12 @@ type
     //   and: TableHeader, TableCell, TableCellAlt (table cells)
     // - formats should be defined before NewPage() to take effect
     // - example: DefineFormat('H1', TReportFormat(FontName: 'Arial', FontSize: 28, ...))
-    procedure DefineFormat(const AName: string; const AFormat: TReportFormat);
+    procedure DefineFormat(const AName: RawUtf8; const AFormat: TReportFormat);
 
     /// get defined format by name (returns safe default if not found)
     // - returns a TReportFormat record with font properties and spacing
     // - if format name not found, returns default: 11pt Arial, regular style, black color
-    function GetFormat(const AName: string): TReportFormat;
+    function GetFormat(const AName: RawUtf8): TReportFormat;
 
     /// draw heading with automatic PDF bookmark and auto-spacing
     // - ALevel: heading level 1..6 (H1 is top-level, H6 is smallest)
@@ -460,56 +460,56 @@ type
     // - automatically uses format 'H{Level}' from registry (H1, H2, ..., H6)
     // - auto-advances CurrentY based on heading format spacing
     // - raises exception if ALevel not in 1..6 or ATitle is empty
-    procedure DrawHeading(ALevel: Integer; const ATitle: string);
+    procedure DrawHeading(ALevel: Integer; const ATitle: RawUtf8);
 
     { --- Phase 5: Inline text formatting (Markdown-style) --- }
     /// draw text in bold (Strong format)
-    procedure DrawStrong(X, Y: Integer; const AText: string);
+    procedure DrawStrong(X, Y: Integer; const AText: RawUtf8);
     /// inline bold: uses CurrentX/CurrentY, advances CurrentX
-    procedure DrawStrong(const AText: string); overload;
+    procedure DrawStrong(const AText: RawUtf8); overload;
     /// draw text in italic (Em format)
-    procedure DrawEm(X, Y: Integer; const AText: string);
+    procedure DrawEm(X, Y: Integer; const AText: RawUtf8);
     /// inline italic: uses CurrentX/CurrentY, advances CurrentX
-    procedure DrawEm(const AText: string); overload;
+    procedure DrawEm(const AText: RawUtf8); overload;
     /// draw text in monospace (Code format)
-    procedure DrawCode(X, Y: Integer; const AText: string);
+    procedure DrawCode(X, Y: Integer; const AText: RawUtf8);
     /// inline code: uses CurrentX/CurrentY, advances CurrentX
-    procedure DrawCode(const AText: string); overload;
+    procedure DrawCode(const AText: RawUtf8); overload;
     /// draw text as hyperlink (blue underlined)
     // - ATarget: optional target URL (for future use)
-    procedure DrawLink(X, Y: Integer; const AText: string; const ATarget: string = '');
+    procedure DrawLink(X, Y: Integer; const AText: RawUtf8; const ATarget: RawUtf8 = '');
     /// inline link: uses CurrentX/CurrentY, advances CurrentX
-    procedure DrawLink(const AText: string; const ATarget: string = ''); overload;
+    procedure DrawLink(const AText: RawUtf8; const ATarget: RawUtf8 = ''); overload;
     /// draw block quote (italic gray with left margin)
     // - overloaded: auto uses page margins
-    procedure DrawQuote(const AText: string); overload;
+    procedure DrawQuote(const AText: RawUtf8); overload;
     /// draw block quote (italic gray with left margin) — legacy version with explicit positioning
     // - MaxWidth: maximum line width in 1/100 mm
-    procedure DrawQuote(X, MaxWidth, Y: Integer; const AText: string); overload;
+    procedure DrawQuote(X, MaxWidth, Y: Integer; const AText: RawUtf8); overload;
 
     /// draw paragraph with word wrapping — auto uses page margins
     // - auto-advances CurrentY
-    procedure DrawParagraph(const AText: string); overload;
+    procedure DrawParagraph(const AText: RawUtf8); overload;
     /// draw paragraph with word wrapping — legacy version with explicit positioning
     // - MaxWidth: maximum line width in 1/100 mm
     // - auto-advances CurrentY
-    procedure DrawParagraph(X, MaxWidth, Y: Integer; const AText: string); overload;
+    procedure DrawParagraph(X, MaxWidth, Y: Integer; const AText: RawUtf8); overload;
 
     /// draw list item with a U+2022 bullet prefix
-    procedure DrawListItem(X, Y: Integer; const AText: string); overload;
+    procedure DrawListItem(X, Y: Integer; const AText: RawUtf8); overload;
     /// draw list item with a custom prefix, e.g. '1. '
-    procedure DrawListItem(X, Y: Integer; const AText, APrefix: string); overload;
+    procedure DrawListItem(X, Y: Integer; const AText, APrefix: RawUtf8); overload;
 
     /// draw figure/table caption (small italic gray) — auto uses page margins
-    procedure DrawCaption(const ACaption: string); overload;
+    procedure DrawCaption(const ACaption: RawUtf8); overload;
     /// draw figure/table caption (small italic gray) — legacy version with explicit positioning
     // - MaxWidth: maximum line width in 1/100 mm
-    procedure DrawCaption(X, MaxWidth, Y: Integer; const ACaption: string); overload;
+    procedure DrawCaption(X, MaxWidth, Y: Integer; const ACaption: RawUtf8); overload;
 
     { --- metadata --- }
-    property Title:   string read fTitle   write fTitle;
-    property Author:  string read fAuthor  write fAuthor;
-    property Subject: string read fSubject write fSubject;
+    property Title:   RawUtf8 read fTitle   write fTitle;
+    property Author:  RawUtf8 read fAuthor  write fAuthor;
+    property Subject: RawUtf8 read fSubject write fSubject;
 
     { --- page geometry (read-only) --- }
     /// printable page width in 1/100 mm
@@ -527,17 +527,17 @@ type
     property Pages[Index: Integer]: TPageData read GetPage;
 
     { --- drawing (Phase 3) --- }
-    procedure DrawText(X, Y: Integer; const S: string);
+    procedure DrawText(X, Y: Integer; const S: RawUtf8);
     /// Draw text without coordinates: uses CurrentX/CurrentY, advances CurrentX by text width
-    procedure DrawText(const S: string); overload;
-    procedure DrawTextRight(X, Y: Integer; const S: string);
-    procedure DrawTextAt(X, Y: Integer; const S: string);
-    procedure DrawTextCenter(X, Y: Integer; const S: string);
+    procedure DrawText(const S: RawUtf8); overload;
+    procedure DrawTextRight(X, Y: Integer; const S: RawUtf8);
+    procedure DrawTextAt(X, Y: Integer; const S: RawUtf8);
+    procedure DrawTextCenter(X, Y: Integer; const S: RawUtf8);
     /// draw text with automatic word wrapping at MaxWidth (in 1/100 mm); updates CurrentY
-    procedure DrawTextWrapped(X, MaxWidth, Y: Integer; const AText: string);
+    procedure DrawTextWrapped(X, MaxWidth, Y: Integer; const AText: RawUtf8);
     procedure DrawLine(X1, Y1, X2, Y2, Width: Integer; Color: TColor);
     procedure DrawFilledRect(X1, Y1, X2, Y2: Integer; Color: TColor);
-    procedure Columns2(Gap: Integer; const Text1, Text2: string);
+    procedure Columns2(Gap: Integer; const Text1, Text2: RawUtf8);
 
     { --- tables (Phase 4) --- }
     /// begin table with TTableLayout definition (column widths, fonts, colors, alignment)
@@ -545,22 +545,22 @@ type
     // - recommended primary API for new code
     procedure BeginTable(const Layout: TTableLayout); overload;
     /// draw table header row with TTableLayout formatting
-    procedure DrawTableHeader(const Headers: array of string);
+    procedure DrawTableHeader(const Headers: array of RawUtf8);
     /// draw table data row with alternating colors and automatic page breaks
-    procedure DrawTableRow(const Values: array of string);
+    procedure DrawTableRow(const Values: array of RawUtf8);
     /// draw the closing row of a table, e.g. a totals line
     // - styled by the Footer* fields of TTableLayout, which default to the
     // header's look, so the footer is set apart from the data rows
     // - in a tagged export the row lands in a TFoot group instead of TBody
     // (ISO 32000-1 14.8.4.3.4), so assistive technology can tell it apart
-    procedure DrawTableFooter(const Cells: array of string);
+    procedure DrawTableFooter(const Cells: array of RawUtf8);
     /// begin table with specified column widths (1/100 mm) and optional alignments
     // - legacy API; prefer BeginTable(const Layout: TTableLayout)
     procedure BeginTable(const ColWidths: array of Integer;
                         const ColAligns: array of TTableColumnAlign); overload;
     /// add table row with cells; IsHeader=true renders with gray background
     // - legacy API; prefer DrawTableHeader / DrawTableRow
-    procedure AddTableRow(const Cells: array of string; IsHeader: boolean = false);
+    procedure AddTableRow(const Cells: array of RawUtf8; IsHeader: boolean = false);
     /// end table block and finalize layout
     procedure EndTable;
 
@@ -585,7 +585,7 @@ type
 
     { --- §5.3 open exported PDF --- }
     /// open FileName with the default PDF viewer (xdg-open / open / ShellExecute)
-    procedure OpenPdfFile(const FileName: string);
+    procedure OpenPdfFile(const FileName: TFileName);
 
     { --- output (Phase 5/6) --- }
     /// print pages [From..To_] on the default printer
@@ -596,9 +596,9 @@ type
     //   so TPdfVclCanvas coordinates match the PDF coordinate system exactly
     function  ExportPdfStream(aDest: TStream): boolean;
     /// export all pages as PDF to a file; calls ExportPdfStream internally
-    procedure ExportPDF(const FileName: string;
+    procedure ExportPDF(const FileName: TFileName;
                         Protect, Encrypt: Boolean;
-                        const ATitle, ACompany: string);
+                        const ATitle, ACompany: RawUtf8);
 
     { --- Phase 6: PDF export options --- }
     /// include PDF outlines/bookmarks (default: false)
@@ -610,9 +610,9 @@ type
     /// use PDF Type1 standard fonts (Helvetica/Times/Courier) instead of TTF (default: true)
     property ExportPdfStandardFonts: boolean  read fExportPdfStandardFonts write fExportPdfStandardFonts;
     /// PDF author field (defaults to Author property when empty)
-    property ExportPdfAuthor:      string     read fExportPdfAuthor      write fExportPdfAuthor;
+    property ExportPdfAuthor:      RawUtf8     read fExportPdfAuthor      write fExportPdfAuthor;
     /// PDF subject field (defaults to Subject property when empty)
-    property ExportPdfSubject:     string     read fExportPdfSubject     write fExportPdfSubject;
+    property ExportPdfSubject:     RawUtf8     read fExportPdfSubject     write fExportPdfSubject;
     /// PDF version written to the file header; default is pdf13 (backward-compatible)
     property ExportPdfFileFormat:  TPdfFileFormat read fExportPdfFileFormat write fExportPdfFileFormat;
     /// enable Tagged PDF (ISO 32000-1 §14) on export; adds structure tags H1-H6 and P
@@ -627,7 +627,7 @@ type
     /// Get font names based on current embedding mode
     // - When ExportPdfEmbeddedTTF=true: returns platform-specific TTF fonts
     // - When ExportPdfEmbeddedTTF=false: returns PDF standard Type1 fonts
-    procedure GetExportFonts(out SansFont, SerifFont, MonoFont: string);
+    procedure GetExportFonts(out SansFont, SerifFont, MonoFont: RawUtf8);
   end;
 
 /// convert 1/100-mm value to pixels at the given DPI
@@ -708,9 +708,14 @@ begin
 end;
 
 procedure GetReportFonts(Embedded: boolean;
-  out SansFont, SerifFont, MonoFont: string);
+  out SansFont, SerifFont, MonoFont: RawUtf8);
+var
+  sans, serif, mono: string;
 begin
-  GetPdfFonts(Embedded, SansFont, SerifFont, MonoFont);
+  GetPdfFonts(Embedded, sans, serif, mono);
+  SansFont := StringToUtf8(sans);
+  SerifFont := StringToUtf8(serif);
+  MonoFont := StringToUtf8(mono);
 end;
 
 { =========================================================================
@@ -746,7 +751,7 @@ begin
   fExportPdfLanguage      := 'en';
 
   // Phase 5: Initialize format registry with default Markdown-style formats
-  fFormatRegistry := TFPGMap<string, TReportFormat>.Create;
+  fFormatRegistry := TFPGMap<RawUtf8, TReportFormat>.Create;
   fHeadingCount := 0;
   SetLength(fHeadings, 0);
   fCurrentHeadingLevel := 0;
@@ -1027,7 +1032,7 @@ end;
 
 procedure TGDIPages.SetupMeasureFont;
 begin
-  fMeasureBitmap.Canvas.Font.Name  := fFontName;
+  fMeasureBitmap.Canvas.Font.Name  := Utf8ToString(fFontName);
   fMeasureBitmap.Canvas.Font.Size  := fFontSize;
   fMeasureBitmap.Canvas.Font.Style := fFontStyle;
 end;
@@ -1038,22 +1043,22 @@ begin
     fMeasurer := TPdfFontMeasurer.Create;
   { the export flags decide which font the PDF will really use, so they decide
     which metrics the layout has to be measured with }
-  Result := fMeasurer.SetFont(StringToUtf8(fFontName),
+  Result := fMeasurer.SetFont(fFontName,
     fsBold in fFontStyle, fsItalic in fFontStyle, fExportPdfStandardFonts);
 end;
 
-function TGDIPages.MeasureTextWidthPt(const S: string): single;
+function TGDIPages.MeasureTextWidthPt(const S: RawUtf8): single;
 begin
   if SetupPdfMeasureFont then
-    Result := fMeasurer.TextWidth(StringToUtf8(S), fFontSize)
+    Result := fMeasurer.TextWidth(S, fFontSize)
   else
     Result := -1; { no PDF metrics for this font — caller falls back to the LCL }
 end;
 
-function TGDIPages.MeasureTextWidthPx(const S: string): Integer;
+function TGDIPages.MeasureTextWidthPx(const S: RawUtf8): Integer;
 begin
   SetupMeasureFont;
-  Result := fMeasureBitmap.Canvas.TextWidth(S);
+  Result := fMeasureBitmap.Canvas.TextWidth(Utf8ToString(S));
 end;
 
 function TGDIPages.LineHeightPx: Integer;
@@ -1080,7 +1085,7 @@ begin
   Result := PointsToMM100(fFontSize * fLineHeightFactor);
 end;
 
-function TGDIPages.MeasureTextWidthMM(const S: string): Integer;
+function TGDIPages.MeasureTextWidthMM(const S: RawUtf8): Integer;
 var
   Pt: single;
 begin
@@ -1161,7 +1166,7 @@ begin
   fTextColor := fSavedStates[fSavedCount].TextColor;
 end;
 
-procedure TGDIPages.SetFont(const Name: string; Size: Integer);
+procedure TGDIPages.SetFont(const Name: RawUtf8; Size: Integer);
 begin
   fFontName := Name;
   fFontSize := Size;
@@ -1185,19 +1190,19 @@ begin
   fInlineBlockId := 0;  { the inline run of the previous line is closed }
 end;
 
-procedure TGDIPages.SetHeader(const AText: string);
+procedure TGDIPages.SetHeader(const AText: RawUtf8);
 begin
   fHeaderText := AText;
 end;
 
-procedure TGDIPages.SetFooter(const AText: string);
+procedure TGDIPages.SetFooter(const AText: RawUtf8);
 begin
   fFooterText := AText;
 end;
 
 { --- format registry methods --- }
 
-procedure TGDIPages.DefineFormat(const AName: string; const AFormat: TReportFormat);
+procedure TGDIPages.DefineFormat(const AName: RawUtf8; const AFormat: TReportFormat);
 var
   Index: Integer;
 begin
@@ -1208,7 +1213,7 @@ begin
     fFormatRegistry.Add(AName, AFormat);
 end;
 
-function TGDIPages.GetFormat(const AName: string): TReportFormat;
+function TGDIPages.GetFormat(const AName: RawUtf8): TReportFormat;
 var
   Index: Integer;
 begin
@@ -1252,7 +1257,7 @@ begin
     YInPoints := (fPages[HeadingRec.PageNum].PageHeight + fMarginBottom - HeadingRec.Y) * 72 / 2540;
 
     { Create outline entry for this heading }
-    PDF.CreateOutline(HeadingRec.Title, HeadingRec.Level, YInPoints);
+    PDF.CreateOutline(Utf8ToString(HeadingRec.Title), HeadingRec.Level, YInPoints);
   end;
 end;
 
@@ -1277,16 +1282,16 @@ begin
 end;
 
 procedure TGDIPages.EmitCanvasText(ACanvas: TCanvas; X, Y: Integer;
-  const S: string);
+  const S: RawUtf8);
 begin
   { TCanvas.TextOut takes integer pixels, which on PDF export snaps every
     position to the 0.75 pt (1 px @ 96 DPI) grid. The PDF bridge can do better,
     so place the text where the layout actually put it (ROADMAP B-5). The
     preview keeps the integer path — it draws on a pixel grid anyway. }
   if ACanvas is TPdfVclCanvas then
-    TPdfVclCanvas(ACanvas).TextOutFrac(ScaleXF(X), ScaleYF(Y), S)
+    TPdfVclCanvas(ACanvas).TextOutUtf8(ScaleXF(X), ScaleYF(Y), S)
   else
-    ACanvas.TextOut(ScaleX(X), ScaleY(Y), S);
+    ACanvas.TextOut(ScaleX(X), ScaleY(Y), Utf8ToString(S));
 end;
 
 function TGDIPages.ScaleXF(V: Integer): single;
@@ -1358,7 +1363,7 @@ end;
 
 { --- inline text formatting --- }
 
-procedure TGDIPages.DrawStrong(X, Y: Integer; const AText: string);
+procedure TGDIPages.DrawStrong(X, Y: Integer; const AText: RawUtf8);
 begin
   SaveLayout;
   FontStyle := FontStyle + [fsBold];
@@ -1366,7 +1371,7 @@ begin
   RestoreLayout;
 end;
 
-procedure TGDIPages.DrawStrong(const AText: string); overload;
+procedure TGDIPages.DrawStrong(const AText: RawUtf8); overload;
 begin
   SaveLayout;
   FontStyle := FontStyle + [fsBold];
@@ -1379,7 +1384,7 @@ begin
   RestoreLayout;
 end;
 
-procedure TGDIPages.DrawEm(X, Y: Integer; const AText: string);
+procedure TGDIPages.DrawEm(X, Y: Integer; const AText: RawUtf8);
 begin
   SaveLayout;
   FontStyle := FontStyle + [fsItalic];
@@ -1387,7 +1392,7 @@ begin
   RestoreLayout;
 end;
 
-procedure TGDIPages.DrawEm(const AText: string); overload;
+procedure TGDIPages.DrawEm(const AText: RawUtf8); overload;
 begin
   SaveLayout;
   FontStyle := FontStyle + [fsItalic];
@@ -1400,7 +1405,7 @@ begin
   RestoreLayout;
 end;
 
-procedure TGDIPages.DrawCode(X, Y: Integer; const AText: string);
+procedure TGDIPages.DrawCode(X, Y: Integer; const AText: RawUtf8);
 var
   Format: TReportFormat;
   CodeSize: Integer;
@@ -1418,7 +1423,7 @@ begin
   RestoreLayout;
 end;
 
-procedure TGDIPages.DrawCode(const AText: string); overload;
+procedure TGDIPages.DrawCode(const AText: RawUtf8); overload;
 var
   Format: TReportFormat;
   CodeSize: Integer;
@@ -1441,7 +1446,7 @@ begin
   RestoreLayout;
 end;
 
-procedure TGDIPages.DrawLink(X, Y: Integer; const AText: string; const ATarget: string = '');
+procedure TGDIPages.DrawLink(X, Y: Integer; const AText: RawUtf8; const ATarget: RawUtf8 = '');
 begin
   SaveLayout;
   SetFont(fFontName, fFontSize);
@@ -1452,7 +1457,7 @@ begin
   { Future: could add PDF annotation with ATarget as URL }
 end;
 
-procedure TGDIPages.DrawLink(const AText: string; const ATarget: string = ''); overload;
+procedure TGDIPages.DrawLink(const AText: RawUtf8; const ATarget: RawUtf8 = ''); overload;
 begin
   SaveLayout;
   SetFont(fFontName, fFontSize);
@@ -1468,14 +1473,14 @@ begin
   { Future: could add PDF annotation with ATarget as URL }
 end;
 
-procedure TGDIPages.DrawQuote(const AText: string);
+procedure TGDIPages.DrawQuote(const AText: RawUtf8);
 begin
   { X=0: start at left edge of printable area }
   { Nutze zentral berechnete fPrintableWidth - kein Buffer-Hack nötig }
   DrawQuote(0, fPrintableWidth, fCurrentY, AText);
 end;
 
-procedure TGDIPages.DrawQuote(X, MaxWidth, Y: Integer; const AText: string);
+procedure TGDIPages.DrawQuote(X, MaxWidth, Y: Integer; const AText: RawUtf8);
 const
   QUOTE_INDENT = 1000; { 10mm indent for quotes }
 var
@@ -1494,14 +1499,14 @@ begin
   MoveToNextLine(Format.SpaceAfter);
 end;
 
-procedure TGDIPages.DrawParagraph(const AText: string);
+procedure TGDIPages.DrawParagraph(const AText: RawUtf8);
 begin
   { X=0: start at left edge of printable area }
   { Nutze zentral berechnete fPrintableWidth - kein Buffer-Hack nötig }
   DrawParagraph(0, fPrintableWidth, fCurrentY, AText);
 end;
 
-procedure TGDIPages.DrawParagraph(X, MaxWidth, Y: Integer; const AText: string);
+procedure TGDIPages.DrawParagraph(X, MaxWidth, Y: Integer; const AText: RawUtf8);
 var
   Format: TReportFormat;
 begin
@@ -1518,12 +1523,12 @@ begin
   MoveToNextLine(Format.SpaceAfter);
 end;
 
-procedure TGDIPages.DrawListItem(X, Y: Integer; const AText: string);
+procedure TGDIPages.DrawListItem(X, Y: Integer; const AText: RawUtf8);
 begin
-  DrawListItem(X, Y, AText, Utf8AsLclString(LIST_BULLET));
+  DrawListItem(X, Y, AText, LIST_BULLET);
 end;
 
-procedure TGDIPages.DrawListItem(X, Y: Integer; const AText, APrefix: string);
+procedure TGDIPages.DrawListItem(X, Y: Integer; const AText, APrefix: RawUtf8);
 var
   Format: TReportFormat;
   LH: Integer;
@@ -1564,13 +1569,13 @@ begin
   MoveToNextLine(LH + Format.SpaceAfter);
 end;
 
-procedure TGDIPages.DrawCaption(const ACaption: string);
+procedure TGDIPages.DrawCaption(const ACaption: RawUtf8);
 begin
   { X=0: start at left edge of printable area }
   DrawCaption(0, fPrintableWidth, fCurrentY, ACaption);
 end;
 
-procedure TGDIPages.DrawCaption(X, MaxWidth, Y: Integer; const ACaption: string);
+procedure TGDIPages.DrawCaption(X, MaxWidth, Y: Integer; const ACaption: RawUtf8);
 var
   Format: TReportFormat;
 begin
@@ -1587,12 +1592,12 @@ begin
   MoveToNextLine(Format.SpaceAfter);
 end;
 
-procedure TGDIPages.DrawHeading(ALevel: Integer; const ATitle: string);
+procedure TGDIPages.DrawHeading(ALevel: Integer; const ATitle: RawUtf8);
 var
   HeadingInfo: THeadingInfo;
   Format: TReportFormat;
   TotalSpace: Integer;
-  SavedFontName: string;
+  SavedFontName: RawUtf8;
   SavedFontSize: Integer;
   SavedFontStyle: TFontStyles;
   HeadingLineHeight: Integer;
@@ -1607,7 +1612,7 @@ begin
     raise Exception.Create('DrawHeading: title cannot be empty');
 
   { Get heading format (H1, H2, ..., H6) }
-  Format := GetFormat('H' + IntToStr(ALevel));
+  Format := GetFormat('H' + Int32ToUtf8(ALevel));
 
   { Auto-calculate heading line height for page break check }
   SavedFontName := fFontName;
@@ -1662,7 +1667,7 @@ end;
 
 { --- drawing helpers --- }
 
-procedure TGDIPages.EmitTextCmd(X, Y: Integer; const S: string; Align: Integer);
+procedure TGDIPages.EmitTextCmd(X, Y: Integer; const S: RawUtf8; Align: Integer);
 var
   Cmd: TDrawCommand;
   TextWidthMM: Integer;
@@ -1705,12 +1710,12 @@ begin
   AddCommand(Cmd);
 end;
 
-procedure TGDIPages.DrawText(X, Y: Integer; const S: string);
+procedure TGDIPages.DrawText(X, Y: Integer; const S: RawUtf8);
 begin
   EmitTextCmd(X, Y, S, 0);
 end;
 
-procedure TGDIPages.DrawText(const S: string); overload;
+procedure TGDIPages.DrawText(const S: RawUtf8); overload;
 var
   TextWidth: Integer;
   LineH: Integer;
@@ -1747,22 +1752,22 @@ begin
   fCurrentX := fCurrentX + TextWidth;
 end;
 
-procedure TGDIPages.DrawTextRight(X, Y: Integer; const S: string);
+procedure TGDIPages.DrawTextRight(X, Y: Integer; const S: RawUtf8);
 begin
   EmitTextCmd(X, Y, S, 1);
 end;
 
-procedure TGDIPages.DrawTextAt(X, Y: Integer; const S: string);
+procedure TGDIPages.DrawTextAt(X, Y: Integer; const S: RawUtf8);
 begin
   EmitTextCmd(X, Y, S, 0);
 end;
 
-procedure TGDIPages.DrawTextCenter(X, Y: Integer; const S: string);
+procedure TGDIPages.DrawTextCenter(X, Y: Integer; const S: RawUtf8);
 begin
   EmitTextCmd(X, Y, S, 2);
 end;
 
-procedure TGDIPages.DrawTextWrapped(X, MaxWidth, Y: Integer; const AText: string);
+procedure TGDIPages.DrawTextWrapped(X, MaxWidth, Y: Integer; const AText: RawUtf8);
 var
   CurrY: Integer;
 begin
@@ -1803,13 +1808,13 @@ end;
 { --- Phase 3: word-wrap helper for Columns2 --- }
 
 procedure TGDIPages.RecordWrappedText(X: Integer; var Y: Integer;
-  const S: string; MaxWidthMM: Integer);
+  const S: RawUtf8; MaxWidthMM: Integer);
 var
   MaxPt:  single;
   SpaceW: single;
   LH:     Integer;
-  Words:  TStringList;
-  Line:   string;
+  Words:  TRawUtf8DynArray;
+  Line:   RawUtf8;
   LineW:  single;
   WordW:  single;
   i:      Integer;
@@ -1836,19 +1841,16 @@ begin
                 GetMeasureDPI) * (72 / 2540);
   end;
 
-  Words  := TStringList.Create;
   try
-    Words.Delimiter       := ' ';
-    Words.StrictDelimiter := True;
-    Words.DelimitedText   := S;
+    CsvToRawUtf8DynArray(pointer(S), Words, ' ');
     Line  := '';
     LineW := 0;
-    for i := 0 to Words.Count - 1 do
+    for i := 0 to High(Words) do
     begin
       if Words[i] = '' then Continue;
       WordW := MeasureTextWidthPt(Words[i]);
       if WordW < 0 then
-        WordW := PixelsToMM(fMeasureBitmap.Canvas.TextWidth(Words[i]),
+        WordW := PixelsToMM(fMeasureBitmap.Canvas.TextWidth(Utf8ToString(Words[i])),
                    GetMeasureDPI) * (72 / 2540);
       if (LineW > 0) and (LineW + SpaceW + WordW > MaxPt) then
       begin
@@ -1886,12 +1888,11 @@ begin
       Inc(Y, LH);
     end;
   finally
-    Words.Free;
     fCurrentBlockId := PrevBlockId;
   end;
 end;
 
-procedure TGDIPages.Columns2(Gap: Integer; const Text1, Text2: string);
+procedure TGDIPages.Columns2(Gap: Integer; const Text1, Text2: RawUtf8);
 var
   ColW:    Integer;
   Y1, Y2: Integer;
@@ -1954,8 +1955,8 @@ begin
   AddCommand(BTCmd);
 end;
 
-procedure TGDIPages.DrawTableStyledRow(const Cells: array of string;
-  ARowKind: Integer; const AFontName: string; AFontSize: Integer;
+procedure TGDIPages.DrawTableStyledRow(const Cells: array of RawUtf8;
+  ARowKind: Integer; const AFontName: RawUtf8; AFontSize: Integer;
   AFontStyle: TFontStyles; ABkColor: TColor);
 var
   i: Integer;
@@ -2041,7 +2042,7 @@ begin
 end;
 
 
-procedure TGDIPages.DrawTableHeader(const Headers: array of string);
+procedure TGDIPages.DrawTableHeader(const Headers: array of RawUtf8);
 var
   i: Integer;
   kind: Integer;
@@ -2065,9 +2066,9 @@ begin
     fTableLayout.HeaderBkColor);
 end;
 
-procedure TGDIPages.DrawTableFooter(const Cells: array of string);
+procedure TGDIPages.DrawTableFooter(const Cells: array of RawUtf8);
 var
-  nam: string;
+  nam: RawUtf8;
   siz: Integer;
   sty: TFontStyles;
   bk: TColor;
@@ -2112,7 +2113,7 @@ begin
   DrawTableStyledRow(Cells, 3, nam, siz, sty, bk);
 end;
 
-procedure TGDIPages.DrawTableRow(const Values: array of string);
+procedure TGDIPages.DrawTableRow(const Values: array of RawUtf8);
 var
   i: Integer;
   Cmd: TDrawCommand;
@@ -2250,7 +2251,7 @@ begin
   AddCommand(Cmd);
 end;
 
-procedure TGDIPages.AddTableRow(const Cells: array of string; IsHeader: boolean = false);
+procedure TGDIPages.AddTableRow(const Cells: array of RawUtf8; IsHeader: boolean = false);
 const
   HEADER_COLOR = $E0E0E0;  // light gray
   ROW_COLOR = $FFFFFF;     // white
@@ -2259,7 +2260,7 @@ var
   Cmd: TDrawCommand;
   CellX, CellWidth: Integer;
   AlignValue: Integer;
-  CellText: string;
+  CellText: RawUtf8;
 begin
   if not fTableInProgress then
     raise Exception.Create('AddTableRow: BeginTable not called');
@@ -2369,16 +2370,16 @@ var
   ArtifactDoc:    TPdfDocumentVcl; // fActivePdfDoc, set aside in an artifact row
 
 
-  function SubstitutePlaceholders(const AText: string; PageNum: Integer): string;
+  function SubstitutePlaceholders(const AText: RawUtf8; PageNum: Integer): RawUtf8;
   begin
     Result := AText;
-    Result := StringReplace(Result, '{#}', IntToStr(PageNum + 1), [rfReplaceAll]);
-    Result := StringReplace(Result, '{total}', IntToStr(fPageCount), [rfReplaceAll]);
+    Result := StringReplaceAll(Result, '{#}', Int32ToUtf8(PageNum + 1));
+    Result := StringReplaceAll(Result, '{total}', Int32ToUtf8(fPageCount));
   end;
 
   procedure ApplyFont;
   begin
-    ACanvas.Font.Name  := Cmd.FontName;
+    ACanvas.Font.Name  := Utf8ToString(Cmd.FontName);
     ACanvas.Font.Size  := Round(Cmd.FontSize * FontScale);
     ACanvas.Font.Style := Cmd.FontStyle;
     ACanvas.Font.Color := Cmd.Color;
@@ -2494,8 +2495,8 @@ begin
   { Render header if set }
   if fHeaderText <> '' then
   begin
-    HeaderText := SubstitutePlaceholders(fHeaderText, PageIndex);
-    ACanvas.Font.Name  := fFontName;
+    HeaderText := Utf8ToString(SubstitutePlaceholders(fHeaderText, PageIndex));
+    ACanvas.Font.Name  := Utf8ToString(fFontName);
     ACanvas.Font.Size  := Round(fFontSize * FontScale);
     ACanvas.Font.Style := fFontStyle;
     ACanvas.Font.Color := fTextColor;
@@ -2614,8 +2615,8 @@ begin
         if fActivePdfDoc <> nil then
           fActivePdfDoc.BeginStructContent(TPdfStructRole(Cmd.HeadingLevel));
         { Render heading with format from registry }
-        Format := GetFormat('H' + IntToStr(Cmd.HeadingLevel));
-        ACanvas.Font.Name := Format.FontName;
+        Format := GetFormat('H' + Int32ToUtf8(Cmd.HeadingLevel));
+        ACanvas.Font.Name := Utf8ToString(Format.FontName);
         ACanvas.Font.Size := Round(Format.FontSize * FontScale);
         ACanvas.Font.Style := Format.FontStyle;
         ACanvas.Font.Color := Format.Color;
@@ -2713,8 +2714,8 @@ begin
   { Render footer if set }
   if fFooterText <> '' then
   begin
-    FooterText := SubstitutePlaceholders(fFooterText, PageIndex);
-    ACanvas.Font.Name  := fFontName;
+    FooterText := Utf8ToString(SubstitutePlaceholders(fFooterText, PageIndex));
+    ACanvas.Font.Name  := Utf8ToString(fFontName);
     ACanvas.Font.Size  := Round(fFontSize * FontScale);
     ACanvas.Font.Style := fFontStyle;
     ACanvas.Font.Color := fTextColor;
@@ -2959,7 +2960,7 @@ begin
   end;
   Form := TForm.Create(nil);
   try
-    Form.Caption := fTitle;
+    Form.Caption := Utf8ToString(fTitle);
     if Form.Caption = '' then
       Form.Caption := 'Print Preview';
     Form.Position    := poScreenCenter;
@@ -3078,7 +3079,7 @@ end;
   §5.3 – OpenPdfFile (cross-platform: xdg-open / open / ShellExecute)
   ========================================================================= }
 
-procedure TGDIPages.OpenPdfFile(const FileName: string);
+procedure TGDIPages.OpenPdfFile(const FileName: TFileName);
 begin
   // Phase 5.3: Open PDF with system viewer (cross-platform)
   // Note: Not implemented; PDF file is saved, user can open manually
@@ -3133,7 +3134,7 @@ begin
   fExportPdfStandardFonts := false;
 end;
 
-procedure TGDIPages.GetExportFonts(out SansFont, SerifFont, MonoFont: string);
+procedure TGDIPages.GetExportFonts(out SansFont, SerifFont, MonoFont: RawUtf8);
 begin
   GetReportFonts(fExportPdfEmbeddedTTF, SansFont, SerifFont, MonoFont);
 end;
@@ -3144,7 +3145,7 @@ var
   i:            Integer;
   PageW, PageH: Integer;
   PdfAuthor,
-  PdfSubject:   string;
+  PdfSubject:   RawUtf8;
 begin
   Result := False;
   if fPageCount = 0 then Exit;
@@ -3157,7 +3158,7 @@ begin
       if PdfAuthor  = '' then PdfAuthor  := fAuthor;
       PdfSubject := fExportPdfSubject;
       if PdfSubject = '' then PdfSubject := fSubject;
-      PDF.Info.Title   := SysUtils.Trim(fTitle);
+      PDF.Info.Title   := Utf8ToString(TrimU(fTitle));
       { PDF/UA needs a title (dc:title, DisplayDocTitle): without one, the
         first H1 names the document (ROADMAP B-10) }
       if fExportPdfTagged and
@@ -3165,12 +3166,12 @@ begin
         for i := 0 to fHeadingCount - 1 do
           if fHeadings[i].Level = 1 then
           begin
-            PDF.Info.Title := SysUtils.Trim(fHeadings[i].Title);
+            PDF.Info.Title := Utf8ToString(TrimU(fHeadings[i].Title));
             break;
           end;
       PDF.Info.Creator := SysUtils.Trim(Application.Title);
-      PDF.Info.Author  := PdfAuthor;
-      PDF.Info.Subject := PdfSubject;
+      PDF.Info.Author  := Utf8ToString(PdfAuthor);
+      PDF.Info.Subject := Utf8ToString(PdfSubject);
       PDF.FileFormat   := fExportPdfFileFormat;
       { Tagged first: TPdfDocument.SetTagged picks the PDF/UA font mode, and
         SetExportPdfTagged has already aligned our own flags with it }
@@ -3222,8 +3223,8 @@ begin
   end;
 end;
 
-procedure TGDIPages.ExportPDF(const FileName: string;
-  Protect, Encrypt: Boolean; const ATitle, ACompany: string);
+procedure TGDIPages.ExportPDF(const FileName: TFileName;
+  Protect, Encrypt: Boolean; const ATitle, ACompany: RawUtf8);
 var
   FS: TFileStream;
 begin

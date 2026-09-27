@@ -63,7 +63,7 @@ begin
   Doc.Tagged          := True;
   Doc.DefaultLanguage := 'en';
   // asked afterwards, so the names match the mode Tagged just selected
-  GetReportFonts(Doc.EmbeddedTTF, SansFont, SerifFont, MonoFont);
+  GetPdfFonts(Doc.EmbeddedTTF, SansFont, SerifFont, MonoFont);
   Doc.Info.Title      := 'mORMot2 PDF Cross-Platform Demo';
   Doc.DefaultPaperSize := mormot.ui.pdf.psA4;
 
@@ -178,7 +178,7 @@ Shows `TGDIPages` with a Lazarus GUI: WYSIWYG preview, print and PDF export via 
 ```pascal
 uses mormot.ui.report;
 
-var Report: TGDIPages; SansFont, SerifFont, MonoFont: string;
+var Report: TGDIPages; SansFont, SerifFont, MonoFont: RawUtf8;
 begin
   Report := TGDIPages.Create(nil);
   // ExportPdfTagged wraps all draw commands in struct elements, auto-raises

@@ -116,9 +116,9 @@ type
   TDemoRowArray = array of TDemoRow;
 
 var
-  SansFont: String;
-  SerifFont: String;
-  MonoFont: String;
+  SansFont: RawUtf8;
+  SerifFont: RawUtf8;
+  MonoFont: RawUtf8;
 
 { Table layout for the order list. Built at runtime instead of as a typed
   constant: Delphi 7 has no constants for dynamic array fields.

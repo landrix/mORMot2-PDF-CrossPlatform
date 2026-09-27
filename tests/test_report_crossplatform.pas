@@ -41,6 +41,7 @@ type
     procedure TestTableFooterRow;
     procedure TestTableGroupsAcrossPages;
     procedure TestListItemBullet;
+    procedure TestParagraphKeepsQuotes;
   end;
 
 implementation
@@ -638,6 +639,38 @@ begin
     CheckEqual(8, Length(t), 'bullet, space and item');
     Check((Length(t) >= 4) and (t[1] = #$E2) and (t[2] = #$80) and (t[3] = #$A2) and (t[4] = ' '),
       'U+2022 as UTF-8');
+  finally
+    Report.Free;
+  end;
+end;
+
+procedure TReportTests.TestParagraphKeepsQuotes;
+const
+  QUOTED = '"one two three four five six" end';
+var
+  Report: TGDIPages;
+  i, lines: Integer;
+  t: RawUtf8;
+begin
+  // words are split at spaces only: a quote character is text - the former
+  // TStringList split dropped the quotes and kept the quoted part as one word
+  Report := TGDIPages.Create(nil);
+  try
+    Report.NewPage;
+    Report.DrawParagraph(0, 3000, Report.CurrentY, QUOTED); // 30 mm: must wrap
+    Report.EndDoc;
+    t := '';
+    lines := 0;
+    for i := 0 to High(Report.Pages[0].Commands) do
+      if Report.Pages[0].Commands[i].Kind = dckDrawText then
+      begin
+        if t <> '' then
+          t := t + ' ';
+        t := t + Report.Pages[0].Commands[i].Text;
+        inc(lines);
+      end;
+    Check(lines > 1, 'the quoted part wraps like any text');
+    CheckEqual(t, QUOTED, 'quotes kept');
   finally
     Report.Free;
   end;

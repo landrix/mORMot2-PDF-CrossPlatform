@@ -116,7 +116,7 @@ Two rules:
 
 - **Fonts are embedded.** PDF/UA does not allow the viewer's own base-14 faces,
   so tagging turns `EmbeddedTTF` on and `StandardFontsReplace` off. Ask for the
-  font names *after* that, with `GetExportFonts` / `GetReportFonts`.
+  font names *after* that, with `GetExportFonts` / `GetPdfFonts`.
 - **Switch it on before the first page.** The font flags decide which metrics
   the layout is measured with; setting them later raises an exception.
 
@@ -132,7 +132,7 @@ Report.DrawHeading(1, 'Report title');
 // Low-level API
 Doc.Tagged          := True;
 Doc.DefaultLanguage := 'en';
-GetReportFonts(Doc.EmbeddedTTF, SansFont, SerifFont, MonoFont);
+GetPdfFonts(Doc.EmbeddedTTF, SansFont, SerifFont, MonoFont);
 Doc.AddPage;
 Doc.BeginStructContent(psrH1);
 Doc.VclCanvas.TextOut(40, 40, 'Title');

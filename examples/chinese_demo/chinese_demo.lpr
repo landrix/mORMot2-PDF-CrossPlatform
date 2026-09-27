@@ -27,9 +27,9 @@ uses
   mormot.core.base,
   mormot.core.os,
   mormot.core.unicode,
+  mormot.pdf.types,   // GetPdfFonts
   mormot.ui.pdf,
-  mormot.ui.pdfcanvas,
-  mormot.ui.report;
+  mormot.ui.pdfcanvas;
 
 {$R *.res}
 
@@ -83,7 +83,7 @@ begin
     {$endif MSWINDOWS}
     Doc.Info.Title       := 'Chinese PDF Demo';
     Doc.DefaultPaperSize := mormot.ui.pdf.psA4;
-    GetReportFonts(Doc.EmbeddedTTF, SansFont, SerifFont, MonoFont);
+    GetPdfFonts(Doc.EmbeddedTTF, SansFont, SerifFont, MonoFont);
 
     Doc.AddPage;
     C := Doc.VclCanvas;

@@ -8,8 +8,9 @@ tagged output passes PAC 2024 with accepted warnings only (W-1, a hint on
 every Figure; W-2, e-mail addresses without links in `zugferd_demo`) and veraPDF
 `ua1`. PDF/A-3U with PDF/UA-1 is verified (R-17). Fonts are embedded and subset
 on all three platforms; tables carry `THead`/`TBody`/`TFoot` row groups. All
-three platforms build with FPC; `test_runner` is green with 241 assertions on
-Windows, 280 on Linux and 300 on macOS (after the first R-20 step).
+three platforms build with FPC; `test_runner` is green with 243 assertions on
+Windows (after the second R-20 step), 280 on Linux and 300 on macOS (after the
+first).
 **Layer 1 builds on Delphi 7** (R-19, done): 127 assertions on Win32, and the
 tagged Unicode test file passes PAC 2024 and veraPDF `ua1` from Delphi 7/Win32
 and FPC/Win64 alike. The macOS run found a heap-dependent `.ttc` defect in the
@@ -40,10 +41,21 @@ earlier post covered them.
   as the compiler holds it (unchanged under FPC)
 - **Removed** (check): `pdf_demo_windows`, the Delphi 7 golden master on the
   original library, with its `peekpdf` tools
-- **Coming with R-20** (announce when done): `TGDIPages` takes `RawUtf8` for
-  all text and `TFileName` for file names — FPC callers do not change, a
-  Delphi caller converts `string` with `StringToUtf8`; `TGDIPages` is split
-  into a core without GUI and a preview control
+- **`TGDIPages` takes `RawUtf8`** for all text — parameters, `TReportFormat`,
+  `TTableLayout`, `Title`/`Author`/`Subject`, `ExportPdf*` — and `TFileName`
+  for file names. FPC callers compile unchanged, except that
+  **`GetReportFonts` and `GetExportFonts` now return `RawUtf8`**: an `out`
+  parameter needs the exact type, so their `string` variables become
+  `RawUtf8`. Code that draws through `TPdfDocumentVcl` without `TGDIPages`
+  takes `GetPdfFonts` from `mormot.pdf.types` instead, which returns
+  `string` — the demos do so now
+- **Fixed:** a paragraph lost its quotation marks — `"quoted text"` came out
+  as `quoted text` — and the quoted part could not wrap, because the words
+  were split with `TStringList.DelimitedText`, which treats `"` as a quote
+  character (`markdown_demo`'s Alan Kay quote)
+- **Coming with R-20** (announce when done): `TGDIPages` split into a core
+  without GUI and a preview control; `TGDIPages` and the TCanvas bridge on
+  Delphi
 
 ---
 
@@ -180,8 +192,22 @@ does.
 assertions) fails 1/4 with the UTF-8 decoding of either method broken;
 `test_runner` 241/241. The eight demo PDFs are the same apart from date and
 `/ID`. Linux 280/280 and macOS 300/300 on 2026-09-27, the tagged demos of all
-three platforms pass veraPDF `ua1`. **Next:** point 3, `TGDIPages` on
-`RawUtf8`.
+three platforms pass veraPDF `ua1`.
+
+**Step 2, point 1 — done on Windows, 2026-09-27:** `TGDIPages` on `RawUtf8`,
+still FPC-only. Every text parameter, record field, property and the format
+registry key are `RawUtf8`, file names `TFileName`; conversion only towards
+the LCL (`Utf8ToString`) and layer 1's `string` API. `RenderPageToCanvas`
+draws on the bridge with `TextOutUtf8`. `GetReportFonts`/`GetExportFonts`
+return `RawUtf8`, so the three report demos changed their variables, and the
+four TCanvas demos call `GetPdfFonts` and no longer use `mormot.ui.report`.
+Word splitting moved from `TStringList.DelimitedText` to
+`CsvToRawUtf8DynArray`, which fixed lost quotation marks (see "To
+Announce"); `TestParagraphKeepsQuotes` fails 1/2 on the old unit.
+`test_runner` 243/243. Seven demo PDFs are the same apart from date and
+`/ID`; `markdown_demo` differs only in the quote, now with its quotation
+marks. **Open:** Linux and macOS (+2 each expected: 282, 302). **Next:**
+point 3, the split into core and preview.
 
 **Not part of R-20:** Delphi 2010 and later have `TCustomCanvas` with virtual
 drawing methods (not verified here), where overriding might work without typed
@@ -270,7 +296,7 @@ GUI) stay manual. veraPDF runs on Java and could follow as a later step.
 
 ### V — Verification Outstanding
 
-All three platforms build and pass `test_runner` (241 assertions on Windows,
+All three platforms build and pass `test_runner` (243 assertions on Windows,
 280 on Linux, 300 on macOS — after the first R-20 step). The tagged demos pass
 veraPDF `ua1` 106/106 on all three — measured again on 2026-09-27 — and PAC
 2024 (2026-09-26) for the files of all three platforms, `zugferd_demo` also `3u` 148/148 and Mustang;

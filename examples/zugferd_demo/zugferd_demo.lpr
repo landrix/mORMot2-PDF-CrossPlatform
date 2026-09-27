@@ -35,8 +35,7 @@ uses
   mormot.core.unicode,
   mormot.pdf.types,   // TPdfStructRole
   mormot.ui.pdf,
-  mormot.ui.pdfcanvas,
-  mormot.ui.report;   // GetReportFonts
+  mormot.ui.pdfcanvas;
 
 const
   XML_NAME = 'factur-x.xml';
@@ -164,7 +163,7 @@ begin
     Doc.DefaultLanguage := 'de';
     // PDF/A embeds every font, so ask for the names of the embedded mode
     Doc.EmbeddedTTF := true;
-    GetReportFonts(Doc.EmbeddedTTF, SansFont, SerifFont, MonoFont);
+    GetPdfFonts(Doc.EmbeddedTTF, SansFont, SerifFont, MonoFont);
     Doc.Info.Title   := 'Rechnung 123456XX';
     Doc.Info.Author  := '[Seller name]';
     Doc.Info.Subject := 'Rechnung mit eingebetteten ZUGFeRD / Factur-X-Daten (EN 16931)';

@@ -35,13 +35,13 @@ type
     MarginRight: Integer;
     MarginTop: Integer;
     MarginBottom: Integer;
-    HeadingFontName: string;    { Font for H1-H6 headings }
+    HeadingFontName: RawUtf8;    { Font for H1-H6 headings }
     HeadingFontSize: Integer;
-    BodyFontName: string;       { Font for paragraphs and body text }
+    BodyFontName: RawUtf8;       { Font for paragraphs and body text }
     BodyFontSize: Integer;
-    MonoFontName: string;       { Font for code blocks (Code format) }
+    MonoFontName: RawUtf8;       { Font for code blocks (Code format) }
     LineHeightFactor: Single;   { Line-height multiplier (default 1.1; try 1.3-1.4 for open layouts) }
-    PageLabel: string;
+    PageLabel: RawUtf8;
   end;
 
 const
@@ -339,7 +339,7 @@ var
   MS: TMemoryStream;
   FS: TFileStream;
   Config1, Config2: TPageConfig;
-  SansFont, SerifFont, MonoFont: string;
+  SansFont, SerifFont, MonoFont: RawUtf8;
 begin
   Report := TGDIPages.Create(nil);
   try
