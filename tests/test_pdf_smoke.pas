@@ -1,7 +1,7 @@
 /// PDF smoke tests: document basics and tagged output
 // - migrated to TSynTestCase framework for mORMot2 compatibility
 // - drawn through TPdfDocument/TPdfCanvas (layer 1), so the suite runs on
-// Delphi too (R-19); the two tests of the TCanvas bridge itself need
+// Delphi too (R-19); the tests of the TCanvas bridge itself need
 // PDF_HASVCLCANVAS (test_defines.inc), which Delphi lacks until R-20
 unit test_pdf_smoke;
 
@@ -35,6 +35,7 @@ type
     procedure TestPdfDifferentSizes;
     {$ifdef PDF_HASVCLCANVAS}
     procedure TestVclCanvasTextMetrics;
+    procedure TestVclCanvasUtf8Text;
     {$endif PDF_HASVCLCANVAS}
     procedure TestTaggedAltTextIsPdfString;
     procedure TestTaggedImpliesEmbeddedFonts;
@@ -537,6 +538,81 @@ begin
   finally
     PDF.Free;
   end;
+end;
+
+procedure TPdfSmokeTests.TestVclCanvasUtf8Text;
+const
+  // 'Größe' as UTF-8 bytes, and its Helvetica AFM advance widths
+  GROESSE: RawUtf8 = 'Gr'#$C3#$B6#$C3#$9F'e';
+  W_GROESSE = 778 + 333 + 556 + 611 + 556;
+  W_L       = 222; // 'l'
+var
+  s: string;
+  sTextOut, sUtf8: RawByteString;
+
+  function NewCanvas(PDF: TPdfDocumentVcl): TPdfVclCanvas;
+  begin
+    PDF.CompressionMethod := cmNone;
+    PDF.EmbeddedTTF := false;
+    PDF.StandardFontsReplace := true;
+    PDF.AddPage;
+    result := PDF.VclCanvas as TPdfVclCanvas;
+    result.Font.Name := 'Helvetica';
+    result.Font.Size := 10;
+  end;
+
+  // the text object of the page, from BT to ET
+  function DrawnText(Utf8: boolean): RawByteString;
+  var
+    PDF: TPdfDocumentVcl;
+    Stream: TMemoryStream;
+    i, j: integer;
+  begin
+    Stream := TMemoryStream.Create;
+    try
+      PDF := TPdfDocumentVcl.Create(false, 0, pdfaNone);
+      try
+        if Utf8 then
+          NewCanvas(PDF).TextOutUtf8(10, 10, GROESSE)
+        else
+          NewCanvas(PDF).TextOutFrac(10, 10, s);
+        PDF.SaveToStream(Stream);
+      finally
+        PDF.Free;
+      end;
+      result := StreamToRaw(Stream);
+    finally
+      Stream.Free;
+    end;
+    i := Pos(RawByteString('BT'), result);
+    j := PosEx(RawByteString('ET'), result, i);
+    if (i = 0) or (j = 0) then
+      result := ''
+    else
+      result := copy(result, i, j - i + 2);
+  end;
+
+var
+  PDF: TPdfDocumentVcl;
+  C: TPdfVclCanvas;
+begin
+  { s is built from code points, not from GROESSE: the string path and the
+    RawUtf8 path must meet from independent sources }
+  s := SynUnicodeToString('Gr' + WideChar($F6) + WideChar($DF) + 'e');
+  PDF := TPdfDocumentVcl.Create(false, 0, pdfaNone);
+  try
+    C := NewCanvas(PDF);
+    CheckSame(C.TextWidthUtf8(GROESSE) / C.TextWidthUtf8('l'),
+      W_GROESSE / W_L, 1e-3, 'UTF-8 decoded for measuring');
+    CheckSame(C.TextWidthFrac(s), C.TextWidthUtf8(GROESSE), 1e-3,
+      'string and RawUtf8 measure alike');
+  finally
+    PDF.Free;
+  end;
+  sTextOut := DrawnText(false);
+  sUtf8 := DrawnText(true);
+  Check(Pos(RawByteString('Tj'), sUtf8) > 0, 'TextOutUtf8 shows text');
+  Check(sUtf8 = sTextOut, 'TextOutUtf8 draws as TextOutFrac');
 end;
 {$endif PDF_HASVCLCANVAS}
 

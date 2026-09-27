@@ -335,7 +335,7 @@ TPdfDocument.GetRegisteredTrueTypeFont(LogFont)
 
 ```
 TPdfVclCanvas.TextOut(X, Y, S)
-  UTF8Decode → WideString W
+  StringToSynUnicode → W   (TextOutUtf8: Utf8ToSynUnicode)
   → TPdfCanvas.TextOutW(X, Y, W)
       → TPdfWrite.ShowText(PW) → AddUnicodeHexText(PW, Len, false, Canvas)
 
@@ -496,7 +496,7 @@ TPdfCanvas.SetFont(name, size, style, DEFAULT_CHARSET)   (pdf.pas:8749)
 │  → WinAnsi font registered
 
 C.TextOut(40, 80, CJK_CHAR_ZHONG)                   (pdfcanvas.pas:279)
-│  UTF8Decode → WideString [U+4E2D]
+│  StringToSynUnicode → [U+4E2D]
 │  → TPdfCanvas.TextOutW → TPdfWrite.ShowText
 │     → AddUnicodeHexTextNoUniScribe                  (pdf.pas:5484)
 

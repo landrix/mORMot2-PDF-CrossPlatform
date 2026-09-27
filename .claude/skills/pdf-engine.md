@@ -430,6 +430,7 @@ Text: `TextOut`, `TextWidth`, `TextHeight`
 Shapes: `Rectangle`, `Ellipse`, `RoundRect`, `FillRect`
 Sub-pixel (TPdfVclCanvas only, `single` instead of `integer`):
 `TextOutFrac`, `TextWidthFrac`, `TextHeightFrac`, `RectangleFrac`
+UTF-8 (TPdfVclCanvas only, `RawUtf8` instead of `string`): `TextOutUtf8`, `TextWidthUtf8` — the same on every compiler, while the `string` methods read `string` as the compiler holds it (UTF-8 under FPC, the ANSI code page under Delphi 7) through `StringToSynUnicode`/`StringToUtf8`
 Lines: `MoveTo`, `LineTo`, `Polyline`, `Polygon` — `MoveTo` only moves `PenPos`; each `LineTo` writes one complete path object (`RG w` → `m` from `PenPos` → `l` → `S`), so pen changes never land inside a path (B-12)
 Images: `Draw`, `StretchDraw`
 Font: `Name`, `Size`, `Style` (fsBold/fsItalic/fsUnderline/fsStrikeOut), `Color`

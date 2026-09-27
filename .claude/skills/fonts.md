@@ -248,7 +248,7 @@ After `TPdfTtf.Create`:
 
 ```
 TPdfVclCanvas.TextOut(X, Y, S)              pdfcanvas.pas:273
-  UTF8Decode(S) → W: WideString
+  StringToSynUnicode(S) → W: SynUnicode   (TextOutUtf8: Utf8ToSynUnicode)
   → TPdfCanvas.TextOutW(X, Y, W)            pdf.pas:8992
       → TPdfWrite.ShowText(PW)              pdf.pas:9463
           → TPdfWrite.AddUnicodeHexText(PW, Len, false, Canvas)   pdf.pas:5549

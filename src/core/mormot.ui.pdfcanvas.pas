@@ -91,6 +91,8 @@ type
     function SetupMeasureFace: boolean;
     /// apply the PDF fill+stroke operation based on current brush/pen
     procedure FillAndStroke;
+    /// draw already decoded text at a sub-pixel position
+    procedure TextOutDecoded(X, Y: single; const AText: SynUnicode);
   protected
     procedure DoMoveTo(X, Y: integer); override;  // TCanvas.MoveTo calls this
     procedure DoLineTo(X, Y: integer); override;  // TCanvas.LineTo calls this
@@ -102,6 +104,10 @@ type
     // 0.75 pt (1 px @ 96 DPI) grid; TGDIPages uses this overload to place text
     // at the position it actually computed (ROADMAP B-5)
     procedure TextOutFrac(X, Y: single; const AText: string);
+    /// TextOutFrac for UTF-8 text, the same on every compiler
+    // - string is UTF-8 under FPC but ANSI under Delphi 7: RawUtf8 callers
+    // such as TGDIPages use this method and need no conversion
+    procedure TextOutUtf8(X, Y: single; const AText: RawUtf8);
     /// width of AText in canvas pixels, measured with the font the PDF uses
     // - TCanvas.TextWidth measures with the widgetset's own resolution of
     // Font.Name and rounds to whole screen pixels (0.75 pt @ 96 DPI), while
@@ -109,6 +115,8 @@ type
     // from it was up to 27% too narrow, and differed per platform (ROADMAP B-4)
     // - falls back to the LCL when no PDF face resolves for Font.Name
     function TextWidthFrac(const AText: string): single;
+    /// TextWidthFrac for UTF-8 text, see TextOutUtf8
+    function TextWidthUtf8(const AText: RawUtf8): single;
     /// height of AText in canvas pixels, measured with the PDF font metrics
     // - matches where TextOut/TextOutFrac put the baseline, i.e. Font.Size
     // below the requested top, plus the descender of the current face
@@ -346,21 +354,30 @@ begin
   TextOutFrac(X, Y, AText);
 end;
 
-procedure TPdfVclCanvas.TextOutFrac(X, Y: single; const AText: string);
+procedure TPdfVclCanvas.TextOutDecoded(X, Y: single; const AText: SynUnicode);
 var
-  W: WideString;
   pageH: single;
 begin
-  if AText = '' then
-    exit;
   SyncFont;
   pageH := fPdfDoc.DefaultPageHeight;
   if pageH <= 0 then
     pageH := 841; // A4 fallback
-  // FPC string is UTF-8; TPdfCanvas.TextOutW handles Unicode→WinAnsi/CID mapping
-  W := UTF8Decode(AText);
+  // TPdfCanvas.TextOutW handles the Unicode to WinAnsi/CID mapping
   fPdfCanvas.TextOutW((X + fScale.OriginX) * fScale.ScaleX,
-    pageH - (Y + Font.Size + fScale.OriginY) * fScale.ScaleY, pointer(W));
+    pageH - (Y + Font.Size + fScale.OriginY) * fScale.ScaleY, pointer(AText));
+end;
+
+procedure TPdfVclCanvas.TextOutFrac(X, Y: single; const AText: string);
+begin
+  // string as the compiler holds it: UTF-8 under FPC, ANSI under Delphi 7
+  if AText <> '' then
+    TextOutDecoded(X, Y, StringToSynUnicode(AText));
+end;
+
+procedure TPdfVclCanvas.TextOutUtf8(X, Y: single; const AText: RawUtf8);
+begin
+  if AText <> '' then
+    TextOutDecoded(X, Y, Utf8ToSynUnicode(AText));
 end;
 
 function TPdfVclCanvas.SetupMeasureFace: boolean;
@@ -375,17 +392,21 @@ end;
 
 function TPdfVclCanvas.TextWidthFrac(const AText: string): single;
 begin
+  result := TextWidthUtf8(StringToUtf8(AText));
+end;
+
+function TPdfVclCanvas.TextWidthUtf8(const AText: RawUtf8): single;
+begin
   if AText = '' then
     result := 0
   else if not SetupMeasureFace then
     // no PDF metrics for this font: the LCL is all there is - inherited
     // TextExtent, not inherited TextWidth, which would call back into our
     // TextExtent override and recurse
-    result := inherited TextExtent(AText).cx
+    result := inherited TextExtent(Utf8ToString(AText)).cx
   else
     // TPdfFontMeasurer works in PDF points, this canvas in screen pixels
-    result := fMeasurer.TextWidth(StringToUtf8(AText), Abs(Font.Size)) /
-      fScale.ScaleX;
+    result := fMeasurer.TextWidth(AText, Abs(Font.Size)) / fScale.ScaleX;
 end;
 
 function TPdfVclCanvas.TextHeightFrac(const AText: string): single;
