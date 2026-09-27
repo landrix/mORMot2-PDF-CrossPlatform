@@ -11,6 +11,7 @@ uses
   mormot.rest.sqlite3,
   // mORMot2 UI
   mormot.ui.report, // TGDIPages (includes PDF export via ExportPdfStream)
+  mormot.ui.reportpreview, // ShowReportPreview, PrintReport
   data,
   server;
 
@@ -90,7 +91,6 @@ implementation
 {$R *.lfm}
 
 uses
-  Printers,   // for TPrinter
   mormot.core.base,
   mormot.core.text,
   mormot.core.datetime,
@@ -172,7 +172,7 @@ begin
     Result.MarginBottom := 2000;
 
     // --- Metadata (for PDF export) ---
-    Result.Title   := edtTitle.Text;
+    Result.Title   := StringToUtf8(edtTitle.Text);
     Result.Author  := 'mORMot2 Demo';
     Result.Subject := edtCompany.Text;
 
@@ -357,8 +357,8 @@ begin
   Log('Building preview...');
   Report := BuildReport;
   try
-    // ShowPreviewForm opens the built-in preview window
-    Report.ShowPreviewForm;
+    // ShowReportPreview opens the preview window (mormot.ui.reportpreview)
+    ShowReportPreview(Report);
   finally
     Report.Free;
   end;
@@ -374,7 +374,7 @@ begin
   Log('Printing...');
   Report := BuildReport;
   try
-    Report.PrintPages(0, Report.PageCount - 1);
+    PrintReport(Report);
   finally
     Report.Free;
   end;

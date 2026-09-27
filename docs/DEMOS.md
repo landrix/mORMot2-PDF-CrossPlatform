@@ -170,7 +170,7 @@ Shows `TGDIPages` with a Lazarus GUI: WYSIWYG preview, print and PDF export via 
   on the continuation pages that table pagination creates, and marks them as
   artifacts in the tagged export
 - Tagged PDF/UA export (`ExportPdfTagged`), verified with PAC 2024
-- GUI preview with `ShowPreviewForm`
+- GUI preview with `ShowReportPreview` (`mormot.ui.reportpreview`)
 - PDF export with metadata, from the GUI or in batch mode
 
 **Core pattern:**
@@ -203,7 +203,7 @@ begin
   Report.DrawHeading(1, 'Order List Q1/2026');
 
   Report.EndDoc;
-  Report.ShowPreviewForm;   // or: Report.ExportPdfStream(Stream)
+  ShowReportPreview(Report);   // or: Report.ExportPdfStream(Stream)
   Report.Free;
 end;
 ```

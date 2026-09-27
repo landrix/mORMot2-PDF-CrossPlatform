@@ -53,9 +53,20 @@ earlier post covered them.
   as `quoted text` — and the quoted part could not wrap, because the words
   were split with `TStringList.DelimitedText`, which treats `"` as a quote
   character (`markdown_demo`'s Alan Kay quote)
-- **Coming with R-20** (announce when done): `TGDIPages` split into a core
-  without GUI and a preview control; `TGDIPages` and the TCanvas bridge on
-  Delphi
+- **Preview and printing moved out of `TGDIPages`:** it is a non-visual
+  `TComponent` now, usable without forms. `Report.ShowPreviewForm` becomes
+  `ShowReportPreview(Report)`, `Report.PrintPages(From, To_)` becomes
+  `PrintReport(Report, From, To_)`, both in the new unit
+  `mormot.ui.reportpreview`. `ShowPrintDialog` (printed without a dialog)
+  and `OpenPdfFile` (did nothing) are removed. `Orientation` is of the new
+  type `TReportOrientation` with the same values `poPortrait`/`poLandscape`
+  — a unit that also uses `Printers` after `mormot.ui.report` gets
+  `Printers.poPortrait` and a type error; qualify it or drop `Printers`.
+  New `ExportPdfCreator` for `/Creator`, which came from
+  `Application.Title`: a GUI application sets it to its title, otherwise
+  the executable name is written
+- **Coming with R-20** (announce when done): `TGDIPages` and the TCanvas
+  bridge on Delphi
 
 ---
 
@@ -175,12 +186,12 @@ replacement (Delphi 7 has no generics).
    programs (LCL first, mORMot2 first): both 65001, the same 46.008 pt for
    "ÄÖÜ" in Arial 12.
 3. **`TGDIPages` is split:** a core without GUI (recording, layout, PDF
-   export; `RawUtf8` throughout) and a preview control derived from
-   `TScrollBox` that converts only when it draws on the screen. The core
-   builds under Delphi first, the `--export` path of the GUI demos with it;
-   the preview and the `.dfm` of the GUI demos follow.
-4. **File names are `TFileName`** (`ExportPDF`, `OpenPdfFile`): a boundary to
-   the operating system, the mORMot2 convention.
+   export; `RawUtf8` throughout) and the preview and printing in their own
+   unit, converting only when they draw on the screen. The core builds under
+   Delphi first, the `--export` path of the GUI demos with it; the preview
+   and the `.dfm` of the GUI demos follow.
+4. **File names are `TFileName`** (`ExportPDF`): a boundary to the operating
+   system, the mORMot2 convention.
 
 Optional, for consistency down to layer 1: a `TPdfCanvas.TextOutUtf8`, so
 callers need not go through `Utf8ToSynUnicode` + `TextOutW` as `layer1_demo`
@@ -206,8 +217,25 @@ Word splitting moved from `TStringList.DelimitedText` to
 Announce"); `TestParagraphKeepsQuotes` fails 1/2 on the old unit.
 `test_runner` 243/243. Seven demo PDFs are the same apart from date and
 `/ID`; `markdown_demo` differs only in the quote, now with its quotation
-marks. **Open:** Linux and macOS (+2 each expected: 282, 302). **Next:**
-point 3, the split into core and preview.
+marks. **Open:** Linux and macOS (+2 each expected: 282, 302).
+
+**Step 3, point 3 — done on Windows, 2026-09-27:** `TGDIPages` is a
+non-visual `TComponent` — it was a `TScrollBox` nobody placed on a form. The
+new unit `mormot.ui.reportpreview` holds `ShowReportPreview(Report)` and
+`PrintReport(Report, From, To_)`, both on the public API only. The core lost
+`Controls`, `Forms`, `ExtCtrls`, `StdCtrls`, `ComCtrls`, `Dialogs`,
+`Printers`, `LazFileUtils` and `fgl`: `Orientation` has its own
+`TReportOrientation` (same value names), the format registry is two arrays
+with `FindRawUtf8`, the measuring DPI comes from the bitmap's
+`Font.PixelsPerInch` instead of `Screen`, and `/Creator` from the new
+`ExportPdfCreator`, else `Executable.ProgramName` — what `Application.Title`
+gave; `report_demo` passes its title. `ShowPreviewForm`, `PrintPages`,
+`ShowPrintDialog` (it printed without a dialog) and `OpenPdfFile` (empty)
+are gone. `test_runner` 243/243; the eight demo PDFs as after step 2,
+`/Creator` unchanged. The preview window was not opened — check it by hand
+(zoom, page keys, Ctrl+wheel). **Open:** the preview by hand; Linux and
+macOS for steps 2 and 3 together. **Next:** point 3 continued, the core on
+Delphi 7.
 
 **Not part of R-20:** Delphi 2010 and later have `TCustomCanvas` with virtual
 drawing methods (not verified here), where overriding might work without typed

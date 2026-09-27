@@ -56,7 +56,7 @@ try
   // 4. Export / preview
   Report.ExportPdfStream(Stream);
   // or
-  Report.ShowPreviewForm;
+  ShowReportPreview(Report);   // mormot.ui.reportpreview
 finally
   Report.Free;
 end;
@@ -310,16 +310,18 @@ Report.Columns2(Gap, Text1, Text2);               // two-column text
 
 ## Export & Preview
 
+`TGDIPages` is a non-visual `TComponent` (R-20): the unit needs no forms and
+no printer. Preview and printing live in `mormot.ui.reportpreview` and use
+only the public API (`PageCount`, `Pages[]`, margins, `Title`,
+`RenderPageToCanvas`):
+
 ```pascal
-// WYSIWYG preview (GUI):
-Report.ShowPreviewForm;
+// WYSIWYG preview (GUI, modal):
+ShowReportPreview(Report);
 
-// Print:
-Report.PrintPages(0, Report.PageCount - 1);
-Report.ShowPrintDialog;
-
-// Open exported file in default PDF viewer:
-Report.OpenPdfFile('output.pdf');   // calls xdg-open / open / ShellExecute
+// Print on the default printer (range clipped, defaults print all pages):
+PrintReport(Report);
+PrintReport(Report, 0, 2);
 
 // Export PDF:
 Report.ExportPdfStream(AStream): boolean;
@@ -332,6 +334,7 @@ Report.ExportPdfLevel          := pdfA1B;    // PDF/A conformance level
 Report.ExportPdfFileFormat     := pdf17;     // PDF version header (default: pdf13)
 Report.ExportPdfAuthor         := 'Company';
 Report.ExportPdfSubject        := 'Report';
+Report.ExportPdfCreator        := 'My App';   // /Creator; empty = executable name
 Report.Title   := 'Document title';
 Report.Author  := 'Author name';
 Report.Subject := 'Subject';
@@ -479,7 +482,7 @@ DrawHeading / DrawParagraph / DrawText
     ↓ EmitTextCmd / AddCommand
     ↓ TDrawCommand array (one list per page)
 
-ShowPreviewForm / ExportPdfStream
+ShowReportPreview / PrintReport / ExportPdfStream
     ↓ RenderPageToCanvas(ACanvas, PageIndex, DestWidth, DestHeight)
     ↓ iterates TDrawCommand[]
     ↓ ACanvas.TextOut / ACanvas.Rectangle / ...

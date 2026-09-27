@@ -234,6 +234,7 @@ end;
 | `LineHeightFactor` | `single` | `1.1` | Line-height multiplier applied to `FontTextHeight`; raise to e.g. `1.3` for more open layouts |
 | `ExportPdfTagged` | boolean | `false` | Wrap all drawing commands in Tagged PDF struct elements on export |
 | `ExportPdfLanguage` | RawUtf8 | `'en'` | BCP-47 language tag written to `/Lang` when `ExportPdfTagged = true` |
+| `ExportPdfCreator` | RawUtf8 | `''` | `/Creator`; empty = executable name. A GUI application passes `StringToUtf8(Application.Title)` |
 
 ---
 

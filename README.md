@@ -86,7 +86,7 @@ Report.DrawTableRow(['Value A', 'Value B']);      // automatic page break + head
 Report.EndTable;
 Report.EndDoc;
 Report.ExportPdfStream(Stream);   // file format is raised to pdf17 automatically
-// or: Report.ShowPreviewForm
+// or: ShowReportPreview(Report)   // mormot.ui.reportpreview
 Report.Free;
 ```
 

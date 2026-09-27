@@ -9,7 +9,7 @@ The original document (`reference/mormot.ui.pdf.pas`) was Windows/GDI-only; this
 
 **RULE: Read the relevant skill file(s) BEFORE doing anything else — before reading source files, before searching, before planning.**
 
-Skills contain complete, distilled API and architectural knowledge. The main source files are very large (mormot.ui.pdf.pas is 14,600+ lines, mormot.ui.report.pas 3,200+); reading them without necessity wastes context and time.
+Skills contain complete, distilled API and architectural knowledge. The main source files are very large (mormot.ui.pdf.pas is 14,600+ lines, mormot.ui.report.pas 2,800+); reading them without necessity wastes context and time.
 
 | Skill | When to use |
 |---|---|
@@ -45,6 +45,7 @@ All files under `src/` require justification and user approval before reading.
 |---|---|---|
 | `src/core/mormot.ui.pdf.pas` | PDF engine (cross-platform) | Production |
 | `src/core/mormot.ui.report.pas` | Report engine (`TGDIPages`) | Production |
+| `src/core/mormot.ui.reportpreview.pas` | Preview window and printing for `TGDIPages` (LCL) | Production |
 | `src/core/mormot.ui.pdfcanvas.pas` | TCanvas bridge (`TPdfDocumentVcl`) | Production |
 | `src/core/mormot.pdf.types.pas` | Platform interfaces & types | Production |
 | `src/platform/windows/mormot.pdf.gdi.pas` | GDI backend | Production |
@@ -59,7 +60,8 @@ All files under `src/` require justification and user approval before reading.
 src/
   core/
     mormot.ui.pdf.pas           PDF objects, TPdfDocument, TPdfCanvas
-    mormot.ui.report.pas        TGDIPages — layout engine
+    mormot.ui.report.pas        TGDIPages — layout engine, no forms or printer
+    mormot.ui.reportpreview.pas ShowReportPreview, PrintReport (LCL)
     mormot.ui.pdfcanvas.pas     TPdfDocumentVcl, TPdfVclCanvas
     mormot.pdf.types.pas        IPdfPlatformFont/SystemFonts/DC, types
     mormot.pdf.fpimage.pas      Bitmap embedding (FPImage)

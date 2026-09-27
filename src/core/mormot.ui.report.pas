@@ -1,7 +1,9 @@
 /// Cross-platform report engine — TGDIPages (FPC/Lazarus)
 // - on Delphi+Windows the original GDI/EMF implementation remains active
 // - on FPC/Lazarus (all platforms) this unit provides a command-list-based
-//   replacement rendered via LCL TCanvas, TPrinter and TPdfDocumentVcl
+//   replacement rendered via TCanvas and TPdfDocumentVcl
+// - no forms and no printer here: preview and printing are in
+//   mormot.ui.reportpreview
 unit mormot.ui.report;
 
 interface
@@ -14,12 +16,11 @@ interface
 
 uses
   Classes, SysUtils, Types, Math,
-  Graphics, Controls, Forms, ExtCtrls, StdCtrls, ComCtrls, Dialogs,
+  Graphics,
   LCLType, LCLIntf,
-  Printers,
-  LazFileUtils,  // OpenDocument (cross-platform: xdg-open / open / ShellExecute)
-  Contnrs, fgl,  // TObjectList + TFPGMap for generics
+  Contnrs,       // TObjectList
   mormot.core.base,
+  mormot.core.os,       // Executable.ProgramName
   mormot.core.text,     // ESynException
   mormot.core.unicode,
   mormot.pdf.types,     // PDF_FONT_STD_* + TPdfStructRole (Tagged PDF)
@@ -56,14 +57,10 @@ procedure GetReportFonts(Embedded: boolean;
   out SansFont, SerifFont, MonoFont: RawUtf8);
 
 type
-  /// Re-export TPrinterOrientation from LCL Printers unit for TGDIPages.Orientation property
-  // - Allows other units to use this type without directly importing Printers
-  TPrinterOrientation = Printers.TPrinterOrientation;
-
-const
-  /// Re-export printer orientation constants
-  poPortrait = Printers.poPortrait;
-  poLandscape = Printers.poLandscape;
+  /// page orientation of TGDIPages.Orientation
+  // - the report's own type, so the core needs no Printers unit; the value
+  // names are those of TPrinterOrientation, callers keep writing poPortrait
+  TReportOrientation = (poPortrait, poLandscape);
 
 type
   /// column alignment for table cells
@@ -200,7 +197,7 @@ type
   // - renders on any TCanvas via RenderPageToCanvas
   // - public surface is API-compatible with the Delphi TGdiPages for the
   //   methods listed in MIGRATION_PLAN.md §8 (Beibehaltung der öffentl. API)
-  TGDIPages = class(TScrollBox)
+  TGDIPages = class(TComponent)
   private
     { --- page storage --- }
     fPages:        array of TPageData;
@@ -216,7 +213,7 @@ type
 
     { --- page geometry (1/100 mm) --- }
     fPaperSize:    TGdiPagePaperSize;
-    fOrientation:  TPrinterOrientation;
+    fOrientation:  TReportOrientation;
     fMarginLeft:   Integer;
     fMarginRight:  Integer;
     fMarginTop:    Integer;
@@ -267,7 +264,8 @@ type
     fSavedCount:   Integer;
 
     { --- Phase 5: Format registry (Markdown-style) --- }
-    fFormatRegistry: TFPGMap<RawUtf8, TReportFormat>;  // H1..H6, Strong, Em, Code, etc.
+    fFormatNames:    TRawUtf8DynArray;      // H1..H6, Strong, Em, Code, etc.
+    fFormats:        array of TReportFormat; // same index as fFormatNames
     fHeadings:       array of THeadingInfo;  // stores heading metadata for PDF outlines
     fHeadingCount:   Integer;  // count of headings in fHeadings array
     fCurrentHeadingLevel: Integer;  // tracks current heading level for auto-spacing in EndHeading
@@ -290,22 +288,12 @@ type
     fExportPdfStandardFonts: boolean;
     fExportPdfAuthor:      RawUtf8;
     fExportPdfSubject:     RawUtf8;
+    fExportPdfCreator:     RawUtf8;
     fExportPdfFileFormat:  TPdfFileFormat;
     fExportPdfTagged:      boolean;
     fExportPdfLanguage:    RawUtf8;
     fActivePdfDoc:         TPdfDocumentVcl;  // non-nil during tagged PDF export only
 
-    { --- Preview Form temporary state (for ShowPreviewForm callbacks) --- }
-    fPreviewCurrPage:      Integer;
-    fPreviewTotalPages:    Integer;
-    fPreviewLblPage:       TLabel;
-    fPreviewEdtZoom:       TEdit;        // editable zoom percentage input
-    fPreviewPaintBox:      TPaintBox;
-    fPreviewScrollBox:     TScrollBox;   // scrollable container for zoomed page
-    fPreviewW:             Integer;      // base preview width @ 96 DPI (unzoomed)
-    fPreviewH:             Integer;      // base preview height @ 96 DPI (unzoomed)
-    fPreviewZoom:          Double;       // zoom factor (1.0 = 100%)
-    fPreviewForm:          TForm;        // reference to modal form for resize events
 
     { === CACHING: Zentrale Berechnung (einmal, viel verwendet) === }
     { --- Seiten-Geometrie Cache (berechnet in NewPage) --- }
@@ -332,20 +320,6 @@ type
     /// emit dckEndList if a list is still open (no-op otherwise)
     procedure CloseOpenList;
     procedure UpdatePageDimensions;
-    procedure PreviewUpdateLabel;
-    procedure PreviewDoPaint(Sender: TObject);
-    procedure PreviewDoPrev(Sender: TObject);
-    procedure PreviewDoNext(Sender: TObject);
-    procedure PreviewApplyZoom;
-    procedure PreviewDoZoomIn(Sender: TObject);
-    procedure PreviewDoZoomOut(Sender: TObject);
-    procedure PreviewDoFitPage(Sender: TObject);
-    procedure PreviewDoFitWidth(Sender: TObject);
-    procedure PreviewDoFormResize(Sender: TObject);
-    procedure PreviewDoKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
-    procedure PreviewDoMouseWheel(Sender: TObject; Shift: TShiftState;
-      WheelDelta: Integer; MousePos: TPoint; var Handled: Boolean);
-    procedure PreviewDoZoomEdit(Sender: TObject);
     function  GetPageCount: Integer;
     function  GetCurrentPageIndex: Integer;
     function  GetPage(Index: Integer): TPageData;
@@ -421,7 +395,7 @@ type
     /// paper size (A4, A5, A3, Letter, Legal) - default psA4
     property PaperSize:    TGdiPagePaperSize   read fPaperSize    write fPaperSize;
     /// page orientation (poPortrait or poLandscape) - default poPortrait
-    property Orientation:  TPrinterOrientation read fOrientation  write fOrientation;
+    property Orientation:  TReportOrientation  read fOrientation  write fOrientation;
     /// left margin in 1/100 mm units - default 2000 (20mm) — updates page dimensions
     property MarginLeft:   Integer             read fMarginLeft   write SetMarginLeft;
     /// right margin in 1/100 mm units - default 2000 (20mm) — updates page dimensions
@@ -569,30 +543,18 @@ type
     // - ACanvas: target canvas to render to (must be valid before call)
     // - PageIndex: 0-based page number to render (must be < PageCount)
     // - DestWidth, DestHeight: rendering area size in pixels (including margins)
-    // - SourceDPI: optional DPI for coordinate conversion (0 = use Screen.PixelsPerInch)
+    // - SourceDPI: optional DPI for coordinate conversion (0 = the screen DPI)
     //   set to PDF.ScreenLogPixels (96) for PDF export to ensure consistency
     // - renders header/footer with {#} and {total} placeholder substitution
+    // - preview and printing call this from mormot.ui.reportpreview
     procedure RenderPageToCanvas(ACanvas: TCanvas;
                                  PageIndex, DestWidth, DestHeight: Integer;
                                  SourceDPI: Integer = 0);
 
-    { --- preview (Phase 4) --- }
-    procedure ShowPreviewForm;
-
-    { --- §5.2 print dialog --- }
-    /// show the OS printer dialog and print if the user confirms
-    procedure ShowPrintDialog;
-
-    { --- §5.3 open exported PDF --- }
-    /// open FileName with the default PDF viewer (xdg-open / open / ShellExecute)
-    procedure OpenPdfFile(const FileName: TFileName);
-
-    { --- output (Phase 5/6) --- }
-    /// print pages [From..To_] on the default printer
-    procedure PrintPages(From, To_: Integer);
+    { --- output (Phase 6) --- }
     /// export all pages as PDF to an existing stream; returns false on error
     // - uses ExportPdfLevel, ExportPdfEmbeddedTTF, ExportPdfAuthor/Subject
-    // - IMPORTANT: uses PDF.ScreenLogPixels for MMToPixels (not Screen.PixelsPerInch)
+    // - IMPORTANT: uses PDF.ScreenLogPixels for MMToPixels (not the screen DPI)
     //   so TPdfVclCanvas coordinates match the PDF coordinate system exactly
     function  ExportPdfStream(aDest: TStream): boolean;
     /// export all pages as PDF to a file; calls ExportPdfStream internally
@@ -613,6 +575,9 @@ type
     property ExportPdfAuthor:      RawUtf8     read fExportPdfAuthor      write fExportPdfAuthor;
     /// PDF subject field (defaults to Subject property when empty)
     property ExportPdfSubject:     RawUtf8     read fExportPdfSubject     write fExportPdfSubject;
+    /// PDF creator field (defaults to the executable name when empty)
+    // - a GUI application may pass its Application.Title here
+    property ExportPdfCreator:     RawUtf8     read fExportPdfCreator     write fExportPdfCreator;
     /// PDF version written to the file header; default is pdf13 (backward-compatible)
     property ExportPdfFileFormat:  TPdfFileFormat read fExportPdfFileFormat write fExportPdfFileFormat;
     /// enable Tagged PDF (ISO 32000-1 §14) on export; adds structure tags H1-H6 and P
@@ -751,7 +716,6 @@ begin
   fExportPdfLanguage      := 'en';
 
   // Phase 5: Initialize format registry with default Markdown-style formats
-  fFormatRegistry := TFPGMap<RawUtf8, TReportFormat>.Create;
   fHeadingCount := 0;
   SetLength(fHeadings, 0);
   fCurrentHeadingLevel := 0;
@@ -786,7 +750,6 @@ begin
   fBitmaps.Free;
   fMeasureBitmap.Free;
   fMeasurer.Free;
-  fFormatRegistry.Free;
   SetLength(fHeadings, 0);  // clear dynamic array
   inherited;
 end;
@@ -1099,12 +1062,12 @@ end;
 function TGDIPages.GetMeasureDPI: Integer;
 begin
   { Return the actual screen DPI that the bitmap canvas uses for font rendering.
-    LCL bitmap canvas (all platforms) measures fonts using Screen.PixelsPerInch.
+    The bitmap canvas measures fonts at the screen DPI (TFont.PixelsPerInch).
     On HiDPI systems (e.g., Retina display in Parallels on Apple Silicon) this
     value is > 96. Using the wrong DPI causes systematic errors in all text
     width measurements: text wraps too early, inline positions drift, and
     right-aligned text is shifted. }
-  Result := Screen.PixelsPerInch;
+  Result := fMeasureBitmap.Canvas.Font.PixelsPerInch;
   if Result <= 0 then Result := 96;
 end;
 
@@ -1206,20 +1169,24 @@ procedure TGDIPages.DefineFormat(const AName: RawUtf8; const AFormat: TReportFor
 var
   Index: Integer;
 begin
-  Index := fFormatRegistry.IndexOf(AName);
+  Index := FindRawUtf8(fFormatNames, AName);
   if Index >= 0 then
-    fFormatRegistry.Data[Index] := AFormat
+    fFormats[Index] := AFormat
   else
-    fFormatRegistry.Add(AName, AFormat);
+  begin
+    Index := AddRawUtf8(fFormatNames, AName);
+    SetLength(fFormats, Index + 1);
+    fFormats[Index] := AFormat;
+  end;
 end;
 
 function TGDIPages.GetFormat(const AName: RawUtf8): TReportFormat;
 var
   Index: Integer;
 begin
-  Index := fFormatRegistry.IndexOf(AName);
+  Index := FindRawUtf8(fFormatNames, AName);
   if Index >= 0 then
-    Result := fFormatRegistry.Data[Index]
+    Result := fFormats[Index]
   else
   begin
     { Return safe default if format not found }
@@ -2732,386 +2699,6 @@ begin
 end;
 
 { =========================================================================
-  Phase 4 – ShowPreviewForm (modal LCL form with TPaintBox)
-  ========================================================================= }
-
-procedure TGDIPages.PreviewUpdateLabel;
-begin
-  if fPreviewLblPage <> nil then
-    fPreviewLblPage.Caption := Format('Page %d / %d', [fPreviewCurrPage + 1, fPreviewTotalPages]);
-end;
-
-procedure TGDIPages.PreviewDoPaint(Sender: TObject);
-var
-  PB: TPaintBox;
-  ZW, ZH: Integer;
-begin
-  PB := TPaintBox(Sender);
-  ZW := Round(fPreviewW * fPreviewZoom);
-  ZH := Round(fPreviewH * fPreviewZoom);
-  PB.Canvas.Brush.Color := clWhite;
-  PB.Canvas.FillRect(Rect(0, 0, ZW, ZH));
-  if (fPreviewCurrPage >= 0) and (fPreviewCurrPage < fPreviewTotalPages) then
-    RenderPageToCanvas(PB.Canvas, fPreviewCurrPage, ZW, ZH);
-end;
-
-procedure TGDIPages.PreviewDoPrev(Sender: TObject);
-begin
-  if fPreviewCurrPage > 0 then
-  begin
-    Dec(fPreviewCurrPage);
-    PreviewUpdateLabel;
-    if fPreviewPaintBox <> nil then
-      fPreviewPaintBox.Invalidate;
-  end;
-end;
-
-procedure TGDIPages.PreviewDoNext(Sender: TObject);
-begin
-  if fPreviewCurrPage < fPreviewTotalPages - 1 then
-  begin
-    Inc(fPreviewCurrPage);
-    PreviewUpdateLabel;
-    if fPreviewPaintBox <> nil then
-      fPreviewPaintBox.Invalidate;
-  end;
-end;
-
-procedure TGDIPages.PreviewApplyZoom;
-var
-  ZW, ZH, CX, CY: Integer;
-begin
-  if (fPreviewPaintBox = nil) or (fPreviewScrollBox = nil) then
-    Exit;
-  ZW := Round(fPreviewW * fPreviewZoom);
-  ZH := Round(fPreviewH * fPreviewZoom);
-  fPreviewPaintBox.Width  := ZW;
-  fPreviewPaintBox.Height := ZH;
-  CX := (fPreviewScrollBox.ClientWidth  - ZW) div 2;
-  CY := (fPreviewScrollBox.ClientHeight - ZH) div 2;
-  if CX < GRAY_MARGIN then CX := GRAY_MARGIN;
-  if CY < GRAY_MARGIN then CY := GRAY_MARGIN;
-  fPreviewPaintBox.Left := CX;
-  fPreviewPaintBox.Top  := CY;
-  if fPreviewEdtZoom <> nil then
-    fPreviewEdtZoom.Text := Format('%d%%', [Round(fPreviewZoom * 100)]);
-  fPreviewPaintBox.Invalidate;
-end;
-
-procedure TGDIPages.PreviewDoZoomIn(Sender: TObject);
-begin
-  if fPreviewZoom < 4.0 then
-  begin
-    fPreviewZoom := fPreviewZoom + 0.25;
-    if fPreviewZoom > 4.0 then
-      fPreviewZoom := 4.0;
-    PreviewApplyZoom;
-  end;
-end;
-
-procedure TGDIPages.PreviewDoZoomOut(Sender: TObject);
-begin
-  if fPreviewZoom > 0.25 then
-  begin
-    fPreviewZoom := fPreviewZoom - 0.25;
-    if fPreviewZoom < 0.25 then
-      fPreviewZoom := 0.25;
-    PreviewApplyZoom;
-  end;
-end;
-
-procedure TGDIPages.PreviewDoFitPage(Sender: TObject);
-var
-  ZX, ZY: Double;
-begin
-  if fPreviewScrollBox = nil then
-    Exit;
-  ZX := (fPreviewScrollBox.ClientWidth  - 2 * GRAY_MARGIN) / fPreviewW;
-  ZY := (fPreviewScrollBox.ClientHeight - 2 * GRAY_MARGIN) / fPreviewH;
-  fPreviewZoom := Min(ZX, ZY);
-  if fPreviewZoom < 0.1 then
-    fPreviewZoom := 0.1;
-  PreviewApplyZoom;
-end;
-
-procedure TGDIPages.PreviewDoFitWidth(Sender: TObject);
-begin
-  if fPreviewScrollBox = nil then
-    Exit;
-  fPreviewZoom := (fPreviewScrollBox.ClientWidth - 2 * GRAY_MARGIN) / fPreviewW;
-  if fPreviewZoom < 0.1 then
-    fPreviewZoom := 0.1;
-  PreviewApplyZoom;
-end;
-
-procedure TGDIPages.PreviewDoFormResize(Sender: TObject);
-begin
-  PreviewApplyZoom;
-  if fPreviewLblPage <> nil then
-    fPreviewLblPage.Left := (fPreviewLblPage.Parent.Width - fPreviewLblPage.Width) div 2;
-end;
-
-procedure TGDIPages.PreviewDoKeyDown(Sender: TObject; var Key: Word;
-  Shift: TShiftState);
-begin
-  case Key of
-    VK_PRIOR:
-      PreviewDoPrev(nil);
-    VK_NEXT:
-      PreviewDoNext(nil);
-    VK_HOME:
-      if fPreviewCurrPage <> 0 then
-      begin
-        fPreviewCurrPage := 0;
-        PreviewUpdateLabel;
-        if fPreviewPaintBox <> nil then
-          fPreviewPaintBox.Invalidate;
-      end;
-    VK_END:
-      if fPreviewCurrPage <> fPreviewTotalPages - 1 then
-      begin
-        fPreviewCurrPage := fPreviewTotalPages - 1;
-        PreviewUpdateLabel;
-        if fPreviewPaintBox <> nil then
-          fPreviewPaintBox.Invalidate;
-      end;
-    VK_OEM_PLUS, VK_ADD:
-      if ssCtrl in Shift then
-        PreviewDoZoomIn(nil);
-    VK_OEM_MINUS, VK_SUBTRACT:
-      if ssCtrl in Shift then
-        PreviewDoZoomOut(nil);
-    VK_0, VK_NUMPAD0:
-      if ssCtrl in Shift then
-      begin
-        fPreviewZoom := 1.0;
-        PreviewApplyZoom;
-      end;
-  end;
-end;
-
-procedure TGDIPages.PreviewDoMouseWheel(Sender: TObject; Shift: TShiftState;
-  WheelDelta: Integer; MousePos: TPoint; var Handled: Boolean);
-begin
-  if ssCtrl in Shift then
-  begin
-    if WheelDelta > 0 then
-      PreviewDoZoomIn(nil)
-    else
-      PreviewDoZoomOut(nil);
-    Handled := True;
-  end;
-end;
-
-procedure TGDIPages.PreviewDoZoomEdit(Sender: TObject);
-var
-  S: string;
-  ZoomVal: Double;
-  Code: Integer;
-begin
-  if fPreviewEdtZoom = nil then Exit;
-  S := Trim(fPreviewEdtZoom.Text);
-  if (Length(S) > 0) and (S[Length(S)] = '%') then
-    S := Trim(Copy(S, 1, Length(S) - 1));
-  Val(S, ZoomVal, Code);
-  if Code <> 0 then
-  begin
-    fPreviewEdtZoom.Text := Format('%d%%', [Round(fPreviewZoom * 100)]);
-    Exit;
-  end;
-  ZoomVal := ZoomVal / 100.0;
-  if ZoomVal < 0.25 then ZoomVal := 0.25;
-  if ZoomVal > 4.0  then ZoomVal := 4.0;
-  fPreviewZoom := ZoomVal;
-  PreviewApplyZoom;
-end;
-
-procedure TGDIPages.ShowPreviewForm;
-var
-  Form:               TForm;
-  ScrollBox:          TScrollBox;
-  PaintBox:           TPaintBox;
-  TopPanel, BtnPanel: TPanel;
-  BtnZoomOut, BtnZoomIn,
-  BtnFitPage, BtnFitWidth: TButton;
-  BtnPrev, BtnNext,
-  BtnClose:           TButton;
-  LblPage:            TLabel;
-  EdtZoom:            TEdit;
-begin
-  fPreviewTotalPages := fPageCount;
-  if fPreviewTotalPages = 0 then
-  begin
-    ShowMessage('No pages available.');
-    Exit;
-  end;
-  fPreviewCurrPage := 0;
-  fPreviewZoom := 1.0;
-  // Base preview size @ 96 DPI (unzoomed reference, same DPI as PDF export)
-  if fPages[0].PageWidth > 0 then
-  begin
-    fPreviewW := MMToPixels(fPages[0].PageWidth + fMarginLeft + fMarginRight, 96);
-    fPreviewH := MMToPixels(fPages[0].PageHeight + fMarginTop + fMarginBottom, 96);
-  end
-  else
-  begin
-    fPreviewW := 793;  // A4 portrait fallback: 210mm @ 96 DPI
-    fPreviewH := 1175; // 297mm @ 96 DPI
-  end;
-  Form := TForm.Create(nil);
-  try
-    Form.Caption := Utf8ToString(fTitle);
-    if Form.Caption = '' then
-      Form.Caption := 'Print Preview';
-    Form.Position    := poScreenCenter;
-    Form.BorderStyle := bsSizeable;
-    Form.KeyPreview  := True;
-    Form.Width  := Min(Round(Screen.Width  * 0.8), 1200);
-    Form.Height := Min(Round(Screen.Height * 0.8), 900);
-    Form.OnResize    := PreviewDoFormResize;
-    Form.OnKeyDown   := PreviewDoKeyDown;
-    fPreviewForm     := Form;
-    // --- top toolbar panel (zoom controls) ---
-    TopPanel := TPanel.Create(Form);
-    TopPanel.Parent     := Form;
-    TopPanel.Align      := alTop;
-    TopPanel.Height     := 36;
-    TopPanel.BevelOuter := bvNone;
-    BtnZoomOut := TButton.Create(Form);
-    BtnZoomOut.Parent  := TopPanel;
-    BtnZoomOut.Caption := Utf8AsLclString(MINUS_SIGN);
-    BtnZoomOut.SetBounds(8, 4, 32, 28);
-    BtnZoomOut.OnClick := PreviewDoZoomOut;
-    EdtZoom := TEdit.Create(Form);
-    EdtZoom.Parent    := TopPanel;
-    EdtZoom.SetBounds(44, 6, 60, 24);
-    EdtZoom.Alignment := taCenter;
-    EdtZoom.OnEditingDone := PreviewDoZoomEdit;
-    fPreviewEdtZoom   := EdtZoom;
-    BtnZoomIn := TButton.Create(Form);
-    BtnZoomIn.Parent  := TopPanel;
-    BtnZoomIn.Caption := '+';
-    BtnZoomIn.SetBounds(108, 4, 32, 28);
-    BtnZoomIn.OnClick := PreviewDoZoomIn;
-    BtnFitPage := TButton.Create(Form);
-    BtnFitPage.Parent  := TopPanel;
-    BtnFitPage.Caption := 'Fit Page';
-    BtnFitPage.SetBounds(152, 4, 90, 28);
-    BtnFitPage.OnClick := PreviewDoFitPage;
-    BtnFitWidth := TButton.Create(Form);
-    BtnFitWidth.Parent  := TopPanel;
-    BtnFitWidth.Caption := 'Fit Width';
-    BtnFitWidth.SetBounds(248, 4, 90, 28);
-    BtnFitWidth.OnClick := PreviewDoFitWidth;
-    // --- bottom panel (page navigation) ---
-    BtnPanel := TPanel.Create(Form);
-    BtnPanel.Parent     := Form;
-    BtnPanel.Align      := alBottom;
-    BtnPanel.Height     := 42;
-    BtnPanel.BevelOuter := bvNone;
-    BtnPrev := TButton.Create(Form);
-    BtnPrev.Parent  := BtnPanel;
-    BtnPrev.Caption := '< Back';
-    BtnPrev.SetBounds(8, 6, 84, 28);
-    BtnPrev.OnClick := PreviewDoPrev;
-    LblPage := TLabel.Create(Form);
-    LblPage.Parent    := BtnPanel;
-    LblPage.AutoSize  := False;
-    LblPage.Width     := 140;
-    LblPage.Left      := (BtnPanel.Width - 140) div 2;
-    LblPage.Top       := 14;
-    LblPage.Alignment := taCenter;
-    fPreviewLblPage   := LblPage;
-    PreviewUpdateLabel;
-    BtnClose := TButton.Create(Form);
-    BtnClose.Parent      := BtnPanel;
-    BtnClose.Caption     := 'Close';
-    BtnClose.ModalResult := mrOk;
-    BtnClose.Anchors     := [akTop, akRight];
-    BtnClose.SetBounds(BtnPanel.Width - 112, 6, 96, 28);
-    BtnNext := TButton.Create(Form);
-    BtnNext.Parent  := BtnPanel;
-    BtnNext.Caption := 'Next >';
-    BtnNext.Anchors := [akTop, akRight];
-    BtnNext.SetBounds(BtnPanel.Width - 208, 6, 84, 28);
-    BtnNext.OnClick := PreviewDoNext;
-    // --- scroll box (fills center area) ---
-    ScrollBox := TScrollBox.Create(Form);
-    ScrollBox.Parent      := Form;
-    ScrollBox.Align       := alClient;
-    ScrollBox.Color       := clSilver;
-    ScrollBox.AutoScroll  := True;
-    ScrollBox.BorderStyle := bsNone;
-    ScrollBox.OnMouseWheel := PreviewDoMouseWheel;
-    fPreviewScrollBox := ScrollBox;
-    // --- paint box (inside scroll box, explicit size set by PreviewApplyZoom) ---
-    PaintBox := TPaintBox.Create(Form);
-    PaintBox.Parent  := ScrollBox;
-    PaintBox.Color   := clWhite;
-    fPreviewPaintBox := PaintBox;
-    PaintBox.OnPaint := PreviewDoPaint;
-    // initial zoom: 100%
-    fPreviewZoom := 1.0;
-    PreviewApplyZoom;
-    Form.ShowModal;
-  finally
-    fPreviewForm      := nil;
-    fPreviewPaintBox  := nil;
-    fPreviewScrollBox := nil;
-    fPreviewLblPage   := nil;
-    fPreviewEdtZoom   := nil;
-    Form.Free;
-  end;
-end;
-
-{ =========================================================================
-  §5.2 – ShowPrintDialog (LCL TPrintDialog)
-  ========================================================================= }
-
-procedure TGDIPages.ShowPrintDialog;
-begin
-  // Phase 5.2: Print all pages directly (TPrintDialog not available/reliable)
-  // TODO: implement proper printer dialog when LCL stabilizes TPrintDialog
-  PrintPages(0, fPageCount - 1);
-end;
-
-{ =========================================================================
-  §5.3 – OpenPdfFile (cross-platform: xdg-open / open / ShellExecute)
-  ========================================================================= }
-
-procedure TGDIPages.OpenPdfFile(const FileName: TFileName);
-begin
-  // Phase 5.3: Open PDF with system viewer (cross-platform)
-  // Note: Not implemented; PDF file is saved, user can open manually
-  // TODO: implement system viewer integration when LCL OpenDocument stabilizes
-end;
-
-{ =========================================================================
-  Phase 5 – PrintPages via LCL TPrinter
-  ========================================================================= }
-
-procedure TGDIPages.PrintPages(From, To_: Integer);
-var
-  i: Integer;
-begin
-  if fPageCount = 0 then Exit;
-  if From < 0 then          From := 0;
-  if To_ >= fPageCount then To_  := fPageCount - 1;
-  if From > To_ then Exit;
-  Printer.BeginDoc;
-  try
-    for i := From to To_ do
-    begin
-      if i > From then
-        Printer.NewPage;
-      RenderPageToCanvas(Printer.Canvas, i, Printer.PageWidth, Printer.PageHeight);
-    end;
-  finally
-    Printer.EndDoc;
-  end;
-end;
-
-{ =========================================================================
   Phase 6 – ExportPdfStream / ExportPDF via TPdfDocumentVcl
   ========================================================================= }
 
@@ -3169,7 +2756,10 @@ begin
             PDF.Info.Title := Utf8ToString(TrimU(fHeadings[i].Title));
             break;
           end;
-      PDF.Info.Creator := SysUtils.Trim(Application.Title);
+      if fExportPdfCreator <> '' then
+        PDF.Info.Creator := Utf8ToString(TrimU(fExportPdfCreator))
+      else
+        PDF.Info.Creator := Utf8ToString(Executable.ProgramName);
       PDF.Info.Author  := Utf8ToString(PdfAuthor);
       PDF.Info.Subject := Utf8ToString(PdfSubject);
       PDF.FileFormat   := fExportPdfFileFormat;

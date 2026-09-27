@@ -190,12 +190,12 @@ Application
 ### 3b — Preview Path
 
 ```
-TGDIPages.ShowPreviewForm
-  │  creates TPreviewForm (LCL form with scroll panel)
+ShowReportPreview(Report)                       (mormot.ui.reportpreview)
+  │  TReportPreview.Show: modal LCL form, scroll box, paint box
   │
-  TPreviewForm.Paint (on each repaint)
-  │  ZW := Round(fPreviewW * fPreviewZoom)   ← zoomed pixel dimensions
-  │  ZH := Round(fPreviewH * fPreviewZoom)
+  TReportPreview.DoPaint (on each repaint)
+  │  ZW := Round(fW * fZoom)   ← zoomed pixel dimensions
+  │  ZH := Round(fH * fZoom)
   │  for each visible page:
   │  TGDIPages.RenderPageToCanvas(ScreenCanvas, PageIndex, ZW, ZH)   ← SourceDPI=0
   │  │  converts 1/100mm → screen pixels
@@ -274,15 +274,12 @@ TGDIPages.ExportPdfStream(aDest: TStream)
 ### 3d — Print Path
 
 ```
-TGDIPages.ShowPrintDialog
-  │  opens OS printer dialog
-  │  on confirm: TGDIPages.PrintPages(0, PageCount-1)
-  │
-TGDIPages.PrintPages(From, To_)
+PrintReport(Report, From = 0, To_ = all)        (mormot.ui.reportpreview)
+  │  no dialog: prints on the default printer
   │  Printer.BeginDoc
   │  for PageIndex := From to To_ do
-  │    TGDIPages.RenderPageToCanvas(Printer.Canvas, PageIndex, PaperW, PaperH, Printer.YDPI)
-  │    Printer.NewPage  (except last page)
+  │    Printer.NewPage  (except first page)
+  │    TGDIPages.RenderPageToCanvas(Printer.Canvas, PageIndex, PageWidth, PageHeight)   ← SourceDPI=0
   └─ Printer.EndDoc
 ```
 
