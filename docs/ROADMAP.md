@@ -11,7 +11,8 @@ on all three platforms; tables carry `THead`/`TBody`/`TFoot` row groups. All
 three platforms build with FPC; `test_runner` is green with 243 assertions on
 Windows (after the second R-20 step), 280 on Linux and 300 on macOS (after the
 first).
-**Layer 1 builds on Delphi 7** (R-19, done): 127 assertions on Win32, and the
+**Layer 1 builds on Delphi 7** (R-19, done), and since R-20 step 4 the
+TCanvas bridge and the `TGDIPages` core too: 243 assertions on Win32, and the
 tagged Unicode test file passes PAC 2024 and veraPDF `ua1` from Delphi 7/Win32
 and FPC/Win64 alike. The macOS run found a heap-dependent `.ttc` defect in the
 FreeType backend, fixed (`fonts.md` §3). The Linux re-run is done up to
@@ -65,8 +66,15 @@ earlier post covered them.
   New `ExportPdfCreator` for `/Creator`, which came from
   `Application.Title`: a GUI application sets it to its title, otherwise
   the executable name is written
-- **Coming with R-20** (announce when done): `TGDIPages` and the TCanvas
-  bridge on Delphi
+- **Delphi 7 builds the TCanvas bridge and the `TGDIPages` core**:
+  `test_runner` 243/243 as with FPC, and `markdown_demo` writes the same PDF
+  as its FPC build. The rule for Delphi: draw through a `TPdfVclCanvas`
+  reference — Delphi 7's `TCanvas` methods are static, a call through
+  `TCanvas` writes nothing into the PDF. **`TPdfDocumentVcl.VclCanvas` now
+  has the type `TPdfVclCanvas`** (was `TCanvas`); code that assigns it to a
+  `TCanvas` variable still compiles
+- **Coming with R-20** (announce when done): the preview and the GUI demos
+  on Delphi
 
 ---
 
@@ -234,8 +242,24 @@ gave; `report_demo` passes its title. `ShowPreviewForm`, `PrintPages`,
 are gone. `test_runner` 243/243; the eight demo PDFs as after step 2,
 `/Creator` unchanged. The preview window was not opened — check it by hand
 (zoom, page keys, Ctrl+wheel). **Open:** the preview by hand; Linux and
-macOS for steps 2 and 3 together. **Next:** point 3 continued, the core on
-Delphi 7.
+macOS for steps 2 and 3 together.
+
+**Step 4, points 1 and 3 — done on Windows, 2026-09-27:** the bridge and the
+`TGDIPages` core build on Delphi 7. The bridge reintroduces the static VCL
+methods (`PDF_CANVASVIRTUAL`, see `platform-backends.md`), `VclCanvas` has
+the type `TPdfVclCanvas`, `RenderPageToCanvas` draws through a local
+`Bridge` reference. `mormot.ui.report` lost its `{$IFDEF FPC}` wrapper and
+the Delphi stub. Delphi 7 syntax: `overload` on every overloaded
+declaration, `NewCommand` for `Default(TDrawCommand)`, `markdown_demo`
+builds its `TTableLayout` in a function. `PDF_HASVCLCANVAS` is on for every
+compiler: Delphi 7 `test_runner` 243/243 (127 before); the one failure on
+the way, `TestLineToWritesCompletePath`, found that `DoLineTo` has to skip
+`psClear` itself. `markdown_demo` from Delphi 7 and from FPC/Win64: same
+size, no difference after masking dates, `/ID` and subset prefixes, same
+roles. FPC: `test_runner` 243/243, the eight demo PDFs as after step 2.
+**Open:** Linux and macOS for steps 2 to 4; PAC/veraPDF on the Delphi 7
+`markdown_demo` file. **Next:** the preview and the GUI demos on Delphi
+(`.dfm`, VCL preview) — or first `report_demo --export`.
 
 **Not part of R-20:** Delphi 2010 and later have `TCustomCanvas` with virtual
 drawing methods (not verified here), where overriding might work without typed

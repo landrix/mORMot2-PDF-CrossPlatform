@@ -13,10 +13,13 @@ FPImage adapter: `src/core/mormot.pdf.fpimage.pas`
 `TPdfDocumentGdi` (Windows-only, Delphi) uses EMF/GDI — not ported.
 
 **Compilers.** `TPdfDocument`/`TPdfCanvas` build with FPC everywhere and with
-Delphi 7 for Win32 (R-19, `tests\build_delphi7.bat`). `TPdfDocumentVcl` is
-FPC-only until R-20: `TPdfVclCanvas` overrides `TCanvas` drawing methods that
-are virtual in the LCL but static in Delphi 7's VCL, so a call through a
-`TCanvas` reference would bypass it. Code for both compilers follows the rule
+Delphi 7 for Win32 (R-19, `tests\build_delphi7.bat`), and so does
+`TPdfDocumentVcl` since R-20 — but the `TCanvas` drawing methods are virtual
+in the LCL and static in Delphi 7's VCL. `TPdfVclCanvas` overrides them under
+FPC and reintroduces them under Delphi (`PDF_CANVASVIRTUAL`), so on Delphi
+only a `TPdfVclCanvas` reference reaches the PDF: a call through `TCanvas`
+draws on the measuring DC. `VclCanvas` therefore has the type
+`TPdfVclCanvas`; keep it. Code for both compilers follows the rule
 in `CLAUDE.md` (Coding Conventions): mORMot2 functions first — `PosEx`, not the
 three-argument `Pos`; `MinPtrInt`, not `Min` — and no `Default()`, `for..in`,
 `inline` or records with methods.
@@ -390,7 +393,7 @@ Doc.DefaultPaperSize := psA4;
 Doc.EmbeddedTTF := False;
 Doc.StandardFontsReplace := True;
 Doc.AddPage;
-C := Doc.VclCanvas;      // TCanvas — coordinates in pixels, Y=0 top
+C := Doc.VclCanvas;      // TPdfVclCanvas (keep the type for Delphi) — pixels, Y=0 top
 C.Font.Name := 'Helvetica';
 C.Font.Size := 12;
 C.TextOut(40, 40, 'Text');

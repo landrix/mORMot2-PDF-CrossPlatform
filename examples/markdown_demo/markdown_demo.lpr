@@ -44,21 +44,28 @@ type
     PageLabel: RawUtf8;
   end;
 
-const
-  { Table layout for invoice items - uses current document font when names are empty }
-  INVOICE_ITEMS_LAYOUT: TTableLayout = (
-    ColumnWidths: [2500, 5000, 5000, 2500];
-    ColumnAligns: [tcaLeft, tcaLeft, tcaRight, tcaRight];
-    HeaderFontName: '';        { Empty = use current document font }
-    HeaderFontSize: 0;         { 0 = use current font size }
-    HeaderFontStyle: [fsBold];
-    HeaderBkColor: $E0E0E0;
-    BodyFontName: '';          { Empty = use current document font }
-    BodyFontSize: 0;           { 0 = use current font size }
-    BodyFontStyle: [];
-    BodyBkColor: $FFFFFF;
-    AlternateRowColor: $F5F5F5;
-  );
+{ Table layout for invoice items - uses current document font when names are
+  empty. Built at runtime: Delphi 7 has no constants for dynamic array fields.
+  Every field starts at zero, like the fields a typed constant leaves out }
+function InvoiceItemsLayout: TTableLayout;
+begin
+  Finalize(Result);
+  FillChar(Result, SizeOf(Result), 0);
+  SetLength(Result.ColumnWidths, 4);
+  Result.ColumnWidths[0] := 2500;
+  Result.ColumnWidths[1] := 5000;
+  Result.ColumnWidths[2] := 5000;
+  Result.ColumnWidths[3] := 2500;
+  SetLength(Result.ColumnAligns, 4);
+  Result.ColumnAligns[0] := tcaLeft;
+  Result.ColumnAligns[1] := tcaLeft;
+  Result.ColumnAligns[2] := tcaRight;
+  Result.ColumnAligns[3] := tcaRight;
+  Result.HeaderFontStyle   := [fsBold];  { empty name, size 0: current font }
+  Result.HeaderBkColor     := $E0E0E0;
+  Result.BodyBkColor       := $FFFFFF;
+  Result.AlternateRowColor := $F5F5F5;
+end;
 
 procedure RenderMarkdownPage(Report: TGDIPages; const Config: TPageConfig);
 var
@@ -294,7 +301,7 @@ begin
   { Draw table with 20 rows — enough to cross a page boundary and demonstrate
     automatic table header repetition (R-9): the header is re-drawn at the top
     of every continuation page without any extra code. }
-  Report.BeginTable(INVOICE_ITEMS_LAYOUT);
+  Report.BeginTable(InvoiceItemsLayout);
   Report.DrawTableHeader(['Date', 'Description', 'Quantity', 'Price']);
   Report.DrawTableRow(['2026-03-01', 'Professional Services',  '10', '$1,500.00']);
   Report.DrawTableRow(['2026-03-02', 'Software License',        '5',   '$500.00']);

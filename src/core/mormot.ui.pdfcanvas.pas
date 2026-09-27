@@ -27,13 +27,25 @@ interface
 
 {$I mormot.defines.inc}
 
+// the LCL declares the TCanvas drawing methods virtual, Delphi 7's VCL does
+// not: there they are reintroduced, and only a TPdfVclCanvas reference
+// reaches them - a call through TCanvas draws on the measuring DC (R-20)
+{$ifdef FPC}
+  {$define PDF_CANVASVIRTUAL}
+{$endif FPC}
+
 uses
+  {$ifndef FPC}
+  Windows,        // before Graphics: its record TBitmap would hide the class
+  {$endif FPC}
   SysUtils,
   Classes,
   Types,
   Graphics,       // TCanvas, TColor, TFont, TPen, TBrush, TRect, TPoint
+  {$ifdef FPC}
   LCLIntf,        // CreateCompatibleDC / DeleteDC for font metrics
   LCLType,        // HDC type
+  {$endif FPC}
   mormot.core.base,
   mormot.core.unicode,
   mormot.pdf.types,  // TPdfStructRole (Tagged PDF)
@@ -94,10 +106,18 @@ type
     /// draw already decoded text at a sub-pixel position
     procedure TextOutDecoded(X, Y: single; const AText: SynUnicode);
   protected
+    {$ifdef PDF_CANVASVIRTUAL}
     procedure DoMoveTo(X, Y: integer); override;  // TCanvas.MoveTo calls this
     procedure DoLineTo(X, Y: integer); override;  // TCanvas.LineTo calls this
+    {$else}
+    procedure DoLineTo(X, Y: integer);
   public
-    procedure TextOut(X, Y: integer; const AText: string); override;
+    procedure MoveTo(X, Y: integer); reintroduce;
+    procedure LineTo(X, Y: integer); reintroduce;
+    {$endif PDF_CANVASVIRTUAL}
+  public
+    procedure TextOut(X, Y: integer; const AText: string);
+      {$ifdef PDF_CANVASVIRTUAL}override{$else}reintroduce{$endif};
     /// TextOut at a sub-pixel position
     // - TCanvas.TextOut only takes integers, so a caller that knows its layout
     // more precisely than whole screen pixels would lose that precision at the
@@ -123,20 +143,27 @@ type
     function TextHeightFrac(const AText: string): single;
     /// integer TextExtent, rounded from TextWidthFrac/TextHeightFrac
     // - TCanvas.TextWidth and TextHeight route through this method
-    function TextExtent(const AText: string): TSize; override;
-    function TextWidth(const AText: string): integer; override;
-    function TextHeight(const AText: string): integer; override;
-    procedure Rectangle(X1, Y1, X2, Y2: integer); override;
+    function TextExtent(const AText: string): TSize;
+      {$ifdef PDF_CANVASVIRTUAL}override{$else}reintroduce{$endif};
+    function TextWidth(const AText: string): integer;
+      {$ifdef PDF_CANVASVIRTUAL}override{$else}reintroduce{$endif};
+    function TextHeight(const AText: string): integer;
+      {$ifdef PDF_CANVASVIRTUAL}override{$else}reintroduce{$endif};
+    procedure Rectangle(X1, Y1, X2, Y2: integer);
+      {$ifdef PDF_CANVASVIRTUAL}override{$else}reintroduce{$endif};
     /// Rectangle at sub-pixel coordinates
     // - TCanvas.Rectangle only takes integers, so an edge derived from
     // TextWidthFrac would be snapped back to the 1 px grid (ROADMAP B-4)
     procedure RectangleFrac(X1, Y1, X2, Y2: single);
-    procedure Ellipse(X1, Y1, X2, Y2: integer); override;
-    procedure RoundRect(X1, Y1, X2, Y2, X3, Y3: integer); override;
+    procedure Ellipse(X1, Y1, X2, Y2: integer);
+      {$ifdef PDF_CANVASVIRTUAL}override{$else}reintroduce{$endif};
+    procedure RoundRect(X1, Y1, X2, Y2, X3, Y3: integer);
+      {$ifdef PDF_CANVASVIRTUAL}override{$else}reintroduce{$endif};
     procedure FillRect(const ARect: TRect); reintroduce;
     procedure Polyline(const Points: array of TPoint); reintroduce;
     procedure Polygon(const Points: array of TPoint); reintroduce;
-    procedure Draw(X, Y: integer; AGraphic: TGraphic); override;
+    procedure Draw(X, Y: integer; AGraphic: TGraphic);
+      {$ifdef PDF_CANVASVIRTUAL}override{$else}reintroduce{$endif};
     procedure StretchDraw(const ARect: TRect; AGraphic: TGraphic); reintroduce;
   public
     constructor Create(APdfDoc: TPdfDocumentVcl; APdfCanvas: TPdfCanvas);
@@ -154,7 +181,7 @@ type
   private
     fVclCanvas: TPdfVclCanvas;
     fCurrentPage: TPdfPage;
-    function GetVclCanvas: TCanvas;
+    function GetVclCanvas: TPdfVclCanvas;
   public
     /// create the document (same parameters as TPdfDocument.Create)
     constructor Create(AUseOutlines: boolean = false;
@@ -202,7 +229,9 @@ type
     procedure SetStrokeAlpha(Value: single);
     /// the recording canvas — use this to draw on the current page
     // - identical API to TPdfDocumentGdi.VclCanvas
-    property VclCanvas: TCanvas read GetVclCanvas;
+    // - keep the TPdfVclCanvas type: under Delphi, a call through a plain
+    // TCanvas reference bypasses the bridge and writes nothing into the PDF
+    property VclCanvas: TPdfVclCanvas read GetVclCanvas;
   end;
 
 const
@@ -246,7 +275,7 @@ begin
   // Create a memory DC so that TCanvas.TextWidth/TextHeight (which call
   // RequiredState([csHandleValid])) work without a visible window.
   // All actual drawing is intercepted by our overrides and goes to fPdfCanvas.
-  fMeasureDC := LCLIntf.CreateCompatibleDC(0);
+  fMeasureDC := CreateCompatibleDC(0);
   Handle := fMeasureDC;
   ResetState;
 end;
@@ -257,7 +286,7 @@ begin
   FreeAndNil(fMeasurer);
   if fMeasureDC <> 0 then
   begin
-    LCLIntf.DeleteDC(fMeasureDC);
+    DeleteDC(fMeasureDC);
     fMeasureDC := 0;
   end;
   inherited;
@@ -498,12 +527,25 @@ end;
 
 // --- Lines ---
 
+{$ifdef PDF_CANVASVIRTUAL}
 procedure TPdfVclCanvas.DoMoveTo(X, Y: integer);
 begin
   // nothing to write: TFPCustomCanvas.MoveTo already stores PenPos, and an
   // 'm' written here would open a path which the pen settings of the next
   // LineTo end up inside - PAC: "Operator 'RG' not allowed" (ROADMAP B-12)
 end;
+{$else}
+procedure TPdfVclCanvas.MoveTo(X, Y: integer);
+begin
+  inherited MoveTo(X, Y); // PenPos only, on the measuring DC - see DoMoveTo
+end;
+
+procedure TPdfVclCanvas.LineTo(X, Y: integer);
+begin
+  DoLineTo(X, Y);
+  inherited MoveTo(X, Y); // PenPos to the end point, nothing drawn on the DC
+end;
+{$endif PDF_CANVASVIRTUAL}
 
 procedure TPdfVclCanvas.DoLineTo(X, Y: integer);
 begin
@@ -511,6 +553,10 @@ begin
   // requires: graphics state first, then m + l, then the painting operator
   // - PenPos is still the start point here, TFPCustomCanvas.LineTo moves it
   // afterwards, so a chained MoveTo/LineTo/LineTo stays connected
+  // - psClear draws nothing: TFPCustomCanvas.LineTo does not even call us
+  // then, our Delphi LineTo does
+  if Pen.Style = psClear then
+    exit;
   SyncPen;
   fPdfCanvas.MoveTo(PxToPtX(PenPos.X), PxToPtY(PenPos.Y));
   fPdfCanvas.LineTo(PxToPtX(X), PxToPtY(Y));
@@ -658,7 +704,7 @@ begin
   inherited;
 end;
 
-function TPdfDocumentVcl.GetVclCanvas: TCanvas;
+function TPdfDocumentVcl.GetVclCanvas: TPdfVclCanvas;
 begin
   result := fVclCanvas;
 end;

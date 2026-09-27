@@ -10,7 +10,7 @@ veraPDF (106/106) and PAC 2024 on all three platforms.
 | Platform | Compiler | Backend | Status |
 |---|---|---|---|
 | Windows | FreePascal/Lazarus | GDI via interfaces | Production |
-| Windows (Win32) | Delphi 7 | GDI via interfaces | Layer 1 only — `TPdfDocument`/`TPdfCanvas`; tests green, tagged Unicode output PAC-verified. The TCanvas bridge and `TGDIPages` need FPC for now (roadmap R-20) |
+| Windows (Win32) | Delphi 7 | GDI via interfaces | Layer 1, the TCanvas bridge and the `TGDIPages` core; all tests green, `markdown_demo` gives the same PDF as FPC. The preview and the GUI demos need FPC for now (roadmap R-20) |
 | Linux | FreePascal/Lazarus | FreeType2 | Production |
 | macOS | FreePascal/Lazarus | FreeType2 | Production |
 
@@ -252,7 +252,7 @@ lazbuild examples/layer1_demo/layer1_demo.lpi -B
 lazbuild tests/test_runner.lpi -B && tests/bin/<cpu-os>/test_runner
 ```
 
-**Delphi 7** (Win32, layer 1) builds from the command line. `MORMOT2` points to
+**Delphi 7** (Win32: layer 1, the TCanvas bridge, the `TGDIPages` core) builds from the command line. `MORMOT2` points to
 the mORMot2 checkout, `DELPHI7` defaults to the standard install folder; output
 goes to `bin\d7\<project>\`:
 
@@ -262,6 +262,8 @@ tests\build_delphi7.bat tests\test_runner.lpr
 bin\d7\test_runner\test_runner.exe --noenter
 tests\build_delphi7.bat examples\layer1_demo\layer1_demo.dpr
 bin\d7\layer1_demo\layer1_demo.exe
+tests\build_delphi7.bat examples\markdown_demo\markdown_demo.lpr
+bin\d7\markdown_demo\markdown_demo.exe
 ```
 
 Do not put `mORMot2\src\ui` on a Delphi search path: it holds the original
@@ -308,7 +310,7 @@ Fonts from `/Library/Fonts`, `/System/Library/Fonts`, `~/Library/Fonts`.
 - **EMF/MetaFile:** Windows-only (`TPdfDocumentGdi`), not portable
 - **GDI+/Gradient fills:** available only via EMF on Windows
 - **Table pagination:** no row wrap within a cell
-- **Delphi:** layer 1 only, on Delphi 7 (Win32). The TCanvas bridge overrides methods that Delphi 7's VCL does not declare virtual; it comes with roadmap R-20
+- **Delphi:** Delphi 7 (Win32) builds layer 1, the TCanvas bridge and the `TGDIPages` core, not yet the preview or the GUI demos (roadmap R-20). Delphi 7's `TCanvas` drawing methods are static: draw through a `TPdfVclCanvas` reference (`Doc.VclCanvas` has that type), never through a plain `TCanvas`, or nothing reaches the PDF
 - **Links in tagged output:** `CreateHyperLink` in a tagged document fails PDF/UA — there is no `Link` structure element for annotations. `TGDIPages.DrawLink` stays conformant by drawing styled text only; its URL is not clickable (roadmap R-18)
 
 Details and the current verification status: [docs/ROADMAP.md](docs/ROADMAP.md)

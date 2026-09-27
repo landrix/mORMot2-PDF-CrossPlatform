@@ -1,7 +1,6 @@
-/// Cross-platform report engine — TGDIPages (FPC/Lazarus)
-// - on Delphi+Windows the original GDI/EMF implementation remains active
-// - on FPC/Lazarus (all platforms) this unit provides a command-list-based
-//   replacement rendered via TCanvas and TPdfDocumentVcl
+/// Cross-platform report engine — TGDIPages (FPC/Lazarus and Delphi)
+// - a command-list-based replacement of the original GDI/EMF TGDIPages,
+//   rendered via TCanvas and TPdfDocumentVcl
 // - no forms and no printer here: preview and printing are in
 //   mormot.ui.reportpreview
 unit mormot.ui.report;
@@ -10,14 +9,15 @@ interface
 
 {$I mormot.defines.inc}
 
-{$IFDEF FPC}
-
-// *** FPC/Lazarus: Cross-Platform implementation (all platforms) ***
-
 uses
+  {$ifndef FPC}
+  Windows,       // MulDiv - before Graphics: its record TBitmap would hide the class
+  {$endif FPC}
   Classes, SysUtils, Types, Math,
   Graphics,
+  {$ifdef FPC}
   LCLType, LCLIntf,
+  {$endif FPC}
   Contnrs,       // TObjectList
   mormot.core.base,
   mormot.core.os,       // Executable.ProgramName
@@ -438,20 +438,20 @@ type
 
     { --- Phase 5: Inline text formatting (Markdown-style) --- }
     /// draw text in bold (Strong format)
-    procedure DrawStrong(X, Y: Integer; const AText: RawUtf8);
+    procedure DrawStrong(X, Y: Integer; const AText: RawUtf8); overload;
     /// inline bold: uses CurrentX/CurrentY, advances CurrentX
     procedure DrawStrong(const AText: RawUtf8); overload;
     /// draw text in italic (Em format)
-    procedure DrawEm(X, Y: Integer; const AText: RawUtf8);
+    procedure DrawEm(X, Y: Integer; const AText: RawUtf8); overload;
     /// inline italic: uses CurrentX/CurrentY, advances CurrentX
     procedure DrawEm(const AText: RawUtf8); overload;
     /// draw text in monospace (Code format)
-    procedure DrawCode(X, Y: Integer; const AText: RawUtf8);
+    procedure DrawCode(X, Y: Integer; const AText: RawUtf8); overload;
     /// inline code: uses CurrentX/CurrentY, advances CurrentX
     procedure DrawCode(const AText: RawUtf8); overload;
     /// draw text as hyperlink (blue underlined)
     // - ATarget: optional target URL (for future use)
-    procedure DrawLink(X, Y: Integer; const AText: RawUtf8; const ATarget: RawUtf8 = '');
+    procedure DrawLink(X, Y: Integer; const AText: RawUtf8; const ATarget: RawUtf8 = ''); overload;
     /// inline link: uses CurrentX/CurrentY, advances CurrentX
     procedure DrawLink(const AText: RawUtf8; const ATarget: RawUtf8 = ''); overload;
     /// draw block quote (italic gray with left margin)
@@ -501,7 +501,7 @@ type
     property Pages[Index: Integer]: TPageData read GetPage;
 
     { --- drawing (Phase 3) --- }
-    procedure DrawText(X, Y: Integer; const S: RawUtf8);
+    procedure DrawText(X, Y: Integer; const S: RawUtf8); overload;
     /// Draw text without coordinates: uses CurrentX/CurrentY, advances CurrentX by text width
     procedure DrawText(const S: RawUtf8); overload;
     procedure DrawTextRight(X, Y: Integer; const S: RawUtf8);
@@ -600,24 +600,9 @@ function MMToPixels(Value100: Integer; DPI: Integer): Integer;
 /// convert pixels to 1/100-mm at the given DPI
 function PixelsToMM(Pixels: Integer; DPI: Integer): Integer;
 
-{$ELSE}
-
-// *** Delphi + Windows: no-op placeholder ***
-// The original mormot.ui.report (from the mORMot2 source tree) is used on
-// Delphi builds — this stub keeps the unit parseable on those compilers.
-procedure Register;
 
 implementation
 
-procedure Register;
-begin
-end;
-
-{$ENDIF FPC}
-
-implementation
-
-{$IFDEF FPC}
 
 { =========================================================================
   Constants
@@ -636,9 +621,8 @@ const
   CELL_PADDING = 200;
   /// conversion factor: 1 point = 3.528 × 1/100mm
   PT_TO_100MM = 3528;
-  /// U+2022 BULLET and a space, U+2212 MINUS SIGN, as UTF-8 bytes
+  /// U+2022 BULLET and a space, as UTF-8 bytes
   LIST_BULLET: RawUtf8 = #$E2#$80#$A2' ';
-  MINUS_SIGN: RawUtf8 = #$E2#$88#$92;
 
 { =========================================================================
   Helper functions
@@ -655,13 +639,11 @@ begin
   Result := MulDiv(Pixels, 2540, DPI);
 end;
 
-{ The bytes as they are, in the LCL convention of this unit (string holds
-  UTF-8), whatever DefaultSystemCodePage says. Non-ASCII stays out of string
-  literals: under CODEPAGE UTF8 FPC converts them, a default parameter even at
-  the call site, in the caller's settings }
-function Utf8AsLclString(const Text: RawUtf8): string;
+{ an all-zero command: FPC's Default(TDrawCommand), which Delphi 7 lacks }
+function NewCommand: TDrawCommand;
 begin
-  SetString(Result, PAnsiChar(pointer(Text)), Length(Text));
+  Finalize(Result);
+  FillChar(Result, SizeOf(Result), 0);
 end;
 
 { Convert PDF points (1/72 inch) to 1/100 mm — the unit of every TGDIPages
@@ -946,7 +928,7 @@ begin
   if not fInList then
     exit;
   fInList := false; // reset first, so AddCommand does not recurse
-  Cmd := Default(TDrawCommand);
+  Cmd := NewCommand;
   Cmd.Kind := dckEndList;
   AddCommand(Cmd);
 end;
@@ -1338,7 +1320,7 @@ begin
   RestoreLayout;
 end;
 
-procedure TGDIPages.DrawStrong(const AText: RawUtf8); overload;
+procedure TGDIPages.DrawStrong(const AText: RawUtf8);
 begin
   SaveLayout;
   FontStyle := FontStyle + [fsBold];
@@ -1359,7 +1341,7 @@ begin
   RestoreLayout;
 end;
 
-procedure TGDIPages.DrawEm(const AText: RawUtf8); overload;
+procedure TGDIPages.DrawEm(const AText: RawUtf8);
 begin
   SaveLayout;
   FontStyle := FontStyle + [fsItalic];
@@ -1390,7 +1372,7 @@ begin
   RestoreLayout;
 end;
 
-procedure TGDIPages.DrawCode(const AText: RawUtf8); overload;
+procedure TGDIPages.DrawCode(const AText: RawUtf8);
 var
   Format: TReportFormat;
   CodeSize: Integer;
@@ -1413,7 +1395,7 @@ begin
   RestoreLayout;
 end;
 
-procedure TGDIPages.DrawLink(X, Y: Integer; const AText: RawUtf8; const ATarget: RawUtf8 = '');
+procedure TGDIPages.DrawLink(X, Y: Integer; const AText: RawUtf8; const ATarget: RawUtf8);
 begin
   SaveLayout;
   SetFont(fFontName, fFontSize);
@@ -1424,7 +1406,7 @@ begin
   { Future: could add PDF annotation with ATarget as URL }
 end;
 
-procedure TGDIPages.DrawLink(const AText: RawUtf8; const ATarget: RawUtf8 = ''); overload;
+procedure TGDIPages.DrawLink(const AText: RawUtf8; const ATarget: RawUtf8);
 begin
   SaveLayout;
   SetFont(fFontName, fFontSize);
@@ -1513,18 +1495,18 @@ begin
     the item is tagged as psrLBody — psrLbl would need a separate TextOut. }
   if not fInList then
   begin
-    Cmd := Default(TDrawCommand);
+    Cmd := NewCommand;
     Cmd.Kind := dckBeginList;
     AddCommand(Cmd);
     fInList := true;
   end;
   fRecordingListItem := true;
   try
-    Cmd := Default(TDrawCommand);
+    Cmd := NewCommand;
     Cmd.Kind := dckBeginLI;
     AddCommand(Cmd);
     DrawText(X, Y, APrefix + AText);
-    Cmd := Default(TDrawCommand);
+    Cmd := NewCommand;
     Cmd.Kind := dckEndLI;
     AddCommand(Cmd);
   finally
@@ -1640,7 +1622,7 @@ var
   TextWidthMM: Integer;
   AdjustedX: Integer;
 begin
-  Cmd              := Default(TDrawCommand);
+  Cmd              := NewCommand;
   Cmd.Kind         := dckDrawText;
   Cmd.Text         := S;
   Cmd.Color        := fTextColor;
@@ -1682,7 +1664,7 @@ begin
   EmitTextCmd(X, Y, S, 0);
 end;
 
-procedure TGDIPages.DrawText(const S: RawUtf8); overload;
+procedure TGDIPages.DrawText(const S: RawUtf8);
 var
   TextWidth: Integer;
   LineH: Integer;
@@ -1747,7 +1729,7 @@ procedure TGDIPages.DrawLine(X1, Y1, X2, Y2, Width: Integer; Color: TColor);
 var
   Cmd: TDrawCommand;
 begin
-  Cmd           := Default(TDrawCommand);
+  Cmd           := NewCommand;
   Cmd.Kind      := dckDrawLine;
   Cmd.X         := NormalizeX(X1);
   Cmd.Y         := NormalizeY(Y1);
@@ -1762,7 +1744,7 @@ procedure TGDIPages.DrawFilledRect(X1, Y1, X2, Y2: Integer; Color: TColor);
 var
   Cmd: TDrawCommand;
 begin
-  Cmd       := Default(TDrawCommand);
+  Cmd       := NewCommand;
   Cmd.Kind  := dckFillRect;
   Cmd.X     := NormalizeX(X1);
   Cmd.Y     := NormalizeY(Y1);
@@ -1890,7 +1872,7 @@ end;
   Phase 4: Table rendering with flexible TTableLayout
   ======================================================================== }
 
-procedure TGDIPages.BeginTable(const Layout: TTableLayout); overload;
+procedure TGDIPages.BeginTable(const Layout: TTableLayout);
 var
   i: Integer;
   BTCmd: TDrawCommand;
@@ -1917,7 +1899,7 @@ begin
   if Length(fTableColAligns) < Length(fTableColWidths) then
     for i := Length(fTableColAligns) to Length(fTableColWidths) - 1 do
       fTableColAligns[i] := tcaLeft;
-  BTCmd := Default(TDrawCommand);
+  BTCmd := NewCommand;
   BTCmd.Kind := dckBeginTable;
   AddCommand(BTCmd);
 end;
@@ -1933,7 +1915,7 @@ var
   AlignValue: Integer;
   CellHeight: Integer;
 begin
-  TRCmd := Default(TDrawCommand);
+  TRCmd := NewCommand;
   TRCmd.Kind  := dckBeginTR;
   TRCmd.Color := ARowKind;
   AddCommand(TRCmd);
@@ -1956,7 +1938,7 @@ begin
     CellWidth := fTableColWidths[i];
 
     { Fill header background }
-    Cmd := Default(TDrawCommand);
+    Cmd := NewCommand;
     Cmd.Kind := dckFillRect;
     Cmd.X := NormalizeX(CellX);
     Cmd.Y := NormalizeY(fCurrentY);
@@ -1966,7 +1948,7 @@ begin
     AddCommand(Cmd);
 
     { Draw header border }
-    Cmd := Default(TDrawCommand);
+    Cmd := NewCommand;
     Cmd.Kind := dckDrawRect;
     Cmd.X := NormalizeX(CellX);
     Cmd.Y := NormalizeY(fCurrentY);
@@ -2003,7 +1985,7 @@ begin
   RestoreLayout;
   Inc(fCurrentY, CellHeight);
   Inc(fTableRowIndex);
-  TRCmd := Default(TDrawCommand);
+  TRCmd := NewCommand;
   TRCmd.Kind := dckEndTR;
   AddCommand(TRCmd);
 end;
@@ -2111,7 +2093,7 @@ begin
     end;
   end;
 
-  TRCmd := Default(TDrawCommand);
+  TRCmd := NewCommand;
   TRCmd.Kind  := dckBeginTR;
   TRCmd.Color := 0;  // 0 = data row
   AddCommand(TRCmd);
@@ -2138,7 +2120,7 @@ begin
     CellWidth := fTableColWidths[i];
 
     { Fill body background }
-    Cmd := Default(TDrawCommand);
+    Cmd := NewCommand;
     Cmd.Kind := dckFillRect;
     Cmd.X := NormalizeX(CellX);
     Cmd.Y := NormalizeY(fCurrentY);
@@ -2148,7 +2130,7 @@ begin
     AddCommand(Cmd);
 
     { Draw body border }
-    Cmd := Default(TDrawCommand);
+    Cmd := NewCommand;
     Cmd.Kind := dckDrawRect;
     Cmd.X := NormalizeX(CellX);
     Cmd.Y := NormalizeY(fCurrentY);
@@ -2186,7 +2168,7 @@ begin
   Inc(fCurrentY, RowHeight);
   fTableRowStartY := fCurrentY;
   Inc(fTableRowIndex);
-  TRCmd := Default(TDrawCommand);
+  TRCmd := NewCommand;
   TRCmd.Kind := dckEndTR;
   AddCommand(TRCmd);
 end;
@@ -2213,7 +2195,7 @@ begin
     for i := Length(fTableColAligns) to Length(fTableColWidths) - 1 do
       fTableColAligns[i] := tcaLeft;
   // Emit a marker command
-  Cmd := Default(TDrawCommand);
+  Cmd := NewCommand;
   Cmd.Kind := dckBeginTable;
   AddCommand(Cmd);
 end;
@@ -2246,7 +2228,7 @@ begin
     CellWidth := fTableColWidths[i];
 
     // Draw cell background
-    Cmd := Default(TDrawCommand);
+    Cmd := NewCommand;
     Cmd.Kind := dckFillRect;
     Cmd.X := NormalizeX(CellX);
     Cmd.Y := NormalizeY(fCurrentY);
@@ -2259,7 +2241,7 @@ begin
     AddCommand(Cmd);
 
     // Draw cell border
-    Cmd := Default(TDrawCommand);
+    Cmd := NewCommand;
     Cmd.Kind := dckDrawRect;
     Cmd.X := NormalizeX(CellX);
     Cmd.Y := NormalizeY(fCurrentY);
@@ -2307,7 +2289,7 @@ begin
   fTableInProgress := False;
   fTableSavedHeaders := nil; // release saved headers
   // Emit end table marker
-  Cmd := Default(TDrawCommand);
+  Cmd := NewCommand;
   Cmd.Kind := dckEndTable;
   AddCommand(Cmd);
   { Restore font/style from BeginTable SaveLayout }
@@ -2326,7 +2308,7 @@ var
   Cmd:            TDrawCommand;
   i, TX, TW:     Integer;
   R:              TRect;
-  HeaderText, FooterText: string;
+  HeaderText, FooterText: RawUtf8;
   Format:         TReportFormat;  // For heading/text formatting
   FontScale:      Double;
   BaseHeight:     Integer;
@@ -2335,7 +2317,49 @@ var
   InListItem:     boolean;        // true between dckBeginLI and dckEndLI
   SpanOpen:       boolean;        // true while a Span wraps the current run
   ArtifactDoc:    TPdfDocumentVcl; // fActivePdfDoc, set aside in an artifact row
+  Bridge:         TPdfVclCanvas;   // ACanvas when it is the PDF bridge, else nil
 
+
+  { Delphi 7's TCanvas drawing methods are static: a call through ACanvas
+    would bypass the bridge, so whatever has to reach the PDF goes through
+    Bridge (R-20) }
+  procedure CanvasTextOut(X, Y: Integer; const S: RawUtf8);
+  begin
+    if Bridge <> nil then
+      Bridge.TextOutUtf8(X, Y, S)
+    else
+      ACanvas.TextOut(X, Y, Utf8ToString(S));
+  end;
+
+  function CanvasTextHeight(const S: RawUtf8): Integer;
+  begin
+    if Bridge <> nil then
+      Result := Bridge.TextHeight(Utf8ToString(S))
+    else
+      Result := ACanvas.TextHeight(Utf8ToString(S));
+  end;
+
+  procedure CanvasRectangle(const R: TRect);
+  begin
+    if Bridge <> nil then
+      Bridge.Rectangle(R.Left, R.Top, R.Right, R.Bottom)
+    else
+      ACanvas.Rectangle(R.Left, R.Top, R.Right, R.Bottom);
+  end;
+
+  procedure CanvasLine(X1, Y1, X2, Y2: Integer);
+  begin
+    if Bridge <> nil then
+    begin
+      Bridge.MoveTo(X1, Y1);
+      Bridge.LineTo(X2, Y2);
+    end
+    else
+    begin
+      ACanvas.MoveTo(X1, Y1);
+      ACanvas.LineTo(X2, Y2);
+    end;
+  end;
 
   function SubstitutePlaceholders(const AText: RawUtf8; PageNum: Integer): RawUtf8;
   begin
@@ -2419,6 +2443,10 @@ var
   end;
 
 begin
+  if ACanvas is TPdfVclCanvas then
+    Bridge := TPdfVclCanvas(ACanvas)
+  else
+    Bridge := nil;
   if (PageIndex < 0) or (PageIndex >= fPageCount) then Exit;
   Page := fPages[PageIndex];
   if (Page.PageWidth <= 0) or (Page.PageHeight <= 0) then Exit;
@@ -2462,7 +2490,7 @@ begin
   { Render header if set }
   if fHeaderText <> '' then
   begin
-    HeaderText := Utf8ToString(SubstitutePlaceholders(fHeaderText, PageIndex));
+    HeaderText := SubstitutePlaceholders(fHeaderText, PageIndex);
     ACanvas.Font.Name  := Utf8ToString(fFontName);
     ACanvas.Font.Size  := Round(fFontSize * FontScale);
     ACanvas.Font.Style := fFontStyle;
@@ -2471,7 +2499,7 @@ begin
     { a running header is pagination, not content (PDF/UA) }
     if fActivePdfDoc <> nil then
       fActivePdfDoc.BeginArtifact;
-    ACanvas.TextOut(fRenderOffsetX, (fRenderOffsetY - ACanvas.TextHeight(HeaderText)) div 2, HeaderText);
+    CanvasTextOut(fRenderOffsetX, (fRenderOffsetY - CanvasTextHeight(HeaderText)) div 2, HeaderText);
     if fActivePdfDoc <> nil then
       fActivePdfDoc.EndArtifact;
   end;
@@ -2547,8 +2575,7 @@ begin
       begin
         ACanvas.Pen.Color := Cmd.Color;
         ACanvas.Pen.Width := Max(1, Cmd.LineWidth);
-        ACanvas.MoveTo(ScaleX(Cmd.X),  ScaleY(Cmd.Y));
-        ACanvas.LineTo(ScaleX(Cmd.X2), ScaleY(Cmd.Y2));
+        CanvasLine(ScaleX(Cmd.X), ScaleY(Cmd.Y), ScaleX(Cmd.X2), ScaleY(Cmd.Y2));
       end;
       dckFillRect:
       begin
@@ -2556,7 +2583,7 @@ begin
         ACanvas.Brush.Color := Cmd.Color;
         ACanvas.Brush.Style := bsSolid;
         ACanvas.Pen.Style   := psClear;
-        ACanvas.Rectangle(R.Left, R.Top, R.Right, R.Bottom);
+        CanvasRectangle(R);
         ACanvas.Pen.Style   := psSolid;
       end;
       dckDrawRect:
@@ -2565,7 +2592,7 @@ begin
         ACanvas.Pen.Color   := Cmd.Color;
         ACanvas.Pen.Width   := Max(1, Cmd.LineWidth);
         ACanvas.Brush.Style := bsClear;
-        ACanvas.Rectangle(R.Left, R.Top, R.Right, R.Bottom);
+        CanvasRectangle(R);
       end;
       dckDrawBitmap:
         if (Cmd.BitmapIndex >= 0) and (Cmd.BitmapIndex < fBitmaps.Count) then
@@ -2681,7 +2708,7 @@ begin
   { Render footer if set }
   if fFooterText <> '' then
   begin
-    FooterText := Utf8ToString(SubstitutePlaceholders(fFooterText, PageIndex));
+    FooterText := SubstitutePlaceholders(fFooterText, PageIndex);
     ACanvas.Font.Name  := Utf8ToString(fFontName);
     ACanvas.Font.Size  := Round(fFontSize * FontScale);
     ACanvas.Font.Style := fFontStyle;
@@ -2689,9 +2716,9 @@ begin
     ACanvas.Brush.Style := bsClear;
     if fActivePdfDoc <> nil then
       fActivePdfDoc.BeginArtifact;
-    ACanvas.TextOut(fRenderOffsetX,
+    CanvasTextOut(fRenderOffsetX,
       ScaleY(Page.PageHeight) +
-      (DestHeight - ScaleY(Page.PageHeight) - ACanvas.TextHeight(FooterText)) div 2,
+      (DestHeight - ScaleY(Page.PageHeight) - CanvasTextHeight(FooterText)) div 2,
       FooterText);
     if fActivePdfDoc <> nil then
       fActivePdfDoc.EndArtifact;
@@ -2830,6 +2857,5 @@ begin
   end;
 end;
 
-{$ENDIF FPC}
 
 end.

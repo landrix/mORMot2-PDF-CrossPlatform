@@ -86,8 +86,8 @@ examples/
   (each demo folder carries a short README.md; the source header of its .lpr
    says the same thing in two sentences)
 tests/
-  test_runner.lpr              runs every suite below (green: 243 assertions on Windows with FPC, 127 with Delphi 7 — layer 1 suites only; 280 on Linux, 300 on macOS, before the quote test (+2) — the rest are skips)
-  test_defines.inc             PDF_HASVCLCANVAS: the TCanvas bridge suites (FPC until R-20)
+  test_runner.lpr              runs every suite below (green: 243 assertions on Windows with FPC, 243 with Delphi 7; 280 on Linux, 300 on macOS, before the quote test (+2) — the rest are skips)
+  test_defines.inc             PDF_HASVCLCANVAS: the TCanvas bridge suites (all compilers since R-20)
   build_delphi7.bat            dcc32 build of one project (R-19); delphi7_core.dpr is the core compile guard
   test_pdf_crossplatform.pas   platform backend, text shaper, TTC extraction
   test_pdf_smoke.pas           PDF basics, tagged output, struct tree, tagged Unicode (all through TPdfCanvas)
@@ -141,7 +141,7 @@ For interface and backend details: `.claude/skills/platform-backends.md`
 | chinese_demo | `TPdfDocumentVcl` | Console | CJK text, subset embedding |
 | rtl_demo | `TPdfDocumentVcl` | Console | Arabic RTL, HarfBuzz/Uniscribe shaping |
 | zugferd_demo | `TPdfDocumentVcl` | Console | PDF/A-3U + PDF/UA-1, `/AF` attachment, `PdfMetadataFacturX`, third-party invoice XML (KoSIT, Apache-2.0) |
-| layer1_demo | `TPdfDocument` | Console | Layer 1 only, PDF points (Y=0 bottom), tagged H1/H2/P/Figure and a Table with THead/TBody/TFoot, UTF-8 via `TextOutW`; the only demo that builds with Delphi 7 |
+| layer1_demo | `TPdfDocument` | Console | Layer 1 only, PDF points (Y=0 bottom), tagged H1/H2/P/Figure and a Table with THead/TBody/TFoot, UTF-8 via `TextOutW`; builds with Delphi 7, as does markdown_demo |
 
 Detailed description with code examples: `docs/DEMOS.md`
 
@@ -263,10 +263,11 @@ lazbuild examples/zugferd_demo/zugferd_demo.lpi -B
 lazbuild examples/layer1_demo/layer1_demo.lpi -B
 lazbuild tests/test_runner.lpi -B && tests/bin/<cpu-os>/test_runner
 
-# Delphi 7 (Win32, layer 1 only) — MORMOT2 must point to the mORMot2 checkout:
+# Delphi 7 (Win32; layer 1, the bridge and the TGDIPages core) — MORMOT2 must point to the mORMot2 checkout:
 tests\build_delphi7.bat tests\test_runner.lpr
 bin\d7\test_runner\test_runner.exe --noenter
 tests\build_delphi7.bat examples\layer1_demo\layer1_demo.dpr
+tests\build_delphi7.bat examples\markdown_demo\markdown_demo.lpr
 ```
 
 On Windows every test runner waits for Enter at the end unless it gets a
@@ -318,10 +319,14 @@ display (`xvfb-run` otherwise); on macOS Cocoa runs it headless.
   all three platforms: `{$I mormot.defines.inc}` in every unit. R-23:
   `layer1_demo`, the first demo that builds on Delphi 7, passes PAC 2024 and
   veraPDF `ua1` on all three platforms.
-  R-20, priority 2: the TCanvas bridge — `TPdfVclCanvas` relies on
-  `override`, but Delphi 7's `TCanvas` drawing methods are static, so a call
-  through a `TCanvas` reference bypasses the bridge. Never put `mORMot2/src/ui`
-  on a Delphi search path: it holds the original `mormot.ui.pdf`/`report`/`core`
+  R-20, priority 2: the TCanvas bridge and the `TGDIPages` core build on
+  Delphi 7, `test_runner` 243/243 there, `markdown_demo` gives the same PDF
+  as FPC; the preview and the GUI demos are open. Delphi 7's `TCanvas`
+  drawing methods are static: the bridge reintroduces them
+  (`PDF_CANVASVIRTUAL` off), so draw through a `TPdfVclCanvas` reference —
+  `VclCanvas` has that type, `RenderPageToCanvas` casts. Never put
+  `mORMot2/src/ui` on a Delphi search path: it holds the original
+  `mormot.ui.pdf`/`report`/`core`
 
 Current verification status per platform, and the open items in detail:
 `docs/ROADMAP.md`

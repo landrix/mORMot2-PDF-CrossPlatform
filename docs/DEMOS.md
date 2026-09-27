@@ -663,9 +663,9 @@ examples/zugferd_demo/bin/<target>/zugferd_demo
 **The low-level API alone, for FPC and Delphi 7**
 
 Draws two tagged pages with `TPdfDocument` and `TPdfCanvas`, without the
-TCanvas bridge and without `TGDIPages`: text and a figure, then a table. It is the only demo that builds with
-Delphi 7 (Win32). The other seven need the bridge, which is FPC-only until
-roadmap R-20.
+TCanvas bridge and without `TGDIPages`: text and a figure, then a table. It
+builds with Delphi 7 (Win32), and so does `markdown_demo`; the GUI demos and
+the preview are FPC-only until roadmap R-20 is done.
 
 **What you learn:**
 - PDF points, with Y counted from the bottom edge: a text line at Y = 780 is

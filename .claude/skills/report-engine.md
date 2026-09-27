@@ -355,6 +355,15 @@ Report.GetExportFonts(SansFont, SerifFont, MonoFont);
 
 ## Rendering
 
+**On Delphi** (R-20) `RenderPageToCanvas` cannot draw into the PDF through
+its `TCanvas` parameter: Delphi 7's drawing methods are static. It keeps a
+local `Bridge` (the parameter cast to `TPdfVclCanvas`, else nil) and draws
+text, header/footer, rectangles and lines through `CanvasTextOut`,
+`CanvasTextHeight`, `CanvasRectangle`, `CanvasLine`. `FillRect` (the white
+page background) and `StretchDraw` stay on `ACanvas`: the bridge
+reintroduces both even under FPC, so they never reached the PDF — routing
+them would change the output. `dckDrawBitmap` has no recording method.
+
 ```pascal
 // Render one page to an arbitrary canvas (used internally by preview and PDF export):
 Report.RenderPageToCanvas(
