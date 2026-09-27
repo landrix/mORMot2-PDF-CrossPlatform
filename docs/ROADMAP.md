@@ -239,9 +239,8 @@ with `FindRawUtf8`, the measuring DPI comes from the bitmap's
 gave; `report_demo` passes its title. `ShowPreviewForm`, `PrintPages`,
 `ShowPrintDialog` (it printed without a dialog) and `OpenPdfFile` (empty)
 are gone. `test_runner` 243/243; the eight demo PDFs as after step 2,
-`/Creator` unchanged. The preview window was not opened — check it by hand
-(zoom, page keys, Ctrl+wheel). **Open:** the preview by hand. Linux and
-macOS: see step 4.
+`/Creator` unchanged. The preview (zoom, page keys, Ctrl+wheel) checked by
+hand on Windows. Linux and macOS: see step 4.
 
 **Step 4, points 1 and 3 — done on Windows, 2026-09-27:** the bridge and the
 `TGDIPages` core build on Delphi 7. The bridge reintroduces the static VCL
@@ -259,8 +258,8 @@ roles. FPC: `test_runner` 243/243, the eight demo PDFs as after step 2.
 **Linux and macOS for steps 2 to 4 — done, 2026-09-27:** `test_runner`
 282/282 on Debian and 302/302 on macOS, all eight demos build and run; the
 tagged demos of all three platforms and the Delphi 7 `markdown_demo` pass
-veraPDF `ua1`, `zugferd_demo` also `3u` and Mustang.
-**Open:** PAC 2024 on the Delphi 7 `markdown_demo` file. **Next:** the
+veraPDF `ua1`, `zugferd_demo` also `3u` and Mustang. The Delphi 7
+`markdown_demo` file passes PAC 2024 too. **Next:** the
 preview and the GUI demos on Delphi (`.dfm`, VCL preview) — or first
 `report_demo --export`.
 
@@ -356,7 +355,7 @@ All three platforms build and pass `test_runner` (243 assertions on Windows,
 veraPDF `ua1` 106/106 on all three — measured again on 2026-09-27 — and PAC
 2024 (2026-09-26) for the files of all three platforms, `zugferd_demo` also `3u` 148/148 and Mustang;
 `tagged_unicode` and `layer1_demo` pass `ua1` from Linux, macOS, FPC/Win64
-and Delphi 7, `markdown_demo` from Delphi 7 too. The
+and Delphi 7, `markdown_demo` from Delphi 7 too (and PAC 2024). The
 structure trees (roles and their counts) and page counts match across the
 platforms for every tagged demo. That was the stated gate for a first version tag, and
 the project still has none.
