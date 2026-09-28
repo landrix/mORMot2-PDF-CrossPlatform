@@ -86,9 +86,10 @@ examples/
   (each demo folder carries a short README.md; the source header of its .lpr
    says the same thing in two sentences)
 tests/
-  test_runner.lpr              runs every suite below (green: 243 assertions on Windows with FPC, 243 with Delphi 7; 282 on Linux, 302 on macOS — the rest are skips)
+  test_runner.lpr              runs every suite below (green: 244 assertions on Windows with FPC, Delphi 7 and Delphi 2010; 282 on Linux, 302 on macOS — the rest are skips)
   test_defines.inc             PDF_HASVCLCANVAS: the TCanvas bridge suites (all compilers since R-20)
   build_delphi7.bat            dcc32 build of one project (R-19); delphi7_core.dpr is the core compile guard
+  build_delphi2010.bat         the same with Delphi 2010, warnings on (R-25, Unicode Delphi)
   test_pdf_crossplatform.pas   platform backend, text shaper, TTC extraction
   test_pdf_smoke.pas           PDF basics, tagged output, struct tree, tagged Unicode (all through TPdfCanvas)
   test_report_crossplatform.pas report engine, tables, tagged export
@@ -220,10 +221,18 @@ Details on interfaces and registration: `.claude/skills/platform-backends.md`
     Compiler switches come from `{$I mormot.defines.inc}`, never from a bare
     `{$mode delphi}` (roadmap R-21)
 - `RawUtf8` instead of `string` for internal strings
-- **No non-ASCII in string literals** in `src/`: `mormot.defines.inc` sets
-  `{$CODEPAGE UTF8}`, and FPC converts such a literal — a default parameter
-  value even at the call site, in the caller's settings (R-21: `'• '` arrived
-  as `'?'`). Put the bytes in a `RawUtf8` constant (`#$E2#$80#$A2`) instead
+- **No non-ASCII in string literals** — in `src/`, demos and tests: FPC
+  converts such a literal under `{$CODEPAGE UTF8}` (R-21: a default parameter
+  `'• '` arrived as `'?'`), Unicode Delphi reads the UTF-8 file as the ANSI
+  code page (R-25: `—` became `â€”`). Put the character in a `RawUtf8`
+  constant, as code points for compilers with code-page strings and as UTF-8
+  bytes for Delphi 7:
+  `LIST_BULLET: RawUtf8 = {$ifdef HASCODEPAGE} #$2022' ' {$else} #$E2#$80#$A2' ' {$endif};`
+  Never the bytes alone: Unicode Delphi reads `#$E2` as a character of the
+  ANSI code page and encodes it again. Code points with four digits
+  (`#$00E4`, not `#$E4`) — only those are independent of the code page. On
+  Delphi 2010 a single such character outside cp1252 draws W1062; the bytes
+  are right
 - No blank lines between `begin`/`end` blocks
 - Interfaces with reference counting (`TInterfacedObject`)
 - Error handling via `ESynException`
@@ -271,6 +280,10 @@ tests\build_delphi7.bat examples\markdown_demo\markdown_demo.lpr
 rem the other demos the same way, from their .lpr; the GUI demos as the
 rem batch export only (--export), zugferd_demo and mormot_demo run from their
 rem demo folder, where they find factur-x.xml and data\
+
+rem Delphi 2010 (Win32, R-25: Unicode Delphi) - the same projects the same way:
+tests\build_delphi2010.bat tests\test_runner.lpr
+bin\d2010\test_runner\test_runner.exe --noenter
 ```
 
 On Windows every test runner waits for Enter at the end unless it gets a
@@ -278,8 +291,8 @@ parameter — pass `--noenter` when it runs unattended.
 
 Every project builds to `bin/<cpu-os>/` — the executable, the PDF it writes
 and its logs — and its units to `lib/<cpu-os>/` (`<cpu-os>` as FPC names the
-target, e.g. `aarch64-linux`, `x86_64-win64`, `aarch64-darwin`). The Delphi 7
-build keeps its own layout under `bin\d7\`.
+target, e.g. `aarch64-linux`, `x86_64-win64`, `aarch64-darwin`). The Delphi
+builds keep their own layout under `bin\d7\` and `bin\d2010\`.
 
 A Lazarus installed outside the distribution packages — `fpcupdeluxe`, a
 source build — usually leaves `lazbuild` off `PATH`; use the full path then.
@@ -335,6 +348,12 @@ itself is in each demo's `uReport.pas`; the form only passes its options.
   `TextOut` reads Delphi 7's `string` as ANSI. Never put
   `mORMot2/src/ui` on a Delphi search path: it holds the original
   `mormot.ui.pdf`/`report`/`core`
+  R-25, Unicode Delphi: with Delphi 2010 `test_runner` is 244/244, all eight
+  demos build and give the same text as Delphi 7 and FPC, PAC 2024 passes
+  their tagged PDFs; veraPDF is open, Win64 (XE2 and later) untested.
+  A console program needs `{$APPTYPE CONSOLE}` after the
+  `mormot.defines.inc` include: FPC's project makes a console executable,
+  dcc32 a GUI one without it, where `WriteLn` raises I/O error 105
 
 Current verification status per platform, and the open items in detail:
 `docs/ROADMAP.md`

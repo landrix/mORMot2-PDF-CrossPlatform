@@ -361,7 +361,7 @@ begin
   if fsItalic    in Font.Style then include(style, pfsItalic);
   if fsUnderline in Font.Style then include(style, pfsUnderline);
   if fsStrikeOut in Font.Style then include(style, pfsStrikeOut);
-  fPdfCanvas.SetFont(Font.Name, Abs(Font.Size), style, Font.Charset);
+  fPdfCanvas.SetFont(StringToUtf8(Font.Name), Abs(Font.Size), style, Font.Charset);
   fPdfCanvas.SetRGBFillColor(ColorToRGB(Font.Color));
   fStateValid := true;
 end;

@@ -334,6 +334,64 @@ carries no structure, so there is no tagged output, and the original in
 under Delphi has to give the same text and structure as the same page through
 layer 1.
 
+### R-25 — Unicode Delphi: Delphi 2010 — priority 3
+
+**Why.** Delphi 7 checks the old language; the second axis — `string` as
+UTF-16, `Char` = `WideChar`, `PChar` = `PWideChar` — is designed (R-20,
+Strings point 2: the bridge reads `string` with `StringToSynUnicode`) but has
+never been compiled. Most Delphi users are on Unicode Delphi.
+
+**Why Delphi 2010, decided 2026-09-28.** It is Unicode, the Pro edition ships
+`dcc32`, so builds and tests run unattended as for Delphi 7, and mORMot2 lists
+it among its validated compilers. The Community Edition (13.0) was rejected as
+the main target: since 10.4 it refuses command-line compiling (`dcc32`,
+`dcc64` and MSBuild — "This version of the product does not support command
+line compiling"), so every build would go through the IDE by hand.
+
+**Work, the R-19/R-20 steps again:** a variant of `build_delphi7.bat` for the
+Delphi 2010 compiler; layer 1 and `test_runner`; the bridge and the
+`TGDIPages` core; the console demos and the `--export` of the GUI demos, each
+giving the same PDF as FPC; PAC 2024 and veraPDF `ua1` on the test PDFs.
+Expected findings: implicit string casts (W1057/W1058), `PChar` where
+`PAnsiChar` is meant, A/W API calls in the GDI backend and Uniscribe.
+
+**Not covered:** Win64 (Delphi XE2 and later; FPC/Win64 is green) and newer
+RTL/VCL changes. Delphi 13 CE may follow as a manual cross-check through the
+IDE — optional.
+
+**Done on Windows, 2026-09-28:** `tests\build_delphi2010.bat`; `test_runner`
+243/243 with Delphi 2010, Delphi 7 and FPC; all eight demos build with Delphi
+2010, and their PDFs give the same text (`pdftotext`) as Delphi 7 and FPC.
+`src/` compiles without a warning. The findings were not in the engine but in
+the UTF-8 constants: Unicode Delphi reads `#$E2` in a literal as a character
+of the ANSI code page and encodes it again (`#$E2#$80#$A2` became
+`C3 A2 E2 82 AC C2 A2`), also in untyped constants; a `RawByteString`
+constant keeps the bytes but carries code page 1252 along. Now every such
+constant is `{$ifdef HASCODEPAGE}` code points `{$else}` bytes (`CLAUDE.md`,
+Coding Conventions); `markdown_demo` had `—` as a literal. The test helper
+`DrawUtf8Text` took a `string` and `UTF8Decode`d it, which converts to the
+ANSI code page first: with correct constants the CJK and Arabic line came out
+as `??????`. Before, the two defects had cancelled out — the double-encoded
+constant went back to its bytes on that conversion — so the tagged Unicode
+test was green. It takes `RawUtf8` now.
+`TPdfVclCanvas` passes `Font.Name` through `StringToUtf8` (Delphi 7 gave
+the ANSI bytes of a non-ASCII font name). The XMP packet header was affected
+too: Delphi 2010 wrote `begin="C3 AF C2 BB C2 BF"` instead of the byte order
+mark `EF BB BF` in every PDF/A and tagged file — no test looked at it. Now
+one constant `XPACKET_BEGIN` in `mormot.ui.pdf.pas`, and
+`TestPdfA3UIdentification` checks the three bytes (244 assertions).
+The console demos and `test_runner` had no `{$APPTYPE CONSOLE}`: dcc32 made
+GUI executables of them (Delphi 7 too, since R-19), and started from the
+Explorer the first `WriteLn` raised `EInOutError` 105. Unseen in scripted
+runs, where the redirected output gives `WriteLn` a handle.
+
+PAC 2024 passes the tagged PDFs of all three compilers, with only the known
+warnings (W-1, W-2).
+
+**Open:** veraPDF `ua1` on the Delphi 2010 PDFs (`tagged_unicode`,
+`layer1_demo`, `markdown_demo`, `zugferd_demo`); the 24 W1057/W1058 in the
+tests.
+
 ### R-22 — Source Comments Back to the Why — priority 3
 
 **The rule** (`CLAUDE.md`, Coding Conventions, since 2026-09-26): a source

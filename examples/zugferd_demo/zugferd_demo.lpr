@@ -25,6 +25,7 @@
 program zugferd_demo;
 
 {$I mormot.defines.inc}
+{$APPTYPE CONSOLE}
 
 uses
   {$ifdef FPC}
@@ -54,10 +55,10 @@ const
   COL_SUM  = RIGHT_X - 6;
   // the text is RawUtf8 and drawn with TextOutUtf8: TextOut reads a string as
   // the compiler holds it, the ANSI code page on Delphi 7, and a non-ASCII
-  // literal in this UTF-8 file would reach Delphi 7 as ANSI - hence the bytes
-  ELLIPSIS: RawUtf8 = #$E2#$80#$A6; // "…"
-  AUML: RawUtf8 = #$C3#$A4;         // "ä"
-  UUML_CAP: RawUtf8 = #$C3#$9C;     // "Ü"
+  // literal in this UTF-8 file would reach Delphi as ANSI - hence the constants
+  ELLIPSIS: RawUtf8 = {$ifdef HASCODEPAGE} #$2026 {$else} #$E2#$80#$A6 {$endif}; // "…"
+  AUML: RawUtf8 = {$ifdef HASCODEPAGE} #$00E4 {$else} #$C3#$A4 {$endif};         // "ä"
+  UUML_CAP: RawUtf8 = {$ifdef HASCODEPAGE} #$00DC {$else} #$C3#$9C {$endif};     // "Ü"
   // the content of factur-x.xml, as the page shows it
   ITEMS: array[0..1, 0..4] of RawUtf8 = (
     ('Zeitschrift [...], Art.-Nr. 246', '1', '288,79', '7 %', '288,79'),

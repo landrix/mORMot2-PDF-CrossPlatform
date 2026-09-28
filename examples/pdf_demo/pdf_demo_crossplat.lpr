@@ -16,6 +16,7 @@
 program pdf_demo_crossplat;
 
 {$I mormot.defines.inc}
+{$APPTYPE CONSOLE}
 
 uses
   {$ifdef FPC}
@@ -46,9 +47,10 @@ end;
 
 const
   // "ä ö ü Ä Ö Ü ß € § °"
-  SPECIAL_CHARS: RawUtf8 = 'Special chars: ' +
+  SPECIAL_CHARS: RawUtf8 = 'Special chars: ' + {$ifdef HASCODEPAGE}
+    #$00E4' '#$00F6' '#$00FC' '#$00C4' '#$00D6' '#$00DC' '#$00DF' '#$20AC' '#$00A7' '#$00B0 {$else}
     #$C3#$A4' '#$C3#$B6' '#$C3#$BC' '#$C3#$84' '#$C3#$96' '#$C3#$9C' ' +
-    #$C3#$9F' '#$E2#$82#$AC' '#$C2#$A7' '#$C2#$B0;
+    #$C3#$9F' '#$E2#$82#$AC' '#$C2#$A7' '#$C2#$B0 {$endif};
 
 var
   Doc: TPdfDocumentVcl;

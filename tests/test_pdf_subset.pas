@@ -52,9 +52,7 @@ type
     // uncompressed PDF; aWhole = EmbeddedWholeTtf
     // - drawn through TPdfCanvas, not the TCanvas bridge, so that the suite
     // runs on Delphi too (R-19): what it checks is the output, not the bridge
-    // - aText holds UTF-8 bytes in a string, decoded like TPdfVclCanvas.TextOut
-    // does: a RawUtf8 parameter would be converted to the system code page first
-    function BuildPdf(const aFont: string; const aText: string;
+    function BuildPdf(const aFont: string; const aText: RawUtf8;
       aWhole, aTagged, aBold: boolean;
       aPdfA: TPdfALevel = pdfaNone): RawByteString;
     function SansFont: string;
@@ -78,7 +76,7 @@ const
 
 /// draw UTF-8 bytes held in a string, decoded as TPdfVclCanvas.TextOut does
 // - X, Y in PDF points from the bottom-left corner
-procedure DrawUtf8Text(PDF: TPdfDocument; X, Y: single; const aText: string);
+procedure DrawUtf8Text(PDF: TPdfDocument; X, Y: single; const aText: RawUtf8);
 /// number of non-overlapping occurrences of Sub in s
 function CountOf(const Sub, s: RawByteString): integer;
 /// the bytes of the first /FontFile2 stream of an uncompressed PDF
@@ -527,16 +525,16 @@ begin
   GetPdfFonts(true, result, serif, mono);
 end;
 
-procedure DrawUtf8Text(PDF: TPdfDocument; X, Y: single; const aText: string);
+procedure DrawUtf8Text(PDF: TPdfDocument; X, Y: single; const aText: RawUtf8);
 var
-  W: WideString;
+  W: SynUnicode;
 begin
-  W := UTF8Decode(aText); // as TPdfVclCanvas.TextOut does
+  W := Utf8ToSynUnicode(aText);
   PDF.Canvas.TextOutW(X, Y, pointer(W));
 end;
 
 function TPdfSubsetEngineTests.BuildPdf(const aFont: string;
-  const aText: string; aWhole, aTagged, aBold: boolean;
+  const aText: RawUtf8; aWhole, aTagged, aBold: boolean;
   aPdfA: TPdfALevel): RawByteString;
 var
   PDF: TPdfDocument;
@@ -604,7 +602,8 @@ begin
     exit;
   end;
   // Latin runs through the WinAnsi instance, Omega through the Type0 one
-  pdf := BuildPdf(SansFont, 'Hello '#$CE#$A9, false, false, false);
+  pdf := BuildPdf(SansFont,
+    'Hello ' + {$ifdef HASCODEPAGE} #$03A9 {$else} #$CE#$A9 {$endif}, false, false, false);
   CheckEqual(CountOf('/Length1 ', pdf), 1, 'one font file for both instances');
   CheckEqual(CountOf('/FontFile2 ', pdf), 1, 'one shared /FontDescriptor');
   // TrueType + Type0 /BaseFont, CIDFontType2 /BaseFont, /FontName
@@ -619,6 +618,8 @@ begin
 end;
 
 procedure TPdfSubsetEngineTests.TestSubsetUnionOfStyles;
+const
+  ZHONG: RawUtf8 = {$ifdef HASCODEPAGE} #$4E2D {$else} #$E4#$B8#$AD {$endif};
 var
   pdf, ttf: RawByteString;
 begin
@@ -629,7 +630,7 @@ begin
   end;
   // Droid Sans Fallback has no bold face: Bold resolves to the same file, so
   // the Regular and Bold fonts share one face and must share one subset
-  pdf := BuildPdf('Droid Sans Fallback', #$E4#$B8#$AD, false, false, true);
+  pdf := BuildPdf('Droid Sans Fallback', ZHONG, false, false, true);
   if Pos(RawByteString('DroidSansFallback'), pdf) = 0 then
   begin
     Check(true, 'SKIP: Droid Sans Fallback not installed');

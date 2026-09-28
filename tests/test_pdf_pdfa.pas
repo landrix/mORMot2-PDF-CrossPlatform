@@ -26,7 +26,7 @@ type
     // attachment from aAttachment when it is not '' and aExtension as
     // PdfAMetadaExtension
     function BuildPdf(aLevel: TPdfALevel; aTagged: boolean;
-      const aText: string; const aAttachment: RawByteString = '';
+      const aText: RawUtf8; const aAttachment: RawByteString = '';
       const aExtension: RawUtf8 = ''): RawByteString;
   published
     procedure TestPdfA3UIdentification;
@@ -43,7 +43,7 @@ type
 implementation
 
 function TPdfATests.BuildPdf(aLevel: TPdfALevel; aTagged: boolean;
-  const aText: string; const aAttachment: RawByteString;
+  const aText: RawUtf8; const aAttachment: RawByteString;
   const aExtension: RawUtf8): RawByteString;
 var
   PDF: TPdfDocument;
@@ -88,8 +88,13 @@ end;
 procedure TPdfATests.TestPdfA3UIdentification;
 var
   s: RawByteString;
+  p: integer;
 begin
   s := BuildPdf(pdfa3U, false, 'Hello');
+  // the byte order mark as UTF-8 bytes: Unicode Delphi encoded them twice (R-25)
+  p := Pos(RawByteString('<?xpacket begin="'), s) + 17;
+  Check((p > 17) and (ord(s[p]) = $EF) and (ord(s[p + 1]) = $BB) and
+    (ord(s[p + 2]) = $BF) and (s[p + 3] = '"'), 'XMP packet begins with EF BB BF');
   Check(copy(s, 1, 8) = '%PDF-1.7', 'PDF/A-3 is based on PDF 1.7');
   Check(Pos(RawByteString('<pdfaid:part>3</pdfaid:part>' +
     '<pdfaid:conformance>U</pdfaid:conformance>'), s) > 0,
@@ -213,7 +218,9 @@ begin
     /ToUnicode - two faces here, a sans and a serif, both WinAnsi
     - a CJK face beside them is the known open case: its unused WinAnsi peer
     has no used characters and so no /ToUnicode (see ROADMAP) }
-  s := BuildPdf(pdfa3U, true, 'Hello ÄÖÜ € —');
+  s := BuildPdf(pdfa3U, true, 'Hello ' + {$ifdef HASCODEPAGE}
+    #$00C4#$00D6#$00DC' '#$20AC' '#$2014 {$else}
+    #$C3#$84#$C3#$96#$C3#$9C' '#$E2#$82#$AC' '#$E2#$80#$94 {$endif});
   fonts := CountOf('/Subtype/TrueType', s) + CountOf('/Subtype/Type0', s);
   Check(fonts >= 2, 'both faces are in the file');
   CheckEqual(CountOf('/ToUnicode', s), fonts, 'one ToUnicode per font');

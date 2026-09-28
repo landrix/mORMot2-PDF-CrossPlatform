@@ -26,6 +26,7 @@
 program layer1_demo;
 
 {$I mormot.defines.inc}
+{$APPTYPE CONSOLE}
 
 {$ifdef OSWINDOWS}
   {$apptype console}
@@ -52,16 +53,19 @@ const
   /// the face's full cmap, not the ANSI part only (fonts.md §10)
   DEFAULT_CHARSET = 1;
   LEFT = 56;
-  /// 'Umlauts and symbols: ä ö ü Ä Ö Ü ß € § °' as UTF-8
-  UMLAUTS: RawUtf8 = 'Umlauts and symbols: '#$C3#$A4' '#$C3#$B6' '#$C3#$BC' '#$C3#$84 +
-    ' '#$C3#$96' '#$C3#$9C' '#$C3#$9F' '#$E2#$82#$AC' '#$C2#$A7' '#$C2#$B0;
+  /// 'Umlauts and symbols: ä ö ü Ä Ö Ü ß € § °'
+  UMLAUTS: RawUtf8 = 'Umlauts and symbols: ' + {$ifdef HASCODEPAGE}
+    #$00E4' '#$00F6' '#$00FC' '#$00C4' '#$00D6' '#$00DC' '#$00DF' '#$20AC' '#$00A7' '#$00B0 {$else}
+    #$C3#$A4' '#$C3#$B6' '#$C3#$BC' '#$C3#$84' '#$C3#$96' '#$C3#$9C' '#$C3#$9F' ' +
+    #$E2#$82#$AC' '#$C2#$A7' '#$C2#$B0 {$endif};
   /// the table: top edge, row height, and the right edge of the columns 1..3
   TABLE_TOP = 700;
   ROW_H = 20;
   COL_RIGHT: array[1..3] of single = (330, 430, 533);
-  /// 'Unit €' and 'Total €' as UTF-8
+  /// U+20AC EURO SIGN
+  EURO = {$ifdef HASCODEPAGE} #$20AC {$else} #$E2#$82#$AC {$endif};
   HEADERS: array[0..3] of RawUtf8 = ('Article', 'Qty',
-    'Unit '#$E2#$82#$AC, 'Total '#$E2#$82#$AC);
+    'Unit ' + EURO, 'Total ' + EURO);
   ROWS: array[0..3, 0..3] of RawUtf8 = (
     ('Bolt M4x10',  '100', '0.05', '5.00'),
     ('Nut M4',      '100', '0.03', '3.00'),

@@ -543,7 +543,9 @@ end;
 procedure TPdfSmokeTests.TestVclCanvasUtf8Text;
 const
   // 'Größe' as UTF-8 bytes, and its Helvetica AFM advance widths
-  GROESSE: RawUtf8 = 'Gr'#$C3#$B6#$C3#$9F'e';
+  GROESSE: RawUtf8 = {$ifdef HASCODEPAGE}
+    'Gr'#$00F6#$00DF'e' {$else}
+    'Gr'#$C3#$B6#$C3#$9F'e' {$endif};
   W_GROESSE = 778 + 333 + 556 + 611 + 556;
   W_L       = 222; // 'l'
 var
@@ -893,7 +895,7 @@ end;
 procedure TPdfSmokeTests.TestTaggedTableRowGroups;
 
   procedure Cell(PDF: TPdfDocument; ARole: TPdfStructRole;
-    Y: integer; const S: string);
+    Y: integer; const S: RawUtf8);
   begin
     PDF.Canvas.BeginStructContent(psrTR);
     PDF.Canvas.BeginStructContent(ARole);
@@ -964,9 +966,13 @@ const
   {$endif DARWIN}
   {$endif MSWINDOWS}
   /// 字体嵌入测试 - "font embedding test"
-  CJK_TEXT = #$E5#$AD#$97#$E4#$BD#$93#$E5#$B5#$8C#$E5#$85#$A5#$E6#$B5#$8B#$E8#$AF#$95;
+  CJK_TEXT = {$ifdef HASCODEPAGE}
+    #$5B57#$4F53#$5D4C#$5165#$6D4B#$8BD5 {$else}
+    #$E5#$AD#$97#$E4#$BD#$93#$E5#$B5#$8C#$E5#$85#$A5#$E6#$B5#$8B#$E8#$AF#$95 {$endif};
   /// مرحبا - "hello", joining letters: needs the shaper
-  ARABIC_TEXT = #$D9#$85#$D8#$B1#$D8#$AD#$D8#$A8#$D8#$A7;
+  ARABIC_TEXT = {$ifdef HASCODEPAGE}
+    #$0645#$0631#$062D#$0628#$0627 {$else}
+    #$D9#$85#$D8#$B1#$D8#$AD#$D8#$A8#$D8#$A7 {$endif};
 
 { the file PAC 2024 and veraPDF are run on (R-19 step 4), named after the
   build, e.g. tagged_unicode_windows_x86_delphi-7.pdf: the files of every

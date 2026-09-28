@@ -38,8 +38,8 @@ procedure PrintReport(Report: TGDIPages; From: integer = 0;
 implementation
 
 const
-  /// U+2212 MINUS SIGN as UTF-8 bytes - no non-ASCII in string literals
-  MINUS_SIGN: RawUtf8 = #$E2#$88#$92;
+  /// U+2212 MINUS SIGN
+  MINUS_SIGN: RawUtf8 = {$ifdef HASCODEPAGE} #$2212 {$else} #$E2#$88#$92 {$endif};
 
 type
   /// state and event handlers of one modal preview window

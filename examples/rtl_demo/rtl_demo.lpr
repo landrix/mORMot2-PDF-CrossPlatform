@@ -26,6 +26,7 @@
 program rtl_demo;
 
 {$I mormot.defines.inc}
+{$APPTYPE CONSOLE}
 
 uses
   {$ifdef FPC}
@@ -64,21 +65,30 @@ const
   // UTF-8 encoded strings, drawn with TextOutUtf8: TextOut reads a string as
   // the compiler holds it, the ANSI code page on Delphi 7
   // U+0628 ARABIC LETTER BA — isolated form
-  ARABIC_BA: RawUtf8 = #$D8#$A8;
+  ARABIC_BA: RawUtf8 = {$ifdef HASCODEPAGE} #$0628 {$else} #$D8#$A8 {$endif};
   // مرحبا  (marhaba = Hello)
   // م=U+0645 ر=U+0631 ح=U+062D ب=U+0628 ا=U+0627
-  ARABIC_HELLO: RawUtf8 = #$D9#$85#$D8#$B1#$D8#$AD#$D8#$A8#$D8#$A7;
+  ARABIC_HELLO: RawUtf8 = {$ifdef HASCODEPAGE}
+    #$0645#$0631#$062D#$0628#$0627 {$else}
+    #$D9#$85#$D8#$B1#$D8#$AD#$D8#$A8#$D8#$A7 {$endif};
   // كتاب  (kitab = Book)
   // ك=U+0643 ت=U+062A ا=U+0627 ب=U+0628
-  ARABIC_BOOK: RawUtf8 = #$D9#$83#$D8#$AA#$D8#$A7#$D8#$A8;
+  ARABIC_BOOK: RawUtf8 = {$ifdef HASCODEPAGE}
+    #$0643#$062A#$0627#$0628 {$else}
+    #$D9#$83#$D8#$AA#$D8#$A7#$D8#$A8 {$endif};
   // مدرسة  (madrasa = School)
   // م=U+0645 د=U+062F ر=U+0631 س=U+0633 ة=U+0629
-  ARABIC_SCHOOL: RawUtf8 = #$D9#$85#$D8#$AF#$D8#$B1#$D8#$B3#$D8#$A9;
+  ARABIC_SCHOOL: RawUtf8 = {$ifdef HASCODEPAGE}
+    #$0645#$062F#$0631#$0633#$0629 {$else}
+    #$D9#$85#$D8#$AF#$D8#$B1#$D8#$B3#$D8#$A9 {$endif};
   // بيت  (bayt = House)
   // ب=U+0628 ي=U+064A ت=U+062A
-  ARABIC_HOUSE: RawUtf8 = #$D8#$A8#$D9#$8A#$D8#$AA;
+  ARABIC_HOUSE: RawUtf8 = {$ifdef HASCODEPAGE}
+    #$0628#$064A#$062A {$else}
+    #$D8#$A8#$D9#$8A#$D8#$AA {$endif};
   // "Expected: U+0628 BA <em dash> same glyph as 1a, now via shaper path."
-  EXPECTED_2A: RawUtf8 = 'Expected: U+0628 BA '#$E2#$80#$94 +
+  EXPECTED_2A: RawUtf8 = 'Expected: U+0628 BA ' +
+    {$ifdef HASCODEPAGE} #$2014 {$else} #$E2#$80#$94 {$endif} +
     ' same glyph as 1a, now via shaper path.';
 
 { <demo>_<os>_<cpu>_<compiler>.pdf next to the executable, e.g.

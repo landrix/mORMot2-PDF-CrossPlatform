@@ -2,6 +2,7 @@
 program test_runner;
 
 {$I mormot.defines.inc}
+{$APPTYPE CONSOLE}
 {$I test_defines.inc}
 
 {$ifdef OSWINDOWS}

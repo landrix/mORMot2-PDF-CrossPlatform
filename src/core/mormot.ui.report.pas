@@ -621,8 +621,9 @@ const
   CELL_PADDING = 200;
   /// conversion factor: 1 point = 3.528 × 1/100mm
   PT_TO_100MM = 3528;
-  /// U+2022 BULLET and a space, as UTF-8 bytes
-  LIST_BULLET: RawUtf8 = #$E2#$80#$A2' ';
+  /// U+2022 BULLET and a space
+  LIST_BULLET: RawUtf8 =
+    {$ifdef HASCODEPAGE} #$2022' ' {$else} #$E2#$80#$A2' ' {$endif};
 
 { =========================================================================
   Helper functions

@@ -13,6 +13,7 @@
 program markdown_demo;
 
 {$I mormot.defines.inc}
+{$APPTYPE CONSOLE}
 
 uses
   {$IFDEF FPC}
@@ -27,6 +28,10 @@ uses
   mormot.ui.report;
 
 {$R *.res}
+
+const
+  /// U+2014 EM DASH
+  EM_DASH: RawUtf8 = {$ifdef HASCODEPAGE} #$2014 {$else} #$E2#$80#$94 {$endif};
 
 type
   { Page rendering configuration }
@@ -244,7 +249,7 @@ begin
   Report.MoveToNextLine(800);
 
   Report.DrawQuote(
-    '"The best way to predict the future is to invent it." — Alan Kay');
+    '"The best way to predict the future is to invent it." ' + EM_DASH + ' Alan Kay');
 
   Report.DrawText(0, Report.CurrentY, 'List example:');
   Report.MoveToNextLine(500);
@@ -293,7 +298,7 @@ begin
     'All headings (H1 through H6) automatically create PDF bookmarks/outlines. Open this PDF in any reader and check the Bookmarks panel to navigate.');
 
   { === H2: Tables === }
-  Report.DrawHeading(2, 'Tables — Flexible Layout');
+  Report.DrawHeading(2, 'Tables ' + EM_DASH + ' Flexible Layout');
 
   Report.DrawParagraph(
     'Tables are defined with flexible layouts (column widths, fonts, colors) and rendered row-by-row with automatic page breaks and alternating colors.');
@@ -329,7 +334,8 @@ begin
 
   { === Footer Caption === }
   Report.DrawCaption(
-    Format('Page: %s — Markdown-style formatting with automatic spacing.', [Config.PageLabel]));
+    'Page: ' + Config.PageLabel + ' ' + EM_DASH +
+    ' Markdown-style formatting with automatic spacing.');
 end;
 
 { <demo>_<os>_<cpu>_<compiler>.pdf next to the executable, e.g.
@@ -378,7 +384,7 @@ begin
     Config1.BodyFontSize := 11;
     Config1.MonoFontName      := MonoFont;
     Config1.LineHeightFactor  := 1.1;   // default spacing
-    Config1.PageLabel := '1 — Standard (15mm margins, ' + SansFont + ', 11pt body, LineHeight=1.1)';
+    Config1.PageLabel := '1 ' + EM_DASH + ' Standard (15mm margins, ' + SansFont + ', 11pt body, LineHeight=1.1)';
     RenderMarkdownPage(Report, Config1);
 
     { === PAGE 2: Compact layout with different fonts === }
@@ -392,7 +398,7 @@ begin
     Config2.BodyFontSize := 9;
     Config2.MonoFontName      := MonoFont;
     Config2.LineHeightFactor  := 1.4;   // more open despite compact margins — contrast with page 1
-    Config2.PageLabel := '2 — Compact (10mm margins, ' + SerifFont + ', 9pt body, LineHeight=1.4)';
+    Config2.PageLabel := '2 ' + EM_DASH + ' Compact (10mm margins, ' + SerifFont + ', 9pt body, LineHeight=1.4)';
     RenderMarkdownPage(Report, Config2);
 
     Report.EndDoc;
@@ -406,7 +412,7 @@ begin
         try
           MS.Position := 0;
           FS.CopyFrom(MS, MS.Size);
-          WriteLn('✓ PDF exported to: ', PdfFileName);
+          WriteLn('PDF exported to: ', PdfFileName);
         finally
           FS.Free;
         end;

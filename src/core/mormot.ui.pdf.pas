@@ -3906,7 +3906,10 @@ const
   {$endif USE_METAFILE}
   c2PI: double = 6.283185307;
   cPIdiv2: double = 1.570796326;
-  BOM_UTF8_CHARS: RawUtf8 = #$EF#$BB#$BF; // UTF-8 byte order mark as string
+  // the XMP packet header; begin is U+FEFF, the byte order mark (EF BB BF)
+  XPACKET_BEGIN: RawUtf8 = '<?xpacket begin="' +
+    {$ifdef HASCODEPAGE} #$FEFF'" ' {$else} #$EF#$BB#$BF'" ' {$endif} +
+    'id="W5M0MpCehiHzreSzNTczkc9d"?>';
 
 function RGBA(r, g, b, a: cardinal): COLORREF;
   {$ifdef HASINLINE} inline;{$endif}
@@ -8645,7 +8648,7 @@ begin
   if fPdfA <> pdfaNone then
   begin
     fMetaData.Writer.Add(
-      '<?xpacket begin="' + BOM_UTF8_CHARS + '" id="W5M0MpCehiHzreSzNTczkc9d"?>' +
+      XPACKET_BEGIN +
       '<x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="mormot.ui.pdf">' +
       '<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">' +
       '<rdf:Description rdf:about="" xmlns:xmp="http://ns.adobe.com/xap/1.0/">' +
@@ -8717,7 +8720,7 @@ begin
      (fMetaData.Writer.Position <> 0) then
     exit;
   fMetaData.Writer.Add(
-    '<?xpacket begin="' + BOM_UTF8_CHARS + '" id="W5M0MpCehiHzreSzNTczkc9d"?>' +
+    XPACKET_BEGIN +
     '<x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="mormot.ui.pdf">' +
     '<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">' +
     '<rdf:Description rdf:about="" xmlns:xmp="http://ns.adobe.com/xap/1.0/">' +

@@ -53,7 +53,7 @@ uses
 
 const
   // the placeholder of an empty table, an em dash as UTF-8
-  NO_VALUE: RawUtf8 = #$E2#$80#$94;
+  NO_VALUE: RawUtf8 = {$ifdef HASCODEPAGE} #$2014 {$else} #$E2#$80#$94 {$endif};
 
 var
   SansFont: RawUtf8;

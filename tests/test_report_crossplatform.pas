@@ -276,10 +276,10 @@ begin
     Report.DrawTextCenter(0, 0, 'Center'); // Align = 2
     Report.DrawTextAt(500, 0, 'At');       // Align = 0 (same as DrawText)
     Report.EndDoc;
-    CheckEqual(0, Report.Pages[0].Commands[0].Align, 'DrawText → left');
-    CheckEqual(1, Report.Pages[0].Commands[1].Align, 'DrawTextRight → right');
-    CheckEqual(2, Report.Pages[0].Commands[2].Align, 'DrawTextCenter → center');
-    CheckEqual(0, Report.Pages[0].Commands[3].Align, 'DrawTextAt → left');
+    CheckEqual(0, Report.Pages[0].Commands[0].Align, 'DrawText -> left');
+    CheckEqual(1, Report.Pages[0].Commands[1].Align, 'DrawTextRight -> right');
+    CheckEqual(2, Report.Pages[0].Commands[2].Align, 'DrawTextCenter -> center');
+    CheckEqual(0, Report.Pages[0].Commands[3].Align, 'DrawTextAt -> left');
   finally
     Report.Free;
   end;
@@ -637,7 +637,7 @@ begin
         break;
       end;
     CheckEqual(8, Length(t), 'bullet, space and item');
-    Check((Length(t) >= 4) and (t[1] = #$E2) and (t[2] = #$80) and (t[3] = #$A2) and (t[4] = ' '),
+    Check((Length(t) >= 4) and (ord(t[1]) = $E2) and (ord(t[2]) = $80) and (ord(t[3]) = $A2) and (t[4] = ' '),
       'U+2022 as UTF-8');
   finally
     Report.Free;

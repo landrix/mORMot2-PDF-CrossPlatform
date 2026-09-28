@@ -19,6 +19,7 @@
 program chinese_demo;
 
 {$I mormot.defines.inc}
+{$APPTYPE CONSOLE}
 
 uses
   {$ifdef FPC}
@@ -48,18 +49,30 @@ const
 
   // UTF-8 encoded strings, drawn with TextOutUtf8: TextOut reads a string as
   // the compiler holds it, the ANSI code page on Delphi 7
-  CJK_TITLE: RawUtf8 = #$E4#$B8#$AD#$E6#$96#$87#$E6#$BC#$94#$E7#$A4#$BA;
+  CJK_TITLE: RawUtf8 = {$ifdef HASCODEPAGE}
+    #$4E2D#$6587#$6F14#$793A {$else}
+    #$E4#$B8#$AD#$E6#$96#$87#$E6#$BC#$94#$E7#$A4#$BA {$endif};
   // 中文演示  (Chinese Demo)
-  CJK_HELLO: RawUtf8 = #$E4#$BD#$A0#$E5#$A5#$BD#$EF#$BC#$8C#$E4#$B8#$96#$E7#$95#$8C#$EF#$BC#$81;
+  CJK_HELLO: RawUtf8 = {$ifdef HASCODEPAGE}
+    #$4F60#$597D#$FF0C#$4E16#$754C#$FF01 {$else}
+    #$E4#$BD#$A0#$E5#$A5#$BD#$EF#$BC#$8C#$E4#$B8#$96#$E7#$95#$8C#$EF#$BC#$81 {$endif};
   // 你好，世界！  (Hello, World!)
-  CJK_NUMBERS: RawUtf8 = #$E4#$B8#$80#$E4#$BA#$8C#$E4#$B8#$89#$E5#$9B#$9B#$E4#$BA#$94#$E5#$85#$AD#$E4#$B8#$83#$E5#$85#$AB#$E4#$B9#$9D#$E5#$8D#$81;
+  CJK_NUMBERS: RawUtf8 = {$ifdef HASCODEPAGE}
+    #$4E00#$4E8C#$4E09#$56DB#$4E94#$516D#$4E03#$516B#$4E5D#$5341 {$else}
+    #$E4#$B8#$80#$E4#$BA#$8C#$E4#$B8#$89#$E5#$9B#$9B#$E4#$BA#$94#$E5#$85#$AD#$E4#$B8#$83#$E5#$85#$AB#$E4#$B9#$9D#$E5#$8D#$81 {$endif};
   // 一二三四五六七八九十  (1–10 as Chinese numerals)
-  CJK_FONT_TEST: RawUtf8 = #$E5#$AD#$97#$E4#$BD#$93#$E5#$B5#$8C#$E5#$85#$A5#$E6#$B5#$8B#$E8#$AF#$95;
+  CJK_FONT_TEST: RawUtf8 = {$ifdef HASCODEPAGE}
+    #$5B57#$4F53#$5D4C#$5165#$6D4B#$8BD5 {$else}
+    #$E5#$AD#$97#$E4#$BD#$93#$E5#$B5#$8C#$E5#$85#$A5#$E6#$B5#$8B#$E8#$AF#$95 {$endif};
   // 字体嵌入测试  (Font embedding test)
-  CJK_SENTENCE: RawUtf8 = #$E8#$BF#$99#$E6#$98#$AF#$E4#$B8#$80#$E4#$B8#$AA#$E6#$B5#$8B#$E8#$AF#$95#$E3#$80#$82;
+  CJK_SENTENCE: RawUtf8 = {$ifdef HASCODEPAGE}
+    #$8FD9#$662F#$4E00#$4E2A#$6D4B#$8BD5#$3002 {$else}
+    #$E8#$BF#$99#$E6#$98#$AF#$E4#$B8#$80#$E4#$B8#$AA#$E6#$B5#$8B#$E8#$AF#$95#$E3#$80#$82 {$endif};
   // 这是一个测试。  (This is a test.)
   // "Chinese PDF Demo  <em dash>  Font: "
-  HEADER_TEXT: RawUtf8 = 'Chinese PDF Demo  '#$E2#$80#$94'  Font: ';
+  HEADER_TEXT: RawUtf8 = {$ifdef HASCODEPAGE}
+    'Chinese PDF Demo  '#$2014'  Font: ' {$else}
+    'Chinese PDF Demo  '#$E2#$80#$94'  Font: ' {$endif};
 
 { <demo>_<os>_<cpu>_<compiler>.pdf next to the executable, e.g.
   chinese_demo_windows_x64_free-pascal-3.2.2.pdf or ..._x86_delphi-7.pdf: the runs
