@@ -25,7 +25,7 @@ mORMot ORM.
 lazbuild mormot_demo.lpi -B
 bin/<target>/mormot_demo                    # GUI
 bin/<target>/mormot_demo --export           # batch -> mormot_demo_<os>_<cpu>_<compiler>.pdf, next to the executable
-bin/<target>/mormot_demo --export out.pdf   # batch to a file of your choice; both need a display
+bin/<target>/mormot_demo --export out.pdf   # batch to a file of your choice
 ```
 
 Delphi 7 (Win32), with `MORMOT2` set to the mORMot2 checkout: build from the
@@ -55,5 +55,9 @@ curl -L -o data/mormot_demo.db \
   https://raw.githubusercontent.com/martin-doyle/mORMot2-Examples/main/10-InvoiceExample/Data/Project10.db
 ```
 
-**Status:** runs; checked on Linux with `--export` (2026-09-26), both with the
-sample database (5 pages) and with an empty one (1 page).
+On Linux the batch mode still needs a display, because the LCL measures the
+text — on a headless machine run it under `xvfb-run`. macOS needs none.
+
+**Status:** `--export` checked on 2026-09-28 from macOS, Debian, FPC/Win64,
+Delphi 7 and Delphi 2010 with the sample database: 5 pages, PAC 2024 and
+veraPDF `ua1` pass. With an empty database: 1 page (Linux, 2026-09-26).

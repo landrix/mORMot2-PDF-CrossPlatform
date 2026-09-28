@@ -14,8 +14,9 @@ by hand from header and data rows.
   `THead`/`TBody` row groups itself, which `TGDIPages` would do for you
 - `Tagged := True` before the first `AddPage`: it raises the file format to
   PDF 1.7 and selects the PDF/UA font mode, so ask for the font names after it
-- PAC 2024 reports one accepted warning on this file, "possibly inappropriate
-  use of figure" (roadmap W-1) — the figure is decorative by design
+- PAC 2024 passes and keeps one hint, "possibly inappropriate use of
+  figure". It comes with every Figure, path or image, and is accepted
+  (roadmap W-1)
 
 **Build and run**
 

@@ -10,7 +10,7 @@ Cross-platform PDF-Generierung für Windows, Linux und macOS, basierend auf der 
 | Plattform | Compiler | Backend | Status |
 |---|---|---|---|
 | Windows | FreePascal/Lazarus | GDI via Interfaces | Produktiv |
-| Windows (Win32) | Delphi 7 | GDI via Interfaces | Ebene 1, die TCanvas-Brücke und der Kern von `TGDIPages`; Tests grün, die sechs Konsolen-Demos und der `--export` der beiden GUI-Demos geben dasselbe PDF wie FPC. Vorschau und Demo-Fenster brauchen vorerst FPC (Roadmap R-20) |
+| Windows (Win32) | Delphi 7, Delphi 2010 | GDI via Interfaces | Ebene 1, die TCanvas-Brücke und der Kern von `TGDIPages`; Tests grün unter beiden, die sechs Konsolen-Demos und der `--export` der beiden GUI-Demos geben dasselbe PDF wie FPC. Vorschau und Demo-Fenster brauchen vorerst FPC (Roadmap R-20) |
 | Linux | FreePascal/Lazarus | FreeType2 | Produktiv |
 | macOS | FreePascal/Lazarus | FreeType2 | Produktiv |
 
@@ -86,7 +86,7 @@ Report.DrawTableRow(['Wert A', 'Wert B']);      // automatischer Seitenumbruch +
 Report.EndTable;
 Report.EndDoc;
 Report.ExportPdfStream(Stream);   // FileFormat wird automatisch auf pdf17 angehoben
-// oder: Report.ShowPreviewForm
+// oder: ShowReportPreview(Report)   // mormot.ui.reportpreview
 Report.Free;
 ```
 
@@ -98,8 +98,9 @@ Einheiten: 1/100mm. Lernpfad mit allen Features: [docs/DEMOS.md](docs/DEMOS.md)
 
 `ExportPdfTagged := True` (Report Engine) bzw. `Tagged := True` (Low-Level-API)
 schreibt den Strukturbaum, den Screenreader und Barrierefreiheits-Prüfer
-brauchen. Beide getaggten Demos bestehen **PAC 2024**, mit einer akzeptierten
-Warnung für eine dekorative Grafik in `pdf_demo`.
+brauchen. Die getaggten Demos bestehen **PAC 2024**. PAC behält einen
+akzeptierten Hinweis auf jeder `Figure`, „possibly inappropriate use of
+figure“; er erscheint bei Vektorpfaden und Bildern gleichermaßen.
 
 Was die Engine erzeugt:
 
@@ -116,7 +117,7 @@ Zwei Regeln:
 - **Schriften werden eingebettet.** PDF/UA erlaubt die eingebauten
   Standardschriften des Betrachters nicht, deshalb schaltet das Tagging
   `EmbeddedTTF` ein und `StandardFontsReplace` aus. Die Schriftnamen *danach*
-  über `GetExportFonts` / `GetReportFonts` erfragen.
+  über `GetExportFonts` / `GetPdfFonts` erfragen.
 - **Vor der ersten Seite einschalten.** Die Font-Flags entscheiden, mit welchen
   Metriken das Layout vermessen wird; später gesetzt lösen sie eine Ausnahme
   aus.
@@ -133,12 +134,20 @@ Report.DrawHeading(1, 'Report-Titel');
 // Low-Level-API
 Doc.Tagged          := True;
 Doc.DefaultLanguage := 'de';
-GetReportFonts(Doc.EmbeddedTTF, SansFont, SerifFont, MonoFont);
+GetPdfFonts(Doc.EmbeddedTTF, SansFont, SerifFont, MonoFont);
 Doc.AddPage;
 Doc.BeginStructContent(psrH1);
 Doc.VclCanvas.TextOut(40, 40, 'Titel');
 Doc.EndStructContent;
 ```
+
+**Diagramme gehören nicht zum Umfang.** Das Projekt hat keine Diagramm-Engine
+und bekommt keine, so wie es auch keine Rechnungs-XML erzeugt. Ein Diagramm
+kommt als Bild aus einer Diagramm-Bibliothek nach Wahl, gezeichnet in eine
+`Figure` mit einem Alternativtext, der sagt, was das Diagramm zeigt. Ein
+Diagramm, das Daten trägt, sollte diese Werte zusätzlich als echte Tabelle im
+Dokument haben: Ein Alternativtext kann keine Datenreihe tragen, eine Tabelle
+lässt sich Zelle für Zelle lesen.
 
 ## Schrifteinbettung und Subsetting
 
@@ -207,7 +216,7 @@ Doc.PdfAMetadaExtension := PdfMetadataFacturX('EN 16931');
 
 ---
 
-## Die 7 Demos (Lernpfad)
+## Die 8 Demos (Lernpfad)
 
 | Demo | API | Was wird gezeigt |
 |---|---|---|
@@ -218,6 +227,7 @@ Doc.PdfAMetadaExtension := PdfMetadataFacturX('EN 16931');
 | [chinese_demo](examples/chinese_demo/) | `TPdfDocumentVcl` | CJK-Text, Subset-Embedding |
 | [rtl_demo](examples/rtl_demo/) | `TPdfDocumentVcl` | Arabisch RTL, HarfBuzz / Uniscribe Shaping |
 | [zugferd_demo](examples/zugferd_demo/) | `TPdfDocumentVcl` | PDF/A-3U + PDF/UA-1, ZUGFeRD-/Factur-X-Rechnung mit eingebetteter XML |
+| [layer1_demo](examples/layer1_demo/) | `TPdfDocument` | Die Low-Level-API allein: getaggte Überschriften, Text, eine Grafik und eine Tabelle mit THead/TBody/TFoot, in PDF-Points; baut mit FPC und Delphi 7 |
 
 Vollständige Anleitung: [docs/DEMOS.md](docs/DEMOS.md)
 
@@ -234,6 +244,7 @@ Vollständige Anleitung: [docs/DEMOS.md](docs/DEMOS.md)
 "C:\lazarus\lazbuild.exe" examples/chinese_demo/chinese_demo.lpi -B
 "C:\lazarus\lazbuild.exe" examples/rtl_demo/rtl_demo.lpi -B
 "C:\lazarus\lazbuild.exe" examples/zugferd_demo/zugferd_demo.lpi -B
+"C:\lazarus\lazbuild.exe" examples/layer1_demo/layer1_demo.lpi -B
 
 # Linux/macOS
 lazbuild examples/pdf_demo/pdf_demo_crossplat.lpi -B
@@ -243,6 +254,7 @@ lazbuild examples/rtl_demo/rtl_demo.lpi -B
 lazbuild examples/report_demo/report_demo.lpi -B
 lazbuild examples/mormot_demo/mormot_demo.lpi -B
 lazbuild examples/zugferd_demo/zugferd_demo.lpi -B
+lazbuild examples/layer1_demo/layer1_demo.lpi -B
 
 # Testsuite
 lazbuild tests/test_runner.lpi -B && tests/bin/<cpu-os>/test_runner
@@ -256,7 +268,15 @@ Installationsordner; die Ausgabe landet in `bin\d7\<Projekt>\`:
 set MORMOT2=C:\pfad\zu\mORMot2
 tests\build_delphi7.bat tests\test_runner.lpr
 bin\d7\test_runner\test_runner.exe --noenter
+tests\build_delphi7.bat examples\layer1_demo\layer1_demo.dpr
+bin\d7\layer1_demo\layer1_demo.exe
+tests\build_delphi7.bat examples\markdown_demo\markdown_demo.lpr
+bin\d7\markdown_demo\markdown_demo.exe
 ```
+
+**Delphi 2010** (ein Unicode-Delphi) baut dieselben Projekte auf dieselbe Weise
+mit `tests\build_delphi2010.bat`, Ausgabe in `bin\d2010\<Projekt>\`, und gibt
+dieselben PDFs wie Delphi 7.
 
 `mORMot2\src\ui` gehört nicht in einen Delphi-Suchpfad: Dort liegt das
 originale `mormot.ui.pdf`, das der Compiler sonst statt der Unit dieses
@@ -296,14 +316,14 @@ Fonts aus `/Library/Fonts`, `/System/Library/Fonts`, `~/Library/Fonts`.
 
 ---
 
-## Open Items
+## Offene Punkte
 
 - **Symbolschriften unter Linux/macOS:** werden nicht gesubsettet — die ganze Schrift wird eingebettet, weil hb-subset die Glyphen-IDs hinter der `(3,0)`-Cmap nicht erhält. Windows subsettet sie (Roadmap R-15b)
 - **TTC-Sammlungen:** nur Face-Index 0 ist erreichbar (Roadmap R-11)
 - **EMF/MetaFile:** Windows-only (`TPdfDocumentGdi`), nicht portierbar
 - **GDI+/Gradient Fills:** nur via EMF auf Windows verfügbar
 - **Tabellen-Pagination:** kein Zeilenumbruch innerhalb einer Zelle
-- **Delphi:** Delphi 7 (Win32) baut Ebene 1, die TCanvas-Brücke und den Kern von `TGDIPages`, alle sechs Konsolen-Demos und den Batch-Export der beiden GUI-Demos, noch nicht die Vorschau und die Demo-Fenster (Roadmap R-20). Die Zeichenmethoden von `TCanvas` sind unter Delphi 7 statisch: über eine `TPdfVclCanvas`-Referenz zeichnen (`Doc.VclCanvas` hat diesen Typ), nie über ein einfaches `TCanvas`, sonst kommt nichts im PDF an
+- **Delphi:** Delphi 7 und Delphi 2010 (Win32) bauen Ebene 1, die TCanvas-Brücke und den Kern von `TGDIPages`, alle sechs Konsolen-Demos und den Batch-Export der beiden GUI-Demos, noch nicht die Vorschau und die Demo-Fenster (Roadmap R-20). Die Zeichenmethoden von `TCanvas` sind unter Delphi 7 statisch: über eine `TPdfVclCanvas`-Referenz zeichnen (`Doc.VclCanvas` hat diesen Typ), nie über ein einfaches `TCanvas`, sonst kommt nichts im PDF an
 - **Links in getaggter Ausgabe:** `CreateHyperLink` in einem getaggten Dokument verletzt PDF/UA — es gibt kein `Link`-Strukturelement für Annotationen. `TGDIPages.DrawLink` bleibt konform, weil es nur formatierten Text zeichnet; seine URL ist nicht anklickbar (Roadmap R-18)
 
 Details und aktueller Prüfstand: [docs/ROADMAP.md](docs/ROADMAP.md)

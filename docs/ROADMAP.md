@@ -3,26 +3,17 @@
 Open work only. Finished work is in the git history, and the technical knowledge
 it produced in `.claude/skills/` — this file repeats neither.
 
-**State on 2026-09-27.** The engine is cross-platform, writes PDF 1.7, and its
-tagged output passes PAC 2024 with accepted warnings only (W-1, a hint on
-every Figure; W-2, e-mail addresses without links in `zugferd_demo`) and veraPDF
-`ua1`. PDF/A-3U with PDF/UA-1 is verified (R-17). Fonts are embedded and subset
-on all three platforms; tables carry `THead`/`TBody`/`TFoot` row groups. All
-three platforms build with FPC; `test_runner` is green with 243 assertions on
-Windows, 282 on Linux and 302 on macOS (after the fourth R-20 step).
-**Layer 1 builds on Delphi 7** (R-19, done), and since R-20 step 4 the
-TCanvas bridge and the `TGDIPages` core too: 243 assertions on Win32, and the
-tagged Unicode test file passes PAC 2024 and veraPDF `ua1` from Delphi 7/Win32
-and FPC/Win64 alike. The macOS run found a heap-dependent `.ttc` defect in the
-FreeType backend, fixed (`fonts.md` §3). The Linux re-run is done up to
-veraPDF on its files (V), and its post-R-21 files pass veraPDF. R-21 is done
-on all three platforms. R-23 is
-done: `layer1_demo` builds with FPC on all three platforms and with Delphi 7,
-and passes PAC 2024 and veraPDF `ua1` everywhere. The six console demos
-build with Delphi 7 (R-20 step 5), and the batch export of the two GUI demos
-(step 6); their Delphi 7 files pass PAC 2024 and veraPDF `ua1`, and Linux and
-macOS were re-checked after step 6 (2026-09-28). **Next:** R-20, the preview
-on the VCL.
+**State on 2026-09-28.** The engine is cross-platform, writes PDF 1.7, and its
+tagged output passes PAC 2024 with accepted hints only (W-1, W-2) and veraPDF
+`ua1`; PDF/A-3U with PDF/UA-1 is verified (R-17). Fonts are embedded and subset
+on all three platforms; tables carry `THead`/`TBody`/`TFoot` row groups.
+`test_runner` is green with 244 assertions on Windows (FPC, Delphi 7 and
+Delphi 2010), 303 on macOS and 282 on Linux (before R-25). **Delphi:** layer
+1, the TCanvas bridge and the `TGDIPages` core build on Delphi 7 (R-19, R-20
+steps 1–6) and on Delphi 2010, a Unicode Delphi (R-25); all six console demos
+and the `--export` of the two GUI demos give the same PDF as FPC. The files of
+macOS, Debian, FPC/Win64, Delphi 7 and Delphi 2010 all pass PAC 2024
+and veraPDF (V). **Next:** R-20 step 7, the preview on the VCL.
 
 ---
 
@@ -85,6 +76,13 @@ earlier post covered them.
   and `mormot_demo` (ORM and static SQLite included) build their report in
   a `uReport.pas` without a form — the pattern for a report that has to run
   without a GUI
+- **Delphi 2010** (Unicode Delphi) builds everything Delphi 7 does —
+  `tests\build_delphi2010.bat` — and writes the same PDFs (R-25)
+- **Fixed:** the XMP packet header from Unicode Delphi was double-encoded
+  (`C3 AF C2 BB C2 BF` instead of the byte order mark `EF BB BF`) in every
+  PDF/A and tagged file
+- **`TPdfVclCanvas` passes `Font.Name` as UTF-8** — Delphi 7 gave the ANSI
+  bytes of a non-ASCII font name
 - **Coming with R-20** (announce when done): the preview and the GUI demos
   on Delphi
 
@@ -101,7 +99,7 @@ a PAC error like "unbalanced marked content" then names no culprit.
 | Development, build, fast iteration | **Linux** |
 | PAC 2024 + tag-tree inspection | **Windows** (only platform; mandatory) |
 | Third-platform verification per change | macOS |
-| Delphi 7 build and Win32 run (R-19) | **Windows** VM with Delphi 7 (`dcc32`) |
+| Delphi build and Win32 run (R-19, R-20, R-25) | **Windows** VM with Delphi 7 and Delphi 2010 (`dcc32`) |
 | `veraPDF` (`ua1`, `3b`, `3u`, `3a`) | installed on macOS since 2026-09-22; the Windows and Linux files are copied there |
 
 **PAC caveat.** The traffic-light status is not enough: a flat tree of
@@ -141,7 +139,7 @@ deflate `/BaseFont` out of reach of the grep.
 **`--export` needs no display on macOS.** The Cocoa widgetset runs both GUI
 demos headless; the `xvfb-run` advice is Linux/GTK2 only.
 
-**Checking a change.** Build all six demos and `test_runner`, then compare the
+**Checking a change.** Build all eight demos and `test_runner`, then compare the
 PDFs with the previous run: file size, `pdffonts`, `pdftotext` output, and the
 pages rendered with `pdftoppm -r 110 -png` compared pixel by pixel. A change
 that is meant to be invisible has to come out pixel-identical. A pixel
@@ -153,193 +151,21 @@ comparison is valid **within** one platform only — see V below.
 
 ### R-20 — Delphi: the TCanvas Bridge and `TGDIPages` — priority 2
 
-**The obstacle, checked against the source 2026-09-25.** `TPdfVclCanvas =
-class(TCanvas)` overrides `TextOut`, `TextExtent`, `TextWidth`, `TextHeight`,
-`Rectangle`, `Ellipse`, `RoundRect`, `Draw`, `DoMoveTo` and `DoLineTo` — all
-virtual in the LCL. In Delphi 7's `Graphics.pas` only `Changed`, `Changing` and
-`CreateHandle` are virtual; `DoMoveTo`/`DoLineTo` do not exist; and the unit
-uses `LCLIntf`/`LCLType` unconditionally.
-
-With `reintroduce` it would compile, but a call through a `TCanvas` reference —
-`C := Doc.VclCanvas; C.TextOut(…)` in every demo, and
-`TGDIPages.RenderPageToCanvas(ACanvas: TCanvas)` — binds statically to the VCL
-method. That draws through GDI onto the measuring DC, and the PDF stays empty.
-**FPC shows the same effect today** for the four methods the bridge already
-reintroduces (`FillRect`, `Polyline`, `Polygon`, `StretchDraw`): this is why
-`RenderPageToCanvas` uses `Rectangle` instead of `FillRect`.
+**The obstacle.** `TPdfVclCanvas = class(TCanvas)` overrides drawing methods
+that are virtual in the LCL but static in Delphi 7's `Graphics.pas`. A call
+through a plain `TCanvas` reference binds to the VCL method, draws through GDI
+onto the measuring DC, and the PDF stays empty. FPC shows the same for the
+methods the bridge reintroduces there (`FillRect`, `Polyline`, `Polygon`,
+`StretchDraw`) — which is why `RenderPageToCanvas` uses `Rectangle`.
 
 **Approach — option B.** Under Delphi the caller holds the concrete type:
-`VclCanvas` returns `TPdfVclCanvas`, the methods are reintroduced, and
-`TGDIPages` gets a render path taking a `TPdfVclCanvas`. The preview keeps
-drawing on a real VCL canvas. The limit has to be documented: code that draws
-through a plain `TCanvas` reference writes nothing into the PDF.
-
-**`TGDIPages` does not exist under Delphi today.** `mormot.ui.report` is
-wrapped in `{$IFDEF FPC}`; under Delphi it is an empty stub pointing to the
-original in `mORMot2/src/ui`, which must never be on the search path. So R-20
-ports it: besides `LCLType`/`LazFileUtils`, `TFPGMap<string, …>` needs a
-replacement (Delphi 7 has no generics).
-
-**Strings — decided 2026-09-27: `RawUtf8` inside, conversion at the GUI only.**
-1. **`TGDIPages` takes `RawUtf8`** wherever it takes text today as `string`:
-   the `Draw*` methods, `SetHeader`/`SetFooter`, the table rows (`array of
-   RawUtf8`), `Title`/`Author`/`Subject`, the `ExportPdf*` texts, font and
-   format names. `TDrawCommand` stores `RawUtf8`. FPC/LCL callers do not
-   change (their `string` holds UTF-8 already); a Delphi 7 caller converts
-   with `StringToUtf8`, otherwise non-ASCII arrives garbled without an error —
-   to be documented. No `string` overloads: under FPC the call would be
-   ambiguous. The original's `DrawText`/`DrawTextU`/`DrawTextW` triple is not
-   followed; our signatures differ from it anyway.
-2. **The bridge keeps `string`** where `TCanvas` dictates it (`TextOut`,
-   `TextWidth`, …) and reads it per compiler: FPC as UTF-8, Delphi 7 from the
-   ANSI code page, Unicode Delphi as UTF-16. mORMot2's `StringToUtf8` and
-   `StringToSynUnicode` do exactly that, so `TextOut` switches from
-   `UTF8Decode` (UTF-8 on every compiler) to `StringToSynUnicode`, as
-   `TextWidth` already uses `StringToUtf8`. Beside them the bridge gets
-   `RawUtf8` methods (`TextOutUtf8`, `TextWidthUtf8`, …, separately named),
-   which `TGDIPages` uses.
-   **Checked 2026-09-27, no defect:** `TextOut` (`UTF8Decode`) and
-   `TextWidth` (`StringToUtf8`) read the same UTF-8 under FPC, whatever the
-   unit order and with Windows on cp1252: `mormot.core.os` calls
-   `SetMultiByteConversionCodePage(CP_UTF8)` on FPC before
-   `mormot.core.unicode` sets `CurrentAnsiConvert`. Measured with two probe
-   programs (LCL first, mORMot2 first): both 65001, the same 46.008 pt for
-   "ÄÖÜ" in Arial 12.
-3. **`TGDIPages` is split:** a core without GUI (recording, layout, PDF
-   export; `RawUtf8` throughout) and the preview and printing in their own
-   unit, converting only when they draw on the screen. The core builds under
-   Delphi first, the `--export` path of the GUI demos with it; the preview
-   and the `.dfm` of the GUI demos follow.
-4. **File names are `TFileName`** (`ExportPDF`): a boundary to the operating
-   system, the mORMot2 convention.
-
-Optional, for consistency down to layer 1: a `TPdfCanvas.TextOutUtf8`, so
-callers need not go through `Utf8ToSynUnicode` + `TextOutW` as `layer1_demo`
-does.
-
-**Step 1, point 2 — done on Windows, 2026-09-27:** `TextOutFrac` decodes with
-`StringToSynUnicode`, `TextOutUtf8` and `TextWidthUtf8` are new,
-`TextWidthFrac` delegates to `TextWidthUtf8`. `TestVclCanvasUtf8Text` (4
-assertions) fails 1/4 with the UTF-8 decoding of either method broken;
-`test_runner` 241/241. The eight demo PDFs are the same apart from date and
-`/ID`. Linux 280/280 and macOS 300/300 on 2026-09-27, the tagged demos of all
-three platforms pass veraPDF `ua1`.
-
-**Step 2, point 1 — done on Windows, 2026-09-27:** `TGDIPages` on `RawUtf8`,
-still FPC-only. Every text parameter, record field, property and the format
-registry key are `RawUtf8`, file names `TFileName`; conversion only towards
-the LCL (`Utf8ToString`) and layer 1's `string` API. `RenderPageToCanvas`
-draws on the bridge with `TextOutUtf8`. `GetReportFonts`/`GetExportFonts`
-return `RawUtf8`, so the three report demos changed their variables, and the
-four TCanvas demos call `GetPdfFonts` and no longer use `mormot.ui.report`.
-Word splitting moved from `TStringList.DelimitedText` to
-`CsvToRawUtf8DynArray`, which fixed lost quotation marks (see "To
-Announce"); `TestParagraphKeepsQuotes` fails 1/2 on the old unit.
-`test_runner` 243/243. Seven demo PDFs are the same apart from date and
-`/ID`; `markdown_demo` differs only in the quote, now with its quotation
-marks. Linux 282/282 and macOS 302/302 on 2026-09-27, as expected.
-
-**Step 3, point 3 — done on Windows, 2026-09-27:** `TGDIPages` is a
-non-visual `TComponent` — it was a `TScrollBox` nobody placed on a form. The
-new unit `mormot.ui.reportpreview` holds `ShowReportPreview(Report)` and
-`PrintReport(Report, From, To_)`, both on the public API only. The core lost
-`Controls`, `Forms`, `ExtCtrls`, `StdCtrls`, `ComCtrls`, `Dialogs`,
-`Printers`, `LazFileUtils` and `fgl`: `Orientation` has its own
-`TReportOrientation` (same value names), the format registry is two arrays
-with `FindRawUtf8`, the measuring DPI comes from the bitmap's
-`Font.PixelsPerInch` instead of `Screen`, and `/Creator` from the new
-`ExportPdfCreator`, else `Executable.ProgramName` — what `Application.Title`
-gave; `report_demo` passes its title. `ShowPreviewForm`, `PrintPages`,
-`ShowPrintDialog` (it printed without a dialog) and `OpenPdfFile` (empty)
-are gone. `test_runner` 243/243; the eight demo PDFs as after step 2,
-`/Creator` unchanged. The preview (zoom, page keys, Ctrl+wheel) checked by
-hand on Windows. Linux and macOS: see step 4.
-
-**Step 4, points 1 and 3 — done on Windows, 2026-09-27:** the bridge and the
-`TGDIPages` core build on Delphi 7. The bridge reintroduces the static VCL
-methods (`PDF_CANVASVIRTUAL`, see `platform-backends.md`), `VclCanvas` has
-the type `TPdfVclCanvas`, `RenderPageToCanvas` draws through a local
-`Bridge` reference. `mormot.ui.report` lost its `{$IFDEF FPC}` wrapper and
-the Delphi stub. Delphi 7 syntax: `overload` on every overloaded
-declaration, `NewCommand` for `Default(TDrawCommand)`, `markdown_demo`
-builds its `TTableLayout` in a function. `PDF_HASVCLCANVAS` is on for every
-compiler: Delphi 7 `test_runner` 243/243 (127 before); the one failure on
-the way, `TestLineToWritesCompletePath`, found that `DoLineTo` has to skip
-`psClear` itself. `markdown_demo` from Delphi 7 and from FPC/Win64: same
-size, no difference after masking dates, `/ID` and subset prefixes, same
-roles. FPC: `test_runner` 243/243, the eight demo PDFs as after step 2.
-**Linux and macOS for steps 2 to 4 — done, 2026-09-27:** `test_runner`
-282/282 on Debian and 302/302 on macOS, all eight demos build and run; the
-tagged demos of all three platforms and the Delphi 7 `markdown_demo` pass
-veraPDF `ua1`, `zugferd_demo` also `3u` and Mustang. The Delphi 7
-`markdown_demo` file passes PAC 2024 too.
-
-**Remaining, in this order** (surveyed 2026-09-27, sources only):
-5. **The four TCanvas demos on Delphi 7** — `pdf_demo`, `chinese_demo`,
-   `rtl_demo`, `zugferd_demo`. All four hold the canvas in a `C: TCanvas`,
-   which compiles on Delphi 7 and leaves the PDF empty: it becomes
-   `TPdfVclCanvas`. Text beyond ASCII goes through `TextOutUtf8` — the UTF-8
-   byte constants of `chinese_demo` and `rtl_demo`, and the literals in the
-   source (`pdf_demo`'s "Special chars" line, the dash in `chinese_demo`'s
-   title), which Delphi 7 would read as ANSI. Each demo: FPC PDF unchanged,
-   the Delphi 7 PDF compared with it; they check CJK subsetting, Uniscribe
-   shaping and PDF/A-3U from Delphi 7.
-   **Done on Windows, 2026-09-27:** the four demos build with Delphi 7 as
-   well; `pdf_demo` drops its `TPdfDocumentGDI` branch (not ported, it would
-   not have compiled) and its `VC` cast. The FPC PDFs are the same as before
-   apart from date and `/ID`, and the Delphi 7 PDFs the same as the FPC ones
-   after inflating the streams and masking dates, `/ID`, subset prefixes and
-   offsets; `pdftotext` gives the umlauts, `€`, `…` from both. One byte-level
-   difference, in `chinese_demo` only: the `cmap` format 12 (3/10) subtable of
-   both Microsoft YaHei subsets carries `language` = `0x0008CA34` from Win32
-   and 0 from Win64, the same on every run (the other demos' subsets have no
-   format 12 and are byte-identical). The spec wants 0 there. It comes from
-   the 32-bit `CreateFontPackage` itself: the source face (`msyh.ttc`) has
-   0, we pass language 0, `ReduceTTF` copies the tables unchanged, and a
-   test run with `lpfnAllocate` filling its blocks with `$AA` left the value
-   as it was — so the DLL writes it, not our heap. No FPC for Win32 here to
-   confirm from a second compiler. Checkers on the Delphi 7 files, done
-   2026-09-28: `pdf_demo` and `zugferd_demo` pass PAC 2024 and veraPDF `ua1`
-   106/106, `zugferd_demo` also `3u` 148/148 and Mustang; `chinese_demo` and
-   `rtl_demo` are untagged, so `ua1` does not apply (100/106 on every
-   platform, as before).
-   Also since this step: every demo names its PDF
-   `<demo>_<os>_<cpu>_<compiler>.pdf`, as `layer1_demo` did.
-6. **`report_demo --export` and `mormot_demo --export`** on Delphi 7: the
-   export path without the form; `mormot_demo` brings the ORM and the static
-   SQLite for Win32.
-   **Done on Windows, 2026-09-27:** each GUI demo got a `uReport.pas` that
-   builds and exports the report from a `TReportOptions` record, without a
-   form; `uMainForm` only fills the record from its controls (and
-   `mormot_demo`'s form no longer holds a client: `server.pas` has
-   `ReadInvoiceData` and `DemoDatabaseFile`, which falls back to `data/`
-   below the current folder). The `.lpr` builds the form under FPC only
-   (`REPORTDEMO_FORM`, `MORMOTDEMO_FORM`), so on Delphi 7 the program is the
-   batch export. Delphi 7 syntax on the way: `mormot_demo`'s `TTableLayout`
-   typed constant became a function, its `'—'` a UTF-8 constant, and
-   `mormot.uses.inc` is FPC-only — on Delphi 7 it only adds FastMM4. The ORM
-   and `static\delphi\sqlite3.obj` link as they are. Both demos: the FPC
-   `--export` PDF as before, the Delphi 7 one the same as FPC after masking
-   (fonts byte-identical, same `pdftotext`, the locale-dependent dates and
-   amounts included); `mormot_demo` with the sample database, 37 orders.
-   Checkers on the Delphi 7 files, done 2026-09-28: both pass PAC 2024 and
-   veraPDF `ua1` 106/106. Not checked here: the FPC GUI itself (preview,
-   print, export dialog) after the split.
-   **Linux and macOS for steps 5 and 6 — done, 2026-09-28:** `test_runner`
-   302/302 on macOS; all eight demos build and run there, `report_demo` and
-   `mormot_demo` with `--export` headless, their PDFs the same size as
-   before the two steps apart from the date. The Debian and the macOS files
-   pass veraPDF `ua1` 106/106 for every tagged demo, `zugferd_demo` also
-   `3u` 148/148 and Mustang. Page counts and structure trees (roles and
-   their counts) match across macOS, Debian, FPC/Win64 and Delphi 7 for all
-   nine files.
-7. **`mormot.ui.reportpreview` on the VCL.**
-8. **The GUI demos with their forms on Delphi** — built in code or a `.dfm`
-   beside the `.lfm`, to be decided.
-
-**Not part of R-20:** Delphi 2010 and later have `TCustomCanvas` with virtual
-drawing methods (not verified here), where overriding might work without typed
-references. Checking that needs a current Delphi, e.g. a Community Edition.
+`VclCanvas` returns `TPdfVclCanvas`, the methods are reintroduced
+(`PDF_CANVASVIRTUAL` off, `platform-backends.md`), `RenderPageToCanvas` casts.
+The preview keeps drawing on a real VCL canvas. **Strings:** `RawUtf8` inside
+`TGDIPages`, file names `TFileName`, conversion only where the GUI draws; the
+bridge keeps `string` where `TCanvas` dictates it, read per compiler, beside
+`TextOutUtf8`/`TextWidthUtf8` (`pdf-engine.md`). No `string` overloads — under
+FPC the call would be ambiguous.
 
 **Rejected — option C**, the EMF route of the original `TPdfDocumentGdi`: EMF
 carries no structure, so there is no tagged output, and the original in
@@ -349,12 +175,32 @@ carries no structure, so there is no tagged output, and the original in
 under Delphi has to give the same text and structure as the same page through
 layer 1.
 
-### R-25 — Unicode Delphi: Delphi 2010 — priority 3
+**Done** (details in the commits):
+1. The bridge reads `string` per compiler; `TextOutUtf8`, `TextWidthUtf8` (e06c736)
+2. `TGDIPages` on `RawUtf8`, file names `TFileName` (c644e17)
+3. `TGDIPages` a non-visual `TComponent`; preview and printing in
+   `mormot.ui.reportpreview` (e9d63fb)
+4. The bridge and the `TGDIPages` core build on Delphi 7; `test_runner`
+   243/243 there (cb39c6c)
+5. `pdf_demo`, `chinese_demo`, `rtl_demo`, `zugferd_demo` build on Delphi 7;
+   every demo names its PDF `<demo>_<os>_<cpu>_<compiler>.pdf` (3d0ab39)
+6. `report_demo --export` and `mormot_demo --export` build on Delphi 7, the
+   report in each demo's `uReport.pas` (049a9b2)
 
-**Why.** Delphi 7 checks the old language; the second axis — `string` as
-UTF-16, `Char` = `WideChar`, `PChar` = `PWideChar` — is designed (R-20,
-Strings point 2: the bridge reads `string` with `StringToSynUnicode`) but has
-never been compiled. Most Delphi users are on Unicode Delphi.
+Steps 1–6 verified on all three platforms, from Delphi 7 and — with R-25 —
+from Delphi 2010: see V. Not checked since step 3: the FPC GUI itself
+(preview, print, export dialog) after the split.
+
+**Remaining, in this order:**
+7. **`mormot.ui.reportpreview` on the VCL.**
+8. **The GUI demos with their forms on Delphi** — built in code or a `.dfm`
+   beside the `.lfm`, to be decided.
+
+Optional, for consistency down to layer 1: a `TPdfCanvas.TextOutUtf8`, so
+callers need not go through `Utf8ToSynUnicode` + `TextOutW` as `layer1_demo`
+does.
+
+### R-25 — Unicode Delphi: Delphi 2010 — done, two leftovers
 
 **Why Delphi 2010, decided 2026-09-28.** It is Unicode, the Pro edition ships
 `dcc32`, so builds and tests run unattended as for Delphi 7, and mORMot2 lists
@@ -363,49 +209,19 @@ the main target: since 10.4 it refuses command-line compiling (`dcc32`,
 `dcc64` and MSBuild — "This version of the product does not support command
 line compiling"), so every build would go through the IDE by hand.
 
-**Work, the R-19/R-20 steps again:** a variant of `build_delphi7.bat` for the
-Delphi 2010 compiler; layer 1 and `test_runner`; the bridge and the
-`TGDIPages` core; the console demos and the `--export` of the GUI demos, each
-giving the same PDF as FPC; PAC 2024 and veraPDF `ua1` on the test PDFs.
-Expected findings: implicit string casts (W1057/W1058), `PChar` where
-`PAnsiChar` is meant, A/W API calls in the GDI backend and Uniscribe.
+**Done 2026-09-28** (9f6633b): `tests\build_delphi2010.bat`; `test_runner`
+244/244 with Delphi 2010, Delphi 7 and FPC; all eight demos build with Delphi
+2010 and give the same PDFs as Delphi 7 (identical after masking dates and
+`/ID`); PAC 2024 and veraPDF pass them (V). `src/` compiles without a
+warning. The findings were in the UTF-8 constants, not in the engine — the
+literal rule in `CLAUDE.md`, Coding Conventions — and they uncovered a
+double-encoded XMP packet header from Unicode Delphi (`XPACKET_BEGIN`, checked
+by `TestPdfA3UIdentification`) and the missing `{$APPTYPE CONSOLE}` of every
+console program under dcc32.
 
-**Not covered:** Win64 (Delphi XE2 and later; FPC/Win64 is green) and newer
-RTL/VCL changes. Delphi 13 CE may follow as a manual cross-check through the
-IDE — optional.
-
-**Done on Windows, 2026-09-28:** `tests\build_delphi2010.bat`; `test_runner`
-243/243 with Delphi 2010, Delphi 7 and FPC; all eight demos build with Delphi
-2010, and their PDFs give the same text (`pdftotext`) as Delphi 7 and FPC.
-`src/` compiles without a warning. The findings were not in the engine but in
-the UTF-8 constants: Unicode Delphi reads `#$E2` in a literal as a character
-of the ANSI code page and encodes it again (`#$E2#$80#$A2` became
-`C3 A2 E2 82 AC C2 A2`), also in untyped constants; a `RawByteString`
-constant keeps the bytes but carries code page 1252 along. Now every such
-constant is `{$ifdef HASCODEPAGE}` code points `{$else}` bytes (`CLAUDE.md`,
-Coding Conventions); `markdown_demo` had `—` as a literal. The test helper
-`DrawUtf8Text` took a `string` and `UTF8Decode`d it, which converts to the
-ANSI code page first: with correct constants the CJK and Arabic line came out
-as `??????`. Before, the two defects had cancelled out — the double-encoded
-constant went back to its bytes on that conversion — so the tagged Unicode
-test was green. It takes `RawUtf8` now.
-`TPdfVclCanvas` passes `Font.Name` through `StringToUtf8` (Delphi 7 gave
-the ANSI bytes of a non-ASCII font name). The XMP packet header was affected
-too: Delphi 2010 wrote `begin="C3 AF C2 BB C2 BF"` instead of the byte order
-mark `EF BB BF` in every PDF/A and tagged file — no test looked at it. Now
-one constant `XPACKET_BEGIN` in `mormot.ui.pdf.pas`, and
-`TestPdfA3UIdentification` checks the three bytes (244 assertions).
-The console demos and `test_runner` had no `{$APPTYPE CONSOLE}`: dcc32 made
-GUI executables of them (Delphi 7 too, since R-19), and started from the
-Explorer the first `WriteLn` raised `EInOutError` 105. Unseen in scripted
-runs, where the redirected output gives `WriteLn` a handle.
-
-PAC 2024 passes the tagged PDFs of all three compilers, with only the known
-warnings (W-1, W-2).
-
-**Open:** veraPDF `ua1` on the Delphi 2010 PDFs (`tagged_unicode`,
-`layer1_demo`, `markdown_demo`, `zugferd_demo`); the 24 W1057/W1058 in the
-tests.
+**Open:** the 24 W1057/W1058 in the tests; Win64 Delphi (XE2 and later;
+FPC/Win64 is green) and newer RTL/VCL changes. Delphi 13 CE may follow as a
+manual cross-check through the IDE — optional.
 
 ### R-22 — Source Comments Back to the Why — priority 3
 
@@ -482,16 +298,14 @@ GUI) stay manual. veraPDF runs on Java and could follow as a later step.
 
 ### V — Verification Outstanding
 
-All three platforms build and pass `test_runner` (243 assertions on Windows,
-282 on Linux, 302 on macOS — after the fourth R-20 step, macOS again after the
-sixth). The tagged demos pass veraPDF `ua1` 106/106 on all three and from
-Delphi 7 — the seven tagged files from Linux, macOS, FPC/Win64 and Delphi 7,
-measured again on 2026-09-28 after R-20 step 6 — and PAC 2024 for the files
-of all three platforms and of Delphi 7; `zugferd_demo` also `3u` 148/148 and
-Mustang. The structure trees (roles and their counts) and page counts match
-across the platforms and both compilers for every tagged demo. That was the
-stated gate for a first version tag, and
-the project still has none.
+All three platforms build and pass `test_runner` (244 assertions on Windows
+with FPC, Delphi 7 and Delphi 2010, 303 on macOS, 282 on Linux before R-25).
+Last full run 2026-09-28, after R-25, on the files of macOS, Debian,
+FPC/Win64, Delphi 7 and Delphi 2010: the seven tagged files pass veraPDF `ua1` 106/106 and PAC 2024,
+`zugferd_demo` also `3u` 148/148 and Mustang; `chinese_demo` and `rtl_demo`
+are untagged (`ua1` 100/106, not applicable). Page counts and structure trees
+(roles and their counts) match across all five for every file. That was the
+stated gate for a first version tag, and the project still has none.
 
 | Open | Why it matters |
 |---|---|
@@ -499,7 +313,7 @@ the project still has none.
 | The U-2 width fix on Linux | exercised on macOS only: no Linux Arabic face reaches the shaper width path (`fonts.md` §10), and `TestShapedGlyphWidthFromHmtx` skips itself there |
 | veraPDF in the routine runs | installed on macOS with `ua1`, `3a`, `3b`, `3u` (path in `CLAUDE.local.md`); run by hand on each platform's files, not scripted |
 | The `.ttc` fix on Linux | `TestTtcFaceExtraction` skips itself: the Linux machine has no `.ttc` installed (e.g. `fonts-noto-cjk` would bring one) |
-| Delphi beyond layer 1 | the TCanvas bridge and `TGDIPages` — R-20; only Delphi 7 has been built |
+| Delphi GUI | the preview and the demo windows — R-20 steps 7 and 8 |
 
 **Comparing the platforms — but not pixel by pixel.** The demos resolve
 different families (Calibri/Cambria/Consolas, Liberation, Trebuchet MS/Georgia/

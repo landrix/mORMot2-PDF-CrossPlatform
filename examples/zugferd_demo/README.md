@@ -25,7 +25,7 @@ identifier changed from XRechnung to plain EN 16931. The placeholders such as
 `[Seller name]` are the original's. Source, change and checksums:
 [THIRD_PARTY.md](THIRD_PARTY.md).
 
-**Verified** on Windows, Linux and macOS: veraPDF `3u` 148/148 and `ua1`
+**Verified** on Windows, Linux and macOS, and from Delphi 7 and Delphi 2010: veraPDF `3u` 148/148 and `ua1`
 106/106, Mustang-CLI valid, PAC 2024 green. PAC keeps one quality hint — the
 e-mail addresses are text without a link element — accepted as roadmap W-2.
 The same file as `pdfa3A` passes veraPDF `3a` 155/155.

@@ -59,14 +59,14 @@ Fallback when a requested font is not found: `TPdfDocument.FontFallBackName` (st
 ## 3. Font Embedding — Whole TTF vs. Subset
 
 Controlled by `TPdfDocument.EmbeddedWholeTtf` (boolean, **default `false`** — the
-constructor leaves it unset). `Tagged := true` sets it to
-`PdfFontSubsetter = nil`: whole face on Windows, subset on Linux/macOS.
+constructor leaves it unset). Tagged output is subset on every platform, like
+untagged output.
 
 | `EmbeddedWholeTtf` | Behaviour |
 |---|---|
 | `true` | Complete TTF bytes embedded. Safe for all scripts including RTL/Arabic. For a `.ttc`, the loaded face alone is extracted as a standalone sfnt — a raw `ttcf` container is not a valid `/FontFile2`. |
 | `false` (default), Linux/macOS | Subset via `IPdfFontSubsetter` (`mormot.pdf.hbsubset`, `libharfbuzz-subset`, R-12). Glyph IDs retained, so content streams, `/W` and `/ToUnicode` stay valid. Safe for Latin, CJK, shaped RTL and tagged output. |
-| `false` (default), Windows | Subset via `CreateFontPackage`. Safe for Latin only: its input is code points, so shaped GSUB glyphs are lost. |
+| `false` (default), Windows | Subset via `CreateFontPackage` with a glyph keep list (`TTFCFP_FLAGS_GLYPHLIST`, R-15). Glyph IDs retained, so it is safe for the same cases as hb-subset — Latin, CJK, shaped Arabic (Uniscribe), tagged output. |
 
 The whole face is embedded instead — silently, as before R-12 — when no
 subsetter is registered (library missing, HarfBuzz < 2.9), for PDF/A-1 (6.3.5
@@ -132,10 +132,18 @@ the WinAnsi, CIDFont and Type0 objects get the same `ABCDEF+` tag, derived from
 
 ### Windows subset input (`CreateFontPackage`)
 
-- `fWinAnsiUsed` — 256-bit set of used WinAnsi code points
-- `fUsedWideChar` — sorted array of used Unicode code points beyond WinAnsi
+A glyph keep list (`TTFCFP_FLAGS_GLYPHLIST`) rather than code points, so the
+glyph IDs stay where they are. The WinAnsi characters are resolved to glyph
+indices through the face itself (`AddWinAnsiGlyphs`, R-15a), which works
+whatever cmap the lookup goes through — symbol fonts included, unlike POSIX
+(R-15b). The whole face is embedded for PDF/A-1, as on POSIX.
 
-If both are empty (can happen with GSUB-shaped Arabic), the subset degenerates to unusable.
+The 32-bit `fontsub.dll` writes `language` = `0x0008CA34` into the format 12
+(3/10) `cmap` subtable of a subset, the 64-bit one 0 (spec: 0). Source face and
+our input both say 0 and the tables are copied unchanged, so it is the DLL's
+own output — stable, ignored by viewers and validators. It is the one
+byte-level difference between Delphi/Win32 and FPC/Win64 subsets
+(`chinese_demo`'s Microsoft YaHei; faces without format 12 are identical).
 
 ---
 

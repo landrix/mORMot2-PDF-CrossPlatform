@@ -86,10 +86,12 @@ examples/
   (each demo folder carries a short README.md; the source header of its .lpr
    says the same thing in two sentences)
 tests/
-  test_runner.lpr              runs every suite below (green: 244 assertions on Windows with FPC, Delphi 7 and Delphi 2010; 282 on Linux, 302 on macOS — the rest are skips)
+  test_runner.lpr              runs every suite below (green: 244 assertions on Windows with FPC, Delphi 7 and Delphi 2010; 303 on macOS, 282 on Linux before R-25 — the rest are skips)
   test_defines.inc             PDF_HASVCLCANVAS: the TCanvas bridge suites (all compilers since R-20)
-  build_delphi7.bat            dcc32 build of one project (R-19); delphi7_core.dpr is the core compile guard
+  build_delphi7.bat            dcc32 build of one project (R-19)
   build_delphi2010.bat         the same with Delphi 2010, warnings on (R-25, Unicode Delphi)
+  delphi7_core.dpr             Delphi 7 compile guard for the core units
+  no_hbsubset.sh               Linux: tests and console demos with libharfbuzz-subset hidden
   test_pdf_crossplatform.pas   platform backend, text shaper, TTC extraction
   test_pdf_smoke.pas           PDF basics, tagged output, struct tree, tagged Unicode (all through TPdfCanvas)
   test_report_crossplatform.pas report engine, tables, tagged export
@@ -103,6 +105,7 @@ docs/
   DEMOS.md            Learning path: the 8 demos step by step
   API_REFERENCE.md    TCanvas methods, TReportFormat, TTableLayout
   ROADMAP.md          Open work in detail, completed work as one line each
+CHANGELOG.md          Released versions; "Unreleased" collects what comes next
 .claude/skills/
   pdf-engine.md       TPdfDocument, TPdfDocumentVcl, TPdfCanvas — full API, enums, encryption, FPImage
   report-engine.md    TGDIPages — all methods, tables, command recording, global helpers
@@ -329,31 +332,23 @@ itself is in each demo's `uReport.pas`; the form only passes its options.
   besides. `layer1_demo`'s figure is deliberately a set of shapes, not a
   chart. A chart example only on request (ROADMAP "Charts")
 - **Links in tagged output**: no `Link` role, `OBJR` or `/StructParent` for annotations — `CreateHyperLink` in tagged output fails veraPDF `ua1` on four 7.18 rules (measured). `TGDIPages.DrawLink` draws link-styled text as a `Span` and drops the URL: conformant, not clickable (roadmap R-18, only on request)
-- **Delphi** (R-19, R-21 and R-23 done, R-20): layer 1 — `mormot.pdf.types`,
-  `mormot.ui.pdf`, GDI backend, Uniscribe — builds on Delphi 7, Win32;
-  `test_runner` green with 127 assertions (the layer 1 suites), and the tagged
-  Unicode test file passes PAC 2024 and veraPDF `ua1` from both compilers. R-21 done on
-  all three platforms: `{$I mormot.defines.inc}` in every unit. R-23:
-  `layer1_demo`, the first demo that builds on Delphi 7, passes PAC 2024 and
-  veraPDF `ua1` on all three platforms.
-  R-20, priority 2: the TCanvas bridge and the `TGDIPages` core build on
-  Delphi 7, `test_runner` 243/243 there, and all six console demos and the
-  `--export` of the two GUI demos build there and give the same PDF as FPC
-  (the GUI demos build their report in `uReport.pas`, without a form); the
-  preview and the demo windows are open. Delphi 7's `TCanvas`
-  drawing methods are static: the bridge reintroduces them
-  (`PDF_CANVASVIRTUAL` off), so draw through a `TPdfVclCanvas` reference —
-  `VclCanvas` has that type, `RenderPageToCanvas` casts. Text beyond ASCII
-  goes through `TextOutUtf8` from a `RawUtf8` constant of UTF-8 bytes:
-  `TextOut` reads Delphi 7's `string` as ANSI. Never put
+- **Delphi** (R-19, R-21, R-23, R-25 done; R-20 steps 1–6 done): layer 1,
+  the TCanvas bridge and the `TGDIPages` core build on Delphi 7 and Delphi
+  2010 (Unicode Delphi), Win32; `test_runner` 244/244 on both. All six console
+  demos and the `--export` of the two GUI demos build and give the same PDF as
+  FPC (the GUI demos build their report in `uReport.pas`, without a form);
+  PAC 2024 and veraPDF pass the files of both compilers. Open: the preview and
+  the demo windows (R-20 steps 7, 8); Win64 Delphi (XE2 and later) untested.
+  Delphi 7's `TCanvas` drawing methods are static: the bridge reintroduces
+  them (`PDF_CANVASVIRTUAL` off), so draw through a `TPdfVclCanvas`
+  reference — `VclCanvas` has that type, `RenderPageToCanvas` casts. Text
+  beyond ASCII goes through `TextOutUtf8` from a `RawUtf8` constant (see the
+  literal rule in Coding Conventions): `TextOut` reads Delphi 7's `string` as
+  ANSI. A console program needs `{$APPTYPE CONSOLE}` after the
+  `mormot.defines.inc` include: FPC's project makes a console executable,
+  dcc32 a GUI one without it, where `WriteLn` raises I/O error 105. Never put
   `mORMot2/src/ui` on a Delphi search path: it holds the original
   `mormot.ui.pdf`/`report`/`core`
-  R-25, Unicode Delphi: with Delphi 2010 `test_runner` is 244/244, all eight
-  demos build and give the same text as Delphi 7 and FPC, PAC 2024 passes
-  their tagged PDFs; veraPDF is open, Win64 (XE2 and later) untested.
-  A console program needs `{$APPTYPE CONSOLE}` after the
-  `mormot.defines.inc` include: FPC's project makes a console executable,
-  dcc32 a GUI one without it, where `WriteLn` raises I/O error 105
 
 Current verification status per platform, and the open items in detail:
 `docs/ROADMAP.md`

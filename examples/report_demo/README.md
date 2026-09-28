@@ -28,7 +28,7 @@ bin/<target>/report_demo --export out.pdf   # batch to a file of your choice
 ```
 
 On Linux the batch mode still needs a display, because the LCL measures the
-text — on a headless machine run it under `xvfb-run`.
+text — on a headless machine run it under `xvfb-run`. macOS needs none.
 
 Delphi 7 (Win32), from the repository root, with `MORMOT2` set to the mORMot2
 checkout — the batch export only; the window follows with roadmap R-20:

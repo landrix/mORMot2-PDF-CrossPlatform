@@ -10,7 +10,7 @@ veraPDF (106/106) and PAC 2024 on all three platforms.
 | Platform | Compiler | Backend | Status |
 |---|---|---|---|
 | Windows | FreePascal/Lazarus | GDI via interfaces | Production |
-| Windows (Win32) | Delphi 7 | GDI via interfaces | Layer 1, the TCanvas bridge and the `TGDIPages` core; all tests green, the six console demos and the `--export` of the two GUI demos give the same PDF as FPC. The preview and the demo windows need FPC for now (roadmap R-20) |
+| Windows (Win32) | Delphi 7, Delphi 2010 | GDI via interfaces | Layer 1, the TCanvas bridge and the `TGDIPages` core; all tests green on both, the six console demos and the `--export` of the two GUI demos give the same PDF as FPC. The preview and the demo windows need FPC for now (roadmap R-20) |
 | Linux | FreePascal/Lazarus | FreeType2 | Production |
 | macOS | FreePascal/Lazarus | FreeType2 | Production |
 
@@ -266,6 +266,10 @@ tests\build_delphi7.bat examples\markdown_demo\markdown_demo.lpr
 bin\d7\markdown_demo\markdown_demo.exe
 ```
 
+**Delphi 2010** (a Unicode Delphi) builds the same projects the same way with
+`tests\build_delphi2010.bat`, output in `bin\d2010\<project>\`, and gives the
+same PDFs as Delphi 7.
+
 Do not put `mORMot2\src\ui` on a Delphi search path: it holds the original
 `mormot.ui.pdf`, which the compiler would take instead of this project's.
 
@@ -310,7 +314,7 @@ Fonts from `/Library/Fonts`, `/System/Library/Fonts`, `~/Library/Fonts`.
 - **EMF/MetaFile:** Windows-only (`TPdfDocumentGdi`), not portable
 - **GDI+/Gradient fills:** available only via EMF on Windows
 - **Table pagination:** no row wrap within a cell
-- **Delphi:** Delphi 7 (Win32) builds layer 1, the TCanvas bridge and the `TGDIPages` core, all six console demos and the batch export of the two GUI demos, not yet the preview or the demo windows (roadmap R-20). Delphi 7's `TCanvas` drawing methods are static: draw through a `TPdfVclCanvas` reference (`Doc.VclCanvas` has that type), never through a plain `TCanvas`, or nothing reaches the PDF
+- **Delphi:** Delphi 7 and Delphi 2010 (Win32) build layer 1, the TCanvas bridge and the `TGDIPages` core, all six console demos and the batch export of the two GUI demos, not yet the preview or the demo windows (roadmap R-20). Delphi 7's `TCanvas` drawing methods are static: draw through a `TPdfVclCanvas` reference (`Doc.VclCanvas` has that type), never through a plain `TCanvas`, or nothing reaches the PDF
 - **Links in tagged output:** `CreateHyperLink` in a tagged document fails PDF/UA — there is no `Link` structure element for annotations. `TGDIPages.DrawLink` stays conformant by drawing styled text only; its URL is not clickable (roadmap R-18)
 
 Details and the current verification status: [docs/ROADMAP.md](docs/ROADMAP.md)
