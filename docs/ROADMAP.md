@@ -385,6 +385,18 @@ highest kept ID and drops the hinting. Where to start: why `glyf` stays 15
 times larger (the keep list, or composite glyphs pulled in), then whether
 dropping the hinting tables is allowed after `CreateFontPackage`.
 
+### Thinner Table Borders — priority 4
+
+Asked for on 2026-09-29, after `GridColor` (grey borders, accepted). The cell
+borders of `TGDIPages` tables are `LineWidth = 1` — screen pixels at 96 dpi,
+clamped to at least 1 in `RenderPageToCanvas` (`Max(1, Cmd.LineWidth)`) — so
+0.75 pt is the thinnest border. A thinner one (0.25–0.5 pt) needs a width
+below one pixel on the way through the TCanvas bridge: `Pen.Width` is an
+integer. Where to start: whether `TPdfVclCanvas` can take a fractional pen
+width beside `Pen.Width` (as `TextOutFrac` does for text positions), then a
+`TTableLayout.GridWidth` in 1/100 mm, 0 = today's pixel. Delphi 7 draws
+through the bridge reference too (R-20), so both paths need it.
+
 ### R-24 — Tests on GitHub Actions — priority 4
 
 **Why.** `test_runner` runs by hand on three machines today; a push should
