@@ -13,7 +13,8 @@ Delphi 2010), 303 on macOS and 282 on Linux (before R-25). **Delphi:** layer
 steps 1–6) and on Delphi 2010, a Unicode Delphi (R-25); all six console demos
 and the `--export` of the two GUI demos give the same PDF as FPC. The files of
 macOS, Debian, FPC/Win64, Delphi 7 and Delphi 2010 all pass PAC 2024
-and veraPDF (V). **Next:** R-20 step 7, the preview on the VCL.
+and veraPDF (V). **Next:** R-26, `zugferd_demo` on `TGDIPages` with its text
+from the invoice XML; then R-20 step 7, the preview on the VCL.
 
 ---
 
@@ -85,6 +86,10 @@ earlier post covered them.
   bytes of a non-ASCII font name
 - **Coming with R-20** (announce when done): the preview and the GUI demos
   on Delphi
+- **Coming with R-26** (announce when done): `TGDIPages` exports PDF/A-3
+  attachments and an XMP extension (`AddExportPdfAttachment`,
+  `ExportPdfMetadataExtension`); `zugferd_demo` builds its invoice with
+  `TGDIPages` from the data in `factur-x.xml`
 
 ---
 
@@ -148,6 +153,84 @@ comparison is valid **within** one platform only — see V below.
 ---
 
 ## Open
+
+### R-26 — `zugferd_demo` on `TGDIPages`, Its Text From the XML — priority 1
+
+**Why.** Since 3d0ab39 every non-ASCII character in the demos is a code-point
+constant (`{$ifdef HASCODEPAGE} #$00E4 {$else} #$C3#$A4 {$endif}`). That
+builds on every compiler, but a user cannot read or adapt it, and other
+compilers must not pay for Delphi 7. `zugferd_demo` is the worst case — a
+German invoice — and hard to follow besides: pixel columns, `Open`/`Close`
+around every element, hand-broken lines, and a page that repeats
+`factur-x.xml` by hand, so the two have to be changed together.
+
+**Decided 2026-09-29:**
+- **Layer 3.** The invoice is a report: `DrawHeading`, `DrawParagraph` (word
+  wrap), a `TTableLayout` table (`THead`/`TBody`/`TFoot` and page breaks
+  come with it), tagging without `Open`/`Close`. Layer 2 stays shown by
+  `pdf_demo`, `chinese_demo` and `rtl_demo`, layer 1 by `layer1_demo`
+- **The page reads `factur-x.xml`**, the file it embeds, so the two cannot
+  differ. A demo-only reader with fixed paths fills a record `TInvoice`;
+  then the page is drawn from the record, which shows where data from a
+  database would go in. The reader is a hint, not a parser: the prefixes
+  `rsm:`/`ram:`/`udt:` are fixed, no entities, no CDATA, no validation — the
+  engine still neither generates nor validates invoice XML. mORMot2 has no XML
+  reader (only `JsonToXML`/`XmlEscape`); a small `PosEx` search through the
+  nested tags is enough. The XML stays unchanged (licence, checksum in
+  `THIRD_PARTY.md`)
+- **Labels in ASCII German**, so the source is pure ASCII without
+  `HASCODEPAGE`: "Ihre Referenz" for "Käuferreferenz", "Bankverbindung:
+  IBAN …" for "SEPA-Überweisung auf IBAN …". The umlauts and "…" on the page
+  come from the UTF-8 XML. Amounts `336.9` → `336,90`, dates `20160404` →
+  `04.04.2016`, the IBAN in groups of four
+- The source line in the footer (KoSIT, Apache-2.0) stays in the code — a
+  licence duty, not user text; `--no-attachment` and `--untagged` stay
+
+**The library extension.** `TGDIPages.ExportPdfStream` creates its
+`TPdfDocumentVcl` as a local, streams it page by page
+(`SaveToStreamDirect*`) and frees it: nothing outside reaches
+`CreateFileAttachmentFrom` or `PdfAMetadaExtension`. `ExportPdfLevel`
+already takes `pdfa3U` (it goes to the constructor). New, in the style of the
+other `ExportPdf*` options, applied after the outlines and before
+`SaveToStreamDirectEnd`:
+```pascal
+Report.AddExportPdfAttachment(Xml, 'factur-x.xml', 'Factur-X invoice data',
+  'text/xml', afrAlternative);
+Report.ExportPdfMetadataExtension := PdfMetadataFacturX('EN 16931', 'factur-x.xml');
+```
+`TPdfAFRelationship` re-exported through `mormot.ui.pdfcanvas`, as
+`TPdfALevel` is. **Rejected:** an event `OnExportPdfDocument(Sender, Doc)` —
+it hands out the document in the middle of the stream (an `AddPage` there
+breaks the file), and `of object` needs a helper class in a console program.
+
+**To check first:** whether `CreateFileAttachmentFrom` works in the direct
+streaming mode. `zugferd_demo` saves with `SaveToFile` today; the XMP packet
+is written at `SaveToStreamDirectEnd`, so the metadata extension fits there,
+the attachment is unknown. The test below answers it; if it fails, look into
+`mormot.ui.pdf.pas` (ask first, `CLAUDE.md`).
+
+**Work, in this order (on Windows: FPC, Delphi 7, Delphi 2010):**
+1. Test in `test_report_crossplatform`: a `TGDIPages` export with
+   `pdfa3U`, tagged, one attachment and `PdfMetadataFacturX` — `/AF` in the
+   catalog, `/EmbeddedFiles`, `/AFRelationship /Alternative`, the `fx:`
+   properties in the XMP. It fails before the extension
+2. The extension in `mormot.ui.report`; `report-engine.md` and
+   `API_REFERENCE.md` (whose `TPdfALevel` list also lacks `pdfa3U`)
+3. `zugferd_demo` rewritten: reader → `TInvoice` → `TGDIPages`; README,
+   `DEMOS.md`, the source header
+4. `test_runner` on all three compilers; the demo from all three gives the
+   same PDF (dates, `/ID`, subset prefixes masked); veraPDF `3u` and `ua1`,
+   Mustang, PAC 2024 (W-2 stays); then macOS and Linux
+
+**Accepted differences:** the layout changes, so the PDF is not compared with
+the old one, only checked again. `TTableLayout` styles all footer rows alike —
+today only "Gesamtbetrag" is bold. More items than fit now break the page
+instead of running off it.
+
+**Afterwards, demo by demo:** the other demos lose their code-point constants
+the same way — ASCII labels, non-ASCII data from a UTF-8 file or a literal
+straight into a `RawUtf8`. Then the literal rule in `CLAUDE.md` (Coding
+Conventions) applies to `src/` and `tests/` only.
 
 ### R-20 — Delphi: the TCanvas Bridge and `TGDIPages` — priority 2
 
