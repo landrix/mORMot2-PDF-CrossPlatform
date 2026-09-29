@@ -2,25 +2,36 @@
 
 Demo 7 of the [learning path](../../docs/DEMOS.md#demo-7--zugferd_demo).
 
-**Layer 2.** `uses mormot.ui.pdfcanvas, mormot.ui.pdf`, plus `mormot.pdf.types`
-for the structure roles.
+**Layer 3.** `uses mormot.ui.report` — nothing else of this project; it
+re-exports the PDF/A levels, `afr*` and `PdfMetadataFacturX`.
 
-Draws a one-page invoice with `TPdfDocumentVcl` and embeds its machine-readable
-data, `factur-x.xml`, as an associated file: a hybrid invoice of the
+Reads the invoice data from `factur-x.xml`, draws the invoice with `TGDIPages`
+and embeds the same file as an associated file: a hybrid invoice of the
 ZUGFeRD 2.x / Factur-X 1.x profile **EN 16931**, as exchanged between
 businesses in Germany and France. The file is PDF/A-3U and PDF/UA-1 at once.
 
 **What is special here**
 
-- `PdfA` goes to the constructor — `TPdfDocumentVcl.Create(true, 0, pdfa3U)`.
-  Setting the property later calls `NewDoc` and erases what was drawn
-- `Tagged := True` right after it, before the first `AddPage`, as in every
-  tagged demo; the page is `H1`, `P` and one `Table` with `THead`, `TBody`
-  and `TFoot`
-- `CreateFileAttachmentFrom(..., afrAlternative)` embeds the XML;
-  `PdfMetadataFacturX('EN 16931')` writes the `fx:` XMP properties with their
-  PDF/A extension schema. The engine adds the `pdfuaid` schema to the same list
-- the page shows exactly what the XML says, so both change together
+- **The page is read from the file it embeds**, so the two cannot differ.
+  `ReadInvoice` fills a record `TInvoice`, the page is drawn from the record —
+  that record is where data from your own database or ERP export would go in
+- `ReadInvoice` is a demo reader, not an XML parser: fixed element paths, the
+  prefixes `rsm:`/`ram:`/`udt:` as in the file, no entities, no validation.
+  mORMot2 has no XML reader; a `PosEx` search through the nested tags is
+  enough for one known file
+- **The source is pure ASCII.** The labels are German without umlauts ("Ihre
+  Referenz", "Bankverbindung"); every umlaut and "…" on the page comes from the
+  UTF-8 XML as `RawUtf8`. So the same source builds with FPC, Delphi 7 and
+  Delphi 2010 without code-point constants. Amounts, dates and the IBAN are
+  formatted for a German invoice (`336,90`, `04.04.2016`, groups of four)
+- `ExportPdfLevel := pdfa3U` and `ExportPdfTagged := True` before the first
+  `NewPage`; `DrawHeading`, `DrawParagraph` and a `TTableLayout` table give
+  `H1`, `P` and `Table` with `THead`, `TBody` and a `TFoot` for the three
+  totals — no `BeginStructContent` in the demo
+- `AddExportPdfAttachment(..., afrAlternative)` embeds the XML;
+  `ExportPdfMetadataExtension := PdfMetadataFacturX('EN 16931', ...)` writes
+  the `fx:` XMP properties with their PDF/A extension schema. The engine adds
+  the `pdfuaid` schema to the same list
 
 **The invoice data is third-party test data**, not written here: test case
 `01.01a` of the KoSIT xrechnung-testsuite (Apache-2.0), with its specification
@@ -28,10 +39,11 @@ identifier changed from XRechnung to plain EN 16931. The placeholders such as
 `[Seller name]` are the original's. Source, change and checksums:
 [THIRD_PARTY.md](THIRD_PARTY.md).
 
-**Verified** on Windows, Linux and macOS, and from Delphi 7 and Delphi 2010: veraPDF `3u` 148/148 and `ua1`
-106/106, Mustang-CLI valid, PAC 2024 green. PAC keeps one quality hint — the
-e-mail addresses are text without a link element — accepted as roadmap W-2.
-The same file as `pdfa3A` passes veraPDF `3a` 155/155.
+**Verified:** the three compilers write the same PDF (dates and `/ID`
+masked). The earlier layer-2 version of this demo passed veraPDF `3u` and
+`ua1`, Mustang-CLI and PAC 2024 on Windows, Linux and macOS, with one accepted
+quality hint — the e-mail addresses are text without a link element (roadmap
+W-2); this version is being checked the same way (roadmap R-26).
 
 **Not for invoices to German authorities.** They take pure XML (XRechnung),
 not a PDF. The engine only writes the PDF/A-3 container; it neither generates
@@ -41,7 +53,7 @@ nor validates invoice XML.
 
 | Switch | Effect |
 |---|---|
-| `--no-attachment` | no `factur-x.xml`, no `fx:` metadata |
+| `--no-attachment` | no `factur-x.xml` in the PDF, no `fx:` metadata; the page is still read from it |
 | `--untagged` | no structure tree: PDF/A-3U without PDF/UA |
 
 **Build and run** — `factur-x.xml` is looked up in the current folder, then
@@ -52,9 +64,9 @@ lazbuild zugferd_demo.lpi -B      # Windows: "C:\lazarus\lazbuild.exe" …
 bin/<target>/zugferd_demo         # -> zugferd_demo_<os>_<cpu>_<compiler>.pdf, next to the executable
 ```
 
-Delphi 7 (Win32), with `MORMOT2` set to the mORMot2 checkout: build from the
-repository root, run from this folder — the executable lands one level
-higher than the FPC one, so the second lookup misses:
+Delphi 7 or Delphi 2010 (Win32), with `MORMOT2` set to the mORMot2 checkout:
+build from the repository root, run from this folder — the executable lands
+one level higher than the FPC one, so the second lookup misses:
 
 ```bat
 tests\build_delphi7.bat examples\zugferd_demo\zugferd_demo.lpr
@@ -74,7 +86,7 @@ java -jar Mustang-CLI-<version>.jar --action validate --source zugferd_demo_<os>
 
 | File | What it is |
 |---|---|
-| `factur-x.xml` | the invoice data, embedded as it is |
+| `factur-x.xml` | the invoice data, read for the page and embedded as it is |
 | `THIRD_PARTY.md` | its source, the change made, checksums, validation result |
 | `factur-x.LICENSE.txt` | the Apache License 2.0 it comes under |
 | `.gitattributes` | keeps the XML's line endings, so the checksum holds |

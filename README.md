@@ -262,7 +262,7 @@ Report.ExportPdfStream(Stream);
 | [mormot_demo](examples/mormot_demo/) | `TGDIPages` + ORM | SQLite database, service layer, TTableLayout, tagged export, `--export` batch mode |
 | [chinese_demo](examples/chinese_demo/) | `TPdfDocumentVcl` | CJK text, subset embedding |
 | [rtl_demo](examples/rtl_demo/) | `TPdfDocumentVcl` | Arabic RTL, HarfBuzz / Uniscribe shaping |
-| [zugferd_demo](examples/zugferd_demo/) | `TPdfDocumentVcl` | PDF/A-3U + PDF/UA-1, ZUGFeRD / Factur-X invoice with embedded XML |
+| [zugferd_demo](examples/zugferd_demo/) | `TGDIPages` | PDF/A-3U + PDF/UA-1, ZUGFeRD / Factur-X invoice read from and embedded with its XML |
 | [layer1_demo](examples/layer1_demo/) | `TPdfDocument` | The low-level API alone: tagged headings, text, a figure and a table with THead/TBody/TFoot, in PDF points; builds with FPC and Delphi 7 |
 
 Full guide: [docs/DEMOS.md](docs/DEMOS.md)

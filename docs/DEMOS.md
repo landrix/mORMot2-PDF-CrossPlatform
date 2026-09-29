@@ -24,8 +24,8 @@ can so share one folder for checking. The GUI demos write it with `--export`
 and no file name.
 
 **One unit per layer.** Each demo uses the units of its layer only: Demos 2–4
-`mormot.ui.report` (the GUI forms add `mormot.ui.reportpreview`), Demos 1 and
-5–7 `mormot.ui.pdfcanvas` with `mormot.ui.pdf`, Demo 8 `mormot.ui.pdf`. A
+and 7 `mormot.ui.report` (the GUI forms add `mormot.ui.reportpreview`), Demos
+1, 5 and 6 `mormot.ui.pdfcanvas` with `mormot.ui.pdf`, Demo 8 `mormot.ui.pdf`. A
 layer re-exports what its API takes from below, so a report never needs
 `mormot.ui.pdf` — and must not have it: both units declare `psA4`, and the
 order of the `uses` clause would decide which one is meant. See the main
@@ -601,27 +601,36 @@ examples/rtl_demo/bin/x86_64-linux/rtl_demo
 
 **Specialised: PDF/A-3U and PDF/UA-1 in one file, as a hybrid e-invoice**
 
-Draws a one-page invoice and embeds its machine-readable data as an associated
-file — a ZUGFeRD 2.x / Factur-X 1.x invoice of the profile **EN 16931**, the
-form exchanged between businesses in Germany and France. The same file
-conforms to PDF/A-3U (archiving, every text maps to Unicode) and to PDF/UA-1
-(accessibility).
+Reads the invoice data from `factur-x.xml`, draws the invoice with
+`TGDIPages` and embeds the same file as an associated file — a ZUGFeRD 2.x /
+Factur-X 1.x invoice of the profile **EN 16931**, the form exchanged between
+businesses in Germany and France. The same file conforms to PDF/A-3U
+(archiving, every text maps to Unicode) and to PDF/UA-1 (accessibility).
 
 **What you learn:**
-- Pass the PDF/A level to the constructor. Setting `PdfA` later calls
-  `NewDoc` and erases everything drawn so far
-- `Tagged := True` and PDF/A combine: the engine writes one XMP packet with
-  both identifications, and describes the `pdfuaid` schema PDF/A does not
+- A report as PDF/A: `ExportPdfLevel := pdfa3U` and `ExportPdfTagged := True`
+  before the first `NewPage`, like every font option — they decide which
+  metrics the layout is measured with
+- Tagged PDF and PDF/A combine: the engine writes one XMP packet with both
+  identifications, and describes the `pdfuaid` schema PDF/A does not
   predefine
-- `CreateFileAttachmentFrom(..., afrAlternative)` embeds a file with its
+- `AddExportPdfAttachment(..., afrAlternative)` embeds a file with its
   `/AFRelationship`; from PDF/A-2 up the catalog lists it in `/AF`
-- `PdfMetadataFacturX('EN 16931')` writes the `fx:` XMP properties a ZUGFeRD
-  reader looks for, with their PDF/A extension schema
+- `ExportPdfMetadataExtension := PdfMetadataFacturX('EN 16931', ...)` writes
+  the `fx:` XMP properties a ZUGFeRD reader looks for, with their PDF/A
+  extension schema
+- **Data in, page out:** the page is drawn from a record `TInvoice`, which a
+  small demo reader fills from the XML the PDF embeds — so page and data
+  cannot differ, and the record shows where your own data would go in
+- **Non-ASCII text without code-point constants:** the labels are ASCII, the
+  umlauts come from the UTF-8 file as `RawUtf8`, so one source builds with
+  FPC, Delphi 7 and Delphi 2010
 - Stages A and U: `pdfa3U` needs no more than a `/ToUnicode` for every font,
   which the engine writes; `pdfa3A` additionally needs the structure tree, so
-  it requires `Tagged := True`
+  it requires the tagged export
 - What the engine does **not** do: generate or validate invoice XML. That is
-  the caller's, and here it is third-party test data
+  the caller's, and here it is third-party test data. The demo's reader is no
+  parser either: fixed paths and prefixes, no entities, no validation
 
 **Scope.** Invoices to German public authorities take pure XML (XRechnung),
 not a PDF, so they are not what this demo — or this project — produces.
@@ -629,42 +638,46 @@ not a PDF, so they are not what this demo — or this project — produces.
 **The invoice data** is test case `01.01a` of the KoSIT xrechnung-testsuite
 (Apache-2.0), with its specification identifier changed to EN 16931 and
 renamed `factur-x.xml`; `examples/zugferd_demo/THIRD_PARTY.md` records the
-source, the change and the checksums. The page shows the same content.
+source, the change and the checksums.
 
 **Core pattern:**
 
 ```pascal
 uses
-  mormot.pdf.types, mormot.ui.pdf, mormot.ui.pdfcanvas;
+  mormot.ui.report;   // re-exports pdfa3U, afrAlternative, PdfMetadataFacturX
 
-var Doc: TPdfDocumentVcl; Xml: RawByteString;
+var Report: TGDIPages; Xml: RawUtf8; Invoice: TInvoice;
 begin
   Xml := StringFromFile('factur-x.xml');
-  Doc := TPdfDocumentVcl.Create(true, 0, pdfa3U);  // level in the constructor
-  Doc.Tagged := True;                              // PDF/UA-1 as well
-  Doc.DefaultLanguage := 'de';
-  Doc.Info.Title := 'Rechnung 123456XX';
-  Doc.AddPage;
-  Doc.BeginStructContent(psrH1);
-  Doc.VclCanvas.TextOut(60, 60, 'Rechnung 123456XX');
-  Doc.EndStructContent;
-  // ... the invoice as P and one Table with THead / TBody / TFoot
-  Doc.CreateFileAttachmentFrom(Xml, 'factur-x.xml', 'Factur-X invoice data',
-    'text/xml', Now, Now, nil, afrAlternative);
-  Doc.PdfAMetadaExtension := PdfMetadataFacturX('EN 16931');
-  Doc.SaveToFile(PdfFileName); // zugferd_demo_<os>_<cpu>_<compiler>.pdf
-  Doc.Free;
+  Invoice := ReadInvoice(Xml);           // the demo's reader
+  Report := TGDIPages.Create(nil);
+  Report.ExportPdfLevel := pdfa3U;       // all before the first NewPage
+  Report.ExportPdfTagged := True;        // PDF/UA-1 as well
+  Report.ExportPdfLanguage := 'de';
+  Report.UseOutlines := True;
+  Report.Title := 'Rechnung ' + Invoice.Number;
+  Report.NewPage;
+  Report.DrawHeading(1, 'Rechnung ' + Invoice.Number);
+  Report.DrawParagraph('Rechnungsdatum: ' + GermanDate(Invoice.IssueDate));
+  // ... one TTableLayout table: header, the items, three totals as footer rows
+  Report.EndDoc;
+  Report.AddExportPdfAttachment(Xml, 'factur-x.xml', 'Factur-X invoice data',
+    'text/xml', afrAlternative);
+  Report.ExportPdfMetadataExtension := PdfMetadataFacturX('EN 16931', 'factur-x.xml');
+  Report.ExportPdfStream(Stream);        // zugferd_demo_<os>_<cpu>_<compiler>.pdf
+  Report.Free;
 end;
 ```
 
-**Switches:** `--no-attachment` leaves the XML and the `fx:` metadata out,
-`--untagged` the structure tree — to tell the sources of a checker failure
-apart.
+**Switches:** `--no-attachment` leaves the XML and the `fx:` metadata out of
+the PDF (the page is still read from it), `--untagged` the structure tree — to
+tell the sources of a checker failure apart.
 
-**Output:** `zugferd_demo_<os>_<cpu>_<compiler>.pdf` (1 page). Verified on Windows, Linux and
-macOS with veraPDF (`3u` 148/148, `ua1` 106/106), Mustang-CLI and PAC 2024.
-PAC keeps one accepted quality hint, e-mail addresses without a link element
-(ROADMAP W-2).
+**Output:** `zugferd_demo_<os>_<cpu>_<compiler>.pdf` (1 page). The earlier
+layer-2 version passed veraPDF (`3u`, `ua1`), Mustang-CLI and PAC 2024 on
+Windows, Linux and macOS, with one accepted quality hint, e-mail addresses
+without a link element (ROADMAP W-2); this version is being checked the same
+way (ROADMAP R-26).
 
 **Build & run** — `factur-x.xml` is looked up in the current folder, then two
 levels above the executable (the demo folder); the PDF goes next to the executable:
@@ -785,5 +798,5 @@ bin\d7\layer1_demo\layer1_demo.exe
 | 4 mormot_demo | `TGDIPages` + ORM | 1/100mm, Y=0 top | mORMot2 + LCL + SQLite |
 | 5 chinese_demo | `TPdfDocumentVcl` | pixels, Y=0 top | mORMot2 + LCL + CJK font |
 | 6 rtl_demo | `TPdfDocumentVcl` | pixels, Y=0 top | mORMot2 + LCL + Arabic font + HarfBuzz (Linux/macOS) |
-| 7 zugferd_demo | `TPdfDocumentVcl` | pixels, Y=0 top | mORMot2 + LCL |
+| 7 zugferd_demo | `TGDIPages` | 1/100mm, Y=0 top | mORMot2 + LCL |
 | 8 layer1_demo | `TPdfDocument` | PDF points, Y=0 bottom | mORMot2 + LCL (FPC) or VCL (Delphi 7) |

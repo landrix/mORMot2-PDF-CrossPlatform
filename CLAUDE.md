@@ -86,7 +86,7 @@ examples/
   (each demo folder carries a short README.md; the source header of its .lpr
    says the same thing in two sentences)
 tests/
-  test_runner.lpr              runs every suite below (green: 257 assertions on Windows with FPC, Delphi 7 and Delphi 2010; 315 on macOS, 296 on Linux — the rest are skips)
+  test_runner.lpr              runs every suite below (green: 259 assertions on Windows with FPC, Delphi 7 and Delphi 2010; 315 on macOS, 296 on Linux — the rest are skips)
   test_defines.inc             PDF_HASVCLCANVAS: the TCanvas bridge suites (all compilers since R-20)
   build_delphi7.bat            dcc32 build of one project (R-19)
   build_delphi2010.bat         the same with Delphi 2010, warnings on (R-25, Unicode Delphi)
@@ -144,7 +144,7 @@ For interface and backend details: `.claude/skills/platform-backends.md`
 | mormot_demo | `TGDIPages` + ORM | GUI | SQLite via TRestClientDB, TTableLayout, tagged PDF, `--export` batch mode |
 | chinese_demo | `TPdfDocumentVcl` | Console | CJK text, subset embedding |
 | rtl_demo | `TPdfDocumentVcl` | Console | Arabic RTL, HarfBuzz/Uniscribe shaping |
-| zugferd_demo | `TPdfDocumentVcl` | Console | PDF/A-3U + PDF/UA-1, `/AF` attachment, `PdfMetadataFacturX`, third-party invoice XML (KoSIT, Apache-2.0) |
+| zugferd_demo | `TGDIPages` | Console | PDF/A-3U + PDF/UA-1, page read from the embedded XML, `AddExportPdfAttachment`, `PdfMetadataFacturX`, third-party invoice XML (KoSIT, Apache-2.0) |
 | layer1_demo | `TPdfDocument` | Console | Layer 1 only, PDF points (Y=0 bottom), tagged H1/H2/P/Figure and a Table with THead/TBody/TFoot, UTF-8 via `TextOutW`; builds with Delphi 7, as do all console demos |
 
 Detailed description with code examples: `docs/DEMOS.md`
@@ -352,7 +352,7 @@ itself is in each demo's `uReport.pas`; the form only passes its options.
 - **Links in tagged output**: no `Link` role, `OBJR` or `/StructParent` for annotations — `CreateHyperLink` in tagged output fails veraPDF `ua1` on four 7.18 rules (measured). `TGDIPages.DrawLink` draws link-styled text as a `Span` and drops the URL: conformant, not clickable (roadmap R-18, only on request)
 - **Delphi** (R-19, R-21, R-23, R-25 done; R-20 steps 1–6 done): layer 1,
   the TCanvas bridge and the `TGDIPages` core build on Delphi 7 and Delphi
-  2010 (Unicode Delphi), Win32; `test_runner` 257/257 on both. All six console
+  2010 (Unicode Delphi), Win32; `test_runner` 259/259 on both. All six console
   demos and the `--export` of the two GUI demos build and give the same PDF as
   FPC (the GUI demos build their report in `uReport.pas`, without a form);
   PAC 2024 and veraPDF pass the files of both compilers. Open: the preview and

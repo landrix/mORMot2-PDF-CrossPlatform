@@ -34,8 +34,8 @@ warning and two notices remain, and none of them is an error:
   change
 - `BR-DE-TMP-32`: no delivery date or invoicing period on the header, as upstream
 
-The content is placeholder data (`[Seller name]` and the like). The demo draws
-it on the page and embeds the file as it is here.
+The content is placeholder data (`[Seller name]` and the like). The demo reads
+the page's content from it and embeds the file as it is here.
 
 `.gitattributes` marks it `-text`, so no checkout converts its line endings
 and the checksum above keeps holding.
