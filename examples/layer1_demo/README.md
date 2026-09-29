@@ -3,8 +3,7 @@
 Demo 8 of the [learning path](../../docs/DEMOS.md#demo-8--layer1_demo).
 
 **Layer 1.** `uses mormot.ui.pdf`, plus `mormot.pdf.types` for the structure
-roles and `GetPdfFonts`, and the platform backend — `mormot.pdf.gdi` on
-Windows, `mormot.pdf.freetype` elsewhere.
+roles and `GetPdfFonts`. The platform backend comes with `mormot.ui.pdf`.
 
 Draws a two-page tagged PDF with the low-level API only: no TCanvas bridge and
 no report engine. It was the first demo that built with Delphi 7 as well as

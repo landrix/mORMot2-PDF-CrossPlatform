@@ -42,12 +42,7 @@ uses
   mormot.core.text,   // FormatUtf8
   mormot.core.unicode,
   mormot.pdf.types,   // TPdfStructRole, GetPdfFonts
-  {$ifdef OSWINDOWS}
-  mormot.pdf.gdi,       // registers the GDI backend
-  {$else}
-  mormot.pdf.freetype,  // registers the FreeType2 backend
-  {$endif OSWINDOWS}
-  mormot.ui.pdf;
+  mormot.ui.pdf;      // registers the platform backend itself
 
 const
   /// the face's full cmap, not the ANSI part only (fonts.md §10)

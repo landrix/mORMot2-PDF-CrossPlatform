@@ -209,6 +209,13 @@ A program uses the unit of its layer: `mormot.ui.report` (layer 3),
 both declare `psA4`, and `TRect` differs from the LCL's, so the uses order
 decides which one a name means. Details: `.claude/skills/report-engine.md`
 
+The platform units need no `uses` in a program: `mormot.ui.pdf` brings
+`mormot.pdf.gdi`, or `mormot.pdf.freetype` and `mormot.pdf.hbsubset`. The one
+optional unit is `mormot.pdf.harfbuzz` (POSIX shaper). Shaping has two
+switches: `UseUniscribe` for Uniscribe (Windows only), `RightToLeftText` alone
+for HarfBuzz — set both, never behind a conditional.
+Details: `.claude/skills/platform-backends.md` (Registration)
+
 ### Platform Abstraction
 
 New platform feature: use interface method, do not add `{$ifdef}` inside `mormot.ui.pdf.pas`.

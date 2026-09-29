@@ -38,8 +38,7 @@ uses
   mormot.core.os,
   mormot.core.unicode,
   {$ifndef MSWINDOWS}
-  mormot.pdf.freetype,   // FreeType2 backend (must be before mormot.pdf.harfbuzz)
-  mormot.pdf.harfbuzz,   // HarfBuzz shaper — registers PdfTextShaper at startup
+  mormot.pdf.harfbuzz,   // optional shaper: registers PdfTextShaper at startup
   {$endif MSWINDOWS}
   mormot.pdf.types,   // GetPdfFonts
   mormot.ui.pdf,
@@ -179,11 +178,13 @@ begin
     C.TextOut(40, 296, 'Expected: isolated letter forms, each with correct advance width (no overlap).');
 
     // === Section 2: Shaper path (contextual shaping + RTL bidi) ===
-    // Windows: Uniscribe   Linux/macOS: HarfBuzz (if libharfbuzz loaded)
+    // Windows: Uniscribe, switched on by UseUniscribe. Linux/macOS: HarfBuzz,
+    // switched on by RightToLeftText alone (if libharfbuzz loaded)
     // no conditional here: USE_UNISCRIBE lives inside mormot.ui.pdf and never
     // reaches this unit, so an {$ifdef USE_UNISCRIBE} would compile the
     // assignment away and the shaper would never run (ROADMAP R-16).
-    // The property exists on every platform and is inert where Uniscribe is.
+    // The property exists on every platform and is inert where Uniscribe
+    // does not exist.
     Doc.UseUniscribe := true;
 
     C.Font.Name  := SansFont;

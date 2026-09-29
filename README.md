@@ -36,6 +36,23 @@ layer's API takes from below, that layer re-exports:
 `mormot.pdf.types` goes beside layers 1 and 2 for the structure roles
 (`psrH1`, `psrP`, …) and `GetPdfFonts`.
 
+**The platform backend needs no `uses` of yours.** `mormot.ui.pdf` pulls in
+GDI on Windows, and FreeType2 with the hb-subset font subsetter on Linux and
+macOS, so every layer has them. The one optional unit is the HarfBuzz shaper
+for Arabic and other complex scripts on Linux/macOS:
+
+```pascal
+uses
+  {$ifndef MSWINDOWS}
+  mormot.pdf.harfbuzz,   // shapes when RightToLeftText is set
+  {$endif}
+  ...
+```
+
+Shaping is switched per platform: `UseUniscribe := True` for Uniscribe on
+Windows (inert elsewhere), `RightToLeftText := True` for HarfBuzz. Set both,
+without a conditional — see [rtl_demo](examples/rtl_demo/).
+
 **Never put `mormot.ui.pdf` beside `mormot.ui.report`.** The two use some of
 the same names for different things — `psA4` is a `TPdfPaperSize` in one and
 a `TGdiPagePaperSize` in the other, and `mormot.ui.pdf`'s `TRect` is not the

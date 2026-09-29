@@ -100,17 +100,29 @@ if not PdfPlatformRegistered then
   raise ESynException.Create('No PDF platform registered');
 ```
 
-**Conditional uses in the application project (not in the core):**
+**Who pulls the units in — `mormot.ui.pdf`, not the application.** Its
+interface `uses` takes `mormot.pdf.gdi` on Windows and `mormot.pdf.freetype`
+plus `mormot.pdf.hbsubset` elsewhere, so every program of every layer has its
+backend and, where the library loads, its subsetter:
 
-```pascal
-uses
-  {$ifdef MSWINDOWS}
-  mormot.pdf.gdi,       // registers GDI backend
-  {$else}
-  mormot.pdf.freetype,  // registers FreeType2 backend
-  {$endif}
-  mormot.ui.pdf;
-```
+| Unit | Pulled in by | Application `uses` |
+|---|---|---|
+| `mormot.pdf.gdi` (Windows) | `mormot.ui.pdf` | none |
+| `mormot.pdf.freetype` (POSIX) | `mormot.ui.pdf` | none |
+| `mormot.pdf.hbsubset` (POSIX) | `mormot.ui.pdf` | none |
+| `mormot.pdf.harfbuzz` (POSIX, shaper) | nobody | **the application**, under `{$ifndef MSWINDOWS}`, when it draws RTL or complex scripts |
+
+`mormot.pdf.harfbuzz` uses `mormot.pdf.freetype` itself, so no order has to be
+kept in the application's `uses`. Until 2026-09-29 `layer1_demo` listed the
+backend units and `rtl_demo` claimed FreeType had to come before HarfBuzz —
+both redundant, and removed. A program that names a backend unit anyway (the
+tests use `mormot.pdf.freetype` for `ExtractSfntFromTtc`) does no harm.
+
+**Two switches, one per platform.** `UseUniscribe` gates Uniscribe on Windows
+and does nothing elsewhere; HarfBuzz on Linux/macOS runs whenever
+`PdfTextShaper <> nil` and `Canvas.RightToLeftText` is set, whatever
+`UseUniscribe` says (`TPdfWrite.AddUnicodeHexText`). Portable RTL code sets
+both, without a conditional.
 
 ---
 

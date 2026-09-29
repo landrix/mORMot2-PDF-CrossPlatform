@@ -361,10 +361,10 @@ AddUnicodeHexTextNoUniScribe (pdf.pas:5484):
 ### 4c — Text Rendering — Uniscribe / HarfBuzz Path (RTL, Complex Scripts)
 
 ```
-AddUnicodeHexText (pdf.pas:5549):
-  if UseUniscribe and ttf present:
+AddUnicodeHexText (pdf.pas:6026) — two independent gates, one per platform:
 
     {$ifdef USE_UNISCRIBE}  (Windows)
+    if UseUniscribe and ttf present:
     shaped := AddUnicodeHexTextUniScribe(PW, Len, ttf.WinAnsiFont, NL, Canvas)
       ScriptItemize(PW, Len, AScriptState) → items[]
         if Canvas.RightToLeftText: AScriptState.uBidiLevel := 1   (pdf.pas:5387)
@@ -386,8 +386,9 @@ AddUnicodeHexText (pdf.pas:5549):
             → AddGlyphs(OutGlyphs, count, Canvas)
     {$endif}
 
+    {$ifndef OSWINDOWS}  — NOT gated by UseUniscribe
     if not shaped and PdfTextShaper <> nil       (Linux/macOS HarfBuzz — COMPLETE P2-A: Arabic ligatures confirmed)
-       and Canvas.RightToLeftText:
+       and ttf present and Canvas.RightToLeftText:
       shaped := AddUnicodeHexTextHarfBuzz(PW, Len, ttf.WinAnsiFont, NL, Canvas)
         if WinAnsiTtf.UnicodeFont = nil: CreateAssociatedUnicodeFont
         Canvas.SetPdfFont(WinAnsiTtf.UnicodeFont, size)   ← switches to CID font
@@ -407,6 +408,7 @@ AddUnicodeHexText (pdf.pas:5549):
             Step 3 (POSIX): PUA-Slot mit HarfBuzz-Breite (nur wenn nicht in CMAP)
           AddHex4(Glyph)
         wenn Offsets ≠ 0: TJ-Array-Operator (P3-B); sonst: Add('> Tj')
+    {$endif}
 
   if not shaped:
     → AddUnicodeHexTextNoUniScribe(…)           ← Latin fallback

@@ -477,9 +477,7 @@ begin
   Doc := TPdfDocumentVcl.Create;
   Doc.EmbeddedTTF      := True;
   Doc.EmbeddedWholeTtf := False;  // subset: only the glyphs actually drawn
-  {$ifdef MSWINDOWS}
   Doc.UseUniscribe     := False;  // CJK needs no contextual shaping
-  {$endif}
   Doc.Info.Title := 'Chinese PDF Demo';
 
   Doc.AddPage;
@@ -530,9 +528,9 @@ Shows Arabic right-to-left text in two sections: an unshared isolated-letter bas
 - `PdfC.RightToLeftText := True` signals RTL direction to the PDF canvas
 - Section 1 (no shaper): isolated Arabic letters verify the CMAP fix and per-glyph advance widths
 - Section 2 (shaper): contextual Arabic letter forms (connected ligatures) via Uniscribe or HarfBuzz
-- Why HarfBuzz: FreeType alone cannot perform Arabic GSUB substitutions; `mormot.pdf.harfbuzz` must be registered
+- Why HarfBuzz: FreeType alone cannot perform Arabic GSUB substitutions; `mormot.pdf.harfbuzz` must be in the `uses` clause (it is the one optional unit: `mormot.ui.pdf` brings the FreeType2 backend and the subsetter itself)
 - `EmbeddedWholeTtf := False` is safe on every platform: both subsetters receive the shaped glyph IDs themselves — hb-subset on Linux/macOS (ROADMAP R-12), `CreateFontPackage` with a glyph keep list on Windows (R-15)
-- **Set `UseUniscribe := True` without a conditional.** `USE_UNISCRIBE` is defined inside `mormot.ui.pdf` and does not reach your unit, so `{$ifdef USE_UNISCRIBE}` around the assignment compiles to nothing and the shaper never runs. That was ROADMAP R-16, and it is why the property is declared on every platform — it is simply inert where Uniscribe does not exist
+- **Set `UseUniscribe := True` without a conditional.** `USE_UNISCRIBE` is defined inside `mormot.ui.pdf` and does not reach your unit, so `{$ifdef USE_UNISCRIBE}` around the assignment compiles to nothing and the shaper never runs. That was ROADMAP R-16, and it is why the property is declared on every platform — it is simply inert where Uniscribe does not exist. HarfBuzz does not look at it: on Linux/macOS `RightToLeftText := True` alone switches it on
 - Platform-specific Arabic fonts: Tahoma (Windows) / Geeza Pro (macOS) / Noto Naskh Arabic (Linux)
 
 **Font and library requirements:**
@@ -548,17 +546,16 @@ Shows Arabic right-to-left text in two sections: an unshared isolated-letter bas
 ```pascal
 uses
   {$ifndef MSWINDOWS}
-  mormot.pdf.freetype,    // FreeType2 backend (before harfbuzz)
-  mormot.pdf.harfbuzz,    // registers PdfTextShaper at startup
+  mormot.pdf.harfbuzz,    // optional shaper: registers PdfTextShaper at startup
   {$endif}
-  mormot.ui.pdf, mormot.ui.pdfcanvas;
+  mormot.ui.pdf, mormot.ui.pdfcanvas;  // mormot.ui.pdf brings the backend
 
 var Doc: TPdfDocumentVcl; C: TPdfVclCanvas; PdfC: TPdfCanvas;
 begin
   Doc := TPdfDocumentVcl.Create;
   Doc.EmbeddedTTF      := True;
   Doc.EmbeddedWholeTtf := False;  // both subsetters keep the shaped glyph IDs
-  Doc.UseUniscribe     := True;   // no {$ifdef} here — see the note above
+  Doc.UseUniscribe     := False;  // section 1 stays unshaped on Windows too
 
   Doc.AddPage;
   C    := Doc.VclCanvas;
@@ -575,12 +572,10 @@ begin
   C.TextOut(40, 162, ARABIC_HELLO);   // مرحبا  (5 isolated chars)
 
   // --- Section 2: Shaper path — contextual forms + RTL bidi ---
-  {$ifdef MSWINDOWS}
-  Doc.UseUniscribe := True;
-  {$endif}
+  Doc.UseUniscribe := True;         // Uniscribe on Windows - no {$ifdef}
   C.Font.Name  := ARABIC_FONT;
   C.Font.Size  := 36;
-  PdfC.RightToLeftText := True;
+  PdfC.RightToLeftText := True;     // RTL; alone switches HarfBuzz on
   C.TextOut(500, 472, ARABIC_HELLO);   // مرحبا — connected contextual forms
   C.TextOut(500, 516, ARABIC_BOOK);    // كتاب
   C.TextOut(500, 560, ARABIC_SCHOOL);  // مدرسة
@@ -721,8 +716,7 @@ until roadmap R-20 is done.
 ```pascal
 uses
   mormot.core.base, mormot.core.unicode, mormot.pdf.types,
-  {$ifdef OSWINDOWS} mormot.pdf.gdi, {$else} mormot.pdf.freetype, {$endif}
-  mormot.ui.pdf;
+  mormot.ui.pdf;   // brings the platform backend itself
 
 procedure DrawText(C: TPdfCanvas; X, Y: single; const Text: RawUtf8);
 var W: SynUnicode;

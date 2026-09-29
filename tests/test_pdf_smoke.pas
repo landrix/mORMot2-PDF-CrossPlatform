@@ -1062,7 +1062,8 @@ begin
       DrawUtf8Text(PDF, 40, 700, CJK_TEXT);
       PDF.Canvas.EndStructContent;
       PDF.Canvas.BeginStructContent(psrP);
-      PDF.UseUniscribe := true; // the shaper: Uniscribe or HarfBuzz
+      // shapes on Windows only: HarfBuzz needs RightToLeftText, not set here
+      PDF.UseUniscribe := true;
       PDF.Canvas.SetFont(ARABIC_FONT, 24, [], PDF_DEFAULT_CHARSET);
       DrawUtf8Text(PDF, 40, 650, ARABIC_TEXT);
       PDF.UseUniscribe := false;

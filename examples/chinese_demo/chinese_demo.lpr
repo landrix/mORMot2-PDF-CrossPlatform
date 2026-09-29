@@ -102,9 +102,8 @@ begin
     Doc.EmbeddedWholeTtf := false; // subset: hb-subset on POSIX (R-12),
                                    // CreateFontPackage on Windows (R-15) —
                                    // both keep the glyph IDs CJK is drawn with
-    {$ifdef MSWINDOWS}
-    Doc.UseUniscribe     := false; // CJK needs no contextual shaping
-    {$endif MSWINDOWS}
+    // CJK needs no contextual shaping; the property exists on every platform
+    Doc.UseUniscribe     := false;
     Doc.Info.Title       := 'Chinese PDF Demo';
     Doc.DefaultPaperSize := psA4;
     GetPdfFonts(Doc.EmbeddedTTF, SansFont, SerifFont, MonoFont);
