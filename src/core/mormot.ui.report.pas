@@ -26,7 +26,34 @@ uses
   mormot.pdf.types,     // PDF_FONT_STD_* + TPdfStructRole (Tagged PDF)
   mormot.ui.pdfcanvas;  // cross-platform PDF engine (uses FreeType2 on POSIX)
               // also re-exports TPdfFontMeasurer (layout metrics, ROADMAP B-5)
-              // Re-exports TPdfALevel and PDF/A level constants from mormot.ui.pdf
+
+{ what the ExportPdf* options take, re-exported: a report program uses this
+  unit only - mormot.ui.pdf beside it hides psA4 or TRect, depending on the
+  order of the uses clause }
+type
+  TPdfALevel = mormot.ui.pdfcanvas.TPdfALevel;
+  TPdfFileFormat = mormot.pdf.types.TPdfFileFormat;
+  TPdfAFRelationship = mormot.ui.pdfcanvas.TPdfAFRelationship;
+
+const
+  pdfaNone = mormot.ui.pdfcanvas.pdfaNone;
+  pdfa1A = mormot.ui.pdfcanvas.pdfa1A;
+  pdfa1B = mormot.ui.pdfcanvas.pdfa1B;
+  pdfa2A = mormot.ui.pdfcanvas.pdfa2A;
+  pdfa2B = mormot.ui.pdfcanvas.pdfa2B;
+  pdfa3A = mormot.ui.pdfcanvas.pdfa3A;
+  pdfa3B = mormot.ui.pdfcanvas.pdfa3B;
+  pdfa3U = mormot.ui.pdfcanvas.pdfa3U;
+  pdf13 = mormot.pdf.types.pdf13;
+  pdf14 = mormot.pdf.types.pdf14;
+  pdf15 = mormot.pdf.types.pdf15;
+  pdf16 = mormot.pdf.types.pdf16;
+  pdf17 = mormot.pdf.types.pdf17;
+  afrUnspecified = mormot.ui.pdfcanvas.afrUnspecified;
+  afrSource = mormot.ui.pdfcanvas.afrSource;
+  afrData = mormot.ui.pdfcanvas.afrData;
+  afrAlternative = mormot.ui.pdfcanvas.afrAlternative;
+  afrSupplement = mormot.ui.pdfcanvas.afrSupplement;
 
 { =========================================================================
   Phase 1 – Types and structure
@@ -625,6 +652,12 @@ function MMToPixels(Value100: Integer; DPI: Integer): Integer;
 /// convert pixels to 1/100-mm at the given DPI
 function PixelsToMM(Pixels: Integer; DPI: Integer): Integer;
 
+/// the ZUGFeRD/Factur-X XMP for ExportPdfMetadataExtension
+// - re-exports mormot.ui.pdf.PdfMetadataFacturX, see there
+function PdfMetadataFacturX(const ConformanceLevel: RawUtf8;
+  const DocumentFileName: RawUtf8 = 'factur-x.xml';
+  const Version: RawUtf8 = '1.0'; const DocumentType: RawUtf8 = 'INVOICE'): RawUtf8;
+
 
 implementation
 
@@ -657,6 +690,13 @@ const
 function MMToPixels(Value100: Integer; DPI: Integer): Integer;
 begin
   Result := MulDiv(Value100, DPI, 2540);
+end;
+
+function PdfMetadataFacturX(const ConformanceLevel, DocumentFileName,
+  Version, DocumentType: RawUtf8): RawUtf8;
+begin
+  Result := mormot.ui.pdfcanvas.PdfMetadataFacturX(ConformanceLevel,
+    DocumentFileName, Version, DocumentType);
 end;
 
 function PixelsToMM(Pixels: Integer; DPI: Integer): Integer;

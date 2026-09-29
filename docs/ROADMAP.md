@@ -89,7 +89,9 @@ earlier post covered them.
 - **Coming with R-26** (announce when done): `TGDIPages` exports PDF/A-3
   attachments and an XMP extension (`AddExportPdfAttachment`,
   `ExportPdfMetadataExtension`); `zugferd_demo` builds its invoice with
-  `TGDIPages` from the data in `factur-x.xml`
+  `TGDIPages` from the data in `factur-x.xml`. `mormot.ui.report` re-exports
+  what its `ExportPdf*` options take (PDF/A levels, `TPdfFileFormat`, `afr*`,
+  `PdfMetadataFacturX`), so a report program needs no other unit of ours
 
 ---
 

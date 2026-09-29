@@ -350,9 +350,16 @@ reach `CreateFileAttachmentFrom` and `PdfAMetadaExtension`. The extension is
 assigned **before** `SaveToStreamDirectBegin` — PDF/A writes its XMP packet
 there; the attachments are created after the outlines, before
 `SaveToStreamDirectEnd`, which works in the direct streaming mode
-(`TestExportPdfAttachment`). `TPdfAFRelationship` and the `afr*` values are
-re-exported by `mormot.ui.pdfcanvas`; `PdfMetadataFacturX` is not — take it
-from `mormot.ui.pdf`.
+(`TestExportPdfAttachment`).
+
+**A report program uses `mormot.ui.report` only.** It re-exports what the
+`ExportPdf*` options take — `TPdfALevel`/`pdfa*`, `TPdfFileFormat`/`pdf1x`,
+`TPdfAFRelationship`/`afr*`, `PdfMetadataFacturX` — through
+`mormot.ui.pdfcanvas`. Never add `mormot.ui.pdf` beside it: its
+`TPdfPaperSize` has a `psA4` as `TGdiPagePaperSize` does, and its `TRect`
+differs from the LCL's, so the uses order decides which one a name means
+(`Report.PaperSize := psA4` then fails to compile). A new option taking a
+layer-1 type re-exports that type the same way.
 
 ### Font Selection for Export
 

@@ -236,7 +236,7 @@ end;
 | `ExportPdfLanguage` | RawUtf8 | `'en'` | BCP-47 language tag written to `/Lang` when `ExportPdfTagged = true` |
 | `ExportPdfCreator` | RawUtf8 | `''` | `/Creator`; empty = executable name. A GUI application passes `StringToUtf8(Application.Title)` |
 | `ExportPdfLevel` | `TPdfALevel` | `pdfaNone` | PDF/A level of the export, `pdfaNone` … `pdfa3U` |
-| `ExportPdfMetadataExtension` | RawUtf8 | `''` | Raw XMP for a PDF/A export, e.g. `PdfMetadataFacturX('EN 16931')` from `mormot.ui.pdf` |
+| `ExportPdfMetadataExtension` | RawUtf8 | `''` | Raw XMP for a PDF/A export, e.g. `PdfMetadataFacturX('EN 16931')` |
 
 ### PDF/A-3 Attachments
 
@@ -245,7 +245,7 @@ Report.ExportPdfLevel := pdfa3U;
 Report.ExportPdfTagged := True;
 // ... draw the report ...
 Report.AddExportPdfAttachment(Xml, 'factur-x.xml', 'Factur-X invoice data',
-  'text/xml', afrAlternative);       // afr* re-exported by mormot.ui.pdfcanvas
+  'text/xml', afrAlternative);
 Report.ExportPdfMetadataExtension := PdfMetadataFacturX('EN 16931', 'factur-x.xml');
 Report.ExportPdfStream(Stream);
 ```
@@ -253,6 +253,11 @@ Report.ExportPdfStream(Stream);
 `AddExportPdfAttachment(Content, Title, Description, MimeType, Relationship = afrAlternative)`
 embeds `Content` as an associated file (`/AF` in the catalog). The attachments
 stay for every later export until `ClearExportPdfAttachments`.
+
+All of this needs `mormot.ui.report` only: it re-exports the PDF/A levels,
+`TPdfFileFormat`, the `afr*` values and `PdfMetadataFacturX`. Do not add
+`mormot.ui.pdf` to a report program — its `psA4` and `TRect` hide the
+report's, depending on the order of the uses clause.
 
 ---
 

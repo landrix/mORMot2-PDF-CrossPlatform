@@ -199,6 +199,16 @@ continuation page is an artifact and opens no second `THead`.
 With the low-level API the caller opens the groups, as `pdf_demo` shows.
 Details: `.claude/skills/report-engine.md` (Tables), `.claude/skills/call-graph.md` (Path 10)
 
+### One Unit per Layer
+
+A program uses the unit of its layer: `mormot.ui.report` (layer 3),
+`mormot.ui.pdfcanvas` with `mormot.ui.pdf` (layer 2), `mormot.ui.pdf`
+(layer 1). What a layer's API takes from below is re-exported by that layer —
+`mormot.ui.report` re-exports the PDF/A levels, `TPdfFileFormat`, `afr*` and
+`PdfMetadataFacturX`. Never put `mormot.ui.pdf` beside `mormot.ui.report`:
+both declare `psA4`, and `TRect` differs from the LCL's, so the uses order
+decides which one a name means. Details: `.claude/skills/report-engine.md`
+
 ### Platform Abstraction
 
 New platform feature: use interface method, do not add `{$ifdef}` inside `mormot.ui.pdf.pas`.

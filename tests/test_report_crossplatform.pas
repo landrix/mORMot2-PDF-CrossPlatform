@@ -18,8 +18,7 @@ uses
   mormot.core.base,
   mormot.core.test,
   mormot.lib.z,      // UncompressZipString
-  mormot.ui.pdf,     // PdfMetadataFacturX
-  mormot.ui.report;  // includes TPrinterOrientation re-export
+  mormot.ui.report;  // re-exports what the ExportPdf* options take
 
 type
   /// TGDIPages report engine test cases

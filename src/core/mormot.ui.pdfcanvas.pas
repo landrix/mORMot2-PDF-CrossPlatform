@@ -254,7 +254,20 @@ const
   afrAlternative = mormot.ui.pdf.afrAlternative;
   afrSupplement = mormot.ui.pdf.afrSupplement;
 
+/// Re-export mormot.ui.pdf.PdfMetadataFacturX for mormot.ui.report, which
+// does not use mormot.ui.pdf: its psA4 and TRect would hide the report's
+function PdfMetadataFacturX(const ConformanceLevel: RawUtf8;
+  const DocumentFileName: RawUtf8 = 'factur-x.xml';
+  const Version: RawUtf8 = '1.0'; const DocumentType: RawUtf8 = 'INVOICE'): RawUtf8;
+
 implementation
+
+function PdfMetadataFacturX(const ConformanceLevel, DocumentFileName,
+  Version, DocumentType: RawUtf8): RawUtf8;
+begin
+  result := mormot.ui.pdf.PdfMetadataFacturX(ConformanceLevel,
+    DocumentFileName, Version, DocumentType);
+end;
 
 // ---------------------------------------------------------------------------
 // TPdfVclCanvas
