@@ -8,7 +8,7 @@ tagged output passes PAC 2024 with accepted hints only (W-1, W-2) and veraPDF
 `ua1`; PDF/A-3U with PDF/UA-1 is verified (R-17). Fonts are embedded and subset
 on all three platforms; tables carry `THead`/`TBody`/`TFoot` row groups.
 `test_runner` is green with 257 assertions on Windows (FPC, Delphi 7 and
-Delphi 2010), 303 on macOS and 282 on Linux (before R-25). **Delphi:** layer
+Delphi 2010), 315 on macOS and 296 on Linux. **Delphi:** layer
 1, the TCanvas bridge and the `TGDIPages` core build on Delphi 7 (R-19, R-20
 steps 1–6) and on Delphi 2010, a Unicode Delphi (R-25); all six console demos
 and the `--export` of the two GUI demos give the same PDF as FPC. The files of
@@ -429,13 +429,15 @@ GUI) stay manual. veraPDF runs on Java and could follow as a later step.
 - `rtl_demo`: the same PDF expected as before on Linux/macOS, apart from the
   section 2 heading, now the same text on every platform
 
-All three platforms build and pass `test_runner` (244 assertions on Windows
-with FPC, Delphi 7 and Delphi 2010, 303 on macOS, 282 on Linux before R-25).
-Last full run 2026-09-28, after R-25, on the files of macOS, Debian,
-FPC/Win64, Delphi 7 and Delphi 2010: the seven tagged files pass veraPDF `ua1` 106/106 and PAC 2024,
-`zugferd_demo` also `3u` 148/148 and Mustang; `chinese_demo` and `rtl_demo`
-are untagged (`ua1` 100/106, not applicable). Page counts and structure trees
-(roles and their counts) match across all five for every file. That was the
+All three platforms build and pass `test_runner` (257 assertions on Windows
+with FPC, Delphi 7 and Delphi 2010, 315 on macOS, 296 on Linux).
+Last full run 2026-09-29, after the shaping switch (`UseUniscribe`), on the
+files of macOS, Debian, FPC/Win64, Delphi 7 and Delphi 2010: the seven tagged
+files pass veraPDF `ua1` (35/35 files) and PAC 2024, `zugferd_demo` also `3u`
+(5/5) and Mustang (5/5, no warnings); `chinese_demo` and `rtl_demo` are
+untagged (not applicable). The run of 2026-09-28, after R-25, found page
+counts and structure trees (roles and their counts) the same across all five
+for every file. That was the
 stated gate for a first version tag, and the project still has none.
 
 | Open | Why it matters |

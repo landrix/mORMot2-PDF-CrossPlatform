@@ -95,6 +95,14 @@ embedded". Inflate every stream with `python3` and search the result instead.
 A `Syntax Warning: Mismatch between font type and embedded font file` from
 poppler means the descriptor key and the embedded flavour disagree.
 
+veraPDF logs `WARNUNG`/`WARNING: The Top DICT does not begin with ROS
+operator` for Hiragino: its CFF is name-keyed, not CID-keyed. That is legal
+for a `CIDFontType0` — the CID is taken as the glyph index (ISO 32000-1
+9.7.4.2), which holds because the subset keeps the original GIDs under
+Identity-H. A log line, not a rule: the file passes `ua1`, and it renders the
+same characters as the Linux file (checked 2026-09-29). Do not convert the
+face to CID-keyed CFF to silence it.
+
 **Every `.ttc` face hinges on `TPdfFTContext.SfntChecked`.** `GetFontData(0)`
 extracts the loaded face once and caches it in `Sfnt`; with `SfntChecked` set
 and `Sfnt` empty it hands out FreeType's whole collection instead. The face then
