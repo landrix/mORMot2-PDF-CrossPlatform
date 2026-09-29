@@ -4,8 +4,8 @@ Demo 6 of the [learning path](../../docs/DEMOS.md#demo-6--rtl_demo).
 
 **Layer 2.** `uses mormot.ui.pdfcanvas, mormot.ui.pdf` — the latter also for
 `TPdfCanvas.RightToLeftText`, one layer below the bridge — plus
-`mormot.pdf.types` for `GetPdfFonts`, and on Linux/macOS `mormot.pdf.harfbuzz`,
-the optional shaper. The FreeType2 backend comes with `mormot.ui.pdf`.
+`mormot.pdf.types` for `GetPdfFonts`. The shaper — Uniscribe, or HarfBuzz on
+Linux/macOS — comes with `mormot.ui.pdf`.
 
 Draws Arabic with `TPdfDocumentVcl` twice in one PDF, unshaped and shaped, so
 the two paths can be compared side by side.
@@ -14,9 +14,9 @@ the two paths can be compared side by side.
 
 - section 1 draws without a shaper: isolated letters resolved through the CMAP,
   which verifies the per-glyph advance widths
-- section 2 shapes — Uniscribe on Windows (`UseUniscribe := True`), HarfBuzz on
-  Linux/macOS (`mormot.pdf.harfbuzz` registers `PdfTextShaper` at startup).
-  Both need `RightToLeftText := True`
+- section 2 shapes with `UseUniscribe := True`, the one shaping switch —
+  Uniscribe on Windows, HarfBuzz on Linux/macOS — and sets the direction with
+  `RightToLeftText := True`
 - the face is embedded as a subset: both subsetters are fed the shaped glyph
   IDs, so the GSUB output survives
 

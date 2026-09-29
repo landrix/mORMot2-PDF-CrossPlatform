@@ -1,7 +1,8 @@
 /// HarfBuzz text shaper for the cross-platform PDF engine
 // - implements IPdfTextShaper using the HarfBuzz library + FreeType2 backend
 // - registers PdfTextShaper in initialization when libharfbuzz is available
-// - optional: include in the project uses clause to enable RTL/Arabic shaping
+// - used by mormot.ui.pdf on POSIX: no project uses clause needs it; shaping
+//   runs where TPdfDocument.UseUniscribe is set
 // - runtime dependency: libharfbuzz.so.0 (Linux) / libharfbuzz.0.dylib (macOS)
 unit mormot.pdf.harfbuzz;
 
@@ -264,11 +265,11 @@ begin
   buf := HarfBuzz.buffer_create;
   try
     HarfBuzz.buffer_add_utf16(buf, AText, ALen, 0, -1);
-    // set direction first; guess_segment_properties will only fill what is missing
+    // RTL is forced; otherwise guess_segment_properties takes the direction
+    // from the script, as Uniscribe's itemizer does - a forced LTR would
+    // shape Arabic in the wrong order
     if AIsRTL then
-      HarfBuzz.buffer_set_direction(buf, HB_DIRECTION_RTL)
-    else
-      HarfBuzz.buffer_set_direction(buf, HB_DIRECTION_LTR);
+      HarfBuzz.buffer_set_direction(buf, HB_DIRECTION_RTL);
     HarfBuzz.buffer_guess_segment_properties(buf);
     HarfBuzz.shape(font, buf, nil, 0);
     count     := 0;

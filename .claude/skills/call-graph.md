@@ -361,7 +361,7 @@ AddUnicodeHexTextNoUniScribe (pdf.pas:5484):
 ### 4c — Text Rendering — Uniscribe / HarfBuzz Path (RTL, Complex Scripts)
 
 ```
-AddUnicodeHexText (pdf.pas:6026) — two independent gates, one per platform:
+AddUnicodeHexText (pdf.pas) — UseUniscribe gates both platforms' shaper:
 
     {$ifdef USE_UNISCRIBE}  (Windows)
     if UseUniscribe and ttf present:
@@ -386,9 +386,13 @@ AddUnicodeHexText (pdf.pas:6026) — two independent gates, one per platform:
             → AddGlyphs(OutGlyphs, count, Canvas)
     {$endif}
 
-    {$ifndef OSWINDOWS}  — NOT gated by UseUniscribe
-    if not shaped and PdfTextShaper <> nil       (Linux/macOS HarfBuzz — COMPLETE P2-A: Arabic ligatures confirmed)
-       and ttf present and Canvas.RightToLeftText:
+    {$ifndef OSWINDOWS}  — the same UseUniscribe switch
+    if not shaped and UseUniscribe and PdfTextShaper <> nil   (Linux/macOS HarfBuzz)
+       and ttf present
+       and (Canvas.RightToLeftText or NeedsShaping(PW, Len)):
+      ← NeedsShaping: a char of a complex script (U+0590–109F, …); Latin
+        runs stay in the simple font, as Uniscribe leaves them
+      ← AIsRTL = RightToLeftText; false → HarfBuzz guesses the direction
       shaped := AddUnicodeHexTextHarfBuzz(PW, Len, ttf.WinAnsiFont, NL, Canvas)
         if WinAnsiTtf.UnicodeFont = nil: CreateAssociatedUnicodeFont
         Canvas.SetPdfFont(WinAnsiTtf.UnicodeFont, size)   ← switches to CID font

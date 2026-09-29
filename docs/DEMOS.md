@@ -450,7 +450,7 @@ cd examples\mormot_demo
 Shows how to render Chinese (CJK) text with `TPdfDocumentVcl`. CJK ideographs require the full CMAP of a CJK-capable font and no contextual shaping.
 
 **What you learn:**
-- CJK has no contextual shaping — `UseUniscribe := False` is sufficient on Windows
+- CJK has no contextual shaping — `UseUniscribe` stays off, on every platform
 - `EmbeddedWholeTtf := False` embeds only the glyphs actually drawn, on every platform: hb-subset on Linux/macOS (ROADMAP R-12), `CreateFontPackage` driven by a glyph keep list on Windows (R-15). Both keep the glyph numbering, so Identity-H and `/ToUnicode` stay valid
 - Root cause of the historic CJK failure: `lfCharSet = ANSI_CHARSET` restricted CMAP to Latin only; the fix passes `Font.Charset` (DEFAULT_CHARSET) via `TPdfVclCanvas.SyncFont`
 - What subsetting saves here: Microsoft YaHei / WQY covers 28,000+ ideographs (~17 MB TTF), so embedding the whole face costs about 24 MB where the subset costs 39 KB
@@ -528,9 +528,9 @@ Shows Arabic right-to-left text in two sections: an unshared isolated-letter bas
 - `PdfC.RightToLeftText := True` signals RTL direction to the PDF canvas
 - Section 1 (no shaper): isolated Arabic letters verify the CMAP fix and per-glyph advance widths
 - Section 2 (shaper): contextual Arabic letter forms (connected ligatures) via Uniscribe or HarfBuzz
-- Why HarfBuzz: FreeType alone cannot perform Arabic GSUB substitutions; `mormot.pdf.harfbuzz` must be in the `uses` clause (it is the one optional unit: `mormot.ui.pdf` brings the FreeType2 backend and the subsetter itself)
+- Why HarfBuzz: FreeType alone cannot perform Arabic GSUB substitutions. `mormot.ui.pdf` brings `mormot.pdf.harfbuzz` itself, like the FreeType2 backend and the subsetter; it shapes when `libharfbuzz` loads
 - `EmbeddedWholeTtf := False` is safe on every platform: both subsetters receive the shaped glyph IDs themselves — hb-subset on Linux/macOS (ROADMAP R-12), `CreateFontPackage` with a glyph keep list on Windows (R-15)
-- **Set `UseUniscribe := True` without a conditional.** `USE_UNISCRIBE` is defined inside `mormot.ui.pdf` and does not reach your unit, so `{$ifdef USE_UNISCRIBE}` around the assignment compiles to nothing and the shaper never runs. That was ROADMAP R-16, and it is why the property is declared on every platform — it is simply inert where Uniscribe does not exist. HarfBuzz does not look at it: on Linux/macOS `RightToLeftText := True` alone switches it on
+- **Set `UseUniscribe := True` without a conditional.** `USE_UNISCRIBE` is defined inside `mormot.ui.pdf` and does not reach your unit, so `{$ifdef USE_UNISCRIBE}` around the assignment compiles to nothing and the shaper never runs. That was ROADMAP R-16, and it is why the property is declared on every platform — on Linux and macOS the same switch shapes with HarfBuzz. `RightToLeftText` only sets the direction
 - Platform-specific Arabic fonts: Tahoma (Windows) / Geeza Pro (macOS) / Noto Naskh Arabic (Linux)
 
 **Font and library requirements:**
@@ -545,17 +545,14 @@ Shows Arabic right-to-left text in two sections: an unshared isolated-letter bas
 
 ```pascal
 uses
-  {$ifndef MSWINDOWS}
-  mormot.pdf.harfbuzz,    // optional shaper: registers PdfTextShaper at startup
-  {$endif}
-  mormot.ui.pdf, mormot.ui.pdfcanvas;  // mormot.ui.pdf brings the backend
+  mormot.ui.pdf, mormot.ui.pdfcanvas;  // mormot.ui.pdf brings backend and shaper
 
 var Doc: TPdfDocumentVcl; C: TPdfVclCanvas; PdfC: TPdfCanvas;
 begin
   Doc := TPdfDocumentVcl.Create;
   Doc.EmbeddedTTF      := True;
   Doc.EmbeddedWholeTtf := False;  // both subsetters keep the shaped glyph IDs
-  Doc.UseUniscribe     := False;  // section 1 stays unshaped on Windows too
+  Doc.UseUniscribe     := False;  // section 1 stays unshaped
 
   Doc.AddPage;
   C    := Doc.VclCanvas;
@@ -572,10 +569,10 @@ begin
   C.TextOut(40, 162, ARABIC_HELLO);   // مرحبا  (5 isolated chars)
 
   // --- Section 2: Shaper path — contextual forms + RTL bidi ---
-  Doc.UseUniscribe := True;         // Uniscribe on Windows - no {$ifdef}
+  Doc.UseUniscribe := True;         // Uniscribe or HarfBuzz - no {$ifdef}
   C.Font.Name  := ARABIC_FONT;
   C.Font.Size  := 36;
-  PdfC.RightToLeftText := True;     // RTL; alone switches HarfBuzz on
+  PdfC.RightToLeftText := True;     // the direction
   C.TextOut(500, 472, ARABIC_HELLO);   // مرحبا — connected contextual forms
   C.TextOut(500, 516, ARABIC_BOOK);    // كتاب
   C.TextOut(500, 560, ARABIC_SCHOOL);  // مدرسة

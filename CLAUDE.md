@@ -70,7 +70,7 @@ src/
   platform/
     windows/mormot.pdf.gdi.pas  GDI backend (Windows)
     unix/mormot.pdf.freetype.pas FreeType2 backend (Linux/macOS)
-    unix/mormot.pdf.harfbuzz.pas HarfBuzz text shaper (Linux/macOS, optional)
+    unix/mormot.pdf.harfbuzz.pas HarfBuzz text shaper (Linux/macOS, used by mormot.ui.pdf)
     unix/mormot.pdf.hbsubset.pas hb-subset font subsetter (Linux/macOS, optional)
   lib/
     mormot.lib.uniscribe.pas    Uniscribe text shaping (Windows, optional)
@@ -86,7 +86,7 @@ examples/
   (each demo folder carries a short README.md; the source header of its .lpr
    says the same thing in two sentences)
 tests/
-  test_runner.lpr              runs every suite below (green: 254 assertions on Windows with FPC, Delphi 7 and Delphi 2010; 303 on macOS, 282 on Linux before R-25 — the rest are skips)
+  test_runner.lpr              runs every suite below (green: 257 assertions on Windows with FPC, Delphi 7 and Delphi 2010; 303 on macOS, 282 on Linux before R-25 — the rest are skips)
   test_defines.inc             PDF_HASVCLCANVAS: the TCanvas bridge suites (all compilers since R-20)
   build_delphi7.bat            dcc32 build of one project (R-19)
   build_delphi2010.bat         the same with Delphi 2010, warnings on (R-25, Unicode Delphi)
@@ -210,11 +210,12 @@ both declare `psA4`, and `TRect` differs from the LCL's, so the uses order
 decides which one a name means. Details: `.claude/skills/report-engine.md`
 
 The platform units need no `uses` in a program: `mormot.ui.pdf` brings
-`mormot.pdf.gdi`, or `mormot.pdf.freetype` and `mormot.pdf.hbsubset`. The one
-optional unit is `mormot.pdf.harfbuzz` (POSIX shaper). Shaping has two
-switches: `UseUniscribe` for Uniscribe (Windows only), `RightToLeftText` alone
-for HarfBuzz — set both, never behind a conditional.
-Details: `.claude/skills/platform-backends.md` (Registration)
+`mormot.pdf.gdi`, or `mormot.pdf.freetype`, `mormot.pdf.harfbuzz` and
+`mormot.pdf.hbsubset`; a missing library only leaves its feature off.
+**Shaping is one switch**, `UseUniscribe` — Uniscribe on Windows, HarfBuzz on
+Linux/macOS, only for runs of a script that needs it (or `RightToLeftText`
+runs). `RightToLeftText` is the direction only. Never set either behind a
+conditional. Details: `.claude/skills/platform-backends.md` (Registration)
 
 ### Platform Abstraction
 
@@ -351,7 +352,7 @@ itself is in each demo's `uReport.pas`; the form only passes its options.
 - **Links in tagged output**: no `Link` role, `OBJR` or `/StructParent` for annotations — `CreateHyperLink` in tagged output fails veraPDF `ua1` on four 7.18 rules (measured). `TGDIPages.DrawLink` draws link-styled text as a `Span` and drops the URL: conformant, not clickable (roadmap R-18, only on request)
 - **Delphi** (R-19, R-21, R-23, R-25 done; R-20 steps 1–6 done): layer 1,
   the TCanvas bridge and the `TGDIPages` core build on Delphi 7 and Delphi
-  2010 (Unicode Delphi), Win32; `test_runner` 254/254 on both. All six console
+  2010 (Unicode Delphi), Win32; `test_runner` 257/257 on both. All six console
   demos and the `--export` of the two GUI demos build and give the same PDF as
   FPC (the GUI demos build their report in `uReport.pas`, without a form);
   PAC 2024 and veraPDF pass the files of both compilers. Open: the preview and

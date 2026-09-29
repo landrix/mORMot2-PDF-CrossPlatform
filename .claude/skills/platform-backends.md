@@ -100,29 +100,35 @@ if not PdfPlatformRegistered then
   raise ESynException.Create('No PDF platform registered');
 ```
 
-**Who pulls the units in — `mormot.ui.pdf`, not the application.** Its
-interface `uses` takes `mormot.pdf.gdi` on Windows and `mormot.pdf.freetype`
-plus `mormot.pdf.hbsubset` elsewhere, so every program of every layer has its
-backend and, where the library loads, its subsetter:
+**Who pulls the units in — `mormot.ui.pdf`, never the application.** Its
+interface `uses` takes `mormot.pdf.gdi` on Windows and `mormot.pdf.freetype`,
+`mormot.pdf.harfbuzz` and `mormot.pdf.hbsubset` elsewhere. The two HarfBuzz
+units load their library at run time and register only when it resolves, so
+a missing library leaves shaping or subsetting off — no build dependency.
+`hbsubset` opens the same `libharfbuzz` anyway, so the shaper costs nothing.
+A program that names a platform unit itself (the tests use
+`mormot.pdf.freetype` for `ExtractSfntFromTtc`) does no harm; no program
+needs to. Before 2026-09-29 `mormot.pdf.harfbuzz` had to be added by the
+application, `layer1_demo` listed the backends, and `rtl_demo` wrongly
+required FreeType before HarfBuzz.
 
-| Unit | Pulled in by | Application `uses` |
-|---|---|---|
-| `mormot.pdf.gdi` (Windows) | `mormot.ui.pdf` | none |
-| `mormot.pdf.freetype` (POSIX) | `mormot.ui.pdf` | none |
-| `mormot.pdf.hbsubset` (POSIX) | `mormot.ui.pdf` | none |
-| `mormot.pdf.harfbuzz` (POSIX, shaper) | nobody | **the application**, under `{$ifndef MSWINDOWS}`, when it draws RTL or complex scripts |
-
-`mormot.pdf.harfbuzz` uses `mormot.pdf.freetype` itself, so no order has to be
-kept in the application's `uses`. Until 2026-09-29 `layer1_demo` listed the
-backend units and `rtl_demo` claimed FreeType had to come before HarfBuzz —
-both redundant, and removed. A program that names a backend unit anyway (the
-tests use `mormot.pdf.freetype` for `ExtractSfntFromTtc`) does no harm.
-
-**Two switches, one per platform.** `UseUniscribe` gates Uniscribe on Windows
-and does nothing elsewhere; HarfBuzz on Linux/macOS runs whenever
-`PdfTextShaper <> nil` and `Canvas.RightToLeftText` is set, whatever
-`UseUniscribe` says (`TPdfWrite.AddUnicodeHexText`). Portable RTL code sets
-both, without a conditional.
+**One shaping switch, `UseUniscribe`, on every platform**
+(`TPdfWrite.AddUnicodeHexText`):
+- Windows: Uniscribe itemizes the run and shapes only complex items; the
+  rest takes the simple font
+- Linux/macOS: HarfBuzz shapes a run when `RightToLeftText` is set or
+  `NeedsShaping` finds a character of a script that needs it (Hebrew, Arabic
+  to Myanmar U+0590–109F, Khmer/Mongolian, U+A800–ABFF, presentation forms);
+  Latin text keeps the simple font, as with Uniscribe
+- `RightToLeftText` is the direction only. HarfBuzz gets RTL forced when it
+  is set; otherwise `hb_buffer_guess_segment_properties` takes the direction
+  from the script (a forced LTR shaped Arabic in the wrong order). Glyphs come
+  back in visual order either way
+- Limit: a run mixing Arabic and Latin in one `TextOut` is not bidi-reordered
+  on Linux/macOS; HarfBuzz shapes, it does not itemize by direction
+- Changed 2026-09-29: HarfBuzz used to run on `RightToLeftText` alone and
+  ignore `UseUniscribe`. Code for Linux/macOS that sets only
+  `RightToLeftText` now draws unshaped; guarded by `TestShapingSwitch`
 
 ---
 

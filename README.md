@@ -36,21 +36,16 @@ layer's API takes from below, that layer re-exports:
 `mormot.pdf.types` goes beside layers 1 and 2 for the structure roles
 (`psrH1`, `psrP`, …) and `GetPdfFonts`.
 
-**The platform backend needs no `uses` of yours.** `mormot.ui.pdf` pulls in
-GDI on Windows, and FreeType2 with the hb-subset font subsetter on Linux and
-macOS, so every layer has them. The one optional unit is the HarfBuzz shaper
-for Arabic and other complex scripts on Linux/macOS:
+**The platform units need no `uses` of yours.** `mormot.ui.pdf` pulls in GDI
+and Uniscribe on Windows, and FreeType2, the HarfBuzz shaper and the hb-subset
+font subsetter on Linux and macOS. HarfBuzz is loaded at run time: where the
+library is missing, text is drawn unshaped and fonts are embedded whole.
 
-```pascal
-uses
-  {$ifndef MSWINDOWS}
-  mormot.pdf.harfbuzz,   // shapes when RightToLeftText is set
-  {$endif}
-  ...
-```
-
-Shaping is switched per platform: `UseUniscribe := True` for Uniscribe on
-Windows (inert elsewhere), `RightToLeftText := True` for HarfBuzz. Set both,
+**Shaping** Arabic, Hebrew, Indic or Thai text is one switch on every
+platform, `UseUniscribe := True` — the name comes from the original API; on
+Linux and macOS it shapes with HarfBuzz. Latin text stays in the simple font
+either way. `RightToLeftText := True` on the canvas sets the paragraph
+direction; without it the direction comes from the script. Set the switch
 without a conditional — see [rtl_demo](examples/rtl_demo/).
 
 **Never put `mormot.ui.pdf` beside `mormot.ui.report`.** The two use some of

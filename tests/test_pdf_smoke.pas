@@ -49,6 +49,7 @@ type
     {$endif PDF_HASVCLCANVAS}
     procedure TestTaggedTableRowGroups;
     procedure TestTaggedUnicode;
+    procedure TestShapingSwitch;
     procedure TestZeroRealIsWritten;
   end;
 
@@ -1062,8 +1063,7 @@ begin
       DrawUtf8Text(PDF, 40, 700, CJK_TEXT);
       PDF.Canvas.EndStructContent;
       PDF.Canvas.BeginStructContent(psrP);
-      // both switches, as rtl_demo: Uniscribe needs UseUniscribe, HarfBuzz
-      // RightToLeftText
+      // as rtl_demo: UseUniscribe shapes, RightToLeftText is the direction
       PDF.UseUniscribe := true;
       PDF.Canvas.RightToLeftText := true;
       PDF.Canvas.SetFont(ARABIC_FONT, 24, [], PDF_DEFAULT_CHARSET);
@@ -1106,6 +1106,66 @@ begin
   finally
     Stream.Free;
   end;
+end;
+
+{ one line in aFont, uncompressed, with the two shaping switches as given }
+function ShapedPdf(const aFont, aText: RawUtf8; aShape, aRtl: boolean): RawByteString;
+var
+  PDF: TPdfDocument;
+  Stream: TMemoryStream;
+begin
+  Stream := TMemoryStream.Create;
+  try
+    PDF := TPdfDocument.Create(false, 0, pdfaNone);
+    try
+      PDF.CompressionMethod := cmNone;
+      PDF.EmbeddedTTF := true;
+      PDF.AddPage;
+      PDF.UseUniscribe := aShape;
+      PDF.Canvas.RightToLeftText := aRtl;
+      PDF.Canvas.SetFont(aFont, 24, [], PDF_DEFAULT_CHARSET);
+      DrawUtf8Text(PDF, 40, 650, aText);
+      PDF.SaveToStream(Stream);
+    finally
+      PDF.Free;
+    end;
+    result := StreamToRaw(Stream);
+  finally
+    Stream.Free;
+  end;
+end;
+
+{ joined Arabic letters are presentation forms (U+FExx) or PUA slots (U+Exxx)
+  in /ToUnicode; unshaped text maps to U+06xx only }
+function IsShaped(const s: RawByteString): boolean;
+begin
+  result := (Pos(RawByteString('> <FE'), s) > 0) or
+            (Pos(RawByteString('> <E'), s) > 0);
+end;
+
+procedure TPdfSmokeTests.TestShapingSwitch;
+var
+  sans, serif, mono: string;
+begin
+  { UseUniscribe is the one shaping switch on every platform, RightToLeftText
+    only the direction: HarfBuzz used to run on RightToLeftText alone and to
+    force LTR otherwise, which shaped Arabic in the wrong order }
+  {$ifndef OSWINDOWS} // Uniscribe is part of Windows
+  if PdfTextShaper = nil then
+  begin
+    Check(true, 'SKIP: no text shaper (libharfbuzz absent)');
+    exit;
+  end;
+  {$endif OSWINDOWS}
+  Check(IsShaped(ShapedPdf(ARABIC_FONT, ARABIC_TEXT, true, false)),
+    'UseUniscribe alone shapes, the direction taken from the script');
+  Check(not IsShaped(ShapedPdf(ARABIC_FONT, ARABIC_TEXT, false, true)),
+    'RightToLeftText alone does not shape');
+  // Uniscribe leaves a run without a complex script in the simple font, and
+  // HarfBuzz has to do the same, or every Latin line changes font
+  GetPdfFonts(true, sans, serif, mono);
+  CheckEqual(CountOf('/Type0', ShapedPdf(StringToUtf8(sans), 'Hello, World', true, false)), 0,
+    'Latin text with UseUniscribe stays in the simple font');
 end;
 
 procedure TPdfSmokeTests.TestZeroRealIsWritten;

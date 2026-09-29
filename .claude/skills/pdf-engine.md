@@ -154,7 +154,7 @@ Doc.Free;
 | `FileFormat` | `TPdfFileFormat` | PDF version header: `pdf13`..`pdf17` (default `pdf13`); PDF/A and Tagged auto-raise this |
 | `GeneratePdf15File` | boolean | Compatibility alias: `true` = `pdf15`, `false` leaves `FileFormat` unchanged |
 | `Tagged` | boolean | Enable Tagged PDF (ISO 32000-1 §14); setting `true` auto-raises `FileFormat` to `pdf17` |
-| `UseUniscribe` | boolean | Use Uniscribe for text shaping (Windows only) |
+| `UseUniscribe` | boolean | The one shaping switch: Uniscribe on Windows, HarfBuzz on Linux/macOS; `Canvas.RightToLeftText` is the direction only (`platform-backends.md`, Registration) |
 
 ### Methods
 

@@ -205,6 +205,8 @@ type
   /// interface for Unicode text shaping (RTL, Arabic, Indic scripts)
   // - implemented by THarfBuzzTextShaper (Unix/macOS) when libharfbuzz is present
   // - PdfTextShaper is nil by default; set by mormot.pdf.harfbuzz initialization
+  // - AIsRTL forces right-to-left; false lets the shaper take the direction
+  // from the script
   IPdfTextShaper = interface
     ['{D4E5F6A7-B8C9-0123-DEF0-234567890123}']
     /// shape a run of Unicode text using OpenType GSUB/GPOS rules

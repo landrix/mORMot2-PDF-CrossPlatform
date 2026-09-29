@@ -5,9 +5,8 @@
 // Worth noting:
 // - section 1 draws without a shaper: isolated letters only, resolved through
 //   the CMAP — it verifies the per-glyph advance widths
-// - section 2 shapes: Uniscribe on Windows (UseUniscribe := true), HarfBuzz on
-//   Linux/macOS (mormot.pdf.harfbuzz registers PdfTextShaper at startup);
-//   both need RightToLeftText := true
+// - section 2 shapes with UseUniscribe := true - Uniscribe on Windows,
+//   HarfBuzz on Linux/macOS - and RightToLeftText := true for the direction
 // - builds with FPC and Delphi 7: the canvas is held as TPdfVclCanvas and the
 //   Arabic goes through TextOutUtf8, the same on every compiler
 // - the face is embedded as a subset: both subsetters receive the shaped glyph
@@ -37,9 +36,6 @@ uses
   mormot.core.base,
   mormot.core.os,
   mormot.core.unicode,
-  {$ifndef MSWINDOWS}
-  mormot.pdf.harfbuzz,   // optional shaper: registers PdfTextShaper at startup
-  {$endif MSWINDOWS}
   mormot.pdf.types,   // GetPdfFonts
   mormot.ui.pdf,
   mormot.ui.pdfcanvas;
@@ -178,13 +174,10 @@ begin
     C.TextOut(40, 296, 'Expected: isolated letter forms, each with correct advance width (no overlap).');
 
     // === Section 2: Shaper path (contextual shaping + RTL bidi) ===
-    // Windows: Uniscribe, switched on by UseUniscribe. Linux/macOS: HarfBuzz,
-    // switched on by RightToLeftText alone (if libharfbuzz loaded)
-    // no conditional here: USE_UNISCRIBE lives inside mormot.ui.pdf and never
-    // reaches this unit, so an {$ifdef USE_UNISCRIBE} would compile the
-    // assignment away and the shaper would never run (ROADMAP R-16).
-    // The property exists on every platform and is inert where Uniscribe
-    // does not exist.
+    // UseUniscribe is the one shaping switch: Uniscribe on Windows, HarfBuzz
+    // on Linux/macOS (if libharfbuzz loaded); RightToLeftText is the direction.
+    // No conditional: an {$ifdef USE_UNISCRIBE} would compile the assignment
+    // away, as that symbol never leaves mormot.ui.pdf (ROADMAP R-16)
     Doc.UseUniscribe := true;
 
     C.Font.Name  := SansFont;
@@ -192,11 +185,7 @@ begin
     C.Font.Style := [fsBold];
     C.Font.Color := clBlack;
     PdfC.RightToLeftText := false;
-    {$ifdef MSWINDOWS}
     C.TextOut(40, 322, 'Section 2: Contextual shaping  (UseUniscribe=true, RTL)');
-    {$else}
-    C.TextOut(40, 322, 'Section 2: Contextual shaping  (HarfBuzz, RightToLeftText=true)');
-    {$endif MSWINDOWS}
 
     // --- 2a: Single char with shaper ---
     C.Font.Name  := SansFont;

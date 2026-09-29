@@ -90,6 +90,7 @@ uses
   mormot.pdf.gdi,        // registers GDI backend via RegisterPdfPlatform()
   {$else}
   mormot.pdf.freetype,   // registers FreeType2 backend via RegisterPdfPlatform()
+  mormot.pdf.harfbuzz,   // registers PdfTextShaper when libharfbuzz loads
   mormot.pdf.hbsubset,   // registers PdfFontSubsetter when libharfbuzz-subset loads
   {$endif OSWINDOWS}
   mormot.pdf.types,      // platform-neutral interfaces and records
@@ -730,7 +731,8 @@ type
     {$endif USE_UNISCRIBE}
     {$ifndef OSWINDOWS}
     /// internal method using HarfBuzz for RTL/complex-script shaping on Unix/macOS
-    // - called when PdfTextShaper <> nil and Canvas.RightToLeftText is set
+    // - called when UseUniscribe is set and the run is RightToLeftText or
+    // holds a script that needs shaping
     // - returns false if PdfTextShaper.ShapeText fails (caller falls back)
     function AddUnicodeHexTextHarfBuzz(PW: PWideChar; PWLen: integer;
       WinAnsiTtf: TPdfFontTrueType; NextLine: boolean; Canvas: TPdfCanvas): boolean;
@@ -1776,16 +1778,20 @@ type
     // - default value is false (i.e. not embedded standard font)
     property StandardFontsReplace: boolean
       read fStandardFontsReplace write SetStandardFontsReplace;
-    /// set if the PDF engine must use the Windows Uniscribe API to
-    // render Ordering and/or Shaping of the text
+    /// set if the PDF engine must shape the text with the platform's shaper:
+    // Uniscribe on Windows, HarfBuzz on Linux and macOS
+    // - the name is the original API's; it is the one shaping switch on every
+    // platform, RightToLeftText only sets the direction
     // - useful for Hebrew, Arabic and some Asiatic languages handling
     // - set to false by default, for faster content generation
     // - declared on every platform on purpose, so that portable code can set
     // it without a conditional: USE_UNISCRIBE is defined inside this unit and
     // does NOT reach the units that use it, so an {$ifdef USE_UNISCRIBE}
     // around the assignment would silently compile to nothing (ROADMAP R-16)
-    // - it has no effect where Uniscribe does not exist; Linux and macOS shape
-    // through PdfTextShaper (HarfBuzz) whenever RightToLeftText is set
+    // - HarfBuzz shapes a run when RightToLeftText is set or the run holds a
+    // script that needs shaping (Arabic, Hebrew, Indic, Thai, ...): like with
+    // Uniscribe, Latin text stays in the simple font. Without RightToLeftText
+    // it takes the direction from the script
     // - you can set this property temporary to true, when using the Canvas
     // property, but this property must be set appropriately before the content
     // generation if you use any TPdfDocumentGdi.VclCanvas text output with
@@ -2012,7 +2018,8 @@ type
     // Figure's /BBox
     fCTMDepth: integer;
     /// if text must be rendered from right to left (RTL paragraph direction)
-    // - used by Uniscribe (Windows) and HarfBuzz (Unix/macOS) shaping paths
+    // - only the direction: it takes effect while TPdfDocument.UseUniscribe
+    // switches shaping on, with Uniscribe (Windows) and HarfBuzz (Unix/macOS)
     fRightToLeftText: boolean;
     /// parameters taken from RenderMetaFile() call
     fUseMetaFileTextPositioning: TPdfCanvasRenderMetaFileTextPositioning;
@@ -2471,7 +2478,8 @@ type
     property Doc: TPdfDocument
       read GetDoc;
     /// if text must be rendered from right to left (RTL paragraph direction)
-    // - used by Uniscribe (Windows) and HarfBuzz (Unix/macOS) shaping paths
+    // - only the direction: it takes effect while TPdfDocument.UseUniscribe
+    // switches shaping on, with Uniscribe (Windows) and HarfBuzz (Unix/macOS)
     property RightToLeftText: boolean
       read fRightToLeftText write fRightToLeftText;
   end;
@@ -5798,6 +5806,28 @@ end;
 
 {$ifndef OSWINDOWS}
 
+// true if the run holds a character of a script that needs OpenType shaping:
+// what Uniscribe's ScriptItemize marks as complex, so that HarfBuzz leaves the
+// same runs in the simple font
+function NeedsShaping(PW: PWideChar; Len: integer): boolean;
+var
+  i: integer;
+  c: cardinal;
+begin
+  result := true;
+  for i := 0 to Len - 1 do
+  begin
+    c := ord(PW[i]);
+    if ((c >= $0590) and (c <= $109F)) or // Hebrew, Arabic, Indic ... Myanmar
+       ((c >= $1780) and (c <= $18AF)) or // Khmer, Mongolian
+       ((c >= $A800) and (c <= $ABFF)) or // Syloti Nagri ... Meetei Mayek
+       ((c >= $FB1D) and (c <= $FDFF)) or // Hebrew and Arabic presentation forms A
+       ((c >= $FE70) and (c <= $FEFE)) then // Arabic presentation forms B
+      exit;
+  end;
+  result := false;
+end;
+
 function TPdfWrite.AddUnicodeHexTextHarfBuzz(PW: PWideChar; PWLen: integer;
   WinAnsiTtf: TPdfFontTrueType; NextLine: boolean; Canvas: TPdfCanvas): boolean;
 var
@@ -6042,9 +6072,11 @@ begin
       shaped := AddUnicodeHexTextUniScribe(PW, PWLen, ttf.WinAnsiFont, NextLine, Canvas);
     {$endif USE_UNISCRIBE}
     {$ifndef OSWINDOWS}
-    // HarfBuzz shaping for RTL text on Unix/macOS when libharfbuzz is loaded
-    if not shaped and (PdfTextShaper <> nil) and (ttf <> nil) and
-       Canvas.RightToLeftText then
+    // the same switch as Uniscribe; Latin runs stay in the simple font, as
+    // Uniscribe leaves them there too
+    if not shaped and Canvas.fDoc.UseUniScribe and (PdfTextShaper <> nil) and
+       (ttf <> nil) and
+       (Canvas.RightToLeftText or NeedsShaping(PW, PWLen)) then
       shaped := AddUnicodeHexTextHarfBuzz(PW, PWLen, ttf.WinAnsiFont, NextLine, Canvas);
     {$endif OSWINDOWS}
     if not shaped then

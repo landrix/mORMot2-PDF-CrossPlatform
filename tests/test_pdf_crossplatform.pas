@@ -17,10 +17,9 @@ uses
   mormot.core.test,
   mormot.pdf.types,
   {$ifndef MSWINDOWS}
-  mormot.pdf.harfbuzz,  // registers PdfTextShaper when libharfbuzz is present
   mormot.pdf.freetype,  // ExtractSfntFromTtc + FreeType face validation
   {$endif MSWINDOWS}
-  mormot.ui.pdf;
+  mormot.ui.pdf;        // registers the backend and PdfTextShaper itself
 
 type
   /// Cross-platform PDF test cases

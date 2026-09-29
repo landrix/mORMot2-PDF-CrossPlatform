@@ -7,7 +7,7 @@ it produced in `.claude/skills/` — this file repeats neither.
 tagged output passes PAC 2024 with accepted hints only (W-1, W-2) and veraPDF
 `ua1`; PDF/A-3U with PDF/UA-1 is verified (R-17). Fonts are embedded and subset
 on all three platforms; tables carry `THead`/`TBody`/`TFoot` row groups.
-`test_runner` is green with 254 assertions on Windows (FPC, Delphi 7 and
+`test_runner` is green with 257 assertions on Windows (FPC, Delphi 7 and
 Delphi 2010), 303 on macOS and 282 on Linux (before R-25). **Delphi:** layer
 1, the TCanvas bridge and the `TGDIPages` core build on Delphi 7 (R-19, R-20
 steps 1–6) and on Delphi 2010, a Unicode Delphi (R-25); all six console demos
@@ -84,6 +84,15 @@ earlier post covered them.
   PDF/A and tagged file
 - **`TPdfVclCanvas` passes `Font.Name` as UTF-8** — Delphi 7 gave the ANSI
   bytes of a non-ASCII font name
+- **Shaping is one switch on every platform: `UseUniscribe`** — Uniscribe on
+  Windows, HarfBuzz on Linux/macOS; `RightToLeftText` only sets the
+  direction, and without it HarfBuzz takes the direction from the script.
+  **Changed on Linux/macOS:** `RightToLeftText` alone no longer shapes — set
+  `UseUniscribe := True` as well (on Windows it was always needed). Latin
+  text stays in the simple font, as with Uniscribe
+- **No platform unit in your `uses` any more:** `mormot.ui.pdf` brings the
+  HarfBuzz shaper (`mormot.pdf.harfbuzz`) itself, like the FreeType2 backend
+  and the subsetter; remove it from your `uses` clause or leave it, both work
 - **Coming with R-20** (announce when done): the preview and the GUI demos
   on Delphi
 - **Coming with R-26** (announce when done): `TGDIPages` exports PDF/A-3
@@ -381,11 +390,21 @@ GUI) stay manual. veraPDF runs on Java and could follow as a later step.
 
 ### V — Verification Outstanding
 
-**New since the last run (2026-09-29):** `TestTaggedUnicode` asserts that its
-Arabic is shaped (R-13, done): U+FExx or PUA in `/ToUnicode`. It sets
-`RightToLeftText` now, so on Linux/macOS HarfBuzz shapes that line for the
-first time — run `test_runner` there, and PAC/veraPDF on its
-`tagged_unicode_*.pdf`. Geeza Pro (macOS) takes the PUA path.
+**New since the last run (2026-09-29), not yet built on Linux/macOS:**
+- `UseUniscribe` is now the shaping switch for HarfBuzz too, and
+  `mormot.ui.pdf` uses `mormot.pdf.harfbuzz` itself. The POSIX branches
+  (`NeedsShaping`, the gate in `AddUnicodeHexText`, the direction in
+  `THarfBuzzTextShaper.ShapeText`) could not be compiled on Windows —
+  `NeedsShaping` was checked alone in a scratch program. Build everything
+  there first
+- `TestShapingSwitch`: `UseUniscribe` alone shapes Arabic (direction from the
+  script), `RightToLeftText` alone does not, Latin stays in the simple font
+- `TestTaggedUnicode` asserts that its Arabic is shaped (R-13, done): U+FExx or
+  PUA in `/ToUnicode`. On Linux/macOS HarfBuzz shapes that line for the first
+  time — run PAC/veraPDF on its `tagged_unicode_*.pdf`. Geeza Pro (macOS)
+  takes the PUA path
+- `rtl_demo`: the same PDF expected as before on Linux/macOS, apart from the
+  section 2 heading, now the same text on every platform
 
 All three platforms build and pass `test_runner` (244 assertions on Windows
 with FPC, Delphi 7 and Delphi 2010, 303 on macOS, 282 on Linux before R-25).

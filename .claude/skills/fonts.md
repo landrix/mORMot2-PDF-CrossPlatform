@@ -486,8 +486,10 @@ defined in `mormot.ui.pdf.pas` and does not reach the units that use it, so a
 guarded `Doc.UseUniscribe := true` compiles to nothing and the shaper never
 runs — Section 2 of `rtl_demo` then produces output byte-identical to its
 no-shaper Section 1. This was ROADMAP R-16. The property is declared
-unconditionally for that reason and is inert where Uniscribe does not exist;
-`TestUseUniscribeIsPortable` fails to compile if it is ever gated again.
+unconditionally for that reason, and since 2026-09-29 it is the shaping switch
+on Linux/macOS too (HarfBuzz; `RightToLeftText` is the direction only —
+`platform-backends.md`, Registration). `TestUseUniscribeIsPortable` fails to
+compile if it is ever gated again; `TestShapingSwitch` checks the output.
 
 `UseUniscribe=true` (Windows, complex scripts):
 - Uniscribe shapes Arabic contextual forms via `ScriptShape` → GSUB glyph IDs
