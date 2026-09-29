@@ -413,29 +413,15 @@ GUI) stay manual. veraPDF runs on Java and could follow as a later step.
 
 ### V — Verification Outstanding
 
-**New since the last run (2026-09-29), not yet built on Linux/macOS:**
-- `UseUniscribe` is now the shaping switch for HarfBuzz too, and
-  `mormot.ui.pdf` uses `mormot.pdf.harfbuzz` itself. The POSIX branches
-  (`NeedsShaping`, the gate in `AddUnicodeHexText`, the direction in
-  `THarfBuzzTextShaper.ShapeText`) could not be compiled on Windows —
-  `NeedsShaping` was checked alone in a scratch program. Build everything
-  there first
-- `TestShapingSwitch`: `UseUniscribe` alone shapes Arabic (direction from the
-  script), `RightToLeftText` alone does not, Latin stays in the simple font
-- `TestTaggedUnicode` asserts that its Arabic is shaped (R-13, done): U+FExx or
-  PUA in `/ToUnicode`. On Linux/macOS HarfBuzz shapes that line for the first
-  time — run PAC/veraPDF on its `tagged_unicode_*.pdf`. Geeza Pro (macOS)
-  takes the PUA path
-- `rtl_demo`: the same PDF expected as before on Linux/macOS, apart from the
-  section 2 heading, now the same text on every platform
-
 All three platforms build and pass `test_runner` (257 assertions on Windows
 with FPC, Delphi 7 and Delphi 2010, 315 on macOS, 296 on Linux).
 Last full run 2026-09-29, after the shaping switch (`UseUniscribe`), on the
 files of macOS, Debian, FPC/Win64, Delphi 7 and Delphi 2010: the seven tagged
 files pass veraPDF `ua1` (35/35 files) and PAC 2024, `zugferd_demo` also `3u`
 (5/5) and Mustang (5/5, no warnings); `chinese_demo` and `rtl_demo` are
-untagged (not applicable). The run of 2026-09-28, after R-25, found page
+untagged (not applicable). Linux and macOS built the POSIX shaping branches
+for the first time in that run; `tagged_unicode_*.pdf`, whose Arabic HarfBuzz
+now shapes there, passes PAC and veraPDF as well. The run of 2026-09-28, after R-25, found page
 counts and structure trees (roles and their counts) the same across all five
 for every file. That was the
 stated gate for a first version tag, and the project still has none.
