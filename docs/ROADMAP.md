@@ -7,7 +7,7 @@ it produced in `.claude/skills/` — this file repeats neither.
 tagged output passes PAC 2024 with accepted hints only (W-1, W-2) and veraPDF
 `ua1`; PDF/A-3U with PDF/UA-1 is verified (R-17). Fonts are embedded and subset
 on all three platforms; tables carry `THead`/`TBody`/`TFoot` row groups.
-`test_runner` is green with 244 assertions on Windows (FPC, Delphi 7 and
+`test_runner` is green with 254 assertions on Windows (FPC, Delphi 7 and
 Delphi 2010), 303 on macOS and 282 on Linux (before R-25). **Delphi:** layer
 1, the TCanvas bridge and the `TGDIPages` core build on Delphi 7 (R-19, R-20
 steps 1–6) and on Delphi 2010, a Unicode Delphi (R-25); all six console demos
@@ -381,6 +381,12 @@ GUI) stay manual. veraPDF runs on Java and could follow as a later step.
 
 ### V — Verification Outstanding
 
+**New since the last run (2026-09-29):** `TestTaggedUnicode` asserts that its
+Arabic is shaped (R-13, done): U+FExx or PUA in `/ToUnicode`. It sets
+`RightToLeftText` now, so on Linux/macOS HarfBuzz shapes that line for the
+first time — run `test_runner` there, and PAC/veraPDF on its
+`tagged_unicode_*.pdf`. Geeza Pro (macOS) takes the PUA path.
+
 All three platforms build and pass `test_runner` (244 assertions on Windows
 with FPC, Delphi 7 and Delphi 2010, 303 on macOS, 282 on Linux before R-25).
 Last full run 2026-09-28, after R-25, on the files of macOS, Debian,
@@ -568,17 +574,6 @@ Only face index 0 of a `.ttc` is reachable, because `TPdfFontMap` carries no
 face index. Add one so the remaining faces can be selected by name. The
 FreeType backend already extracts a single face as a standalone sfnt
 (`ExtractSfntFromTtc`), so the embedding side needs no change.
-
-### R-13 — Shaped Arabic on the Windows Path — unprioritised
-
-**Effort:** 0.5 day | **File:** `tests/`
-
-The advance half is done (`TestShapedGlyphWidthFromHmtx`, see `fonts.md` §10).
-Left is the end-to-end half: `TestUseUniscribeIsPortable` (from R-16) is a
-compile-time guard, not an output check. Nothing yet asserts that shaped Arabic
-reaches the PDF on the Windows path — by checking the `/ToUnicode` entries for
-`U+FExx` after drawing with `UseUniscribe` set. A Windows-side test; under
-R-19 it would run on Win32 as well.
 
 ### Charts — out of scope; an example only on explicit request
 

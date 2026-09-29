@@ -1062,10 +1062,13 @@ begin
       DrawUtf8Text(PDF, 40, 700, CJK_TEXT);
       PDF.Canvas.EndStructContent;
       PDF.Canvas.BeginStructContent(psrP);
-      // shapes on Windows only: HarfBuzz needs RightToLeftText, not set here
+      // both switches, as rtl_demo: Uniscribe needs UseUniscribe, HarfBuzz
+      // RightToLeftText
       PDF.UseUniscribe := true;
+      PDF.Canvas.RightToLeftText := true;
       PDF.Canvas.SetFont(ARABIC_FONT, 24, [], PDF_DEFAULT_CHARSET);
       DrawUtf8Text(PDF, 40, 650, ARABIC_TEXT);
+      PDF.Canvas.RightToLeftText := false;
       PDF.UseUniscribe := false;
       PDF.Canvas.EndStructContent;
       PDF.SaveToStream(Stream);
@@ -1078,6 +1081,12 @@ begin
     CheckEqual(CountOf('/S/P', s), 3, 'three P');
     Check(CountOf('/FontFile', s) >= 3, 'Latin, CJK and Arabic faces embedded');
     Check(Pos(RawByteString('5B57'), s) > 0, 'ToUnicode maps the CJK text (U+5B57)');
+    { joined Arabic letters are presentation forms (U+FExx) or, in a face
+      without them, PUA slots (U+Exxx); unshaped text maps to U+06xx only
+      (R-13). POSIX shapes only when libharfbuzz loaded }
+    if {$ifdef OSWINDOWS} true {$else} PdfTextShaper <> nil {$endif} then
+      Check((Pos(RawByteString('> <FE'), s) > 0) or
+            (Pos(RawByteString('> <E'), s) > 0), 'the Arabic text is shaped');
     { the WinAnsi peers of the CJK and Arabic faces show no character, and
       were written without /FirstChar, /LastChar and /Widths - PAC 2024
       stopped on them ("'FirstChar' not defined in TrueType font") }
