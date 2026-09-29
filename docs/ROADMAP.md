@@ -21,10 +21,33 @@ from the invoice XML; then R-20 step 7, the preview on the VCL.
 ## To Announce — the Next Forum Post
 
 Changes a user of the library notices: API, behaviour, fixed output. Collected
-here until the post is written, then the list is emptied. Candidates from
+here until the post is written, then the list is emptied. It is the only such
+list: the CHANGELOG entry of the next release is written from it. Candidates from
 before this list was started (2026-09-27) are marked "check": whether an
 earlier post covered them.
 
+- **PDF/A-3U with PDF/UA-1** (check, R-17): verified in one file on all three
+  platforms — veraPDF `3u` and `ua1`, Mustang, PAC 2024; `pdfa3A` passes `3a`.
+  New `pdfa3U` (appended to `TPdfALevel`), `PdfMetadataFacturX` for the `fx:`
+  XMP properties, an `/AFRelationship` on the file overload of
+  `CreateFileAttachment`, and `zugferd_demo` (demo 7) with third-party KoSIT
+  test data (Apache-2.0). `GetPdfFonts` and `PDF_FONT_TTF_*` in
+  `mormot.pdf.types`; `GetReportFonts`/`REPORT_FONT_*` stay as aliases.
+  Known: PDF/A-1 accepts attachments although it forbids them — unchecked
+- **Fixed** (check, found with R-17 and R-19):
+  - tagged PDF/A freed its `StructTreeRoot` twice on `Free`, and skipped
+    `/Lang` and `DisplayDocTitle`; untagged PDF/A claimed `/MarkInfo` over an
+    empty tree
+  - `pdfuaid` had no extension schema, so every tagged PDF/A failed ISO 19005
+    6.6.2.3.1
+  - `/Params /Size 0` for an attachment read from a file
+  - PAC 2024 stopped on tagged CJK or Arabic: the WinAnsi peer lacked
+    `/FirstChar`, `/LastChar`, `/Widths`
+  - `/CIDToGIDMap` was written for PDF/A only; PDF/UA-1 7.21.3.2 wants it
+    for every `CIDFontType2`
+  - Linux/macOS: a `.ttc` face could be embedded as the whole collection
+    (23 MB for Hiragino Sans GB), at random, by heap layout
+  - `GetCharABCWidthsI` was imported without `stdcall` (wrong on Win32)
 - **Delphi 7** (check): layer 1 — `TPdfDocument`/`TPdfCanvas`, GDI backend,
   Uniscribe — builds on Delphi 7, Win32 (R-19). `layer1_demo` is the first
   demo for it, tagged and PDF/UA-conformant from both compilers (R-23)
