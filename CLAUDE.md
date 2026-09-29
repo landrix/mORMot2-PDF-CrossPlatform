@@ -91,6 +91,8 @@ tests/
   build_delphi7.bat            dcc32 build of one project (R-19)
   build_delphi2010.bat         the same with Delphi 2010, warnings on (R-25, Unicode Delphi)
   delphi7_core.dpr             Delphi 7 compile guard for the core units
+  delphi13/test_runner.dproj   Delphi 13 IDE project: Win32, Win64, Linux64, Android64 (R-27)
+  delphi13/android/            FMX host for Android: build.cmd, run-emulator.cmd -Run, BUILD-FREETYPE.md
   no_hbsubset.sh               Linux: tests and console demos with libharfbuzz-subset hidden
   test_pdf_crossplatform.pas   platform backend, text shaper, TTC extraction
   test_pdf_smoke.pas           PDF basics, tagged output, struct tree, tagged Unicode, the shaping switch (through TPdfCanvas; one bridge test)
@@ -356,7 +358,10 @@ itself is in each demo's `uReport.pas`; the form only passes its options.
   demos and the `--export` of the two GUI demos build and give the same PDF as
   FPC (the GUI demos build their report in `uReport.pas`, without a form);
   PAC 2024 and veraPDF pass the files of both compilers. Open: the preview and
-  the demo windows (R-20 steps 7, 8); Win64 Delphi (XE2 and later) untested.
+  the demo windows (R-20 steps 7, 8). Delphi 13 (R-27): `test_runner`
+  green on Win32, Win64, Linux64 and Android64 — on Linux/Android layer 1
+  and the backends only, Delphi has no VCL there (`USE_GRAPHICS_UNIT` off,
+  no `TBitmap` images).
   Delphi 7's `TCanvas` drawing methods are static: the bridge reintroduces
   them (`PDF_CANVASVIRTUAL` off), so draw through a `TPdfVclCanvas`
   reference — `VclCanvas` has that type, `RenderPageToCanvas` casts. Text
