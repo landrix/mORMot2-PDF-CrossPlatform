@@ -82,9 +82,9 @@ examples/
   chinese_demo/       Demo 5 — CJK text, subset embedding (console)
   rtl_demo/           Demo 6 — Arabic RTL, HarfBuzz/Uniscribe shaping (console)
   zugferd_demo/       Demo 7 — PDF/A-3U + PDF/UA-1, ZUGFeRD/Factur-X invoice with embedded XML (console)
-  layer1_demo/        Demo 8 — TPdfDocument/TPdfCanvas alone, tagged; FPC and Delphi 7 (console)
+  layer1_demo/        Demo 8 — TPdfDocument/TPdfCanvas alone, tagged; FPC, Delphi 7 and Delphi 2010 (console)
   (each demo folder carries a short README.md; the source header of its .lpr
-   says the same thing in two sentences)
+   (`layer1_demo`: .dpr) says the same thing in two sentences)
 tests/
   test_runner.lpr              runs every suite below (green: 259 assertions on Windows with FPC, Delphi 7 and Delphi 2010; 317 on macOS, 298 on Linux — the rest are skips)
   test_defines.inc             PDF_HASVCLCANVAS: the TCanvas bridge suites (all compilers since R-20)
@@ -373,7 +373,7 @@ Current verification status per platform, and the open items in detail:
 
 ## Dependencies
 
-Build: FreePascal 3.2+ with Lazarus (what mORMot2 requires; used here: FPC 3.2.2), or Delphi 7 / Delphi 2010 for Win32 (no preview window yet, R-20); mORMot2 sources
+Build: FreePascal 3.2+ with Lazarus (what mORMot2 requires; used here: FPC 3.2.2 on Windows, 3.2.3 on Linux and macOS), or Delphi 7 / Delphi 2010 for Win32 (no preview window yet, R-20); mORMot2 sources
 
 Runtime Windows: none (GDI is part of the OS)
 

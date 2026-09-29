@@ -134,7 +134,10 @@ Units: 1/100 mm. Learning path with all features: [docs/DEMOS.md](docs/DEMOS.md)
 writes the structure tree that screen readers and accessibility checkers need.
 The tagged demos pass **PAC 2024**. PAC keeps one accepted hint on every
 `Figure`, "possibly inappropriate use of figure"; it shows for vector paths
-and images alike.
+and images alike. In `zugferd_demo` it adds one more, "link in text does not
+have a Link element", for the e-mail addresses drawn as plain text: a
+clickable link would need a tagged link annotation, which the engine does not
+write (see *Links in tagged output* below).
 
 What the engine emits:
 
@@ -263,7 +266,7 @@ Report.ExportPdfStream(Stream);
 | [chinese_demo](examples/chinese_demo/) | `TPdfDocumentVcl` | CJK text, subset embedding |
 | [rtl_demo](examples/rtl_demo/) | `TPdfDocumentVcl` | Arabic RTL, HarfBuzz / Uniscribe shaping |
 | [zugferd_demo](examples/zugferd_demo/) | `TGDIPages` | PDF/A-3U + PDF/UA-1, ZUGFeRD / Factur-X invoice read from and embedded with its XML |
-| [layer1_demo](examples/layer1_demo/) | `TPdfDocument` | The low-level API alone: tagged headings, text, a figure and a table with THead/TBody/TFoot, in PDF points; builds with FPC and Delphi 7 |
+| [layer1_demo](examples/layer1_demo/) | `TPdfDocument` | The low-level API alone: tagged headings, text, a figure and a table with THead/TBody/TFoot, in PDF points; builds with FPC, Delphi 7 and Delphi 2010 |
 
 Full guide: [docs/DEMOS.md](docs/DEMOS.md)
 

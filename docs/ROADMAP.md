@@ -449,8 +449,7 @@ untagged (not applicable). Linux and macOS built the POSIX shaping branches
 for the first time in that run; `tagged_unicode_*.pdf`, whose Arabic HarfBuzz
 now shapes there, passes PAC and veraPDF as well. The run of 2026-09-28, after R-25, found page
 counts and structure trees (roles and their counts) the same across all five
-for every file. That was the
-stated gate for a first version tag, and the project still has none.
+for every file.
 After R-26 (8de33da, 994cdb4), 2026-09-29: the new
 `zugferd_demo` passes veraPDF `3u` and `ua1` and Mustang on all five (5/5);
 the other tagged files of Debian and the three Windows compilers pass `ua1`
