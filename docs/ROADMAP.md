@@ -3,19 +3,20 @@
 Open work only. Finished work is in the git history, and the technical knowledge
 it produced in `.claude/skills/` — this file repeats neither.
 
-**State on 2026-09-28.** The engine is cross-platform, writes PDF 1.7, and its
+**State on 2026-09-29.** The engine is cross-platform, writes PDF 1.7, and its
 tagged output passes PAC 2024 with accepted hints only (W-1, W-2) and veraPDF
 `ua1`; PDF/A-3U with PDF/UA-1 is verified (R-17). Fonts are embedded and subset
 on all three platforms; tables carry `THead`/`TBody`/`TFoot` row groups.
 `test_runner` is green with 259 assertions on Windows (FPC, Delphi 7 and
-Delphi 2010), 315 on macOS and 298 on Linux. **Delphi:** layer
+Delphi 2010), 317 on macOS and 298 on Linux. **Delphi:** layer
 1, the TCanvas bridge and the `TGDIPages` core build on Delphi 7 (R-19, R-20
 steps 1–6) and on Delphi 2010, a Unicode Delphi (R-25); all six console demos
 and the `--export` of the two GUI demos give the same PDF as FPC. The files of
 macOS, Debian, FPC/Win64, Delphi 7 and Delphi 2010 all pass PAC 2024
-and veraPDF (V). **Next:** R-26 step 4, the new `zugferd_demo` (on
-`TGDIPages`, its text from the invoice XML) through the checkers and on
-macOS and Linux; then R-20 step 7, the preview on the VCL.
+and veraPDF (V); the new `zugferd_demo` (R-26, on `TGDIPages`, its text from
+the invoice XML) also veraPDF `3u` and Mustang. **Next:** the rest of R-26,
+the other demos without code-point constants; then R-20 step 7, the preview
+on the VCL.
 
 ---
 
@@ -121,7 +122,7 @@ earlier post covered them.
   on Delphi
 - **`TTableLayout.GridColor`** colours the table's cell borders (header, data
   and footer rows); unset it is `clBlack`, the colour so far
-- **Coming with R-26** (announce when done): `TGDIPages` exports PDF/A-3
+- **R-26:** `TGDIPages` exports PDF/A-3
   attachments and an XMP extension (`AddExportPdfAttachment`,
   `ExportPdfMetadataExtension`); `zugferd_demo` builds its invoice with
   `TGDIPages` from the data in `factur-x.xml`. `mormot.ui.report` re-exports
@@ -253,7 +254,7 @@ assigned before that.
    `test_runner` 253/253 on FPC, Delphi 7 and Delphi 2010 (Windows)
 3. ~~`zugferd_demo` rewritten~~ done: reader → `TInvoice` → `TGDIPages`,
    the source pure ASCII; README, `DEMOS.md`, the source header
-4. Done on Windows: `test_runner` 259/259 on all three compilers; the demo
+4. ~~Checked~~ done. Windows: `test_runner` 259/259 on all three compilers; the demo
    builds without a warning and gives the same PDF from all three (identical
    after inflating the streams and masking dates, `/ID`, subset prefixes);
    structure `H1`, 11 `P`, `Table` with `THead` 1 / `TBody` 2 / `TFoot` 3
@@ -263,7 +264,9 @@ assigned before that.
    259/259 on all three compilers, the PDF unchanged (identical after
    inflating and masking dates); Linux (aarch64) `test_runner` 298/298, the
    demo pixel-identical (`pdftoppm`) with the same `pdftotext` output.
-   **Open:** veraPDF `3u` and `ua1`, Mustang; macOS
+   macOS (aarch64) `test_runner` 317/317. veraPDF `3u` and `ua1` and
+   Mustang pass the `zugferd_demo` files of macOS, Debian, FPC/Win64,
+   Delphi 7 and Delphi 2010 (5/5 each); PAC 2024 passes on Windows
 
 **Accepted differences:** the layout changes, so the PDF is not compared with
 the old one, only checked again. `TTableLayout` styles all footer rows alike —
@@ -437,7 +440,7 @@ GUI) stay manual. veraPDF runs on Java and could follow as a later step.
 ### V — Verification Outstanding
 
 All three platforms build and pass `test_runner` (259 assertions on Windows
-with FPC, Delphi 7 and Delphi 2010, 315 on macOS, 298 on Linux).
+with FPC, Delphi 7 and Delphi 2010, 317 on macOS, 298 on Linux).
 Last full run 2026-09-29, after the shaping switch (`UseUniscribe`), on the
 files of macOS, Debian, FPC/Win64, Delphi 7 and Delphi 2010: the seven tagged
 files pass veraPDF `ua1` (35/35 files) and PAC 2024, `zugferd_demo` also `3u`
@@ -448,6 +451,10 @@ now shapes there, passes PAC and veraPDF as well. The run of 2026-09-28, after R
 counts and structure trees (roles and their counts) the same across all five
 for every file. That was the
 stated gate for a first version tag, and the project still has none.
+After R-26 (8de33da, 994cdb4), 2026-09-29: the new
+`zugferd_demo` passes veraPDF `3u` and `ua1` and Mustang on all five (5/5);
+the other tagged files of Debian and the three Windows compilers pass `ua1`
+(24/24).
 
 | Open | Why it matters |
 |---|---|
