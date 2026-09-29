@@ -2552,7 +2552,10 @@ begin
 
   ACanvas.Brush.Color := clWhite;
   ACanvas.Brush.Style := bsSolid;
-  ACanvas.FillRect(Rect(0, 0, DestWidth, DestHeight));
+  { a PDF page is white already; the bridge reintroduces FillRect, so on it
+    this call reached the widgetset with no drawable (GTK2: Gdk-CRITICAL) }
+  if Bridge = nil then
+    ACanvas.FillRect(Rect(0, 0, DestWidth, DestHeight));
 
   { Render header if set }
   if fHeaderText <> '' then

@@ -390,7 +390,10 @@ text, header/footer, rectangles and lines through `CanvasTextOut`,
 `CanvasTextHeight`, `CanvasRectangle`, `CanvasLine`. `FillRect` (the white
 page background) and `StretchDraw` stay on `ACanvas`: the bridge
 reintroduces both even under FPC, so they never reached the PDF — routing
-them would change the output. `dckDrawBitmap` has no recording method.
+them would change the output. The background `FillRect` is skipped when
+`Bridge <> nil`: through the `TCanvas` reference it reached the LCL widgetset
+with a DC that has no drawable, and GTK2 printed two `Gdk-CRITICAL` lines per
+page. `dckDrawBitmap` has no recording method.
 
 ```pascal
 // Render one page to an arbitrary canvas (used internally by preview and PDF export):
