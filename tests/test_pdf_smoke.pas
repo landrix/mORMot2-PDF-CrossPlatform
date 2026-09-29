@@ -962,7 +962,11 @@ const
   CJK_FONT    = 'Hiragino Sans GB';
   ARABIC_FONT = 'Geeza Pro';
   {$else}
+  {$ifdef OSANDROID}
+  CJK_FONT    = 'Noto Sans CJK JP'; // face 0 of NotoSansCJK-Regular.ttc
+  {$else}
   CJK_FONT    = 'Droid Sans Fallback';
+  {$endif OSANDROID}
   ARABIC_FONT = 'Noto Naskh Arabic';
   {$endif DARWIN}
   {$endif MSWINDOWS}

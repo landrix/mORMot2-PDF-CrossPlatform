@@ -38,10 +38,11 @@ const
 
   /// platform TrueType font names — for embedding, and for tagged output
   // - Calibri/Cambria/Consolas on Windows, Trebuchet MS/Georgia/Andale Mono
-  // on macOS, Liberation Sans/Serif/Mono on Linux
-  PDF_FONT_TTF_SANS  = {$ifdef MSWINDOWS}'Calibri'{$else}{$ifdef DARWIN}'Trebuchet MS'{$else}'Liberation Sans'{$endif}{$endif};
-  PDF_FONT_TTF_SERIF = {$ifdef MSWINDOWS}'Cambria'{$else}{$ifdef DARWIN}'Georgia'{$else}'Liberation Serif'{$endif}{$endif};
-  PDF_FONT_TTF_MONO  = {$ifdef MSWINDOWS}'Consolas'{$else}{$ifdef DARWIN}'Andale Mono'{$else}'Liberation Mono'{$endif}{$endif};
+  // on macOS, Liberation Sans/Serif/Mono on Linux, the /system/fonts faces
+  // Roboto/Noto Serif/Droid Sans Mono on Android
+  PDF_FONT_TTF_SANS  = {$ifdef MSWINDOWS}'Calibri'{$else}{$ifdef DARWIN}'Trebuchet MS'{$else}{$ifdef OSANDROID}'Roboto'{$else}'Liberation Sans'{$endif}{$endif}{$endif};
+  PDF_FONT_TTF_SERIF = {$ifdef MSWINDOWS}'Cambria'{$else}{$ifdef DARWIN}'Georgia'{$else}{$ifdef OSANDROID}'Noto Serif'{$else}'Liberation Serif'{$endif}{$endif}{$endif};
+  PDF_FONT_TTF_MONO  = {$ifdef MSWINDOWS}'Consolas'{$else}{$ifdef DARWIN}'Andale Mono'{$else}{$ifdef OSANDROID}'Droid Sans Mono'{$else}'Liberation Mono'{$endif}{$endif}{$endif};
 
 /// font names matching the embedding mode
 // - Embedded=true: the platform TrueType fonts (PDF_FONT_TTF_*)

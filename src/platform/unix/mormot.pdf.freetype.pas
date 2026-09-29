@@ -29,7 +29,6 @@ interface
 uses
   SysUtils,
   Classes,
-  dynlibs,
   mormot.core.base,
   mormot.core.os,
   mormot.core.unicode,
@@ -310,37 +309,37 @@ begin
   result := FreeType.Loaded;
   if result then
     exit;
-  FreeType.Handle := SafeLoadLibrary(FTLIB);
-  if FreeType.Handle = NilHandle then
+  FreeType.Handle := LibraryOpen(FTLIB);
+  if FreeType.Handle = 0 then
   begin
     // Try without version suffix
     {$ifdef DARWIN}
-    FreeType.Handle := SafeLoadLibrary('libfreetype.dylib');
+    FreeType.Handle := LibraryOpen('libfreetype.dylib');
     {$else}
-    FreeType.Handle := SafeLoadLibrary('libfreetype.so');
+    FreeType.Handle := LibraryOpen('libfreetype.so');
     {$endif DARWIN}
   end;
   {$ifdef DARWIN}
   // On Apple Silicon (ARM64), Homebrew installs to /opt/homebrew which is not
   // in the default dyld search path - try explicit paths as last resort
-  if FreeType.Handle = NilHandle then
-    FreeType.Handle := SafeLoadLibrary('/opt/homebrew/lib/libfreetype.6.dylib');
-  if FreeType.Handle = NilHandle then
-    FreeType.Handle := SafeLoadLibrary('/opt/homebrew/lib/libfreetype.dylib');
-  if FreeType.Handle = NilHandle then
-    FreeType.Handle := SafeLoadLibrary('/usr/local/lib/libfreetype.6.dylib');
-  if FreeType.Handle = NilHandle then
-    FreeType.Handle := SafeLoadLibrary('/usr/local/lib/libfreetype.dylib');
+  if FreeType.Handle = 0 then
+    FreeType.Handle := LibraryOpen('/opt/homebrew/lib/libfreetype.6.dylib');
+  if FreeType.Handle = 0 then
+    FreeType.Handle := LibraryOpen('/opt/homebrew/lib/libfreetype.dylib');
+  if FreeType.Handle = 0 then
+    FreeType.Handle := LibraryOpen('/usr/local/lib/libfreetype.6.dylib');
+  if FreeType.Handle = 0 then
+    FreeType.Handle := LibraryOpen('/usr/local/lib/libfreetype.dylib');
   {$endif DARWIN}
-  if FreeType.Handle = NilHandle then
+  if FreeType.Handle = 0 then
     exit;
-  @FreeType.Init          := GetProcedureAddress(FreeType.Handle, 'FT_Init_FreeType');
-  @FreeType.Done          := GetProcedureAddress(FreeType.Handle, 'FT_Done_FreeType');
-  @FreeType.NewFace       := GetProcedureAddress(FreeType.Handle, 'FT_New_Face');
-  @FreeType.DoneFace      := GetProcedureAddress(FreeType.Handle, 'FT_Done_Face');
-  @FreeType.SetCharSize   := GetProcedureAddress(FreeType.Handle, 'FT_Set_Char_Size');
-  @FreeType.LoadChar      := GetProcedureAddress(FreeType.Handle, 'FT_Load_Char');
-  @FreeType.LoadSfntTable := GetProcedureAddress(FreeType.Handle, 'FT_Load_Sfnt_Table');
+  @FreeType.Init          := LibraryResolve(FreeType.Handle, 'FT_Init_FreeType');
+  @FreeType.Done          := LibraryResolve(FreeType.Handle, 'FT_Done_FreeType');
+  @FreeType.NewFace       := LibraryResolve(FreeType.Handle, 'FT_New_Face');
+  @FreeType.DoneFace      := LibraryResolve(FreeType.Handle, 'FT_Done_Face');
+  @FreeType.SetCharSize   := LibraryResolve(FreeType.Handle, 'FT_Set_Char_Size');
+  @FreeType.LoadChar      := LibraryResolve(FreeType.Handle, 'FT_Load_Char');
+  @FreeType.LoadSfntTable := LibraryResolve(FreeType.Handle, 'FT_Load_Sfnt_Table');
   if (@FreeType.Init = nil) or
      (@FreeType.Done = nil) or
      (@FreeType.NewFace = nil) or
@@ -349,14 +348,14 @@ begin
      (@FreeType.LoadChar = nil) or
      (@FreeType.LoadSfntTable = nil) then
   begin
-    FreeLibrary(FreeType.Handle);
-    FreeType.Handle := NilHandle;
+    LibraryClose(FreeType.Handle);
+    FreeType.Handle := 0;
     exit;
   end;
   if FreeType.Init(FreeType.FTLibrary) <> 0 then
   begin
-    FreeLibrary(FreeType.Handle);
-    FreeType.Handle := NilHandle;
+    LibraryClose(FreeType.Handle);
+    FreeType.Handle := 0;
     exit;
   end;
   FreeType.Loaded := true;
@@ -571,6 +570,7 @@ begin
     ScanFontsDir('/usr/local/share/fonts', fFontMap);
     ScanFontsDir(GetEnvironmentVariable('HOME') + '/.fonts', fFontMap);
     ScanFontsDir(GetEnvironmentVariable('HOME') + '/.local/share/fonts', fFontMap);
+    ScanFontsDir('/system/fonts', fFontMap); // Android
     {$endif DARWIN}
   end;
 end;
@@ -596,6 +596,8 @@ begin
     filePath := FindFontFile(fFontMap, 'DejaVu Sans', bold, italic);
     if filePath = '' then
       filePath := FindFontFile(fFontMap, 'DejaVuSans', bold, italic);
+    if filePath = '' then
+      filePath := FindFontFile(fFontMap, 'Roboto', bold, italic); // Android
     if filePath = '' then
       exit; // no font found at all
   end;
@@ -742,7 +744,7 @@ begin
     // as the unassigned C1 controls, miss the CMAP and silently return the
     // .notdef advance. That is what put the bullet (#$95 -> U+2022) and the
     // em dash (#$97 -> U+2014) into /Widths with a wrong value (U-1b).
-    if code <= high(WinAnsiConvert.AnsiToWide) then
+    if code <= high(byte) then
       code := WinAnsiConvert.AnsiToWide[code];
     // Use FT_LOAD_NO_SCALE to get raw design units (like faceRec^.ascender),
     // then apply uniform ScaleDesignUnit(value, UPM) across all metrics.
@@ -815,9 +817,9 @@ begin
   // The PDF engine forms table tags as PCardinal(name)^ — a 4-char ASCII
   // name read as a little-endian DWORD (e.g. 'cmap' → $70616D63).
   // FreeType uses big-endian tags (FT_MAKE_TAG: 'cmap' → $636D6170).
-  // SwapEndian converts between the two; SwapEndian(0)=0 so tag=0
+  // bswap32 converts between the two; bswap32(0)=0 so tag=0
   // ("return whole font file") is passed through correctly.
-  err := FreeType.LoadSfntTable(ctx^.Face, SwapEndian(ATableTag), AOffset,
+  err := FreeType.LoadSfntTable(ctx^.Face, bswap32(ATableTag), AOffset,
     ABuffer, len);
   if err <> 0 then
     exit;
@@ -850,6 +852,7 @@ begin
   ScanFontsDir('/usr/local/share/fonts', fFontMap);
   ScanFontsDir(GetEnvironmentVariable('HOME') + '/.fonts', fFontMap);
   ScanFontsDir(GetEnvironmentVariable('HOME') + '/.local/share/fonts', fFontMap);
+  ScanFontsDir('/system/fonts', fFontMap); // Android
   {$endif DARWIN}
 end;
 
@@ -904,7 +907,7 @@ finalization
   if FreeType.Loaded then
   begin
     FreeType.Done(FreeType.FTLibrary);
-    FreeLibrary(FreeType.Handle);
+    LibraryClose(FreeType.Handle);
     FreeType.Loaded := false;
   end;
 

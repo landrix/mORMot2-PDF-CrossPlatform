@@ -18,7 +18,9 @@ uses
   Interfaces, // registers the LCL widgetset - Delphi has no counterpart
   {$endif FPC}
   SysUtils,
+  {$ifdef PDF_HASVCLCANVAS}
   Graphics,
+  {$endif PDF_HASVCLCANVAS}
   mormot.core.base,
   mormot.core.log,
   mormot.core.os,

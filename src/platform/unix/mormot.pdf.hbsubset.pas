@@ -24,8 +24,8 @@ interface
 {$ifndef MSWINDOWS}
 
 uses
-  dynlibs,
   mormot.core.base,
+  mormot.core.os,
   mormot.pdf.types;
 
 const
@@ -134,19 +134,19 @@ var
 begin
   for i := 0 to high(Names) do
   begin
-    result := SafeLoadLibrary(Names[i]);
-    if result <> NilHandle then
+    result := LibraryOpen(Names[i]);
+    if result <> 0 then
       exit;
   end;
-  result := NilHandle;
+  result := 0;
 end;
 
 procedure UnloadHarfBuzzSubset;
 begin
-  if HbSubset.SubsetHandle <> NilHandle then
-    FreeLibrary(HbSubset.SubsetHandle);
-  if HbSubset.Handle <> NilHandle then
-    FreeLibrary(HbSubset.Handle);
+  if HbSubset.SubsetHandle <> 0 then
+    LibraryClose(HbSubset.SubsetHandle);
+  if HbSubset.Handle <> 0 then
+    LibraryClose(HbSubset.Handle);
   HbSubset := Default(THarfBuzzSubsetLib);
 end;
 
@@ -167,30 +167,30 @@ begin
   HbSubset.SubsetHandle := LoadFirst(['libharfbuzz-subset.so.0',
     'libharfbuzz-subset.so']);
   {$endif DARWIN}
-  if (HbSubset.Handle = NilHandle) or
-     (HbSubset.SubsetHandle = NilHandle) then
+  if (HbSubset.Handle = 0) or
+     (HbSubset.SubsetHandle = 0) then
   begin
     UnloadHarfBuzzSubset;
     exit;
   end;
   with HbSubset do
   begin
-    @blob_create := GetProcedureAddress(Handle, 'hb_blob_create');
-    @blob_destroy := GetProcedureAddress(Handle, 'hb_blob_destroy');
-    @blob_get_data := GetProcedureAddress(Handle, 'hb_blob_get_data');
-    @face_create := GetProcedureAddress(Handle, 'hb_face_create');
-    @face_destroy := GetProcedureAddress(Handle, 'hb_face_destroy');
-    @face_reference_blob := GetProcedureAddress(Handle, 'hb_face_reference_blob');
-    @set_add := GetProcedureAddress(Handle, 'hb_set_add');
+    @blob_create := LibraryResolve(Handle, 'hb_blob_create');
+    @blob_destroy := LibraryResolve(Handle, 'hb_blob_destroy');
+    @blob_get_data := LibraryResolve(Handle, 'hb_blob_get_data');
+    @face_create := LibraryResolve(Handle, 'hb_face_create');
+    @face_destroy := LibraryResolve(Handle, 'hb_face_destroy');
+    @face_reference_blob := LibraryResolve(Handle, 'hb_face_reference_blob');
+    @set_add := LibraryResolve(Handle, 'hb_set_add');
     @input_create_or_fail :=
-      GetProcedureAddress(SubsetHandle, 'hb_subset_input_create_or_fail');
-    @input_destroy := GetProcedureAddress(SubsetHandle, 'hb_subset_input_destroy');
+      LibraryResolve(SubsetHandle, 'hb_subset_input_create_or_fail');
+    @input_destroy := LibraryResolve(SubsetHandle, 'hb_subset_input_destroy');
     @input_unicode_set :=
-      GetProcedureAddress(SubsetHandle, 'hb_subset_input_unicode_set');
-    @input_glyph_set := GetProcedureAddress(SubsetHandle, 'hb_subset_input_glyph_set');
-    @input_set := GetProcedureAddress(SubsetHandle, 'hb_subset_input_set');
-    @input_set_flags := GetProcedureAddress(SubsetHandle, 'hb_subset_input_set_flags');
-    @subset_or_fail := GetProcedureAddress(SubsetHandle, 'hb_subset_or_fail');
+      LibraryResolve(SubsetHandle, 'hb_subset_input_unicode_set');
+    @input_glyph_set := LibraryResolve(SubsetHandle, 'hb_subset_input_glyph_set');
+    @input_set := LibraryResolve(SubsetHandle, 'hb_subset_input_set');
+    @input_set_flags := LibraryResolve(SubsetHandle, 'hb_subset_input_set_flags');
+    @subset_or_fail := LibraryResolve(SubsetHandle, 'hb_subset_or_fail');
     // no partial mode: HarfBuzz < 2.9 has only the deprecated subset API
     if (@blob_create = nil) or
        (@blob_destroy = nil) or

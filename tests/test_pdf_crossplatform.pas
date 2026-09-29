@@ -183,9 +183,10 @@ begin
     letter := Advance(ord('M'));
     Check(bullet > 0, 'bullet #$95 must have a positive advance');
     Check(emdash > 0, 'em dash #$97 must have a positive advance');
-    // an em dash is one em wide by definition, so it is the widest of the
-    // three in any text face - a .notdef box would not order this way
-    Check(emdash > letter, 'em dash must be wider than M');
+    // the bullet is narrow in any text face, the em dash wide - but not
+    // always wider than M: Roboto, the Android sans, draws it at 1599 of
+    // 2048 units against 1788 for M. Two .notdef boxes cannot order this way
+    Check(emdash > bullet, 'em dash must be wider than the bullet');
     Check(bullet < letter, 'bullet must be narrower than M');
     // .notdef is what the defect returned, so the two must not silently be it.
     // Code #$81 is unassigned in WinAnsi and maps to no glyph, so its advance
@@ -201,8 +202,7 @@ begin
     // the face happens to use.
     // Note that assertion #5 above already catches the original defect on any
     // font without assuming anything: with the bug, bullet and em dash both
-    // returned the .notdef advance, and one number cannot be both wider and
-    // narrower than M.
+    // returned the .notdef advance, and one number cannot be wider than itself.
     notdef := Advance($81);
     if notdef > 0 then
     begin
@@ -613,7 +613,7 @@ begin
   Check(ExtractSfntFromTtc(sfnt, 0) = '', 'the result is no longer a collection');
   if LoadFreeType then
   begin
-    tmp := GetTempDir + 'claude_ttc_extract.ttf';
+    tmp := GetSystemPath(spTemp) + 'claude_ttc_extract.ttf';
     Check(FileFromString(sfnt, tmp), 'temp file written');
     face := nil;
     Check(FreeType.NewFace(FreeType.FTLibrary, PAnsiChar(AnsiString(tmp)), 0, face) = 0,
