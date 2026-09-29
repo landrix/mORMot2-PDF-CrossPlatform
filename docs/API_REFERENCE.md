@@ -280,10 +280,13 @@ TTableLayout = record
   FooterFontSize:    Integer;  // four Footer* fields at their default to
   FooterFontStyle:   TFontStyles; // make the footer look like the header
   FooterBkColor:     TColor;
+  GridColor:         TColor;   // cell borders; 0 = clBlack (the default)
 end;
 ```
 
 Empty `FontName` and `FontSize = 0` inherit the current document font. The table automatically picks up the font set by `Report.SetFont()`.
+
+**Cell borders:** `GridColor` colours the borders of every cell — header, data and footer rows. They are one pixel wide at 96 dpi (0.75 pt), the thinnest the canvas bridge draws; a light grey such as `clSilver` makes them recede.
 
 **Automatic header repetition (R-9):** `DrawTableHeader` saves the column headers. When `DrawTableRow` triggers a page break, the headers are automatically re-drawn at the top of the continuation page. `EndTable` clears the saved headers.
 

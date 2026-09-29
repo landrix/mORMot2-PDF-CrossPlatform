@@ -248,6 +248,7 @@ const TABLE_LAYOUT: TTableLayout = (
   FooterFontSize:    0;
   FooterFontStyle:   [];
   FooterBkColor:     0;
+  GridColor:         clSilver; // cell borders; 0 = clBlack, as before the field existed
 );
 
 Report.BeginTable(TABLE_LAYOUT);
@@ -265,6 +266,12 @@ TH|TD`. The group follows from the row kind, so nothing has to be declared:
 `DrawTableFooter` switches to `TFoot`, and `EndTable` closes both the open
 group and the table. A repeated header on a continuation page is an artifact
 and leaves the open `TBody` alone.
+
+**`GridColor`** colours all cell borders (`dckDrawRect`), header, data and
+footer rows alike; 0 is `clBlack`, so layouts that leave it unset draw as
+before. The width stays `LineWidth = 1`: pixels at 96 dpi, clamped to at
+least 1 when rendered — 0.75 pt is the thinnest border until the bridge
+takes fractional pen widths. The legacy `AddTableRow` keeps black.
 
 **`DrawTableFooter(Cells)`** draws the closing row — a totals line, typically.
 Its cells are `TD`, not `TH`. It breaks the page like `DrawTableRow` does, so

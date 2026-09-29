@@ -207,6 +207,7 @@ type
     FooterBkColor: TColor;                    // background color for the footer row
     // - leave all four Footer* fields at their default ('' / 0 / [] / 0) to
     // make DrawTableFooter look exactly like the header row
+    GridColor: TColor;                        // cell borders; 0 = clBlack
   end;
 
   /// heading information tracked for PDF outline generation
@@ -2020,7 +2021,7 @@ begin
     Cmd.Y := NormalizeY(fCurrentY);
     Cmd.X2 := NormalizeX(CellX + CellWidth);
     Cmd.Y2 := NormalizeY(fCurrentY + CellHeight);
-    Cmd.Color := clBlack;
+    Cmd.Color := fTableLayout.GridColor;
     Cmd.LineWidth := 1;
     AddCommand(Cmd);
 
@@ -2202,7 +2203,7 @@ begin
     Cmd.Y := NormalizeY(fCurrentY);
     Cmd.X2 := NormalizeX(CellX + CellWidth);
     Cmd.Y2 := NormalizeY(fCurrentY + RowHeight);
-    Cmd.Color := clBlack;
+    Cmd.Color := fTableLayout.GridColor;
     Cmd.LineWidth := 1;
     AddCommand(Cmd);
 

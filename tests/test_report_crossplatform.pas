@@ -40,6 +40,7 @@ type
     procedure TestPlatformIndependentMetrics;
     procedure TestTaggedRepeatedHeaderAndTitle;
     procedure TestTableFooterRow;
+    procedure TestTableGridColor;
     procedure TestTableGroupsAcrossPages;
     procedure TestListItemBullet;
     procedure TestParagraphKeepsQuotes;
@@ -569,6 +570,50 @@ begin
     MS.Free;
     Report.Free;
   end;
+end;
+
+procedure TReportTests.TestTableGridColor;
+
+  // the colours of all cell borders the table records: -1 none, -2 mixed
+  function GridColorOf(GridColor: TColor): Integer;
+  var
+    Report: TGDIPages;
+    Layout: TTableLayout;
+    i: Integer;
+  begin
+    result := -1;
+    Report := TGDIPages.Create(nil);
+    try
+      Report.NewPage;
+      FillChar(Layout, SizeOf(Layout), 0);
+      SetLength(Layout.ColumnWidths, 2);
+      SetLength(Layout.ColumnAligns, 2);
+      Layout.ColumnWidths[0] := 5000;
+      Layout.ColumnWidths[1] := 5000;
+      Layout.GridColor := GridColor;
+      Report.BeginTable(Layout);
+      Report.DrawTableHeader(['Item', 'Value']);
+      Report.DrawTableRow(['Row', '10']);
+      Report.DrawTableFooter(['Total', '10']);
+      Report.EndTable;
+      Report.EndDoc;
+      for i := 0 to High(Report.Pages[0].Commands) do
+        with Report.Pages[0].Commands[i] do
+          if Kind = dckDrawRect then
+            if result = -1 then
+              result := Color
+            else if result <> Color then
+              result := -2;
+    finally
+      Report.Free;
+    end;
+  end;
+
+begin
+  // GridColor 0 is clBlack, the borders' colour before the field existed
+  CheckEqual(clBlack, GridColorOf(0), 'unset GridColor draws black borders');
+  CheckEqual($C0C0C0, GridColorOf($C0C0C0),
+    'GridColor on the header, data and footer borders');
 end;
 
 
