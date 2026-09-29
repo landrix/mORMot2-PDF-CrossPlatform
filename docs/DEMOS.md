@@ -453,9 +453,9 @@ Shows how to render Chinese (CJK) text with `TPdfDocumentVcl`. CJK ideographs re
 - CJK has no contextual shaping — `UseUniscribe` stays off, on every platform
 - `EmbeddedWholeTtf := False` embeds only the glyphs actually drawn, on every platform: hb-subset on Linux/macOS (ROADMAP R-12), `CreateFontPackage` driven by a glyph keep list on Windows (R-15). Both keep the glyph numbering, so Identity-H and `/ToUnicode` stay valid
 - Root cause of the historic CJK failure: `lfCharSet = ANSI_CHARSET` restricted CMAP to Latin only; the fix passes `Font.Charset` (DEFAULT_CHARSET) via `TPdfVclCanvas.SyncFont`
-- What subsetting saves here: Microsoft YaHei / WQY covers 28,000+ ideographs (~17 MB TTF), so embedding the whole face costs about 24 MB where the subset costs 39 KB
+- What subsetting saves here: Microsoft YaHei covers 28,000+ ideographs (~17 MB TTF), so embedding the whole face costs about 24 MB where the subset costs 39 KB
 - `EmbeddedWholeTtf := True` still embeds the complete TTF binary, should a consumer need the full CMAP
-- Platform-specific CJK fonts: Microsoft YaHei (Windows) / Hiragino Sans GB (macOS) / WQY MicroHei (Linux)
+- Platform-specific CJK fonts: Microsoft YaHei (Windows) / Hiragino Sans GB (macOS) / Droid Sans Fallback (Linux)
 
 **Font requirements:**
 
@@ -463,7 +463,7 @@ Shows how to render Chinese (CJK) text with `TPdfDocumentVcl`. CJK ideographs re
 |---|---|---|
 | Windows | Microsoft YaHei | pre-installed (Vista+) |
 | macOS | Hiragino Sans GB | pre-installed |
-| Linux | WQY MicroHei | `sudo apt install fonts-wqy-microhei` |
+| Linux | Droid Sans Fallback | `sudo apt install fonts-droid-fallback` |
 
 **Core pattern:**
 

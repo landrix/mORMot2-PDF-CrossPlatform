@@ -151,7 +151,7 @@ begin
   WriteLn('File size : ', PdfSize div 1024, ' KB');
   WriteLn('Font used : ', CJK_FONT, '  (EmbeddedWholeTtf=false)');
   WriteLn('');
-  WriteLn('YaHei/WQY covers 28000+ CJK glyphs (~17 MB TTF), so only the glyphs');
+  WriteLn('Microsoft YaHei covers 28000+ CJK glyphs (~17 MB TTF), so only the glyphs');
   WriteLn('actually drawn are embedded: hb-subset on Linux/macOS (ROADMAP R-12),');
   WriteLn('CreateFontPackage with a glyph keep list on Windows (R-15). Both keep');
   WriteLn('the glyph numbering, so Identity-H and /ToUnicode stay valid.');

@@ -30,7 +30,7 @@ layer's API takes from below, that layer re-exports:
 | Layer | `uses` | Re-exports |
 |---|---|---|
 | 3 — `TGDIPages` | `mormot.ui.report`; a GUI adds `mormot.ui.reportpreview` for preview and printing | what the `ExportPdf*` options take: `TPdfALevel` (`pdfaNone` … `pdfa3U`), `TPdfFileFormat` (`pdf13` … `pdf17`), `TPdfAFRelationship` (`afr*`), `PdfMetadataFacturX` |
-| 2 — `TPdfDocumentVcl` | `mormot.ui.pdfcanvas`, `mormot.ui.pdf` | `TPdfALevel`, `TPdfAFRelationship`; the rest of the document API comes from `mormot.ui.pdf` |
+| 2 — `TPdfDocumentVcl` | `mormot.ui.pdfcanvas`, `mormot.ui.pdf` | `TPdfALevel`, `TPdfAFRelationship`, `PdfMetadataFacturX`; the rest of the document API comes from `mormot.ui.pdf` |
 | 1 — `TPdfDocument` | `mormot.ui.pdf` | — |
 
 `mormot.pdf.types` goes beside layers 1 and 2 for the structure roles
@@ -163,7 +163,7 @@ Report.NewPage;
 Report.DrawHeading(1, 'Report title');
 // ... draw, then ExportPdfStream / ExportPDF
 
-// Low-level API
+// TCanvas bridge (layer 2)
 Doc.Tagged          := True;
 Doc.DefaultLanguage := 'en';
 GetPdfFonts(Doc.EmbeddedTTF, SansFont, SerifFont, MonoFont);
@@ -232,12 +232,22 @@ France. Invoices to German public authorities take pure XML (XRechnung), not
 a PDF, and are not in scope.
 
 ```pascal
+// TCanvas bridge (layer 2)
 Doc := TPdfDocumentVcl.Create(true, 0, pdfa3U);   // not the PdfA property: it resets the document
 Doc.Tagged := True;
 // ... draw the invoice ...
 Doc.CreateFileAttachmentFrom(Xml, 'factur-x.xml', 'Factur-X invoice data',
   'text/xml', Now, Now, nil, afrAlternative);
 Doc.PdfAMetadaExtension := PdfMetadataFacturX('EN 16931');
+
+// Report engine (layer 3) - mormot.ui.report alone
+Report.ExportPdfLevel := pdfa3U;
+Report.ExportPdfTagged := True;
+// ... draw the invoice ...
+Report.AddExportPdfAttachment(Xml, 'factur-x.xml', 'Factur-X invoice data',
+  'text/xml', afrAlternative);
+Report.ExportPdfMetadataExtension := PdfMetadataFacturX('EN 16931');
+Report.ExportPdfStream(Stream);
 ```
 
 ---
@@ -260,6 +270,9 @@ Full guide: [docs/DEMOS.md](docs/DEMOS.md)
 ---
 
 ## Build
+
+Requirements: FreePascal 3.2+ with Lazarus and the mORMot2 sources (the
+Lazarus package `mormot2`), or Delphi 7 / Delphi 2010 for Win32 — see below.
 
 ```bash
 # Windows
@@ -284,6 +297,7 @@ lazbuild examples/layer1_demo/layer1_demo.lpi -B
 
 # Test suite
 lazbuild tests/test_runner.lpi -B && tests/bin/<cpu-os>/test_runner
+# on Windows: tests\bin\x86_64-win64\test_runner.exe --noenter (it waits for Enter otherwise)
 ```
 
 **Delphi 7** (Win32: layer 1, the TCanvas bridge, the `TGDIPages` core) builds from the command line. `MORMOT2` points to
@@ -325,17 +339,17 @@ exports without one.
 **Linux:**
 ```bash
 sudo apt install libfreetype6                    # required — PDF font rendering
-sudo apt install libharfbuzz0b                   # optional — Arabic RTL shaping (rtl_demo)
+sudo apt install libharfbuzz0b                   # optional — shaping of Arabic, Hebrew, Indic ... (UseUniscribe)
 sudo apt install libharfbuzz-subset0             # optional — font subsetting (HarfBuzz 2.9+)
 sudo apt install fonts-noto-core                 # optional — Noto Naskh Arabic (rtl_demo)
-sudo apt install fonts-wqy-microhei              # optional — CJK font (chinese_demo)
+sudo apt install fonts-droid-fallback            # optional — Droid Sans Fallback, CJK (chinese_demo)
 ```
 Fonts are detected automatically from `/usr/share/fonts`, `/usr/local/share/fonts`, `~/.fonts`.
 
 **macOS:**
 ```bash
 brew install freetype
-brew install harfbuzz          # optional — Arabic RTL shaping and font subsetting
+brew install harfbuzz          # optional — shaping (UseUniscribe) and font subsetting
 ```
 Fonts from `/Library/Fonts`, `/System/Library/Fonts`, `~/Library/Fonts`.
 

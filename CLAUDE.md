@@ -9,7 +9,7 @@ The original document (`reference/mormot.ui.pdf.pas`) was Windows/GDI-only; this
 
 **RULE: Read the relevant skill file(s) BEFORE doing anything else — before reading source files, before searching, before planning.**
 
-Skills contain complete, distilled API and architectural knowledge. The main source files are very large (mormot.ui.pdf.pas is 14,600+ lines, mormot.ui.report.pas 2,800+); reading them without necessity wastes context and time.
+Skills contain complete, distilled API and architectural knowledge. The main source files are very large (mormot.ui.pdf.pas is 15,000+ lines, mormot.ui.report.pas 2,900+); reading them without necessity wastes context and time.
 
 | Skill | When to use |
 |---|---|
@@ -70,10 +70,10 @@ src/
   platform/
     windows/mormot.pdf.gdi.pas  GDI backend (Windows)
     unix/mormot.pdf.freetype.pas FreeType2 backend (Linux/macOS)
-    unix/mormot.pdf.harfbuzz.pas HarfBuzz text shaper (Linux/macOS, used by mormot.ui.pdf)
-    unix/mormot.pdf.hbsubset.pas hb-subset font subsetter (Linux/macOS, optional)
+    unix/mormot.pdf.harfbuzz.pas HarfBuzz text shaper (Linux/macOS; used by mormot.ui.pdf, library optional)
+    unix/mormot.pdf.hbsubset.pas hb-subset font subsetter (Linux/macOS; used by mormot.ui.pdf, library optional)
   lib/
-    mormot.lib.uniscribe.pas    Uniscribe text shaping (Windows, optional)
+    mormot.lib.uniscribe.pas    Uniscribe text shaping (Windows; used by mormot.ui.pdf unless NO_USE_UNISCRIBE)
 examples/
   pdf_demo/           Demo 1 — TPdfDocumentVcl, TCanvas API, Tagged PDF (console)
   report_demo/        Demo 2 — TGDIPages, GUI preview, tagged PDF
@@ -93,7 +93,7 @@ tests/
   delphi7_core.dpr             Delphi 7 compile guard for the core units
   no_hbsubset.sh               Linux: tests and console demos with libharfbuzz-subset hidden
   test_pdf_crossplatform.pas   platform backend, text shaper, TTC extraction
-  test_pdf_smoke.pas           PDF basics, tagged output, struct tree, tagged Unicode (all through TPdfCanvas)
+  test_pdf_smoke.pas           PDF basics, tagged output, struct tree, tagged Unicode, the shaping switch (through TPdfCanvas; one bridge test)
   test_report_crossplatform.pas report engine, tables, tagged export
   test_pdf_subset.pas          font subsetting: IPdfFontSubsetter and TPdfDocument
   test_pdf_pdfa.pas            PDF/A-3: associated files, XMP schemas, PdfMetadataFacturX, level U
@@ -109,7 +109,7 @@ CHANGELOG.md          Released versions; "Unreleased" collects what comes next
 .claude/skills/
   pdf-engine.md       TPdfDocument, TPdfDocumentVcl, TPdfCanvas — full API, enums, encryption, FPImage
   report-engine.md    TGDIPages — all methods, tables, command recording, global helpers
-  platform-backends.md IPdfPlatformFont/SystemFonts/DC — interfaces, backends, data types
+  platform-backends.md IPdfPlatformFont/SystemFonts/DC, IPdfTextShaper/IPdfFontSubsetter — interfaces, backends, registration, the shaping switch
   call-graph.md       Complete call graph: font lifecycle (4a–4d), rendering, image, bookmarks
   fonts.md            Font handling deep reference: dual-instance model, CMAP loading, text rendering chains, RTL/Arabic
 ```
@@ -177,7 +177,7 @@ Two modes — do not mix:
 | Mode | Property | Fonts |
 |---|---|---|
 | Type1 (no embedding) | `StandardFontsReplace := True` | Helvetica, Times, Courier |
-| TrueType (with embedding) | `EmbeddedTTF := True` | OS-specific via `GetReportFonts()` |
+| TrueType (with embedding) | `EmbeddedTTF := True` | OS-specific via `GetExportFonts()` (report) or `GetPdfFonts()` (layers 1–2) |
 
 **Tagged PDF selects the mode itself.** `Tagged := True` / `ExportPdfTagged := True`
 forces the TrueType mode, because PDF/UA does not allow non-embedded base-14
@@ -336,7 +336,7 @@ itself is in each demo's `uReport.pas`; the form only passes its options.
 
 - **Font subsetting**: default (`EmbeddedWholeTtf = False`) on all platforms, two implementations, both keeping the original glyph IDs and therefore safe for CJK, shaped Arabic and tagged output. **Linux/macOS** (R-12): `IPdfFontSubsetter` from `mormot.pdf.hbsubset` (`libharfbuzz-subset`); 97–99.5% smaller PDFs. **Windows** (R-15): `CreateFontPackage` with a glyph keep list (`TTFCFP_FLAGS_GLYPHLIST`). The whole face is embedded instead for PDF/A-1 (no `/CIDSet`), for symbol fonts on POSIX (R-15b) and when `libharfbuzz-subset` is missing. See `.claude/skills/fonts.md` §3, §9
 - **CFF faces are subset too** (R-15c, done): a CFF-flavoured face goes to `/FontFile3` with `/Subtype /OpenType` as a `CIDFontType0`; `glyf` goes to `/FontFile2`. `PdfFontFileKey()` picks the key. Embedding CFF in `/FontFile2` was a spec violation poppler warned about — do not reintroduce it by assuming one key fits both
-- **RTL / Arabic text**: HarfBuzz delivers correct ligatures on Linux/macOS; Windows uses Uniscribe — see `.claude/skills/fonts.md` §10
+- **RTL / Arabic text**: one switch, `UseUniscribe` — HarfBuzz delivers correct ligatures on Linux/macOS, Windows uses Uniscribe; `RightToLeftText` is the direction only — see `.claude/skills/fonts.md` §10
 - **Testing RTL**: Linux fonts (Noto Naskh Arabic) resolve shaped glyphs through the CMAP, so they never exercise the shaper's own advance path. Validate RTL work against a font without Arabic presentation forms — see `.claude/skills/fonts.md` §10
 - **TTC collections**: only face index 0 is reachable; `TPdfFontMap` has no face index, so the other faces of a `.ttc` cannot be selected by name
 - **EMF/MetaFile**: Windows-only (`TPdfDocumentGdi`), not portable
@@ -344,7 +344,7 @@ itself is in each demo's `uReport.pas`; the form only passes its options.
 - **Table pagination**: no row break within a cell (roadmap R-10)
 - **Symbol fonts on POSIX**: excluded from subsetting, the whole face is embedded (roadmap R-15b); neither side is covered by a demo or test
 - **PDF/A** (R-17): A-3U + PDF/UA-1, A-3A (tagged) and A-3B verified on all three platforms with veraPDF, Mustang and PAC; A-1 and A-2 implemented, unverified. Pass the level to the constructor — the `PdfA` setter calls `NewDoc`. A levels need `Tagged := True`. With PDF/A + Tagged the engine describes `pdfuaid` in the XMP extension schemas, inside the caller's `<pdfaExtension:schemas><rdf:Bag>` if `PdfAMetadaExtension` has one — keep that single list
-- **E-invoices**: the engine writes the PDF/A-3 container (`CreateFileAttachmentFrom` + `PdfMetadataFacturX`) and never generates or validates invoice XML. Scope is B2B (ZUGFeRD/Factur-X profile EN 16931); invoices to German authorities are pure XML and out of scope. Third-party material only with a verified license, recorded in the demo's `THIRD_PARTY.md`
+- **E-invoices**: the engine writes the PDF/A-3 container (`CreateFileAttachmentFrom` + `PdfMetadataFacturX`; in `TGDIPages` `AddExportPdfAttachment` + `ExportPdfMetadataExtension`) and never generates or validates invoice XML. Scope is B2B (ZUGFeRD/Factur-X profile EN 16931); invoices to German authorities are pure XML and out of scope. Third-party material only with a verified license, recorded in the demo's `THIRD_PARTY.md`
 - **Charts**: out of scope — no chart engine, as no invoice XML. A chart is an
   image from a chart library in a `Figure` with `/Alt`, its values as a table
   besides. `layer1_demo`'s figure is deliberately a set of shapes, not a
@@ -373,7 +373,7 @@ Current verification status per platform, and the open items in detail:
 
 ## Dependencies
 
-Build: FreePascal 3.0+, Lazarus 2.0+, mORMot2-Core
+Build: FreePascal 3.2+ with Lazarus (what mORMot2 requires; used here: FPC 3.2.2), or Delphi 7 / Delphi 2010 for Win32 (no preview window yet, R-20); mORMot2 sources
 
 Runtime Windows: none (GDI is part of the OS)
 
@@ -385,8 +385,9 @@ sudo dnf install freetype           # Fedora/RHEL
 
 Runtime macOS: `libfreetype.6.dylib` (`brew install freetype`)
 
-Optional on Linux/macOS: HarfBuzz 2.9+ with its subset library, for RTL shaping
-and font subsetting (without it, the whole face is embedded)
+Optional on Linux/macOS: HarfBuzz for shaping (`UseUniscribe`), and HarfBuzz 2.9+
+with its subset library for font subsetting (without it, the whole face is
+embedded). Both are loaded at run time; nothing to link
 ```bash
 sudo apt install libharfbuzz0b libharfbuzz-subset0   # Debian 12+/Ubuntu 22.04+
 sudo dnf install harfbuzz                            # Fedora/RHEL

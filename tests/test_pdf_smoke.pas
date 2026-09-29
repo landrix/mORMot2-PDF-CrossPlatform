@@ -2,7 +2,7 @@
 // - migrated to TSynTestCase framework for mORMot2 compatibility
 // - drawn through TPdfDocument/TPdfCanvas (layer 1), so the suite runs on
 // Delphi too (R-19); the tests of the TCanvas bridge itself need
-// PDF_HASVCLCANVAS (test_defines.inc), which Delphi lacks until R-20
+// PDF_HASVCLCANVAS (test_defines.inc), set for every compiler since R-20
 unit test_pdf_smoke;
 
 interface
