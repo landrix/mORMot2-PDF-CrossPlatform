@@ -8,7 +8,7 @@ tagged output passes PAC 2024 with accepted hints only (W-1, W-2) and veraPDF
 `ua1`; PDF/A-3U with PDF/UA-1 is verified (R-17). Fonts are embedded and subset
 on all three platforms; tables carry `THead`/`TBody`/`TFoot` row groups.
 `test_runner` is green with 259 assertions on Windows (FPC, Delphi 7 and
-Delphi 2010), 315 on macOS and 296 on Linux. **Delphi:** layer
+Delphi 2010), 315 on macOS and 298 on Linux. **Delphi:** layer
 1, the TCanvas bridge and the `TGDIPages` core build on Delphi 7 (R-19, R-20
 steps 1–6) and on Delphi 2010, a Unicode Delphi (R-25); all six console demos
 and the `--export` of the two GUI demos give the same PDF as FPC. The files of
@@ -259,7 +259,11 @@ assigned before that.
    structure `H1`, 11 `P`, `Table` with `THead` 1 / `TBody` 2 / `TFoot` 3
    `TR`; the page looked at, PAC 2024 passes the files of all three
    compilers. The table borders are grey now: `TTableLayout.GridColor`, new.
-   **Open:** veraPDF `3u` and `ua1`, Mustang; then macOS and Linux
+   After 994cdb4 (no background `FillRect` on the PDF bridge): Windows
+   259/259 on all three compilers, the PDF unchanged (identical after
+   inflating and masking dates); Linux (aarch64) `test_runner` 298/298, the
+   demo pixel-identical (`pdftoppm`) with the same `pdftotext` output.
+   **Open:** veraPDF `3u` and `ua1`, Mustang; macOS
 
 **Accepted differences:** the layout changes, so the PDF is not compared with
 the old one, only checked again. `TTableLayout` styles all footer rows alike —
@@ -433,7 +437,7 @@ GUI) stay manual. veraPDF runs on Java and could follow as a later step.
 ### V — Verification Outstanding
 
 All three platforms build and pass `test_runner` (259 assertions on Windows
-with FPC, Delphi 7 and Delphi 2010, 315 on macOS, 296 on Linux).
+with FPC, Delphi 7 and Delphi 2010, 315 on macOS, 298 on Linux).
 Last full run 2026-09-29, after the shaping switch (`UseUniscribe`), on the
 files of macOS, Debian, FPC/Win64, Delphi 7 and Delphi 2010: the seven tagged
 files pass veraPDF `ua1` (35/35 files) and PAC 2024, `zugferd_demo` also `3u`
