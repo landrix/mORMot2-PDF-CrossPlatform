@@ -2,6 +2,11 @@
 
 Demo 6 of the [learning path](../../docs/DEMOS.md#demo-6--rtl_demo).
 
+**Layer 2.** `uses mormot.ui.pdfcanvas, mormot.ui.pdf` — the latter also for
+`TPdfCanvas.RightToLeftText`, one layer below the bridge — plus
+`mormot.pdf.types` for `GetPdfFonts`, and on Linux/macOS `mormot.pdf.freetype`
+and `mormot.pdf.harfbuzz` for the shaper.
+
 Draws Arabic with `TPdfDocumentVcl` twice in one PDF, unshaped and shaped, so
 the two paths can be compared side by side.
 

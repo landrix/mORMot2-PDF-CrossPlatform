@@ -182,7 +182,7 @@ begin
     Doc.Info.Title   := 'Rechnung 123456XX';
     Doc.Info.Author  := '[Seller name]';
     Doc.Info.Subject := 'Rechnung mit eingebetteten ZUGFeRD / Factur-X-Daten (EN 16931)';
-    Doc.DefaultPaperSize := mormot.ui.pdf.psA4;
+    Doc.DefaultPaperSize := psA4;
     Doc.AddPage;
     C := Doc.VclCanvas;
     C.Font.Name := SansFont;

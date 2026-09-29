@@ -122,7 +122,7 @@ begin
     // with a glyph keep list on Windows (R-15)
     Doc.EmbeddedWholeTtf := false;
     Doc.Info.Title       := 'Arabic RTL Demo';
-    Doc.DefaultPaperSize := mormot.ui.pdf.psA4;
+    Doc.DefaultPaperSize := psA4;
     GetPdfFonts(Doc.EmbeddedTTF, SansFont, SerifFont, MonoFont);
 
     Doc.AddPage;

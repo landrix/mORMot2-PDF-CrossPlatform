@@ -2,6 +2,9 @@
 
 Demo 7 of the [learning path](../../docs/DEMOS.md#demo-7--zugferd_demo).
 
+**Layer 2.** `uses mormot.ui.pdfcanvas, mormot.ui.pdf`, plus `mormot.pdf.types`
+for the structure roles.
+
 Draws a one-page invoice with `TPdfDocumentVcl` and embeds its machine-readable
 data, `factur-x.xml`, as an associated file: a hybrid invoice of the
 ZUGFeRD 2.x / Factur-X 1.x profile **EN 16931**, as exchanged between

@@ -23,6 +23,14 @@ e.g. `pdf_demo_windows_x64_free-pascal-3.2.2.pdf` or
 can so share one folder for checking. The GUI demos write it with `--export`
 and no file name.
 
+**One unit per layer.** Each demo uses the units of its layer only: Demos 2–4
+`mormot.ui.report` (the GUI forms add `mormot.ui.reportpreview`), Demos 1 and
+5–7 `mormot.ui.pdfcanvas` with `mormot.ui.pdf`, Demo 8 `mormot.ui.pdf`. A
+layer re-exports what its API takes from below, so a report never needs
+`mormot.ui.pdf` — and must not have it: both units declare `psA4`, and the
+order of the `uses` clause would decide which one is meant. See the main
+README, "Which unit to use".
+
 ---
 
 ## Demo 1 — pdf_demo_crossplat
@@ -54,9 +62,9 @@ Shows how to produce a 3-page PDF from TCanvas commands using `TPdfDocumentVcl` 
 **Core pattern:**
 
 ```pascal
-uses mormot.pdf.types, mormot.ui.pdf, mormot.ui.pdfcanvas, mormot.ui.report;
+uses mormot.pdf.types, mormot.ui.pdf, mormot.ui.pdfcanvas;
 
-var Doc: TPdfDocumentVcl; C: TCanvas;
+var Doc: TPdfDocumentVcl; C: TPdfVclCanvas;
 begin
   Doc := TPdfDocumentVcl.Create;
   // Tagged PDF — must be set BEFORE AddPage and before the font names are
@@ -67,7 +75,7 @@ begin
   // asked afterwards, so the names match the mode Tagged just selected
   GetPdfFonts(Doc.EmbeddedTTF, SansFont, SerifFont, MonoFont);
   Doc.Info.Title      := 'mORMot2 PDF Cross-Platform Demo';
-  Doc.DefaultPaperSize := mormot.ui.pdf.psA4;
+  Doc.DefaultPaperSize := psA4;
 
   // --- Page 1: Fonts & Text ---
   Doc.AddPage;
@@ -460,11 +468,11 @@ Shows how to render Chinese (CJK) text with `TPdfDocumentVcl`. CJK ideographs re
 **Core pattern:**
 
 ```pascal
-uses mormot.ui.pdf, mormot.ui.pdfcanvas, mormot.ui.report;
+uses mormot.pdf.types, mormot.ui.pdf, mormot.ui.pdfcanvas;
 
 const CJK_FONT = 'Microsoft YaHei'; // Windows example
 
-var Doc: TPdfDocumentVcl; C: TCanvas;
+var Doc: TPdfDocumentVcl; C: TPdfVclCanvas;
 begin
   Doc := TPdfDocumentVcl.Create;
   Doc.EmbeddedTTF      := True;
@@ -545,7 +553,7 @@ uses
   {$endif}
   mormot.ui.pdf, mormot.ui.pdfcanvas;
 
-var Doc: TPdfDocumentVcl; C: TCanvas; PdfC: TPdfCanvas;
+var Doc: TPdfDocumentVcl; C: TPdfVclCanvas; PdfC: TPdfCanvas;
 begin
   Doc := TPdfDocumentVcl.Create;
   Doc.EmbeddedTTF      := True;
@@ -554,7 +562,7 @@ begin
 
   Doc.AddPage;
   C    := Doc.VclCanvas;
-  PdfC := (C as TPdfVclCanvas).PdfCanvas;
+  PdfC := C.PdfCanvas;
 
   // --- Section 1: NoShaper path — isolated form, CMAP fix test ---
   PdfC.RightToLeftText := False;

@@ -106,7 +106,7 @@ begin
     Doc.UseUniscribe     := false; // CJK needs no contextual shaping
     {$endif MSWINDOWS}
     Doc.Info.Title       := 'Chinese PDF Demo';
-    Doc.DefaultPaperSize := mormot.ui.pdf.psA4;
+    Doc.DefaultPaperSize := psA4;
     GetPdfFonts(Doc.EmbeddedTTF, SansFont, SerifFont, MonoFont);
 
     Doc.AddPage;

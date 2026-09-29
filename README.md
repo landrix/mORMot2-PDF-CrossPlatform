@@ -22,6 +22,28 @@ TPdfDocumentVcl     mormot.ui.pdfcanvas  TCanvas-compatible wrapper
 TPdfDocument        mormot.ui.pdf        Direct PDF API, no TCanvas (links the LCL/VCL Graphics unit)
 ```
 
+### Which unit to use
+
+A program uses the units of the layer it works on, as listed here; what a
+layer's API takes from below, that layer re-exports:
+
+| Layer | `uses` | Re-exports |
+|---|---|---|
+| 3 — `TGDIPages` | `mormot.ui.report`; a GUI adds `mormot.ui.reportpreview` for preview and printing | what the `ExportPdf*` options take: `TPdfALevel` (`pdfaNone` … `pdfa3U`), `TPdfFileFormat` (`pdf13` … `pdf17`), `TPdfAFRelationship` (`afr*`), `PdfMetadataFacturX` |
+| 2 — `TPdfDocumentVcl` | `mormot.ui.pdfcanvas`, `mormot.ui.pdf` | `TPdfALevel`, `TPdfAFRelationship`; the rest of the document API comes from `mormot.ui.pdf` |
+| 1 — `TPdfDocument` | `mormot.ui.pdf` | — |
+
+`mormot.pdf.types` goes beside layers 1 and 2 for the structure roles
+(`psrH1`, `psrP`, …) and `GetPdfFonts`.
+
+**Never put `mormot.ui.pdf` beside `mormot.ui.report`.** The two use some of
+the same names for different things — `psA4` is a `TPdfPaperSize` in one and
+a `TGdiPagePaperSize` in the other, and `mormot.ui.pdf`'s `TRect` is not the
+LCL's — so the order of the `uses` clause decides which one a name means.
+With `mormot.ui.pdf` last, `Report.PaperSize := psA4` does not compile. What a
+report needs from below is re-exported by `mormot.ui.report`; if something is
+missing, it belongs there, not in your `uses` clause.
+
 ---
 
 ## Quick start

@@ -81,7 +81,7 @@ begin
 
     Doc.Info.Title   := 'mORMot2 PDF Cross-Platform Demo';
     Doc.Info.Author  := 'Portierungsprojekt';
-    Doc.DefaultPaperSize :=  mormot.ui.pdf.psA4;
+    Doc.DefaultPaperSize := psA4;
 
     // --- Page 1: Fonts & Text ---
     Doc.AddPage;
