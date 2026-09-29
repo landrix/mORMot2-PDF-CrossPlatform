@@ -238,7 +238,9 @@ TGDIPages.ExportPdfStream(aDest: TStream)
   │    ↑ assigned after Tagged, and SetExportPdfTagged has already aligned them,
   │      so the two cannot contradict each other
   │  Doc.Info.Title/Author/Subject := ...
-  │  Doc.NewDoc
+  │  Doc.PdfAMetadaExtension := ExportPdfMetadataExtension
+  │    ↑ before SaveToStreamDirectBegin: PDF/A writes its XMP packet there
+  │  Doc.SaveToStreamDirectBegin(aDest)
   │
   │  fActivePdfDoc := Doc   ← stored so RenderPageToCanvas can call BeginStructContent
   │
@@ -266,8 +268,11 @@ TGDIPages.ExportPdfStream(aDest: TStream)
   │    └─ headings with UseOutlines: Doc.CreateOutline(Title, Level, Y)
   │
   │  fActivePdfDoc := nil
-  │  Doc.SaveToStreamDirectEnd    ← flushes StructTreeRoot + ParentTree
-  │  Doc.SaveToStream(aDest)      ← serialise PDF (see Path 1)
+  │  (each page: SaveToStreamDirectPageFlush)
+  │  AddHeadingsToOutline(Doc)
+  │  Doc.CreateFileAttachmentFrom(...)  per AddExportPdfAttachment entry
+  │  Doc.SaveToStreamDirectEnd    ← flushes StructTreeRoot + ParentTree,
+  │                                 catalog (/AF, /EmbeddedFiles), xref
   └─ returns true on success
 ```
 

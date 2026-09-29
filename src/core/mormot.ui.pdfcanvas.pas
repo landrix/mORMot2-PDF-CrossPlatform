@@ -55,6 +55,9 @@ type
   /// Re-export TPdfALevel from mormot.ui.pdf to allow importing only mormot.pdf.vclcanvas
   TPdfALevel = mormot.ui.pdf.TPdfALevel;
 
+  /// Re-export TPdfAFRelationship for TGDIPages.AddExportPdfAttachment
+  TPdfAFRelationship = mormot.ui.pdf.TPdfAFRelationship;
+
   /// Re-export TPdfFontMeasurer so TGDIPages can lay out its pages with the
   // metrics of the PDF font engine without pulling all of mormot.ui.pdf — that
   // unit re-exports Windows-style TRect/TPoint which clash with the LCL ones
@@ -244,6 +247,12 @@ const
   pdfa3A = mormot.ui.pdf.pdfa3A;
   pdfa3B = mormot.ui.pdf.pdfa3B;
   pdfa3U = mormot.ui.pdf.pdfa3U;
+  /// Re-export the /AFRelationship values from mormot.ui.pdf
+  afrUnspecified = mormot.ui.pdf.afrUnspecified;
+  afrSource = mormot.ui.pdf.afrSource;
+  afrData = mormot.ui.pdf.afrData;
+  afrAlternative = mormot.ui.pdf.afrAlternative;
+  afrSupplement = mormot.ui.pdf.afrSupplement;
 
 implementation
 

@@ -330,7 +330,7 @@ Report.ExportPDF(FileName, UsePassword, Encrypt, Title, Author);
 // PDF export configuration:
 Report.ExportPdfEmbeddedTTF    := True;      // embed TrueType fonts
 Report.ExportPdfStandardFonts  := False;     // use Type1 instead of TTF
-Report.ExportPdfLevel          := pdfA1B;    // PDF/A conformance level
+Report.ExportPdfLevel          := pdfa3U;    // PDF/A level, pdfaNone (default) … pdfa3U
 Report.ExportPdfFileFormat     := pdf17;     // PDF version header (default: pdf13)
 Report.ExportPdfAuthor         := 'Company';
 Report.ExportPdfSubject        := 'Report';
@@ -338,7 +338,21 @@ Report.ExportPdfCreator        := 'My App';   // /Creator; empty = executable na
 Report.Title   := 'Document title';
 Report.Author  := 'Author name';
 Report.Subject := 'Subject';
+
+// PDF/A-3 associated files and XMP extension (R-26, ZUGFeRD/Factur-X):
+Report.AddExportPdfAttachment(Xml, 'factur-x.xml', 'Factur-X invoice data',
+  'text/xml', afrAlternative);       // kept until ClearExportPdfAttachments
+Report.ExportPdfMetadataExtension := PdfMetadataFacturX('EN 16931', 'factur-x.xml');
 ```
+
+`ExportPdfStream` owns its `TPdfDocumentVcl`, so these are the only way to
+reach `CreateFileAttachmentFrom` and `PdfAMetadaExtension`. The extension is
+assigned **before** `SaveToStreamDirectBegin` — PDF/A writes its XMP packet
+there; the attachments are created after the outlines, before
+`SaveToStreamDirectEnd`, which works in the direct streaming mode
+(`TestExportPdfAttachment`). `TPdfAFRelationship` and the `afr*` values are
+re-exported by `mormot.ui.pdfcanvas`; `PdfMetadataFacturX` is not — take it
+from `mormot.ui.pdf`.
 
 ### Font Selection for Export
 

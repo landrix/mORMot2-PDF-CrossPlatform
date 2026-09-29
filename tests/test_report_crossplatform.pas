@@ -17,6 +17,8 @@ uses
   Graphics,
   mormot.core.base,
   mormot.core.test,
+  mormot.lib.z,      // UncompressZipString
+  mormot.ui.pdf,     // PdfMetadataFacturX
   mormot.ui.report;  // includes TPrinterOrientation re-export
 
 type
@@ -42,6 +44,7 @@ type
     procedure TestTableGroupsAcrossPages;
     procedure TestListItemBullet;
     procedure TestParagraphKeepsQuotes;
+    procedure TestExportPdfAttachment;
   end;
 
 implementation
@@ -672,6 +675,108 @@ begin
     Check(lines > 1, 'the quoted part wraps like any text');
     CheckEqual(t, QUOTED, 'quotes kept');
   finally
+    Report.Free;
+  end;
+end;
+
+// the file with every FlateDecode stream inflated in place: PDF/A-3 is PDF
+// 1.7, whose object streams hide the catalog and the file specification
+function InflatePdf(const s: RawUtf8): RawUtf8;
+var
+  p, q, body, e: integer;
+  z: RawUtf8;
+begin
+  result := '';
+  p := 1;
+  q := PosEx('stream', s, 1);
+  while q > 0 do
+  begin
+    if (q > 3) and (copy(s, q - 3, 3) = 'end') then
+    begin
+      q := PosEx('stream', s, q + 6);
+      continue;
+    end;
+    body := q + 6;
+    if (body <= length(s)) and (s[body] = #13) then
+      inc(body);
+    if (body <= length(s)) and (s[body] = #10) then
+      inc(body);
+    e := PosEx('endstream', s, body);
+    if e = 0 then
+      break;
+    result := result + copy(s, p, body - p);
+    z := '';
+    // only a stream dictionary carries a /Filter, so the text since the
+    // previous stream names this stream's filter
+    if PosEx('/FlateDecode', copy(s, p, q - p)) > 0 then
+      try
+        z := UncompressZipString(@s[body], e - body, nil, true);
+      except
+        z := '';
+      end;
+    if z = '' then
+      z := copy(s, body, e - body);
+    result := result + z;
+    p := e;
+    q := PosEx('stream', s, e + 9);
+  end;
+  result := result + copy(s, p, maxInt);
+end;
+
+// true when s holds the key /AF, not only /AFRelationship
+function HasAfKey(const s: RawUtf8): boolean;
+var
+  p: integer;
+begin
+  result := true;
+  p := PosEx('/AF', s, 1);
+  while p > 0 do
+  begin
+    if (p + 3 <= length(s)) and (s[p + 3] <> 'R') then
+      exit;
+    p := PosEx('/AF', s, p + 3);
+  end;
+  result := false;
+end;
+
+procedure TReportTests.TestExportPdfAttachment;
+const
+  XML = '<?xml version="1.0"?><rsm:CrossIndustryInvoice/>';
+var
+  Report: TGDIPages;
+  MS: TMemoryStream;
+  s: RawUtf8;
+begin
+  // R-26: ExportPdfStream owns its TPdfDocumentVcl, so a ZUGFeRD/Factur-X
+  // invoice needs the attachment and the XMP extension as export options
+  Report := TGDIPages.Create(nil);
+  MS := TMemoryStream.Create;
+  try
+    Report.ExportPdfLevel := pdfa3U;
+    Report.ExportPdfTagged := true;
+    Report.NewPage;
+    Report.DrawHeading(1, 'Invoice');
+    Report.DrawParagraph(0, 10000, Report.CurrentY, 'Invoice data attached.');
+    Report.EndDoc;
+    Report.AddExportPdfAttachment(XML, 'factur-x.xml', 'Factur-X invoice data',
+      'text/xml', afrAlternative);
+    Report.ExportPdfMetadataExtension := PdfMetadataFacturX('EN 16931', 'factur-x.xml');
+    Check(Report.ExportPdfStream(MS), 'PDF/A-3U export with attachment');
+    FastSetString(s, MS.Memory, MS.Size);
+    s := InflatePdf(s);
+    Check(PosEx('<pdfaid:conformance>U</pdfaid:conformance>', s) > 0, 'PDF/A-3U');
+    Check(HasAfKey(s), 'catalog carries /AF (ISO 19005-3 6.8)');
+    Check(PosEx('/EmbeddedFiles', s) > 0, 'EmbeddedFiles name tree');
+    Check(PosEx('/AFRelationship/Alternative', s) > 0, 'relationship Alternative');
+    Check(PosEx(XML, s) > 0, 'the XML itself is embedded');
+    Check(PosEx('<fx:ConformanceLevel>EN 16931</fx:ConformanceLevel>', s) > 0,
+      'fx: profile in the XMP');
+    Check(PosEx('<fx:DocumentFileName>factur-x.xml</fx:DocumentFileName>', s) > 0,
+      'fx: file name in the XMP');
+    Check(PosEx('<pdfaSchema:prefix>fx</pdfaSchema:prefix>', s) > 0,
+      'fx: schema described');
+  finally
+    MS.Free;
     Report.Free;
   end;
 end;

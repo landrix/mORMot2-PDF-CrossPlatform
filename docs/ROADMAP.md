@@ -203,19 +203,17 @@ Report.ExportPdfMetadataExtension := PdfMetadataFacturX('EN 16931', 'factur-x.xm
 it hands out the document in the middle of the stream (an `AddPage` there
 breaks the file), and `of object` needs a helper class in a console program.
 
-**To check first:** whether `CreateFileAttachmentFrom` works in the direct
-streaming mode. `zugferd_demo` saves with `SaveToFile` today; the XMP packet
-is written at `SaveToStreamDirectEnd`, so the metadata extension fits there,
-the attachment is unknown. The test below answers it; if it fails, look into
-`mormot.ui.pdf.pas` (ask first, `CLAUDE.md`).
+**Answered (2026-09-29):** `CreateFileAttachmentFrom` works in the direct
+streaming mode, after the outlines. The metadata extension does not fit at
+the end: PDF/A writes its XMP packet in `SaveToStreamDirectBegin`, so it is
+assigned before that.
 
 **Work, in this order (on Windows: FPC, Delphi 7, Delphi 2010):**
-1. Test in `test_report_crossplatform`: a `TGDIPages` export with
-   `pdfa3U`, tagged, one attachment and `PdfMetadataFacturX` — `/AF` in the
-   catalog, `/EmbeddedFiles`, `/AFRelationship /Alternative`, the `fx:`
-   properties in the XMP. It fails before the extension
-2. The extension in `mormot.ui.report`; `report-engine.md` and
-   `API_REFERENCE.md` (whose `TPdfALevel` list also lacks `pdfa3U`)
+1. ~~Test~~ done: `TestExportPdfAttachment` in `test_report_crossplatform`
+   (inflates the object streams first); failed 7/9 with a stub
+2. ~~The extension~~ done: `AddExportPdfAttachment`,
+   `ClearExportPdfAttachments`, `ExportPdfMetadataExtension`; docs updated.
+   `test_runner` 253/253 on FPC, Delphi 7 and Delphi 2010 (Windows)
 3. `zugferd_demo` rewritten: reader → `TInvoice` → `TGDIPages`; README,
    `DEMOS.md`, the source header
 4. `test_runner` on all three compilers; the demo from all three gives the

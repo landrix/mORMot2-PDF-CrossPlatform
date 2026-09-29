@@ -83,7 +83,7 @@ Doc.SetStrokeAlpha(0.8);  // stroke opacity 0..1
 | `DefaultPageLandscape` | boolean | Landscape orientation |
 | `EmbeddedTtf` | boolean | Embed TrueType fonts |
 | `StandardFontsReplace` | boolean | Use Type1 fonts instead of TTF |
-| `PdfA` | `TPdfALevel` | pdfNone, pdfA1A, pdfA1B, pdfA2A, pdfA2B, pdfA3A, pdfA3B |
+| `PdfA` | `TPdfALevel` | pdfaNone, pdfa1A, pdfa1B, pdfa2A, pdfa2B, pdfa3A, pdfa3B, pdfa3U — pass it to the constructor: the setter calls `NewDoc` |
 | `FileFormat` | `TPdfFileFormat` | pdf13 (default) … pdf17; auto-raised by PdfA / Tagged |
 | `Tagged` | boolean | Enable Tagged PDF (ISO 32000-1 §14); auto-raises `FileFormat` to pdf17 |
 | `DefaultLanguage` | string | BCP-47 language tag for `/Lang` (default `'en'`) |
@@ -235,6 +235,24 @@ end;
 | `ExportPdfTagged` | boolean | `false` | Wrap all drawing commands in Tagged PDF struct elements on export |
 | `ExportPdfLanguage` | RawUtf8 | `'en'` | BCP-47 language tag written to `/Lang` when `ExportPdfTagged = true` |
 | `ExportPdfCreator` | RawUtf8 | `''` | `/Creator`; empty = executable name. A GUI application passes `StringToUtf8(Application.Title)` |
+| `ExportPdfLevel` | `TPdfALevel` | `pdfaNone` | PDF/A level of the export, `pdfaNone` … `pdfa3U` |
+| `ExportPdfMetadataExtension` | RawUtf8 | `''` | Raw XMP for a PDF/A export, e.g. `PdfMetadataFacturX('EN 16931')` from `mormot.ui.pdf` |
+
+### PDF/A-3 Attachments
+
+```pascal
+Report.ExportPdfLevel := pdfa3U;
+Report.ExportPdfTagged := True;
+// ... draw the report ...
+Report.AddExportPdfAttachment(Xml, 'factur-x.xml', 'Factur-X invoice data',
+  'text/xml', afrAlternative);       // afr* re-exported by mormot.ui.pdfcanvas
+Report.ExportPdfMetadataExtension := PdfMetadataFacturX('EN 16931', 'factur-x.xml');
+Report.ExportPdfStream(Stream);
+```
+
+`AddExportPdfAttachment(Content, Title, Description, MimeType, Relationship = afrAlternative)`
+embeds `Content` as an associated file (`/AF` in the catalog). The attachments
+stay for every later export until `ClearExportPdfAttachments`.
 
 ---
 

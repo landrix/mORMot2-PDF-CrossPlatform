@@ -190,6 +190,15 @@ type
     Y:        Integer;  // Y position in 1/100 mm
   end;
 
+  /// a file ExportPdfStream embeds, see TGDIPages.AddExportPdfAttachment
+  TReportPdfAttachment = record
+    Content:      RawByteString;
+    Title:        RawUtf8;
+    Description:  RawUtf8;
+    MimeType:     RawUtf8;
+    Relationship: TPdfAFRelationship;
+  end;
+
   { TGDIPages }
 
   /// cross-platform report engine
@@ -292,7 +301,9 @@ type
     fExportPdfFileFormat:  TPdfFileFormat;
     fExportPdfTagged:      boolean;
     fExportPdfLanguage:    RawUtf8;
-    fActivePdfDoc:         TPdfDocumentVcl;  // non-nil during tagged PDF export only
+    fExportPdfAttachments: array of TReportPdfAttachment;
+    fExportPdfMetadataExtension: RawUtf8;
+    fActivePdfDoc:        TPdfDocumentVcl;  // non-nil during tagged PDF export only
 
 
     { === CACHING: Zentrale Berechnung (einmal, viel verwendet) === }
@@ -588,6 +599,20 @@ type
     property ExportPdfTagged: boolean read fExportPdfTagged write SetExportPdfTagged;
     /// BCP-47 language tag for the Tagged PDF /Lang entry (default 'en')
     property ExportPdfLanguage: RawUtf8 read fExportPdfLanguage write fExportPdfLanguage;
+    /// embed a file in the exported PDF as an associated file (/AF)
+    // - PDF/A-3 (ExportPdfLevel pdfa3*) is the level that allows any file:
+    // ZUGFeRD/Factur-X embeds its invoice XML so, as 'factur-x.xml' with
+    // afrAlternative
+    // - kept for every later export, until ClearExportPdfAttachments
+    procedure AddExportPdfAttachment(const aContent: RawByteString;
+      const aTitle, aDescription, aMimeType: RawUtf8;
+      aRelationship: TPdfAFRelationship = afrAlternative);
+    /// remove the files added by AddExportPdfAttachment
+    procedure ClearExportPdfAttachments;
+    /// raw XMP added to the metadata of a PDF/A export
+    // - e.g. PdfMetadataFacturX() from mormot.ui.pdf
+    property ExportPdfMetadataExtension: RawUtf8
+      read fExportPdfMetadataExtension write fExportPdfMetadataExtension;
 
     /// Get font names based on current embedding mode
     // - When ExportPdfEmbeddedTTF=true: returns platform-specific TTF fonts
@@ -2754,6 +2779,29 @@ begin
   GetReportFonts(fExportPdfEmbeddedTTF, SansFont, SerifFont, MonoFont);
 end;
 
+procedure TGDIPages.AddExportPdfAttachment(const aContent: RawByteString;
+  const aTitle, aDescription, aMimeType: RawUtf8;
+  aRelationship: TPdfAFRelationship);
+var
+  n: PtrInt;
+begin
+  n := length(fExportPdfAttachments);
+  SetLength(fExportPdfAttachments, n + 1);
+  with fExportPdfAttachments[n] do
+  begin
+    Content := aContent;
+    Title := aTitle;
+    Description := aDescription;
+    MimeType := aMimeType;
+    Relationship := aRelationship;
+  end;
+end;
+
+procedure TGDIPages.ClearExportPdfAttachments;
+begin
+  fExportPdfAttachments := nil;
+end;
+
 function TGDIPages.ExportPdfStream(aDest: TStream): boolean;
 var
   PDF:          TPdfDocumentVcl;
@@ -2801,6 +2849,8 @@ begin
       end;
       PDF.EmbeddedTTF  := fExportPdfEmbeddedTTF;
       PDF.StandardFontsReplace := fExportPdfStandardFonts;
+      // before SaveToStreamDirectBegin: PDF/A writes its XMP packet there
+      PDF.PdfAMetadaExtension := fExportPdfMetadataExtension;
       PDF.SaveToStreamDirectBegin(aDest);
       { logical block state is per export run (see ROADMAP B-2) }
       fRenderBlockId   := 0;
@@ -2830,6 +2880,11 @@ begin
       { Add PDF outlines/bookmarks from headings (if headings exist) }
       if fHeadingCount > 0 then
         AddHeadingsToOutline(PDF);
+      for i := 0 to high(fExportPdfAttachments) do
+        with fExportPdfAttachments[i] do
+          PDF.CreateFileAttachmentFrom(Content, Utf8ToString(Title),
+            Utf8ToString(Description), Utf8ToString(MimeType), Now, Now, nil,
+            Relationship);
 
       PDF.SaveToStreamDirectEnd;
     finally
