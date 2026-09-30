@@ -65,15 +65,13 @@ src/
     mormot.ui.pdfcanvas.pas     TPdfDocumentVcl, TPdfVclCanvas
     mormot.pdf.types.pas        IPdfPlatformFont/SystemFonts/DC, types
     mormot.pdf.fpimage.pas      Bitmap embedding (FPImage)
-    mormot.ui.core.pas          UI helper functions
-    mormot.ui.gdiplus.pas       GDI+ support (Windows)
+    mormot.ui.core.pas          UI helper functions   } verbatim copies of mORMot2 src/ui,
+    mormot.ui.gdiplus.pas       GDI+ support (Windows) } which is not on the search path
   platform/
     windows/mormot.pdf.gdi.pas  GDI backend (Windows)
     unix/mormot.pdf.freetype.pas FreeType2 backend (Linux/macOS)
     unix/mormot.pdf.harfbuzz.pas HarfBuzz text shaper (Linux/macOS; used by mormot.ui.pdf, library optional)
     unix/mormot.pdf.hbsubset.pas hb-subset font subsetter (Linux/macOS; used by mormot.ui.pdf, library optional)
-  lib/
-    mormot.lib.uniscribe.pas    Uniscribe text shaping (Windows; used by mormot.ui.pdf unless NO_USE_UNISCRIBE)
 examples/
   pdf_demo/           Demo 1 — TPdfDocumentVcl, TCanvas API, Tagged PDF (console)
   report_demo/        Demo 2 — TGDIPages, GUI preview, tagged PDF

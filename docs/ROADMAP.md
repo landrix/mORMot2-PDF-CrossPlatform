@@ -29,6 +29,14 @@ here until the post is written, then the list is emptied. It is the only such
 list: the CHANGELOG entry of the next release is written from it. Emptied for
 v0.10.0 (2026-09-30).
 
+- **Fixed (EMF, Windows):** `PT_BEZIERTO` in `EMR_POLYDRAW`/`EMR_POLYDRAW16`
+  took the points i+1..i+3 instead of i..i+2, so a metafile curve drawn
+  with `PolyDraw` came out distorted (trunk d76f5d793, SynPDF #84);
+  `EMR_ALPHABLEND` records are rendered again under FPC (trunk b2b130b58)
+- **Builds on Windows aarch64 (FPC):** the fork's copy of
+  `mormot.lib.uniscribe` is gone - the `mormot2` package ships the unit and
+  hid the copy; `mormot.ui.core` and `mormot.ui.gdiplus` are the trunk
+  units again (R-28 step 1)
 - **Coming with R-20** (announce when done): the preview and the GUI demos
   on Delphi
 
