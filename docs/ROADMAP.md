@@ -531,6 +531,28 @@ obsolete — an archive demanding A-1 rejects A-3 precisely because A-3 permits
 arbitrary attachments. Say in the documentation which levels are verified
 instead.
 
+### `mormot_demo --export` Hangs in a Fresh Clone — unprioritised
+
+Found on Linux and macOS on 2026-09-29. `examples/mormot_demo/data/` is not
+versioned (only its `.db` is ignored), and `DemoDatabaseFile` (`server.pas`)
+falls back to `data` without creating it. SQLite answers `SQLITE_CANTOPEN`, the LCL shows the exception in
+a modal dialog, and the batch export waits for a click that never comes. With
+the folder present the demo runs. Two parts, both needed: `ForceDirectories`
+before opening the database, and in `--export` mode an exit code instead of a
+dialog, so a batch run fails instead of hanging.
+
+### CFF/CID Faces: poppler Warnings on macOS — unprioritised
+
+Found on 2026-09-29. For the Hiragino faces of `chinese_demo` (CFF, embedded
+as `CIDFontType0`, R-15c) poppler 26.02 reports "Missing or empty DescendantFonts entry in Type 0 font",
+"Mismatch between font type and embedded font file" and "Unknown font tag
+'F3'". The CFF path runs on macOS only: on Linux `chinese_demo` takes Droid
+Sans Fallback (`glyf`, `pdffonts`: CID TrueType) and poppler is silent, and
+the Windows CJK face is `glyf` too. The veraPDF runs so far did not cover it —
+`chinese_demo` is untagged and was not checked. Where to start: veraPDF
+(`3b` or a plain font check) on the macOS `chinese_demo.pdf`, then the Type 0
+dictionary and `/FontFile3` `/Subtype` against ISO 32000 9.7.4 and 9.9.
+
 ### W-1 — "Possibly Inappropriate Use of Figure" — accepted
 
 PAC 2024 passes, but keeps the hint "Possibly inappropriate use of figure
