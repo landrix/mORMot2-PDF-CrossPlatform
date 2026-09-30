@@ -72,6 +72,12 @@ interface
 {$endif USE_METAFILE}
 
 {$define USE_GRAPHICS_UNIT} // VCL/LCL usage is mandatory by now at low level
+{$ifdef OSPOSIX}
+  {$ifndef FPC}
+    // Delphi has no VCL on Linux/Android: no TBitmap/TGraphic images there
+    {$undef USE_GRAPHICS_UNIT}
+  {$endif FPC}
+{$endif OSPOSIX}
 
 // POSIX overrides: re-apply after all {$define} blocks above
 {$ifdef OSPOSIX}
@@ -1668,8 +1674,10 @@ type
     // ForceNoBitmapReuse is false
     // - if ForceCompression property is set, the picture will be stored as a JPEG
     // - you can specify a clipping rectangle region as ClipRc parameter
+    {$ifdef USE_GRAPHICS_UNIT}
     function CreateOrGetImage(B: TBitmap; DrawAt: PPdfBox = nil;
       ClipRc: PPdfBox = nil): PdfString;
+    {$endif USE_GRAPHICS_UNIT}
     /// create a new optional content group (layer)
     // - returns a TPdfOptionalContentGroup needed for
     // TPdfCanvas.BeginMarkedContent
@@ -3089,8 +3097,10 @@ type
     // - use TPdfForm to handle TMetafile in vectorial format
     // - an optional DontAddToFXref is available, if you don't want to add
     // this object to the main XRef list of the PDF file
+    {$ifdef USE_GRAPHICS_UNIT}
     constructor Create(aDoc: TPdfDocument; aImage: TGraphic;
       DontAddToFXref: boolean); reintroduce;
+    {$endif USE_GRAPHICS_UNIT}
     /// create an image from a supplied JPEG file name
     // - will raise an EFOpenError exception if the file doesn't exist
     // - an optional DontAddToFXref is available, if you don't want to add
@@ -3919,7 +3929,30 @@ const
     {$ifdef HASCODEPAGE} #$FEFF'" ' {$else} #$EF#$BB#$BF'" ' {$endif} +
     'id="W5M0MpCehiHzreSzNTczkc9d"?>';
 
-function RGBA(r, g, b, a: cardinal): COLORREF;
+{$ifndef USE_GRAPHICS_UNIT}
+// no VCL/LCL (Delphi on Linux/Android): the few Windows API names used
+// outside the metafile code; system colors fall back to Windows defaults
+const
+  MM_TEXT = 1;
+
+function GetSysColor(Index: integer): cardinal;
+begin
+  case Index of
+    5, 14:  // COLOR_WINDOW, COLOR_HIGHLIGHTTEXT
+      result := $FFFFFF;
+    15:     // COLOR_BTNFACE
+      result := $F0F0F0;
+    13:     // COLOR_HIGHLIGHT
+      result := $D77800;
+    17:     // COLOR_GRAYTEXT
+      result := $6D6D6D;
+  else      // COLOR_WINDOWTEXT, COLOR_BTNTEXT and the rest
+    result := 0;
+  end;
+end;
+{$endif USE_GRAPHICS_UNIT}
+
+function RGBA(r, g, b, a: cardinal): cardinal;
   {$ifdef HASINLINE} inline;{$endif}
 begin
   result := ((r shr 8) or ((g shr 8) shl 8) or ((b shr 8) shl 16) or ((a shr 8) shl 24));
@@ -3979,7 +4012,7 @@ begin
   result := StrToIntDef(tmp, GetACP);
 end;
 {$else}
-function LCIDToCodePage(ALcid: integer): integer;
+function LCIDToCodePage(const ALcid): integer; // SysLocale.DefaultLCID type differs
 begin
   result := CP_UTF8; // default to UTF-8 on non-Windows
 end;
@@ -9595,6 +9628,7 @@ begin
   fLastOutline := result;
 end;
 
+{$ifdef USE_GRAPHICS_UNIT}
 function TPdfDocument.CreateOrGetImage(
   B: TBitmap; DrawAt, ClipRc: PPdfBox): PdfString;
 var
@@ -9671,6 +9705,7 @@ begin
       with DrawAt^ do
         Canvas.DrawXObject(Left, Top, Width, Height, result);
 end;
+{$endif USE_GRAPHICS_UNIT}
 
 function TPdfDocument.CreateOptionalContentGroup(
   ParentContentGroup: TPdfOptionalContentGroup; const Title: string;
@@ -12155,6 +12190,7 @@ end;
 
 { TPdfImage }
 
+{$ifdef USE_GRAPHICS_UNIT}
 constructor TPdfImage.Create(aDoc: TPdfDocument; aImage: TGraphic;
   DontAddToFXref: boolean);
 var
@@ -12280,6 +12316,7 @@ begin
   fAttributes.AddItem('Height', fPixelHeight);
   fAttributes.AddItem('BitsPerComponent', 8);
 end;
+{$endif USE_GRAPHICS_UNIT}
 
 constructor TPdfImage.CreateJpegDirect(aDoc: TPdfDocument;
   const aJpegFileName: TFileName; DontAddToFXref: boolean);

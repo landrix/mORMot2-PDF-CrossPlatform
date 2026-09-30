@@ -128,6 +128,16 @@ earlier post covered them.
   `TGDIPages` from the data in `factur-x.xml`. `mormot.ui.report` re-exports
   what its `ExportPdf*` options take (PDF/A levels, `TPdfFileFormat`, `afr*`,
   `PdfMetadataFacturX`), so a report program needs no other unit of ours
+- **Delphi 13: Win64, Linux64 and Android64** (R-27): layer 1 and the
+  FreeType, HarfBuzz and hb-subset backends build with Delphi 13 for Linux64
+  and Android64 — the backends load their libraries through `mormot.core.os`
+  now, no longer FPC's `dynlibs`. `test_runner` 259/259 on Win32 and Win64,
+  green on Linux64 and Android64 (`tests/delphi13/`). On Delphi for
+  Linux/Android there is no VCL: `CreateOrGetImage(TBitmap)` and
+  `TPdfImage.Create(TGraphic)` are missing there, JPEG goes through
+  `CreateJpegDirect`, and the TCanvas bridge and `TGDIPages` do not build.
+  Android: fonts from `/system/fonts`, `PDF_FONT_TTF_*` are Roboto, Noto
+  Serif and Droid Sans Mono; the app ships its own `libfreetype.so`
 
 ---
 
@@ -348,9 +358,28 @@ double-encoded XMP packet header from Unicode Delphi (`XPACKET_BEGIN`, checked
 by `TestPdfA3UIdentification`) and the missing `{$APPTYPE CONSOLE}` of every
 console program under dcc32.
 
-**Open:** the 24 W1057/W1058 in the tests; Win64 Delphi (XE2 and later;
-FPC/Win64 is green) and newer RTL/VCL changes. Delphi 13 CE may follow as a
-manual cross-check through the IDE — optional.
+**Open:** the 24 W1057/W1058 in the tests. Win64 Delphi is green with
+Delphi 13 (R-27).
+
+### R-27 — Delphi 13: Win64, Linux64, Android64 — done, leftovers
+
+**Done 2026-09-29.** `tests/delphi13/test_runner.dproj` builds the suites
+from the IDE for Win32, Win64, Linux64 (PAServer) and Android64;
+`tests/delphi13/android` is an FMX host, since Android starts no console
+program — `build.cmd`, `run-emulator.cmd -Run` (unattended, log fetched,
+verdict as exit code), `BUILD-FREETYPE.md` for the NDK build of
+`libfreetype.so`. Results after the rebase onto 8bdd6bd: Win32 and Win64
+259/259, Android64 129/129 on an x86_64 AVD with ARM64 translation, Linux64
+171/171 on LMDE 7 (needs `fonts-liberation` and `fonts-noto-core`, else two
+tests fail). FPC after the move away from `dynlibs`: Linux 298/298 (also against
+mORMot2 2.4-stable) and macOS 317/317, the demo PDFs unchanged.
+
+**Open:**
+- the TCanvas bridge and `TGDIPages` on Delphi for Linux/Android: no VCL
+  there — an FMX or bitmap adapter would be the way (cf. `mormot.pdf.fpimage`)
+- HarfBuzz and hb-subset on Android: not packaged, their tests skip;
+  an NDK build as for FreeType would add shaping and subsetting
+- Delphi for macOS (OSX64/OSXARM64) untried
 
 ### R-22 — Source Comments Back to the Why — priority 3
 

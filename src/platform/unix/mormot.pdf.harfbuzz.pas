@@ -26,8 +26,8 @@ interface
 {$ifndef MSWINDOWS}
 
 uses
-  dynlibs,
   mormot.core.base,
+  mormot.core.os,
   mormot.pdf.types,
   mormot.pdf.freetype;
 
@@ -151,42 +151,42 @@ begin
   result := HarfBuzz.Loaded;
   if result then
     exit;
-  HarfBuzz.Handle := SafeLoadLibrary(HBLIB);
-  if HarfBuzz.Handle = NilHandle then
+  HarfBuzz.Handle := LibraryOpen(HBLIB);
+  if HarfBuzz.Handle = 0 then
   begin
     {$ifdef DARWIN}
-    HarfBuzz.Handle := SafeLoadLibrary('libharfbuzz.dylib');
-    if HarfBuzz.Handle = NilHandle then
-      HarfBuzz.Handle := SafeLoadLibrary('/opt/homebrew/lib/libharfbuzz.0.dylib');
-    if HarfBuzz.Handle = NilHandle then
-      HarfBuzz.Handle := SafeLoadLibrary('/opt/homebrew/lib/libharfbuzz.dylib');
-    if HarfBuzz.Handle = NilHandle then
-      HarfBuzz.Handle := SafeLoadLibrary('/usr/local/lib/libharfbuzz.0.dylib');
-    if HarfBuzz.Handle = NilHandle then
-      HarfBuzz.Handle := SafeLoadLibrary('/usr/local/lib/libharfbuzz.dylib');
+    HarfBuzz.Handle := LibraryOpen('libharfbuzz.dylib');
+    if HarfBuzz.Handle = 0 then
+      HarfBuzz.Handle := LibraryOpen('/opt/homebrew/lib/libharfbuzz.0.dylib');
+    if HarfBuzz.Handle = 0 then
+      HarfBuzz.Handle := LibraryOpen('/opt/homebrew/lib/libharfbuzz.dylib');
+    if HarfBuzz.Handle = 0 then
+      HarfBuzz.Handle := LibraryOpen('/usr/local/lib/libharfbuzz.0.dylib');
+    if HarfBuzz.Handle = 0 then
+      HarfBuzz.Handle := LibraryOpen('/usr/local/lib/libharfbuzz.dylib');
     {$else}
-    HarfBuzz.Handle := SafeLoadLibrary('libharfbuzz.so');
+    HarfBuzz.Handle := LibraryOpen('libharfbuzz.so');
     {$endif DARWIN}
   end;
-  if HarfBuzz.Handle = NilHandle then
+  if HarfBuzz.Handle = 0 then
     exit;
-  @HarfBuzz.ft_font_create   := GetProcedureAddress(HarfBuzz.Handle, 'hb_ft_font_create');
-  @HarfBuzz.font_destroy     := GetProcedureAddress(HarfBuzz.Handle, 'hb_font_destroy');
-  @HarfBuzz.buffer_create    := GetProcedureAddress(HarfBuzz.Handle, 'hb_buffer_create');
-  @HarfBuzz.buffer_destroy   := GetProcedureAddress(HarfBuzz.Handle, 'hb_buffer_destroy');
-  @HarfBuzz.buffer_add_utf16 := GetProcedureAddress(HarfBuzz.Handle, 'hb_buffer_add_utf16');
+  @HarfBuzz.ft_font_create   := LibraryResolve(HarfBuzz.Handle, 'hb_ft_font_create');
+  @HarfBuzz.font_destroy     := LibraryResolve(HarfBuzz.Handle, 'hb_font_destroy');
+  @HarfBuzz.buffer_create    := LibraryResolve(HarfBuzz.Handle, 'hb_buffer_create');
+  @HarfBuzz.buffer_destroy   := LibraryResolve(HarfBuzz.Handle, 'hb_buffer_destroy');
+  @HarfBuzz.buffer_add_utf16 := LibraryResolve(HarfBuzz.Handle, 'hb_buffer_add_utf16');
   @HarfBuzz.buffer_set_direction
-    := GetProcedureAddress(HarfBuzz.Handle, 'hb_buffer_set_direction');
+    := LibraryResolve(HarfBuzz.Handle, 'hb_buffer_set_direction');
   @HarfBuzz.buffer_guess_segment_properties
-    := GetProcedureAddress(HarfBuzz.Handle, 'hb_buffer_guess_segment_properties');
-  @HarfBuzz.shape              := GetProcedureAddress(HarfBuzz.Handle, 'hb_shape');
+    := LibraryResolve(HarfBuzz.Handle, 'hb_buffer_guess_segment_properties');
+  @HarfBuzz.shape              := LibraryResolve(HarfBuzz.Handle, 'hb_shape');
   @HarfBuzz.buffer_get_glyph_infos
-    := GetProcedureAddress(HarfBuzz.Handle, 'hb_buffer_get_glyph_infos');
+    := LibraryResolve(HarfBuzz.Handle, 'hb_buffer_get_glyph_infos');
   @HarfBuzz.buffer_get_glyph_positions
-    := GetProcedureAddress(HarfBuzz.Handle, 'hb_buffer_get_glyph_positions');
+    := LibraryResolve(HarfBuzz.Handle, 'hb_buffer_get_glyph_positions');
   // optional symbol — do not abort if missing on older HarfBuzz builds
   @HarfBuzz.ft_font_set_load_flags
-    := GetProcedureAddress(HarfBuzz.Handle, 'hb_ft_font_set_load_flags');
+    := LibraryResolve(HarfBuzz.Handle, 'hb_ft_font_set_load_flags');
   if (@HarfBuzz.ft_font_create = nil) or
      (@HarfBuzz.font_destroy = nil) or
      (@HarfBuzz.buffer_create = nil) or
@@ -198,8 +198,8 @@ begin
      (@HarfBuzz.buffer_get_glyph_infos = nil) or
      (@HarfBuzz.buffer_get_glyph_positions = nil) then
   begin
-    FreeLibrary(HarfBuzz.Handle);
-    HarfBuzz.Handle := NilHandle;
+    LibraryClose(HarfBuzz.Handle);
+    HarfBuzz.Handle := 0;
     exit;
   end;
   HarfBuzz.Loaded := true;
@@ -308,8 +308,8 @@ finalization
   PdfTextShaper := nil; // release interface ref before unloading library
   if HarfBuzz.Loaded then
   begin
-    FreeLibrary(HarfBuzz.Handle);
-    HarfBuzz.Handle := NilHandle;
+    LibraryClose(HarfBuzz.Handle);
+    HarfBuzz.Handle := 0;
     HarfBuzz.Loaded := false;
   end;
 

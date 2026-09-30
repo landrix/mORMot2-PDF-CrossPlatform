@@ -27,6 +27,14 @@ examples/*/ConverterBackup/
 .DS_Store
 .claude/skills/fonts.md.save
 
+# Delphi 13 IDE projects (tests/delphi13)
+__history/
+*.dproj.local
+*.identcache
+tests/delphi13/android/logs/
+tests/delphi13/android/libfreetype.so*
+!tests/delphi13/android/run-emulator.ps1
+
 # local data and settings
 examples/mormot_demo/data/mormot_demo.db
 tests/temp

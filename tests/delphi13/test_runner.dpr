@@ -1,4 +1,6 @@
-/// Unified test runner for all PDF and Report tests
+/// Delphi 13 IDE twin of ../test_runner.lpr - keep the uses clause and the
+// test list in sync with it; the .lpr stays the source for FPC and the
+// command line builds (build_delphi7.bat, build_delphi2010.bat)
 program test_runner;
 
 {$I mormot.defines.inc}

@@ -2,5 +2,11 @@
 
 // the TCanvas bridge (TPdfDocumentVcl, TPdfVclCanvas) and the report engine
 // on top of it: LCL and, since R-20, Delphi 7's VCL - kept as a switch for
-// a compiler that lacks them again
-{$define PDF_HASVCLCANVAS}
+// a compiler that lacks them again; Delphi has no VCL on Linux or Android
+{$ifdef FPC}
+  {$define PDF_HASVCLCANVAS}
+{$else}
+  {$ifdef OSWINDOWS}
+    {$define PDF_HASVCLCANVAS}
+  {$endif OSWINDOWS}
+{$endif FPC}
