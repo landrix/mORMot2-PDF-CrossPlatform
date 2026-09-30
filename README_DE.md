@@ -24,6 +24,44 @@ TPdfDocumentVcl     mormot.ui.pdfcanvas  TCanvas-kompatibler Wrapper
 TPdfDocument        mormot.ui.pdf        Direkte PDF-API, ohne TCanvas (bindet die Unit Graphics von LCL/VCL ein)
 ```
 
+### Welche Unit wofür
+
+Ein Programm bindet die Units der Ebene ein, auf der es arbeitet, wie hier
+aufgeführt; was die API einer Ebene von unten braucht, exportiert diese Ebene
+selbst weiter:
+
+| Ebene | `uses` | Re-Exporte |
+|---|---|---|
+| 3 — `TGDIPages` | `mormot.ui.report`; eine GUI nimmt `mormot.ui.reportpreview` für Vorschau und Druck dazu | was die `ExportPdf*`-Optionen erwarten: `TPdfALevel` (`pdfaNone` … `pdfa3U`), `TPdfFileFormat` (`pdf13` … `pdf17`), `TPdfAFRelationship` (`afr*`), `PdfMetadataFacturX` |
+| 2 — `TPdfDocumentVcl` | `mormot.ui.pdfcanvas`, `mormot.ui.pdf` | `TPdfALevel`, `TPdfAFRelationship`, `PdfMetadataFacturX`; der Rest der Dokument-API kommt aus `mormot.ui.pdf` |
+| 1 — `TPdfDocument` | `mormot.ui.pdf` | — |
+
+`mormot.pdf.types` kommt bei Ebene 1 und 2 für die Strukturrollen
+(`psrH1`, `psrP`, …) und `GetPdfFonts` dazu.
+
+**Die Plattform-Units brauchen kein eigenes `uses`.** `mormot.ui.pdf` bindet
+unter Windows GDI und Uniscribe ein, unter Linux und macOS FreeType2, den
+HarfBuzz-Shaper und den hb-subset-Subsetter. HarfBuzz wird zur Laufzeit
+geladen: Fehlt die Bibliothek, wird Text ungeformt gezeichnet und Schriften
+werden ganz eingebettet.
+
+**Shaping** von arabischem, hebräischem, indischem oder thailändischem Text
+ist auf jeder Plattform ein Schalter, `UseUniscribe := True` — der Name stammt
+aus der Original-API; unter Linux und macOS formt HarfBuzz. Lateinischer Text
+bleibt in beiden Fällen in der einfachen Schrift. `RightToLeftText := True`
+auf dem Canvas setzt die Absatzrichtung; ohne ihn ergibt sich die Richtung aus
+der Schrift. Den Schalter ohne Bedingung setzen — siehe
+[rtl_demo](examples/rtl_demo/).
+
+**`mormot.ui.pdf` nie neben `mormot.ui.report` einbinden.** Beide verwenden
+einige Namen für Verschiedenes — `psA4` ist in der einen ein `TPdfPaperSize`,
+in der anderen ein `TGdiPagePaperSize`, und das `TRect` von `mormot.ui.pdf`
+ist nicht das der LCL —, also entscheidet die Reihenfolge der `uses`-Klausel,
+welches ein Name meint. Mit `mormot.ui.pdf` zuletzt kompiliert
+`Report.PaperSize := psA4` nicht. Was ein Report von unten braucht, exportiert
+`mormot.ui.report` weiter; fehlt etwas, gehört es dorthin, nicht in die eigene
+`uses`-Klausel.
+
 ---
 
 ## Schnellstart
@@ -102,7 +140,11 @@ Einheiten: 1/100mm. Lernpfad mit allen Features: [docs/DEMOS.md](docs/DEMOS.md)
 schreibt den Strukturbaum, den Screenreader und Barrierefreiheits-Prüfer
 brauchen. Die getaggten Demos bestehen **PAC 2024**. PAC behält einen
 akzeptierten Hinweis auf jeder `Figure`, „possibly inappropriate use of
-figure“; er erscheint bei Vektorpfaden und Bildern gleichermaßen.
+figure“; er erscheint bei Vektorpfaden und Bildern gleichermaßen. In
+`zugferd_demo` kommt einer dazu, „link in text does not have a Link element“,
+für die E-Mail-Adressen, die als einfacher Text gezeichnet sind: Ein
+anklickbarer Link bräuchte eine getaggte Link-Annotation, die die Engine nicht
+schreibt (siehe *Links in getaggter Ausgabe* unten).
 
 Was die Engine erzeugt:
 
@@ -133,7 +175,7 @@ Report.NewPage;
 Report.DrawHeading(1, 'Report-Titel');
 // ... zeichnen, dann ExportPdfStream / ExportPDF
 
-// Low-Level-API
+// TCanvas-Brücke (Ebene 2)
 Doc.Tagged          := True;
 Doc.DefaultLanguage := 'de';
 GetPdfFonts(Doc.EmbeddedTTF, SansFont, SerifFont, MonoFont);
@@ -208,12 +250,22 @@ Unternehmen in Deutschland und Frankreich. Rechnungen an deutsche Behörden
 erwarten reine XML (XRechnung), kein PDF, und gehören nicht zum Umfang.
 
 ```pascal
+// TCanvas-Brücke (Ebene 2)
 Doc := TPdfDocumentVcl.Create(true, 0, pdfa3U);   // nicht die Property PdfA: sie setzt das Dokument zurück
 Doc.Tagged := True;
 // ... Rechnung zeichnen ...
 Doc.CreateFileAttachmentFrom(Xml, 'factur-x.xml', 'Factur-X invoice data',
   'text/xml', Now, Now, nil, afrAlternative);
 Doc.PdfAMetadaExtension := PdfMetadataFacturX('EN 16931');
+
+// Report Engine (Ebene 3) - nur mormot.ui.report
+Report.ExportPdfLevel := pdfa3U;
+Report.ExportPdfTagged := True;
+// ... Rechnung zeichnen ...
+Report.AddExportPdfAttachment(Xml, 'factur-x.xml', 'Factur-X invoice data',
+  'text/xml', afrAlternative);
+Report.ExportPdfMetadataExtension := PdfMetadataFacturX('EN 16931');
+Report.ExportPdfStream(Stream);
 ```
 
 ---
@@ -228,14 +280,18 @@ Doc.PdfAMetadaExtension := PdfMetadataFacturX('EN 16931');
 | [mormot_demo](examples/mormot_demo/) | `TGDIPages` + ORM | SQLite-Datenbank, Service-Layer, TTableLayout, getaggter Export, `--export`-Stapelbetrieb |
 | [chinese_demo](examples/chinese_demo/) | `TPdfDocumentVcl` | CJK-Text, Subset-Embedding |
 | [rtl_demo](examples/rtl_demo/) | `TPdfDocumentVcl` | Arabisch RTL, HarfBuzz / Uniscribe Shaping |
-| [zugferd_demo](examples/zugferd_demo/) | `TPdfDocumentVcl` | PDF/A-3U + PDF/UA-1, ZUGFeRD-/Factur-X-Rechnung mit eingebetteter XML |
-| [layer1_demo](examples/layer1_demo/) | `TPdfDocument` | Die Low-Level-API allein: getaggte Überschriften, Text, eine Grafik und eine Tabelle mit THead/TBody/TFoot, in PDF-Points; baut mit FPC und Delphi 7 |
+| [zugferd_demo](examples/zugferd_demo/) | `TGDIPages` | PDF/A-3U + PDF/UA-1, ZUGFeRD-/Factur-X-Rechnung, aus ihrer XML gelesen und mit ihr eingebettet |
+| [layer1_demo](examples/layer1_demo/) | `TPdfDocument` | Die Low-Level-API allein: getaggte Überschriften, Text, eine Grafik und eine Tabelle mit THead/TBody/TFoot, in PDF-Points; baut mit FPC, Delphi 7 und Delphi 2010 |
 
 Vollständige Anleitung: [docs/DEMOS.md](docs/DEMOS.md)
 
 ---
 
 ## Bauen
+
+Voraussetzungen: FreePascal 3.2+ mit Lazarus und den mORMot2-Quellen (das
+Lazarus-Paket `mormot2`), oder Delphi 7 / Delphi 2010 für Win32, oder
+Delphi 13 — siehe unten.
 
 ```bash
 # Windows
@@ -260,6 +316,7 @@ lazbuild examples/layer1_demo/layer1_demo.lpi -B
 
 # Testsuite
 lazbuild tests/test_runner.lpi -B && tests/bin/<cpu-os>/test_runner
+# unter Windows: tests\bin\x86_64-win64\test_runner.exe --noenter (sonst wartet es auf Enter)
 ```
 
 **Delphi 7** (Win32: Ebene 1, die TCanvas-Brücke, der Kern von `TGDIPages`) baut von der Kommandozeile. `MORMOT2` zeigt auf
@@ -311,18 +368,18 @@ Das Cocoa-Widgetset unter macOS exportiert auch ohne Display.
 **Linux:**
 ```bash
 sudo apt install libfreetype6                    # Pflicht — PDF-Fontrendering
-sudo apt install libharfbuzz0b                   # Optional — arabisches RTL-Shaping (rtl_demo)
+sudo apt install libharfbuzz0b                   # Optional — Shaping von Arabisch, Hebräisch, Indisch ... (UseUniscribe)
 sudo apt install libharfbuzz-subset0             # Optional — Font-Subsetting (HarfBuzz 2.9+)
 sudo apt install fonts-liberation                # Empfohlen — Liberation Sans/Serif/Mono, die Schriften der eingebetteten und getaggten Ausgabe
 sudo apt install fonts-noto-core                 # Optional — Noto Naskh Arabic (rtl_demo)
-sudo apt install fonts-wqy-microhei              # Optional — CJK-Font (chinese_demo)
+sudo apt install fonts-droid-fallback            # Optional — Droid Sans Fallback, CJK (chinese_demo)
 ```
 Fonts werden automatisch aus `/usr/share/fonts`, `/usr/local/share/fonts`, `~/.fonts` gefunden.
 
 **macOS:**
 ```bash
 brew install freetype
-brew install harfbuzz          # Optional — arabisches RTL-Shaping und Font-Subsetting
+brew install harfbuzz          # Optional — Shaping (UseUniscribe) und Font-Subsetting
 ```
 Fonts aus `/Library/Fonts`, `/System/Library/Fonts`, `~/Library/Fonts`.
 
