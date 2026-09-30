@@ -96,7 +96,9 @@ begin
   dir := Executable.ProgramFilePath + '..' + PathDelim + '..' + PathDelim + 'data';
   if not DirectoryExists(dir) then
     dir := 'data';
-  result := dir + PathDelim + Executable.ProgramName + '.db';
+  // SQLite does not create the folder: without it the demo fails on open
+  result := EnsureDirectoryExists(dir, EOSException) +
+    Executable.ProgramName + '.db';
 end;
 
 function ReadInvoiceData(out Items: TDtoInvoiceRowDynArray): integer;

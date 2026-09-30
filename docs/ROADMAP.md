@@ -140,6 +140,10 @@ earlier post covered them.
   `CreateJpegDirect`, and the TCanvas bridge and `TGDIPages` do not build.
   Android: fonts from `/system/fonts`, `PDF_FONT_TTF_*` are Roboto, Noto
   Serif and Droid Sans Mono; the app ships its own `libfreetype.so`
+- **Fixed:** `mormot_demo --export` hung in a fresh clone on a modal error
+  dialog — `data/` was missing. The folder is versioned now and created if
+  missing; a failed `--export` of `mormot_demo` or `report_demo` ends with
+  exit code 1 and the reason on stderr
 
 ---
 
@@ -536,16 +540,6 @@ whose point is to make the Windows unit available elsewhere. A-1 is not
 obsolete — an archive demanding A-1 rejects A-3 precisely because A-3 permits
 arbitrary attachments. Say in the documentation which levels are verified
 instead.
-
-### `mormot_demo --export` Hangs in a Fresh Clone — unprioritised
-
-Found on Linux and macOS on 2026-09-29. `examples/mormot_demo/data/` is not
-versioned (only its `.db` is ignored), and `DemoDatabaseFile` (`server.pas`)
-falls back to `data` without creating it. SQLite answers `SQLITE_CANTOPEN`, the LCL shows the exception in
-a modal dialog, and the batch export waits for a click that never comes. With
-the folder present the demo runs. Two parts, both needed: `ForceDirectories`
-before opening the database, and in `--export` mode an exit code instead of a
-dialog, so a batch run fails instead of hanging.
 
 ### CFF/CID Faces: poppler Warnings on macOS — unprioritised
 

@@ -45,8 +45,9 @@ cd examples\mormot_demo
 above the executable, or else below the current folder (the Delphi 7 build).
 The sample database with the orders is not versioned (`.gitignore`); without
 it SQLite creates an empty one, and the table shows its placeholder row "No
-orders available". The `data/` folder itself has to exist:
-a fresh clone has none, and the demo then stops with runtime error 217.
+orders available". The `data/` folder comes with the clone (`.gitkeep`); if
+it is missing, the demo creates it. A failed `--export` ends with exit code 1
+and the reason on stderr, not in a dialog.
 
 The sample database is `Project10.db` in
 [mORMot2-Examples/10-InvoiceExample/Data](https://github.com/martin-doyle/mORMot2-Examples/tree/main/10-InvoiceExample/Data);

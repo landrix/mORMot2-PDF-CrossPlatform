@@ -49,8 +49,20 @@ begin
   // mormot_demo --export [<file.pdf>]: build and export, then quit
   if BatchExportFile(PdfFile) then
   begin
-    ExportReport(DefaultReportOptions, PdfFile);
-    // a Windows GUI executable has no stdout: WriteLn raises I/O error 105
+    // a batch run must fail with an exit code: an unhandled exception would
+    // end in the LCL's modal dialog and wait for a click that never comes
+    try
+      ExportReport(DefaultReportOptions, PdfFile);
+    except
+      on E: Exception do
+      begin
+        // a Windows GUI executable has no stdout: WriteLn raises I/O error 105
+        if IsConsole then
+          WriteLn(ErrOutput, 'Export failed: ', E.ClassName, ': ', E.Message);
+        ExitCode := 1;
+        exit;
+      end;
+    end;
     if IsConsole then
       WriteLn('PDF exported: ', PdfFile);
     exit;
