@@ -153,9 +153,6 @@ Linux64 (LMDE 7), 129/129 on Android64.
   PDF/UA; `TGDIPages.DrawLink` draws link-styled text without a URL (R-18).
 - **PDF/A-1 and -2** are implemented, not verified; PDF/A-1 accepts
   attachments although it forbids them.
-- **CFF faces on macOS:** poppler warns about the `CIDFontType0` dictionary
-  of the Hiragino faces in `chinese_demo`; whether the file is at fault is
-  not yet checked.
 - From v0.9.0, still open: symbolic fonts are not subset on POSIX (R-15b),
   table rows do not split across pages (R-10), only face index 0 of a `.ttc`
   is reachable (R-11), EMF and GDI+ gradients are Windows-only.

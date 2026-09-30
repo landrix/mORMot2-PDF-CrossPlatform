@@ -428,18 +428,6 @@ obsolete — an archive demanding A-1 rejects A-3 precisely because A-3 permits
 arbitrary attachments. Say in the documentation which levels are verified
 instead.
 
-### CFF/CID Faces: poppler Warnings on macOS — unprioritised
-
-Found on 2026-09-29. For the Hiragino faces of `chinese_demo` (CFF, embedded
-as `CIDFontType0`, R-15c) poppler 26.02 reports "Missing or empty DescendantFonts entry in Type 0 font",
-"Mismatch between font type and embedded font file" and "Unknown font tag
-'F3'". The CFF path runs on macOS only: on Linux `chinese_demo` takes Droid
-Sans Fallback (`glyf`, `pdffonts`: CID TrueType) and poppler is silent, and
-the Windows CJK face is `glyf` too. The veraPDF runs so far did not cover it —
-`chinese_demo` is untagged and was not checked. Where to start: veraPDF
-(`3b` or a plain font check) on the macOS `chinese_demo.pdf`, then the Type 0
-dictionary and `/FontFile3` `/Subtype` against ISO 32000 9.7.4 and 9.9.
-
 ### W-1 — "Possibly Inappropriate Use of Figure" — accepted
 
 PAC 2024 passes, but keeps the hint "Possibly inappropriate use of figure
@@ -499,8 +487,6 @@ The engine creates a WinAnsi peer beside every Identity-H font and emits a `Tf`
 for it, but for a face that draws only CJK or Arabic that instance shows
 nothing — `SetFont` selects the WinAnsi instance and writes `Tf` at once, and
 the text output switches to the CID font right after (`/F1 18 Tf /F2 18 Tf`).
-poppler reports `Unknown font tag` for it. Pre-existing and unrelated to CFF
-(it appears on files from before R-15c).
 
 **Measured with a `glyf` face on Windows, 2026-09-26 — not cosmetic.** The
 peer was a `/TrueType` font without `/FirstChar`, `/LastChar` and `/Widths`,

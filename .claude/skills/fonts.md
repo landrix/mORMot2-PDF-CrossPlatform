@@ -92,9 +92,6 @@ The grep only works on a file without object streams. Tagged output deflates
 its font dictionaries, so it returns nothing there — which reads like "no fonts
 embedded". Inflate every stream with `python3` and search the result instead.
 
-A `Syntax Warning: Mismatch between font type and embedded font file` from
-poppler means the descriptor key and the embedded flavour disagree.
-
 veraPDF logs `WARNUNG`/`WARNING: The Top DICT does not begin with ROS
 operator` for Hiragino: its CFF is name-keyed, not CID-keyed. That is legal
 for a `CIDFontType0` — the CID is taken as the glyph index (ISO 32000-1
