@@ -4,7 +4,161 @@
 
 Written at the next release from the list "To Announce" in
 [docs/ROADMAP.md](docs/ROADMAP.md), which collects every change a user notices
-until then. The draft that stood here (R-17, R-19) has moved there.
+until then.
+
+## v0.10.0 — 2026-09-30
+
+PDF/A-3 and hybrid e-invoices (ZUGFeRD / Factur-X), Delphi support from
+Delphi 7 to Delphi 13, and a report engine that no longer needs a GUI. Some
+changes break existing code — see *Breaking changes* first.
+
+### Breaking changes
+
+- **`TGDIPages` takes `RawUtf8`** for all text — parameters, `TReportFormat`,
+  `TTableLayout`, `Title`/`Author`/`Subject`, `ExportPdf*` — and `TFileName`
+  for file names. FPC callers compile unchanged, except that
+  **`GetReportFonts` and `GetExportFonts` return `RawUtf8`**: an `out`
+  parameter needs the exact type, so their `string` variables become
+  `RawUtf8`. Code that draws through `TPdfDocumentVcl` without `TGDIPages`
+  takes `GetPdfFonts` from `mormot.pdf.types`, which returns `string`.
+- **Preview and printing moved out of `TGDIPages`**, which is a non-visual
+  `TComponent` now, usable without forms. `Report.ShowPreviewForm` becomes
+  `ShowReportPreview(Report)`, `Report.PrintPages(From, To_)` becomes
+  `PrintReport(Report, From, To_)`, both in the new unit
+  `mormot.ui.reportpreview`. `ShowPrintDialog` (printed without a dialog) and
+  `OpenPdfFile` (did nothing) are removed. `Orientation` has the new type
+  `TReportOrientation` with the same values `poPortrait`/`poLandscape` — a
+  unit that also uses `Printers` after `mormot.ui.report` gets
+  `Printers.poPortrait` and a type error; qualify it or drop `Printers`.
+  `/Creator` came from `Application.Title`; it is `ExportPdfCreator` now, and
+  without it the executable name is written.
+- **Shaping is one switch on every platform: `UseUniscribe`** — Uniscribe on
+  Windows, HarfBuzz on Linux/macOS. On Linux/macOS `RightToLeftText` alone no
+  longer shapes: set `UseUniscribe := True` as well, as Windows always needed.
+  `RightToLeftText` only sets the direction; without it HarfBuzz takes the
+  direction from the script. Latin text stays in the simple font.
+- **`TPdfDocumentVcl.VclCanvas` has the type `TPdfVclCanvas`** (was
+  `TCanvas`). Code that assigns it to a `TCanvas` variable still compiles —
+  but on Delphi draw through the `TPdfVclCanvas` reference, see *Delphi*.
+- **Demo PDFs are named `<demo>_<os>_<cpu>_<compiler>.pdf`** (was
+  `<demo>_<os>.pdf`), so the files of all compilers share one folder.
+
+### PDF/A-3 and e-invoices
+
+- **PDF/A-3U with PDF/UA-1** in one file, verified on all three platforms
+  with veraPDF (`3u`, `ua1`), Mustang and PAC 2024; `pdfa3A` passes `3a`, and
+  PDF/A-3B is verified with and without tagging. New `pdfa3U` (appended to
+  `TPdfALevel`), `PdfMetadataFacturX` for the `fx:` XMP properties, and an
+  `/AFRelationship` on the file overload of `CreateFileAttachment`. With
+  PDF/A and tagging the engine writes the `pdfuaid` extension schema itself.
+- **`TGDIPages` exports PDF/A-3 attachments and an XMP extension**:
+  `AddExportPdfAttachment`, `ClearExportPdfAttachments`,
+  `ExportPdfMetadataExtension`. `mormot.ui.report` re-exports what its
+  `ExportPdf*` options take (PDF/A levels, `TPdfFileFormat`, `afr*`,
+  `PdfMetadataFacturX`), so a report program needs no other unit of ours.
+- **`zugferd_demo`** (new, demo 7) builds a ZUGFeRD / Factur-X invoice,
+  profile EN 16931, with `TGDIPages`: the page is read from the embedded
+  `factur-x.xml` (third-party KoSIT test data, Apache-2.0), so the two cannot
+  differ. The engine provides the container and neither generates nor
+  validates invoice XML.
+
+### Delphi
+
+- **Delphi 7 and Delphi 2010** (Win32; Delphi 2010 as the Unicode Delphi)
+  build layer 1, the TCanvas bridge and the `TGDIPages` core. All six console
+  demos and the `--export` of the two GUI demos build and write the same PDF
+  as FPC; PAC 2024 and veraPDF pass them. Build scripts:
+  `tests\build_delphi7.bat`, `tests\build_delphi2010.bat`. The preview and
+  the demo windows still need FPC (roadmap R-20).
+- **Draw through a `TPdfVclCanvas` reference on Delphi.** Delphi 7's
+  `TCanvas` methods are static: a call through a plain `TCanvas` writes
+  nothing into the PDF. Text beyond ASCII goes through the new `TextOutUtf8`
+  and `TextWidthUtf8` of `TPdfVclCanvas`, which take `RawUtf8` on every
+  compiler; the `string` methods read `string` as the compiler holds it.
+- **Delphi 13 on Win32, Win64, Linux64 and Android64** — contributed by
+  [@tobfel](https://github.com/tobfel) in
+  [PR #1](https://github.com/martin-doyle/mORMot2-PDF-CrossPlatform/pull/1),
+  many thanks. Layer 1 and the FreeType, HarfBuzz and hb-subset backends
+  build for Linux64 and Android64; the backends load their libraries through
+  `mormot.core.os` now, no longer FPC's `dynlibs`. On Windows the TCanvas
+  bridge and the `TGDIPages` core build as well. Delphi has no VCL on Linux
+  and Android: `CreateOrGetImage(TBitmap)` and `TPdfImage.Create(TGraphic)`
+  are missing there (JPEG goes through `CreateJpegDirect`), and neither the
+  bridge nor `TGDIPages` builds. On Android the fonts come from
+  `/system/fonts`, and the app ships an NDK build of `libfreetype.so`
+  (`tests/delphi13/android/BUILD-FREETYPE.md`). The IDE projects are in
+  `tests/delphi13/`. The maintainers have no Delphi 13: these results are the
+  contributor's, and further checks depend on the community.
+
+### Other changes
+
+- **No platform unit in your `uses` any more:** `mormot.ui.pdf` brings the
+  HarfBuzz shaper itself, like the FreeType2 backend and the subsetter;
+  remove `mormot.pdf.harfbuzz` from your `uses` clause or leave it.
+- **`GetPdfFonts` and `PDF_FONT_TTF_*`** in `mormot.pdf.types`;
+  `GetReportFonts`/`REPORT_FONT_*` stay as aliases.
+- **`TTableLayout.GridColor`** colours the cell borders of header, data and
+  footer rows; unset it is `clBlack`, as before.
+- **`layer1_demo`** (new, demo 8): `TPdfDocument`/`TPdfCanvas` alone, tagged
+  headings, text, a figure and a table with `THead`/`TBody`/`TFoot`.
+- **Removed:** `pdf_demo_windows`, the Delphi 7 golden master on the original
+  library, with its `peekpdf` tools.
+
+### Fixed
+
+- Under FPC a `TPdfReal` of exactly 0 was written as nothing — every outline
+  destination (`/XYZ 0 802 ]`, one operand short), alpha 0, a rectangle or
+  `/BBox` edge at 0. Files with bookmarks from earlier FPC builds are
+  affected.
+- The XMP packet header from Unicode Delphi was double-encoded (`C3 AF C2 BB
+  C2 BF` instead of the byte order mark `EF BB BF`) in every PDF/A and tagged
+  file.
+- `/CIDToGIDMap` was written for PDF/A only; PDF/UA-1 7.21.3.2 wants it for
+  every `CIDFontType2`.
+- PAC 2024 stopped on tagged CJK or Arabic: the WinAnsi peer lacked
+  `/FirstChar`, `/LastChar`, `/Widths`.
+- Linux/macOS: a `.ttc` face could be embedded as the whole collection
+  (23 MB for Hiragino Sans GB), at random, by heap layout.
+- Tagged PDF/A freed its `StructTreeRoot` twice on `Free` and skipped `/Lang`
+  and `DisplayDocTitle`; untagged PDF/A claimed `/MarkInfo` over an empty
+  tree. `pdfuaid` had no extension schema, so every tagged PDF/A failed
+  ISO 19005 6.6.2.3.1. An attachment read from a file had `/Params /Size 0`.
+- `GetCharABCWidthsI` was imported without `stdcall` (wrong on Win32).
+- `TPdfVclCanvas` passed `Font.Name` in the ANSI code page on Delphi 7; it is
+  UTF-8 now.
+- A paragraph lost its quotation marks — `"quoted text"` came out as
+  `quoted text` — and the quoted part could not wrap.
+- `mormot_demo --export` hung in a fresh clone on a modal error dialog,
+  because `data/` was missing. The folder is versioned and created if
+  missing; a failed `--export` of `mormot_demo` or `report_demo` ends with
+  exit code 1 and the reason on stderr.
+
+### Verification
+
+`test_runner` is green with 259 assertions on Windows (FPC, Delphi 7 and
+Delphi 2010), 298 on Linux and 317 on macOS; the differences are skips. The
+tagged demos pass PAC 2024 and veraPDF `ua1` on all three platforms, from
+every compiler; `zugferd_demo` also passes veraPDF `3u` and Mustang.
+Delphi 13, from the contributor: 259/259 on Win32 and Win64, 171/171 on
+Linux64 (LMDE 7), 129/129 on Android64.
+
+### Known limitations
+
+- **Delphi:** no preview window and no demo window yet (R-20); on Linux and
+  Android no TCanvas bridge and no `TGDIPages`; the demos are untried with
+  Delphi 13, and Delphi for macOS is untried.
+- **Android:** HarfBuzz and hb-subset are not packaged — no shaping, whole
+  faces embedded.
+- **Links in tagged output:** `CreateHyperLink` in a tagged document fails
+  PDF/UA; `TGDIPages.DrawLink` draws link-styled text without a URL (R-18).
+- **PDF/A-1 and -2** are implemented, not verified; PDF/A-1 accepts
+  attachments although it forbids them.
+- **CFF faces on macOS:** poppler warns about the `CIDFontType0` dictionary
+  of the Hiragino faces in `chinese_demo`; whether the file is at fault is
+  not yet checked.
+- From v0.9.0, still open: symbolic fonts are not subset on POSIX (R-15b),
+  table rows do not split across pages (R-10), only face index 0 of a `.ttc`
+  is reachable (R-11), EMF and GDI+ gradients are Windows-only.
 
 ## v0.9.0 — 2026-09-23
 
