@@ -11,7 +11,9 @@ on all three platforms; tables carry `THead`/`TBody`/`TFoot` row groups.
 Delphi 2010), 317 on macOS and 298 on Linux. **Delphi:** layer
 1, the TCanvas bridge and the `TGDIPages` core build on Delphi 7 (R-19, R-20
 steps 1–6) and on Delphi 2010, a Unicode Delphi (R-25); all six console demos
-and the `--export` of the two GUI demos give the same PDF as FPC. The files of
+and the `--export` of the two GUI demos give the same PDF as FPC. Delphi 13
+(R-27) runs `test_runner` green on Win32 and Win64 and, with layer 1 and the
+backends only (no VCL), on Linux64 and Android64. The files of
 macOS, Debian, FPC/Win64, Delphi 7 and Delphi 2010 all pass PAC 2024
 and veraPDF (V); the new `zugferd_demo` (R-26, on `TGDIPages`, its text from
 the invoice XML) also veraPDF `3u` and Mustang. **Next:** the rest of R-26,
@@ -153,6 +155,7 @@ a PAC error like "unbalanced marked content" then names no culprit.
 | PAC 2024 + tag-tree inspection | **Windows** (only platform; mandatory) |
 | Third-platform verification per change | macOS |
 | Delphi build and Win32 run (R-19, R-20, R-25) | **Windows** VM with Delphi 7 and Delphi 2010 (`dcc32`) |
+| Delphi 13: Win32, Win64, Linux64, Android64 (R-27) | none of ours — the community; a change is not re-run there unless a contributor does it |
 | `veraPDF` (`ua1`, `3b`, `3u`, `3a`) | installed on macOS since 2026-09-22; the Windows and Linux files are copied there |
 
 **PAC caveat.** The traffic-light status is not enough: a flat tree of
@@ -375,6 +378,9 @@ tests fail). FPC after the move away from `dynlibs`: Linux 298/298 (also against
 mORMot2 2.4-stable) and macOS 317/317, the demo PDFs unchanged.
 
 **Open:**
+- **Checks by the community.** Delphi 13 is on none of the maintainers'
+  machines: after a change, the Delphi 13 runs and the demos with Delphi 13
+  (none built yet) have to come from contributors
 - the TCanvas bridge and `TGDIPages` on Delphi for Linux/Android: no VCL
   there — an FMX or bitmap adapter would be the way (cf. `mormot.pdf.fpimage`)
 - HarfBuzz and hb-subset on Android: not packaged, their tests skip;

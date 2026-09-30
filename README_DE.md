@@ -11,7 +11,9 @@ Cross-platform PDF-Generierung für Windows, Linux und macOS, basierend auf der 
 |---|---|---|---|
 | Windows | FreePascal/Lazarus | GDI via Interfaces | Produktiv |
 | Windows (Win32) | Delphi 7, Delphi 2010 | GDI via Interfaces | Ebene 1, die TCanvas-Brücke und der Kern von `TGDIPages`; Tests grün unter beiden, die sechs Konsolen-Demos und der `--export` der beiden GUI-Demos geben dasselbe PDF wie FPC. Vorschau und Demo-Fenster brauchen vorerst FPC (Roadmap R-20) |
+| Windows (Win32, Win64) | Delphi 13 | GDI via Interfaces | Ebene 1, die TCanvas-Brücke und der Kern von `TGDIPages`; Tests grün (Roadmap R-27) |
 | Linux | FreePascal/Lazarus | FreeType2 | Produktiv |
+| Linux64, Android64 | Delphi 13 | FreeType2 | Ebene 1 und die Backends; Tests grün. Keine TCanvas-Brücke und kein `TGDIPages`: Delphi hat dort keine VCL (Roadmap R-27) |
 | macOS | FreePascal/Lazarus | FreeType2 | Produktiv |
 
 ## Architektur (3 Ebenen)
@@ -278,6 +280,15 @@ bin\d7\markdown_demo\markdown_demo.exe
 mit `tests\build_delphi2010.bat`, Ausgabe in `bin\d2010\<Projekt>\`, und gibt
 dieselben PDFs wie Delphi 7.
 
+**Delphi 13** baut die Testsuiten aus der IDE: `tests\delphi13\test_runner.dproj`
+für Win32, Win64 und Linux64 (über PAServer), `MORMOT2` gesetzt wie für
+Delphi 7. Für Android64 gibt es einen eigenen FMX-Host in
+`tests\delphi13\android\`, weil Android keine Konsolenprogramme startet:
+`build.cmd` baut das APK, `run-emulator.cmd -Run` lässt die Suiten im Emulator
+laufen und gibt das Ergebnis als Exit-Code zurück. Die App braucht ein mit dem
+NDK gebautes `libfreetype.so`, siehe
+[BUILD-FREETYPE.md](tests/delphi13/android/BUILD-FREETYPE.md).
+
 `mORMot2\src\ui` gehört nicht in einen Delphi-Suchpfad: Dort liegt das
 originale `mormot.ui.pdf`, das der Compiler sonst statt der Unit dieses
 Projekts nimmt.
@@ -302,6 +313,7 @@ Das Cocoa-Widgetset unter macOS exportiert auch ohne Display.
 sudo apt install libfreetype6                    # Pflicht — PDF-Fontrendering
 sudo apt install libharfbuzz0b                   # Optional — arabisches RTL-Shaping (rtl_demo)
 sudo apt install libharfbuzz-subset0             # Optional — Font-Subsetting (HarfBuzz 2.9+)
+sudo apt install fonts-liberation                # Empfohlen — Liberation Sans/Serif/Mono, die Schriften der eingebetteten und getaggten Ausgabe
 sudo apt install fonts-noto-core                 # Optional — Noto Naskh Arabic (rtl_demo)
 sudo apt install fonts-wqy-microhei              # Optional — CJK-Font (chinese_demo)
 ```
@@ -314,6 +326,12 @@ brew install harfbuzz          # Optional — arabisches RTL-Shaping und Font-Su
 ```
 Fonts aus `/Library/Fonts`, `/System/Library/Fonts`, `~/Library/Fonts`.
 
+**Android** (Delphi 13): Android bringt kein öffentliches FreeType mit — die App
+liefert ein mit dem NDK gebautes `libfreetype.so` mit
+([BUILD-FREETYPE.md](tests/delphi13/android/BUILD-FREETYPE.md)); ein Build für
+Linux ARM64 lädt nicht. Fonts aus `/system/fonts` (Roboto, Noto Serif, Droid
+Sans Mono). HarfBuzz ist nicht paketiert: kein Shaping, kein Subsetting.
+
 ---
 
 ## Offene Punkte
@@ -323,7 +341,7 @@ Fonts aus `/Library/Fonts`, `/System/Library/Fonts`, `~/Library/Fonts`.
 - **EMF/MetaFile:** Windows-only (`TPdfDocumentGdi`), nicht portierbar
 - **GDI+/Gradient Fills:** nur via EMF auf Windows verfügbar
 - **Tabellen-Pagination:** kein Zeilenumbruch innerhalb einer Zelle
-- **Delphi:** Delphi 7 und Delphi 2010 (Win32) bauen Ebene 1, die TCanvas-Brücke und den Kern von `TGDIPages`, alle sechs Konsolen-Demos und den Batch-Export der beiden GUI-Demos, noch nicht die Vorschau und die Demo-Fenster (Roadmap R-20). Die Zeichenmethoden von `TCanvas` sind unter Delphi 7 statisch: über eine `TPdfVclCanvas`-Referenz zeichnen (`Doc.VclCanvas` hat diesen Typ), nie über ein einfaches `TCanvas`, sonst kommt nichts im PDF an
+- **Delphi:** Delphi 7 und Delphi 2010 (Win32) bauen Ebene 1, die TCanvas-Brücke und den Kern von `TGDIPages`, alle sechs Konsolen-Demos und den Batch-Export der beiden GUI-Demos, noch nicht die Vorschau und die Demo-Fenster (Roadmap R-20). Die Zeichenmethoden von `TCanvas` sind unter Delphi 7 statisch: über eine `TPdfVclCanvas`-Referenz zeichnen (`Doc.VclCanvas` hat diesen Typ), nie über ein einfaches `TCanvas`, sonst kommt nichts im PDF an. Delphi 13 baut Ebene 1, die TCanvas-Brücke und den Kern von `TGDIPages` unter Win32 und Win64 (geprüft über `test_runner`, die Demos noch nicht; beides hängt an der Community, die Maintainer haben kein Delphi 13); unter Linux64 und Android64 nur Ebene 1 und die Backends — keine VCL, also keine TCanvas-Brücke, kein `TGDIPages` und keine `TBitmap`-Bilder (JPEG über `CreateJpegDirect`) (Roadmap R-27)
 - **Links in getaggter Ausgabe:** `CreateHyperLink` in einem getaggten Dokument verletzt PDF/UA — es gibt kein `Link`-Strukturelement für Annotationen. `TGDIPages.DrawLink` bleibt konform, weil es nur formatierten Text zeichnet; seine URL ist nicht anklickbar (Roadmap R-18)
 
 Details und aktueller Prüfstand: [docs/ROADMAP.md](docs/ROADMAP.md)
