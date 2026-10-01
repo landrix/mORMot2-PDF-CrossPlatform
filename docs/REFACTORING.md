@@ -83,10 +83,13 @@ against today's `main`:
        `/ToUnicode`, `FontFile2`/`FontFile3`
      - `struct`: the roles of the structure tree and their counts
 
-     It reuses `InflatePdf` from `test_report_crossplatform`. A test tool,
-     not the draft of the PDF reader (gist §1, after the migration)
-   - A run script per platform (`.bat`, `.sh`): run all eight demos and
-     collect their PDFs into a baseline directory
+     - `run`: run all eight demos of one compiler (`fpc`, `d7`, `d2010`)
+       and collect their PDFs into a baseline directory — in the tool, not
+       in a `.bat` and a `.sh`, so it is written once for all platforms. On
+       Linux without a display: `xvfb-run pdfcheck run ...`
+
+     The reading code is `tests/pdf_inspect.pas`, shared with the tests. A
+     test tool, not the draft of the PDF reader (gist §1, after the migration)
 
    Within one platform `normalize` decides; across platforms, where the
    fonts differ, `pdftotext`, `fonts`, `struct` and the page count must

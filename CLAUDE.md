@@ -94,6 +94,8 @@ tests/
   delphi13/test_runner.dproj   Delphi 13 IDE project: Win32, Win64, Linux64, Android64 (R-27)
   delphi13/android/            FMX host for Android: build.cmd, run-emulator.cmd -Run, BUILD-FREETYPE.md
   no_hbsubset.sh               Linux: tests and console demos with libharfbuzz-subset hidden
+  pdfcheck.lpr                 refactoring check tool: run the demos, compare their PDFs normalized, structure roles (docs/REFACTORING.md)
+  pdf_inspect.pas              reading written PDFs back: inflate, normalize, roles — shared by the tests and pdfcheck
   test_pdf_crossplatform.pas   platform backend, text shaper, TTC extraction
   test_pdf_smoke.pas           PDF basics, tagged output, struct tree, tagged Unicode, the shaping switch (through TPdfCanvas; one bridge test)
   test_report_crossplatform.pas report engine, tables, tagged export
@@ -284,6 +286,7 @@ Details on interfaces and registration: `.claude/skills/platform-backends.md`
 "C:\lazarus\lazbuild.exe" examples/layer1_demo/layer1_demo.lpi -B
 "C:\lazarus\lazbuild.exe" tests/test_runner.lpi -B
 tests\bin\x86_64-win64\test_runner.exe --noenter
+"C:\lazarus\lazbuild.exe" tests/pdfcheck.lpi -B   # refactoring checks: docs/REFACTORING.md
 
 # Linux/macOS:
 lazbuild examples/pdf_demo/pdf_demo_crossplat.lpi -B
@@ -295,6 +298,7 @@ lazbuild examples/mormot_demo/mormot_demo.lpi -B
 lazbuild examples/zugferd_demo/zugferd_demo.lpi -B
 lazbuild examples/layer1_demo/layer1_demo.lpi -B
 lazbuild tests/test_runner.lpi -B && tests/bin/<cpu-os>/test_runner
+lazbuild tests/pdfcheck.lpi -B
 
 # Delphi 7 (Win32; layer 1, the bridge and the TGDIPages core) — MORMOT2 must point to the mORMot2 checkout:
 tests\build_delphi7.bat tests\test_runner.lpr
