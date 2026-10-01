@@ -27,6 +27,12 @@ function PdfStructRoles(const s: RawUtf8): RawUtf8;
 
 /// compare two normalized files: true when equal, otherwise Diff names the
 // first differing line of each
+/// the fonts as pdffonts lists them, one line per font dictionary, sorted:
+// name, type, the font file key (or no), subset and /ToUnicode, e.g.
+// 'ABCDEF+Calibri Type0/CIDFontType2 emb=FontFile2 sub=yes uni=yes'
+// - a Type0 font is followed to its descendant and that one's descriptor
+function PdfFonts(const s: RawUtf8): RawUtf8;
+
 function ComparePdfText(const a, b: RawUtf8; out Diff: RawUtf8): boolean;
 
 implementation
@@ -318,6 +324,239 @@ begin
   tb := LineAt(b, i, lb);
   Diff := '  a, line ' + Int32ToUtf8(la) + ': ' + ta + #10 +
           '  b, line ' + Int32ToUtf8(lb) + ': ' + tb;
+end;
+
+
+{ ---------- objects and fonts ---------- }
+
+function IsDelim(c: AnsiChar): boolean;
+begin
+  result := c in [#0, #9, #10, #12, #13, ' ', '/', '<', '>', '[', ']', '(', ')',
+    '{', '}', '%'];
+end;
+
+// every object's text by its number: the top-level "n g obj" ones and those
+// packed in object streams
+function PdfObjects(const t: RawUtf8): TRawUtf8DynArray;
+
+  procedure Store(num: integer; const body: RawUtf8);
+  begin
+    if num < 0 then
+      exit;
+    if num >= length(result) then
+      SetLength(result, num + 64);
+    result[num] := body;
+  end;
+
+var
+  i, j, k, e, num, n, first, b: integer;
+  body, data: RawUtf8;
+  nums, offs: TIntegerDynArray;
+  c: PUtf8Char;
+begin
+  result := nil;
+  i := PosEx(' obj', t, 1);
+  while i > 0 do
+  begin
+    // "num gen obj": the generation, a space, the number
+    j := i - 1;
+    while (j > 0) and IsDigit(t[j]) do
+      dec(j);
+    if (j < i - 1) and (j > 1) and (t[j] = ' ') and IsDigit(t[j - 1]) and
+       ((i + 4 > length(t)) or IsDelim(t[i + 4])) then
+    begin
+      k := j - 1;
+      while (k > 0) and IsDigit(t[k]) do
+        dec(k);
+      num := GetInteger(pointer(copy(t, k + 1, j - k - 1)));
+      e := PosEx('endobj', t, i + 4);
+      if e = 0 then
+        e := length(t) + 1;
+      body := copy(t, i + 4, e - i - 4);
+      Store(num, body);
+      i := e;
+    end;
+    i := PosEx(' obj', t, i + 4);
+  end;
+  // the objects of each object stream: N pairs "num offset", then the data
+  for i := 0 to high(result) do
+    if PosEx('/Type/ObjStm', result[i]) > 0 then
+    begin
+      body := result[i];
+      j := PosEx('/N ', body);
+      k := PosEx('/First ', body);
+      b := PosEx('stream', body);
+      if (j = 0) or (k = 0) or (b = 0) then
+        continue;
+      n := GetInteger(@body[j + 3]);
+      first := GetInteger(@body[k + 7]);
+      inc(b, 6);
+      if (b <= length(body)) and (body[b] = #13) then
+        inc(b);
+      if (b <= length(body)) and (body[b] = #10) then
+        inc(b);
+      e := PosEx('endstream', body, b);
+      if e = 0 then
+        continue;
+      data := copy(body, b, e - b);
+      SetLength(nums, n);
+      SetLength(offs, n);
+      c := pointer(data);
+      for k := 0 to n - 1 do
+      begin
+        nums[k] := GetNextItemCardinal(c, ' ');
+        offs[k] := GetNextItemCardinal(c, ' ');
+      end;
+      for k := 0 to n - 1 do
+        if k < n - 1 then
+          Store(nums[k], copy(data, first + offs[k] + 1, offs[k + 1] - offs[k]))
+        else
+          Store(nums[k], copy(data, first + offs[k] + 1, maxInt));
+    end;
+end;
+
+// the value of a key of the outer dictionary of obj, as written: a name,
+// "n g R", an array, a number; '' when absent
+function DictValue(const obj, key: RawUtf8): RawUtf8;
+var
+  i, depth, b, nest: integer;
+begin
+  result := '';
+  depth := 0;
+  i := 1;
+  while i <= length(obj) do
+  begin
+    if Matches(obj, i, '<<') then
+    begin
+      inc(depth);
+      inc(i, 2);
+      continue;
+    end;
+    if Matches(obj, i, '>>') then
+    begin
+      dec(depth);
+      if depth = 0 then
+        exit;
+      inc(i, 2);
+      continue;
+    end;
+    if (depth = 1) and Matches(obj, i, key) and
+       ((i + length(key) > length(obj)) or IsDelim(obj[i + length(key)])) then
+    begin
+      b := i + length(key);
+      while (b <= length(obj)) and (obj[b] in [' ', #10, #13]) do
+        inc(b);
+      i := b;
+      if (i <= length(obj)) and (obj[i] = '[') then
+      begin
+        nest := 0;
+        repeat
+          if obj[i] = '[' then
+            inc(nest)
+          else if obj[i] = ']' then
+            dec(nest);
+          inc(i);
+        until (nest = 0) or (i > length(obj));
+      end
+      else if (i <= length(obj)) and (obj[i] = '/') then
+      begin
+        inc(i);
+        while (i <= length(obj)) and not IsDelim(obj[i]) do
+          inc(i);
+      end
+      else
+        // a number, or "n g R"
+        while (i <= length(obj)) and not (obj[i] in ['/', '>', '[', '<']) do
+          inc(i);
+      result := TrimU(copy(obj, b, i - b));
+      exit;
+    end;
+    inc(i);
+  end;
+end;
+
+// the object a "n g R" (or "[n g R]") points to
+function Deref(const objs: TRawUtf8DynArray; const ref: RawUtf8): RawUtf8;
+var
+  c: PUtf8Char;
+  num: integer;
+begin
+  result := '';
+  c := pointer(ref);
+  if c = nil then
+    exit;
+  if c^ = '[' then
+    inc(c);
+  while c^ = ' ' do
+    inc(c);
+  num := GetCardinal(c);
+  if (num > 0) and (num < length(objs)) then
+    result := objs[num];
+end;
+
+function PdfFonts(const s: RawUtf8): RawUtf8;
+var
+  objs, lines: TRawUtf8DynArray;
+  i, k, n: integer;
+  font, sub, desc, ftype, name, emb, tmp: RawUtf8;
+begin
+  result := '';
+  objs := PdfObjects(InflatePdf(s));
+  lines := nil;
+  n := 0;
+  for i := 0 to high(objs) do
+  begin
+    font := objs[i];
+    if DictValue(font, '/Type') <> '/Font' then
+      continue;
+    ftype := copy(DictValue(font, '/Subtype'), 2, maxInt);
+    // the descendant of a Type0 is listed with it, not on its own
+    if (ftype = '') or (ftype = 'CIDFontType0') or (ftype = 'CIDFontType2') then
+      continue;
+    name := copy(DictValue(font, '/BaseFont'), 2, maxInt);
+    desc := font;
+    if ftype = 'Type0' then
+    begin
+      sub := Deref(objs, DictValue(font, '/DescendantFonts'));
+      ftype := ftype + '/' + copy(DictValue(sub, '/Subtype'), 2, maxInt);
+      desc := sub;
+    end;
+    desc := Deref(objs, DictValue(desc, '/FontDescriptor'));
+    if DictValue(desc, '/FontFile2') <> '' then
+      emb := 'FontFile2'
+    else if DictValue(desc, '/FontFile3') <> '' then
+      emb := 'FontFile3'
+    else if DictValue(desc, '/FontFile') <> '' then
+      emb := 'FontFile'
+    else
+      emb := 'no';
+    tmp := name + ' ' + ftype + ' emb=' + emb + ' sub=';
+    if IsSubsetPrefix('/' + name, 1) then
+      tmp := tmp + 'yes'
+    else
+      tmp := tmp + 'no';
+    if DictValue(font, '/ToUnicode') <> '' then
+      tmp := tmp + ' uni=yes'
+    else
+      tmp := tmp + ' uni=no';
+    SetLength(lines, n + 1);
+    lines[n] := tmp;
+    inc(n);
+  end;
+  // a handful of fonts: an insertion sort is enough
+  for i := 1 to n - 1 do
+  begin
+    k := i;
+    while (k > 0) and (lines[k - 1] > lines[k]) do
+    begin
+      tmp := lines[k];
+      lines[k] := lines[k - 1];
+      lines[k - 1] := tmp;
+      dec(k);
+    end;
+  end;
+  for i := 0 to n - 1 do
+    result := result + lines[i] + #10;
 end;
 
 end.

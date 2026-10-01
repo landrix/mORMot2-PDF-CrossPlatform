@@ -73,27 +73,34 @@ Before anything moves. In this order — Sven's merge can change output (the
 trunk's `mormot.lib.uniscribe`, ported trunk commits), so it is checked
 against today's `main`:
 
-1. The check tools, versioned:
-   - `tests/pdfcheck`, in Pascal (no Python, `pdffonts` or `pdftoppm` on the
-     Windows machine), builds and runs on all three platforms:
-     - `normalize`: inflate the streams, mask dates, `/ID` and subset
-       prefixes, compare two directories — the method used by hand so far
-       (ROADMAP R-26, R-25)
-     - `fonts`: the fonts as `pdffonts` lists them — embedded, subset,
-       `/ToUnicode`, `FontFile2`/`FontFile3`
-     - `struct`: the roles of the structure tree and their counts
+1. ~~The check tool~~ done: `tests/pdfcheck`, in Pascal (no Python,
+   `pdffonts` or `pdftoppm` on the Windows machine), on all three platforms:
+   - `run <fpc|d7|d2010> <dir>`: run the eight demos of one compiler and
+     collect their PDFs — in the tool rather than a `.bat` and a `.sh`, so it
+     is written once. On Linux without a display: `xvfb-run pdfcheck run ...`
+   - `compare <dirA> <dirB>`: both sides normalized — streams inflated;
+     dates, `/ID`, XMP uuids, subset prefixes, stream lengths and the
+     cross-reference offsets masked (the method used by hand so far, ROADMAP
+     R-26, R-25) — then compared; the first differing line is shown
+   - `fonts <file>`: the fonts as `pdffonts` lists them — type, font file
+     key, subset, `/ToUnicode`
+   - `struct <file>`: the roles of the structure tree and their counts
+   - `normalize <file> <out>`: one file normalized, to look at a difference
 
-     - `run`: run all eight demos of one compiler (`fpc`, `d7`, `d2010`)
-       and collect their PDFs into a baseline directory — in the tool, not
-       in a `.bat` and a `.sh`, so it is written once for all platforms. On
-       Linux without a display: `xvfb-run pdfcheck run ...`
+   The reading code is `tests/pdf_inspect.pas`, shared with the tests. A test
+   tool, not the draft of the PDF reader (gist §1, after the migration).
+   Within one platform `compare` decides; across platforms, where the fonts
+   differ, `pdftotext`, `fonts`, `struct` and the page count must match
+   (ROADMAP V).
 
-     The reading code is `tests/pdf_inspect.pas`, shared with the tests. A
-     test tool, not the draft of the PDF reader (gist §1, after the migration)
-
-   Within one platform `normalize` decides; across platforms, where the
-   fonts differ, `pdftotext`, `fonts`, `struct` and the page count must
-   match (ROADMAP V)
+   **Checked:** two runs per compiler compare equal — Windows (FPC, Delphi 7,
+   Delphi 2010), Linux, macOS; a changed file is reported with its line, a
+   missing one as such. `fonts` gives the font dictionaries a text search
+   counts in all eight demos; a hand-written file covers a non-embedded
+   Type1 and a CFF `FontFile3` (Windows; on Linux and macOS still to run).
+   `struct` gives `zugferd_demo`'s roles as
+   ROADMAP R-26 records them. `test_runner` unchanged, 259/259 on all three
+   Windows compilers
 2. Baseline of today's `main`: `test_runner` (assertion count) and the PDFs
    of all eight demos on Windows (FPC Win64, Delphi 7, Delphi 2010), Linux
    and macOS

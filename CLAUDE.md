@@ -94,8 +94,8 @@ tests/
   delphi13/test_runner.dproj   Delphi 13 IDE project: Win32, Win64, Linux64, Android64 (R-27)
   delphi13/android/            FMX host for Android: build.cmd, run-emulator.cmd -Run, BUILD-FREETYPE.md
   no_hbsubset.sh               Linux: tests and console demos with libharfbuzz-subset hidden
-  pdfcheck.lpr                 refactoring check tool: run the demos, compare their PDFs normalized, structure roles (docs/REFACTORING.md)
-  pdf_inspect.pas              reading written PDFs back: inflate, normalize, roles — shared by the tests and pdfcheck
+  pdfcheck.lpr                 refactoring check tool: run the demos, compare their PDFs normalized, structure roles, fonts (docs/REFACTORING.md)
+  pdf_inspect.pas              reading written PDFs back: inflate, normalize, roles, fonts — shared by the tests and pdfcheck
   test_pdf_crossplatform.pas   platform backend, text shaper, TTC extraction
   test_pdf_smoke.pas           PDF basics, tagged output, struct tree, tagged Unicode, the shaping switch (through TPdfCanvas; one bridge test)
   test_report_crossplatform.pas report engine, tables, tagged export

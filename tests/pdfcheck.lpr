@@ -4,6 +4,7 @@
 // - pdfcheck compare <dirA> <dirB>         compare the PDFs, normalized
 // - pdfcheck normalize <file.pdf> <out>    write one file normalized
 // - pdfcheck struct <file.pdf>             the structure roles and their counts
+// - pdfcheck fonts <file.pdf>              the fonts, as pdffonts lists them
 // The exit code is 0 when everything ran and matched.
 program pdfcheck;
 
@@ -189,6 +190,7 @@ begin
   Say('  pdfcheck compare <dirA> <dirB>');
   Say('  pdfcheck normalize <file.pdf> <out>');
   Say('  pdfcheck struct <file.pdf>');
+  Say('  pdfcheck fonts <file.pdf>');
   Problems := 1;
 end;
 
@@ -207,6 +209,8 @@ begin
     FileFromString(NormalizePdf(StringFromFile(ParamStr(2))), ParamStr(3))
   else if (cmd = 'struct') and (ParamCount = 2) then
     ConsoleWrite(PdfStructRoles(StringFromFile(ParamStr(2))), ccLightGray, true)
+  else if (cmd = 'fonts') and (ParamCount = 2) then
+    ConsoleWrite(PdfFonts(StringFromFile(ParamStr(2))), ccLightGray, true)
   else
     Usage;
   if Problems > 0 then
