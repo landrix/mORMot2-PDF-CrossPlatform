@@ -111,33 +111,56 @@ Conventions (mechanical, large):
 
 ## 2. Proposed target layout in mORMot2
 
-| Fork | mORMot2 |
-|---|---|
-| `src/core/mormot.ui.pdf.pas` | `src/ui/mormot.ui.pdf.pas` — re-applied as patch on current upstream |
-| `src/core/mormot.pdf.types.pas` | section of `mormot.ui.pdf.pas`, or `src/ui/mormot.ui.pdf.types.pas` |
-| `src/platform/windows/mormot.pdf.gdi.pas` | `src/ui/mormot.ui.pdf.windows.inc` |
-| `src/platform/unix/mormot.pdf.freetype.pas` | `src/lib/mormot.lib.freetype.pas` (thin binding) + `src/ui/mormot.ui.pdf.posix.inc` |
-| `src/platform/unix/mormot.pdf.harfbuzz.pas`, `hbsubset.pas` | `src/lib/mormot.lib.harfbuzz.pas` (hb + hb-subset) + logic in `mormot.ui.pdf.posix.inc` |
-| `src/core/mormot.ui.pdfcanvas.pas` | `src/ui/mormot.ui.pdf.canvas.pas` |
-| `src/core/mormot.ui.report.pas` | open question Q2 |
-| `src/core/mormot.ui.reportpreview.pas` | with Q2 |
-| `src/core/mormot.ui.core.pas`, `mormot.ui.gdiplus.pas` | none (upstream) |
-| `src/lib/mormot.lib.uniscribe.pas` | upstream + additive patch |
-| `src/core/mormot.pdf.fpimage.pas` | drop |
-| `tests/*` | `test/test.ui.pdf.pas` (extend), `test/test.ui.report.pas` |
-| `examples/*` | 1–3 demos in `ex/` |
+Revised after ab's answer of 2026-10-01 (§3). Proposal, not agreed yet:
 
-## 3. Open questions — to agree with the maintainer before coding
+| Unit | Content | LCL/VCL |
+|---|---|---|
+| `src/lib/mormot.lib.freetype.pas` | thin FreeType2 binding, `TSynLibrary`, lazy | no |
+| `src/lib/mormot.lib.harfbuzz.pas` | thin HarfBuzz + hb-subset binding, `TSynLibrary`, lazy | no |
+| `src/pdf/mormot.pdf.core.pas` | PDF objects, writer, `TPdfDocument`, `TPdfCanvas`, the font backend interfaces (today `mormot.pdf.types`); candidate for a further split (fonts/TrueType, tagging/structure, PDF/A + XMP) | **no** |
+| `src/pdf/mormot.pdf.gdi.pas` | Windows font backend on plain GDI | no |
+| `src/pdf/mormot.pdf.freetype.pas` | POSIX font backend on `mormot.lib.freetype` | no |
+| `src/pdf/mormot.pdf.harfbuzz.pas` | POSIX shaper and subsetter on `mormot.lib.harfbuzz` | no |
+| `src/pdf/mormot.pdf.graphics.pas` | `TGraphic`/`TBitmap` images, `TMetaFile` + `TPdfDocumentGdi` (Windows) | yes |
+| `src/pdf/mormot.pdf.canvas.pas` | TCanvas bridge (`TPdfDocumentVcl`) | yes |
+| `src/pdf/mormot.pdf.report.pas` (+ `.preview`) | the report engine | yes |
+| `src/pdf/mormot.pdf.reader.pas` | new: PDF reader (xref chains, incremental updates, object streams, filters, standard security handler, embedded files) | no |
+| `src/ui/mormot.ui.pdf.pas`, `mormot.ui.report.pas` | open: kept for existing users, or a thin compatibility layer over `src/pdf` | yes |
 
-- **Q1 Backend structure:** interfaces + `RegisterPdfPlatform` in `initialization`
-  (as now) vs. `.inc` files per OS (the mORMot2 way, `src/README.md` "Include Files").
-- **Q2 Report:** keep upstream `TGdiPages` API (port the fork's features into it:
-  tables, tagging, PDF/A attachments, cross-platform) vs. a new unit/class next to it.
-- **Q3 `HAS_UI_PDF`:** widen to POSIX (and Delphi Linux/Android without VCL) and
-  split off a Windows-only flag for `TPdfDocumentGdi`/metafile.
-- **Q4 PR sequence:** small PRs — (a) upstream catch-up + Uniscribe patch,
-  (b) `mormot.lib.freetype`/`harfbuzz`, (c) `mormot.ui.pdf` POSIX support,
-  (d) canvas bridge, (e) report, (f) tests/examples.
+Not going upstream: `src/core/mormot.ui.core.pas`, `mormot.ui.gdiplus.pas` (upstream
+copies), `mormot.pdf.fpimage.pas` (unused).
+Tests: `test/test.pdf.*.pas` registered in `mormot2tests`; examples: a few in `ex/`.
+
+Reader starting point: `intf.XRechnungPdfExtract.pas` in XRechnung-for-Delphi
+(Landrix, GPLv3 + commercial; Landrix owns it and contributes it under
+mORMot's MPL/GPL/LGPL).
+It resolves the object graph through the xref chain (incremental updates, so a
+replaced invoice is not picked up), rebuilds a broken xref by scanning, decodes
+Flate/LZW (+ predictor), ASCIIHex, ASCII85, RunLength, and reads RC4-encrypted
+files with an empty user password. For mORMot its own MD5/RC4/zlib go to
+`mormot.crypt.core`/`mormot.lib.z`, and the code to mORMot style.
+
+## 3. Open questions
+
+Answered by ab (forum 7604, 2026-10-01):
+- **Q1 Backends:** libraries as `mormot.lib.*.pas` as far as possible; no
+  `windows.inc`/`posix.inc` include files ("very badly supported by the Delphi IDE").
+- **Folder/units:** instead of one huge `mormot.ui.pdf.pas`, several smaller units
+  — that is the point of a folder of its own. Folder name open: `pdf/`, or
+  `report/`/`export/` holding reporting as well — "worth discussing".
+- **LCL/VCL-free raw PDF generator:** wanted. (The fork has it on Delphi
+  Linux/Android already: `USE_GRAPHICS_UNIT` off.)
+- **PDF reader:** "a well demanded improvement", to be prepared.
+
+Still open:
+- **Q2 Report:** replace `mormot.ui.report` (`TGdiPages`, a `TScrollBox` with a much
+  bigger API) or a new unit next to it.
+- **Q3 `HAS_UI_PDF`:** with an LCL/VCL-free core the PDF units need no UI flag; the
+  Graphics-based units get one (Windows + VCL/LCL for the metafile part).
+- **Q5 Folder name** and whether `mormot.ui.pdf`/`mormot.ui.report` stay.
+- **Q4 PR sequence:** (a) upstream catch-up, (b) `mormot.lib.freetype`/`harfbuzz`,
+  (c) the split into `src/pdf` with an LCL/VCL-free core, (d) canvas bridge and
+  graphics, (e) report, (f) tests/examples, (g) reader.
 
 ## 4. Order of work in this fork
 
@@ -145,9 +168,11 @@ Conventions (mechanical, large):
    drop the stale `mormot.ui.core`/`gdiplus` copies.
 2. Mechanical conventions that do not depend on Q1–Q3: headers, include style,
    OS conditionals, comment cleanup, ASCII, exceptions, `FormatUtf8`, GUIDs.
-3. `TSynLibrary`-based bindings for FreeType/HarfBuzz.
-4. After the maintainer's answer: renames/moves, report strategy, `HAS_UI_PDF`.
-5. Tests into `test.ui.*` form, examples, packages, READMEs.
+3. `TSynLibrary`-based bindings `mormot.lib.freetype`/`mormot.lib.harfbuzz`.
+4. Layer 1 without LCL/VCL: move the `Graphics`-dependent parts out of the core.
+5. After Q2/Q5: renames/moves into `src/pdf`, report strategy, `HAS_UI_PDF`.
+6. Tests into `test.pdf.*` form, examples, packages, READMEs.
+7. Reader, from the XRechnung extractor.
 
 Each step: build `test_runner` (Windows aarch64-win64, WSL aarch64-linux with FPC
 3.2.2/3.2.4/3.3.1, Delphi 13 Win32/Win64) and compare the demo PDFs
