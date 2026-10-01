@@ -105,6 +105,8 @@ tested here. Proposed in the forum: a feature freeze until it is done.
 **Reference:** Arnaud's proposal for units, dependencies and phases —
 https://gist.github.com/synopse/9e31d8808ed2575ad5ad23da6fe41e4f
 
+**Plan:** [REFACTORING.md](REFACTORING.md) — phases, steps, checks.
+
 ### R-26 — `zugferd_demo` on `TGDIPages`, Its Text From the XML — priority 1
 
 **Why.** Since 3d0ab39 every non-ASCII character in the demos is a code-point

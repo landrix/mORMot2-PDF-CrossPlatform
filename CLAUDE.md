@@ -107,6 +107,7 @@ docs/
   DEMOS.md            Learning path: the 8 demos step by step
   API_REFERENCE.md    TCanvas methods, TReportFormat, TTableLayout
   ROADMAP.md          Open work in detail, completed work as one line each
+  REFACTORING.md      mORMot Refactoring: integration into the trunk as src/pdf (R-28)
 CHANGELOG.md          Released versions; a release's entry is written from ROADMAP "To Announce", the one list of user-visible changes
 .claude/skills/
   pdf-engine.md       TPdfDocument, TPdfDocumentVcl, TPdfCanvas — full API, enums, encryption, FPImage
