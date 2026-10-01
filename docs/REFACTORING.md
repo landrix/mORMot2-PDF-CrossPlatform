@@ -13,12 +13,44 @@ steps and records what each step was checked with.
 
 ## Rules for Every Step
 
-**One step, one PR, one kind of change** (gist §22): move units, rename,
-change metrics, change serialization — never two of them at once.
+The gist's §22 (as of 2026-10-01) merged with ROADMAP's Working Method, so
+that no step needs the gist at hand. When the gist changes, update this
+section.
 
-**Behaviour first.** Unless a step says otherwise, the demo PDFs must come out
-identical to the baseline after normalization (Phase 0). A difference is a
-defect until it is explained and accepted in this file.
+**Behaviour**
+
+1. **Behaviour first.** Unless a step says otherwise, the demo PDFs come out
+   identical to the baseline after normalization (Phase 0); existing tests
+   stay valid. A difference is a defect until it is explained and accepted
+   in this file. For the refactoring this replaces ROADMAP's pixel check.
+2. **One step, one PR, one kind of change.** Never two of: move units,
+   rename public API, change font metrics, change PDF serialization, change
+   report layout. Each must be reviewable on its own.
+
+**Architecture**
+
+3. **No new dependency without justification.** Every new `uses` follows the
+   gist's dependency graph (§14). Forbidden: `mormot.lib.font` →
+   `mormot.pdf.*`, `mormot.pdf.core` → GUI, `mormot.pdf` → GUI.
+4. **No generic abstraction without need.** An interface only when there are
+   two implementations or a clear testing or injection need.
+5. **Low-level units stay small.** `mormot.lib.font` and `mormot.pdf.core`
+   depend on little.
+6. **Capabilities, not platform emulation.** No Unix equivalent of a Windows
+   handle to keep the old internal model when a direct abstraction is possible.
+7. **Public convenience.** `uses mormot.pdf` or `uses mormot.pdf.report` is
+   enough; a user never picks the font backend.
+
+**Ours**
+
+8. **Documentation moves with the code.** A step that renames or moves
+   something updates `CLAUDE.md` and the affected skills in the same PR.
+9. **Shaping changes** are checked with a font without Arabic presentation
+   forms (`.claude/skills/fonts.md` §10).
+10. **PAC and veraPDF** are run by Martin (PAC on Windows, veraPDF on macOS).
+11. **Access to `src/` stays restricted** (`CLAUDE.md`), also for refactoring
+    steps: each file is asked for with its reason. Martin follows every step
+    and must not lose track; no standing permission.
 
 **Checked after every step:**
 

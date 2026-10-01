@@ -337,6 +337,8 @@ itself is in each demo's `uReport.pas`; the form only passes its options.
 
 ## Open Items
 
+- **mORMot Refactoring** (R-28, in progress): before any step of it, read
+  `docs/REFACTORING.md` — its rules apply on top of this file
 - **Font subsetting**: default (`EmbeddedWholeTtf = False`) on all platforms, two implementations, both keeping the original glyph IDs and therefore safe for CJK, shaped Arabic and tagged output. **Linux/macOS** (R-12): `IPdfFontSubsetter` from `mormot.pdf.hbsubset` (`libharfbuzz-subset`); 97–99.5% smaller PDFs. **Windows** (R-15): `CreateFontPackage` with a glyph keep list (`TTFCFP_FLAGS_GLYPHLIST`). The whole face is embedded instead for PDF/A-1 (no `/CIDSet`), for symbol fonts on POSIX (R-15b) and when `libharfbuzz-subset` is missing. See `.claude/skills/fonts.md` §3, §9
 - **CFF faces are subset too** (R-15c, done): a CFF-flavoured face goes to `/FontFile3` with `/Subtype /OpenType` as a `CIDFontType0`; `glyf` goes to `/FontFile2`. `PdfFontFileKey()` picks the key. Embedding CFF in `/FontFile2` is a spec violation (ISO 32000-1 9.9) — do not reintroduce it by assuming one key fits both
 - **RTL / Arabic text**: one switch, `UseUniscribe` — HarfBuzz delivers correct ligatures on Linux/macOS, Windows uses Uniscribe; `RightToLeftText` is the direction only — see `.claude/skills/fonts.md` §10
