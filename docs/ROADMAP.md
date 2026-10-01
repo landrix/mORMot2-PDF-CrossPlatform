@@ -86,7 +86,10 @@ deflate `/BaseFont` out of reach of the grep.
 **`--export` needs no display on macOS.** The Cocoa widgetset runs both GUI
 demos headless; the `xvfb-run` advice is Linux/GTK2 only.
 
-**Checking a change.** Build all eight demos and `test_runner`, then compare the
+**Checking a change.** First the golden files: `test_runner --golden-record`
+on the commit before the change, then `test_runner` on the change - a change
+meant to be invisible leaves every golden case green (CLAUDE.md, Build
+Commands). Then build all eight demos and compare the
 PDFs with the previous run: file size, `pdffonts`, `pdftotext` output, and the
 pages rendered with `pdftoppm -r 110 -png` compared pixel by pixel. A change
 that is meant to be invisible has to come out pixel-identical. A pixel
