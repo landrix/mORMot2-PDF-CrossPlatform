@@ -112,8 +112,16 @@ begin
       cmd := cmd + ' --export';
     start := UnixTimeUtc - 1;
     code := -1;
+    {$ifdef OSPOSIX}
+    // POSIX RunRedirect takes fpread() = 0 at EOF for more output and never
+    // returns: the demo writes to our console instead
+    ChDir(RootDir + 'examples' + PathDelim + DEMOS[i].Dir);
+    output := '';
+    code := RunCommand(cmd, true);
+    {$else}
     output := RunRedirect(cmd, @code, nil, INFINITE, true, '',
       RootDir + 'examples' + PathDelim + DEMOS[i].Dir);
+    {$endif OSPOSIX}
     if code <> 0 then
     begin
       Fail(Utf8(DEMOS[i].Dir) + ': exit code ' + Int32ToUtf8(code));

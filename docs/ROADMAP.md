@@ -492,6 +492,23 @@ entries, `/Contents` and `/Tabs /S`; then `mailto:` links for addresses, and
 `DrawLink` writing a real annotation for its URL. Done, it would also clear
 W-2. Not planned: build it only when someone asks for it.
 
+### `RunRedirect` Hangs on POSIX — mORMot2 fix, unprioritised
+
+Found on 2026-10-01 with `pdfcheck run fpc` on Linux: after the first demo had
+written its PDF and exited, `pdfcheck` spun at 100 % CPU, the child left as a
+zombie. In `RunRedirect` (`mormot.core.os.posix.inc`, `RedirectOutput`)
+`fpread` returns 0 at the end of the pipe, but only `n < 0` counts as closed;
+with `INFINITE` the loop reads the closed pipe for ever and never reaches
+`pclose`. Windows goes through `RunCommandWin` and is not affected.
+
+**Workaround, done:** `pdfcheck` runs the demos with `ChDir` +
+`RunCommand(cmd, true)` under `OSPOSIX`; their output goes to the console
+instead of being shown on a failure.
+
+**The fix still open:** take `n <= 0` as the end in `RedirectOutput`, in the
+mORMot2 fork and as a PR to Synopse; then drop the `{$ifdef OSPOSIX}` in
+`tests/pdfcheck.lpr`.
+
 ### The Unused WinAnsi Peer Beside a CJK or Arabic Font — unprioritised
 
 The engine creates a WinAnsi peer beside every Identity-H font and emits a `Tf`
