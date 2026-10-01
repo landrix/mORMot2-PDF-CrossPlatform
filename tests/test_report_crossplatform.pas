@@ -17,7 +17,7 @@ uses
   Graphics,
   mormot.core.base,
   mormot.core.test,
-  mormot.lib.z,      // UncompressZipString
+  pdf_inspect,       // InflatePdf
   mormot.ui.report;  // re-exports what the ExportPdf* options take
 
 type
@@ -721,50 +721,6 @@ begin
   finally
     Report.Free;
   end;
-end;
-
-// the file with every FlateDecode stream inflated in place: PDF/A-3 is PDF
-// 1.7, whose object streams hide the catalog and the file specification
-function InflatePdf(const s: RawUtf8): RawUtf8;
-var
-  p, q, body, e: integer;
-  z: RawUtf8;
-begin
-  result := '';
-  p := 1;
-  q := PosEx('stream', s, 1);
-  while q > 0 do
-  begin
-    if (q > 3) and (copy(s, q - 3, 3) = 'end') then
-    begin
-      q := PosEx('stream', s, q + 6);
-      continue;
-    end;
-    body := q + 6;
-    if (body <= length(s)) and (s[body] = #13) then
-      inc(body);
-    if (body <= length(s)) and (s[body] = #10) then
-      inc(body);
-    e := PosEx('endstream', s, body);
-    if e = 0 then
-      break;
-    result := result + copy(s, p, body - p);
-    z := '';
-    // only a stream dictionary carries a /Filter, so the text since the
-    // previous stream names this stream's filter
-    if PosEx('/FlateDecode', copy(s, p, q - p)) > 0 then
-      try
-        z := UncompressZipString(@s[body], e - body, nil, true);
-      except
-        z := '';
-      end;
-    if z = '' then
-      z := copy(s, body, e - body);
-    result := result + z;
-    p := e;
-    q := PosEx('stream', s, e + 9);
-  end;
-  result := result + copy(s, p, maxInt);
 end;
 
 // true when s holds the key /AF, not only /AFRelationship
