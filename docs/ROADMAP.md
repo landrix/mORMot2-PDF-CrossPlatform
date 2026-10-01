@@ -96,6 +96,15 @@ comparison is valid **within** one platform only — see V below.
 
 ## Open
 
+### R-28 — Integration Into the mORMot2 Trunk — under discussion
+
+**Why.** Arnaud proposed taking the project into the trunk as `src/pdf`;
+Sven (landrix) offered to do the integration in small PRs, reviewed and
+tested here. Proposed in the forum: a feature freeze until it is done.
+
+**Reference:** Arnaud's proposal for units, dependencies and phases —
+https://gist.github.com/synopse/9e31d8808ed2575ad5ad23da6fe41e4f
+
 ### R-26 — `zugferd_demo` on `TGDIPages`, Its Text From the XML — priority 1
 
 **Why.** Since 3d0ab39 every non-ASCII character in the demos is a code-point
