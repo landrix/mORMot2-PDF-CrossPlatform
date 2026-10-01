@@ -73,9 +73,24 @@ Before anything moves. In this order — Sven's merge can change output (the
 trunk's `mormot.lib.uniscribe`, ported trunk commits), so it is checked
 against today's `main`:
 
-1. A versioned normalizer in Pascal (no Python on the Windows machine, no
-   `pdftoppm`): inflate the streams, mask dates, `/ID` and subset prefixes —
-   the method used by hand so far (ROADMAP R-26, R-25)
+1. The check tools, versioned:
+   - `tests/pdfcheck`, in Pascal (no Python, `pdffonts` or `pdftoppm` on the
+     Windows machine), builds and runs on all three platforms:
+     - `normalize`: inflate the streams, mask dates, `/ID` and subset
+       prefixes, compare two directories — the method used by hand so far
+       (ROADMAP R-26, R-25)
+     - `fonts`: the fonts as `pdffonts` lists them — embedded, subset,
+       `/ToUnicode`, `FontFile2`/`FontFile3`
+     - `struct`: the roles of the structure tree and their counts
+
+     It reuses `InflatePdf` from `test_report_crossplatform`. A test tool,
+     not the draft of the PDF reader (gist §1, after the migration)
+   - A run script per platform (`.bat`, `.sh`): run all eight demos and
+     collect their PDFs into a baseline directory
+
+   Within one platform `normalize` decides; across platforms, where the
+   fonts differ, `pdftotext`, `fonts`, `struct` and the page count must
+   match (ROADMAP V)
 2. Baseline of today's `main`: `test_runner` (assertion count) and the PDFs
    of all eight demos on Windows (FPC Win64, Delphi 7, Delphi 2010), Linux
    and macOS
