@@ -56,7 +56,7 @@ section.
 
 | Check | Where |
 |---|---|
-| `test_runner` green, same assertion count | Windows: FPC Win64, Delphi 7, Delphi 2010 |
+| `test_runner` green, same assertion count, golden files unchanged | Windows: FPC Win64, Delphi 7, Delphi 2010 |
 | All eight demos build and run (GUI demos with `--export`) | the same |
 | Demo PDFs identical to the baseline after normalization | the same |
 | `test_runner`, demos, PDFs against the baseline | Linux and macOS — every step that touches POSIX code, otherwise at the end of the phase |
@@ -69,9 +69,10 @@ section.
 
 ### Phase 0 — Baseline
 
-Before anything moves. In this order — Sven's merge can change output (the
-trunk's `mormot.lib.uniscribe`, ported trunk commits), so it is checked
-against today's `main`:
+Before anything moves. In this order — the check tools first, then the
+mORMot2 trunk pinned, then today's `main` recorded; Sven's merge can change
+output (the trunk's `mormot.lib.uniscribe`, ported trunk commits), so it is
+checked against that record:
 
 1. ~~The check tool~~ done: `tests/pdfcheck`, in Pascal (no Python,
    `pdffonts` or `pdftoppm` on the Windows machine), on all three platforms:
@@ -101,16 +102,59 @@ against today's `main`:
    `struct` gives `zugferd_demo`'s roles as
    ROADMAP R-26 records them. `test_runner` unchanged, 259/259 on all three
    Windows compilers
-2. Baseline of today's `main`: `test_runner` (assertion count) and the PDFs
-   of all eight demos on Windows (FPC Win64, Delphi 7, Delphi 2010), Linux
-   and macOS
-3. Sven's branch `mormot2-merge` merged: the trunk commits to `mormot.ui.pdf`,
-   the trunk's `mormot.ui.core`, `mormot.ui.gdiplus` and `mormot.lib.uniscribe`
-   instead of the copies. Checked against step 2 on all three platforms —
-   the ported commits are not Windows-only; every difference explained (the
-   EMF fixes touch no demo)
-4. Baseline again after the merge, on all three platforms: the reference for
-   Phase 1
+2. **Golden files** (Sven, PR #3): nine small documents, layers 1–3,
+   recorded per machine and compiler by `test_runner --golden-record` and
+   compared by every `test_runner` run. They complement `pdfcheck`, which
+   covers the real demos and compares the compilers with each other.
+   Merged unchanged, then ours:
+   - **one normalizer:** Sven's `GoldenNormalize` — a tokenizer that checks
+     each `/Length` and offset before blanking it — moves to
+     `pdf_inspect.pas`; `pdfcheck compare` and `normalize` use it,
+     `NormalizePdf` goes. Pattern matching over the whole file can hide a
+     real difference
+   - the same assertion count with and without a recorded baseline (today
+     279 without, 288 with)
+
+   **Checked** as step 1: two runs per compiler compare equal, and all eight
+   demos normalize without an error, on Delphi 7 and 2010 as well
+3. **mORMot2 trunk.** From here on the project builds against the trunk
+   only: release 2.4-stable lacks functions the ported commits of step 5 use
+   (`TTemp512`, `UINT_999`, `bswap16array`, `StrIEqual`, `SameTextS`,
+   `SameExt`). v0.10.0 stays the last version for 2.4-stable.
+   - a checkout of its own on each machine, beside the project (paths in
+     `CLAUDE.local.md`), with `static/` from the `mormot2static.7z` matching
+     it, checked against `static/dev.sha256`. Windows: the existing Lazarus
+     points to it; Linux and macOS: a separate fpcupdeluxe installation,
+     with the FPC version used so far
+   - **pinned per baseline:** the trunk is updated right before a baseline
+     and its commit recorded here — never between two baselines, or a
+     difference cannot be told from the change under test
+
+   **Pinned:** `d60cc6e80` (2026-10-02). **Checked:** today's `main`,
+   `test_runner` 259/259 on Windows (FPC Win64, Delphi 7, Delphi 2010);
+   Linux and macOS with step 4
+4. **Baseline:** on each platform in one session — build, `test_runner`,
+   `test_runner --golden-record`, `pdfcheck run` for every compiler; Windows
+   (FPC Win64, Delphi 7, Delphi 2010), Linux, macOS
+5. **Sven's merge** (PR #2): the trunk commits to `mormot.ui.pdf`, the trunk's
+   `mormot.ui.core` and `mormot.ui.gdiplus` instead of the copies, the copy
+   of `mormot.lib.uniscribe` dropped (the `mormot2` package ships it).
+   Checked against step 4 on all three platforms — it touches `TPdfWrite` and
+   the POSIX `GetTtfData`: `test_runner` against the golden files,
+   `pdfcheck run` and `compare`; every difference explained (the EMF fixes
+   touch no demo). Then README, CHANGELOG (via ROADMAP "To Announce") and
+   `CLAUDE.md` Dependencies: trunk only, v0.10.0 the last version for
+   2.4-stable
+6. The run of step 5, once accepted, is the reference for Phase 1 — no
+   session of its own
+
+**Where the PDFs go:** on the Mac's drive (path in `CLAUDE.local.md`), one
+folder per state, named `<date>_<state>` (`2026-10-xx_phase0-baseline`,
+`2026-10-xx_phase0-pr2`), all systems flat in it. The demos' file names
+carry demo, OS, CPU and compiler, so `pdfcheck compare <old> <new>` pairs
+every system in one run, and veraPDF checks a folder in one go. Golden files
+are named without the system, which is in their folder name: copied with
+their `golden/<os_cpu_compiler>/` folder, if at all
 
 ### Phase 1 — Generic Font Layer
 
@@ -174,4 +218,6 @@ Process, agreed in the forum:
 
 - The trunk's existing `TGdiPages` (`TScrollBox`, preview built in) — before
   Phase 4
-- Golden files in the trunk, or the normalizer comparison only
+- Golden files in `mormot2tests`: here they are per machine and not
+  versioned (Phase 0 step 2) — how a baseline without files in the
+  repository serves the trunk's tests
