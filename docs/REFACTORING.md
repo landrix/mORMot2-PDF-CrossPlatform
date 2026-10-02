@@ -152,6 +152,14 @@ checked against that record:
    included. Then `test_runner`, `test_runner --golden-record`,
    `pdfcheck run` for every compiler; Windows (FPC Win64, Delphi 7,
    Delphi 2010), Linux, macOS
+
+   **Windows done** (2026-10-02, `418e85e`, mORMot2 `d60cc6e80`): all
+   rebuilt; `test_runner` 279/279 on all three compilers, nine golden files
+   each; 24 demo PDFs in `2026-10-02_phase0-baseline`. Across the compilers
+   seven demos are identical after normalization; `chinese_demo` differs
+   between FPC and Delphi (Delphi 7 = Delphi 2010) in the subset `cmap` only —
+   the 32-bit `fontsub.dll` (`.claude/skills/fonts.md` §3), not a defect.
+   Linux and macOS: to run
 5. **Sven's merge** (PR #2): the trunk commits to `mormot.ui.pdf`, the trunk's
    `mormot.ui.core` and `mormot.ui.gdiplus` instead of the copies, the copy
    of `mormot.lib.uniscribe` dropped (the `mormot2` package ships it).
