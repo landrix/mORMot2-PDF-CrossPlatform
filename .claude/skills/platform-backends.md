@@ -8,7 +8,17 @@ Unix/macOS backend: `src/platform/unix/mormot.pdf.freetype.pas`
 
 ## Three Interfaces
 
-All platform-specific operations run exclusively through these three interfaces. The core (`mormot.ui.pdf.pas`) contains no `{$ifdef}` for platform details.
+On Linux/macOS all platform-specific operations run through these three interfaces.
+
+**Windows bypasses them in `TPdfDocument`.** Under `{$ifdef OSWINDOWS}` the core
+calls GDI directly: `CreateCompatibleDC`/`GetDeviceCaps` in the constructor,
+`CreateFontIndirectW`, `GetTextMetrics`, `GetOutlineTextMetrics`,
+`GetCharABCWidthsA`, `SelectObject` (`GetDCWithFont`), `windows.GetFontData`
+for the tables and the embedded face, plus `CreateFontPackage` and Uniscribe
+(`USE_UNISCRIBE`). The GDI backend's interfaces are used on Windows only by
+`TPdfFontMeasurer`, i.e. the `TGDIPages` layout. A replacement backend (e.g. a
+test stub) therefore reaches the PDF output on POSIX only; moving this path
+behind `IPdfPlatformFont` is part of the refactoring (R-28).
 
 ### IPdfPlatformFont — Font Operations
 

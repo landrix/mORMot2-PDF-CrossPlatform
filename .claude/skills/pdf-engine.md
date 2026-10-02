@@ -626,10 +626,11 @@ AES-128 output size: `16 (IV) + ceil(N/16)*16` bytes per encrypted object/string
 
 **`Tagged := True` picks the mode for you:** it sets `EmbeddedTTF` and clears
 `StandardFontsReplace`, because PDF/UA allows no non-embedded base-14 face. It
-sets `EmbeddedWholeTtf := (PdfFontSubsetter = nil)`: on Linux/macOS the faces
-are subset by hb-subset with retained glyph IDs, which keeps `/ToUnicode` valid
-(R-12); on Windows `CreateFontPackage` would break it, so the whole face is
-embedded. Set `EmbeddedWholeTtf := True` afterwards to force the whole face. It
+sets `EmbeddedWholeTtf := not PdfCanSubsetRetainingGids`: the faces are subset
+with retained glyph IDs, which keeps `/ToUnicode` valid — by hb-subset on
+Linux/macOS (R-12), by `CreateFontPackage` with a glyph keep list on Windows
+(R-15). Only without a subsetter (no `libharfbuzz-subset`, no `FontSub.dll`)
+is the whole face embedded. Set `EmbeddedWholeTtf := True` afterwards to force the whole face. It
 raises `ESynException` when set after the first `AddPage`, and it also widens the
 WinAnsi `/ToUnicode` CMap — previously written for PDF/A only — to tagged
 documents. Resolve font names with `GetPdfFonts` *after* setting `Tagged`.
