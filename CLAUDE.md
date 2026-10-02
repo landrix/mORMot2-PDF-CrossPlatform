@@ -101,6 +101,8 @@ tests/
   test_report_crossplatform.pas report engine, tables, tagged export
   test_pdf_subset.pas          font subsetting: IPdfFontSubsetter and TPdfDocument
   test_pdf_pdfa.pas            PDF/A-3: associated files, XMP schemas, PdfMetadataFacturX, level U
+  test_pdf_golden.pas          golden files: generated PDFs against this machine's baseline (layers 1-2)
+  test_report_golden.pas       the same for TGDIPages (layer 3)
   test_coordinates.pas         page geometry
   test_report_coordinates.pas  report geometry
 reference/
@@ -316,6 +318,14 @@ bin\d2010\test_runner\test_runner.exe --noenter
 
 On Windows every test runner waits for Enter at the end unless it gets a
 parameter — pass `--noenter` when it runs unattended.
+
+**Golden files.** `test_runner --golden-record` writes this machine's baseline
+to `golden/<os>_<cpu>_<compiler>/` next to the executable (not versioned:
+embedded faces depend on the fonts installed); a normal run compares against
+it and skips without one. Record on the commit before a change, then run on the
+change: a difference names the object and shows both excerpts, and the new file
+is kept as `<case>.actual.pdf`. Compared after inflating the streams and
+blanking `/ID`, subset tags, dates, `/Length` and offsets.
 
 Every project builds to `bin/<cpu-os>/` — the executable, the PDF it writes
 and its logs — and its units to `lib/<cpu-os>/` (`<cpu-os>` as FPC names the

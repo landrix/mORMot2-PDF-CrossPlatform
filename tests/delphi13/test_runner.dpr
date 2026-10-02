@@ -30,9 +30,11 @@ uses
   test_pdf_crossplatform,
   test_pdf_smoke,
   test_pdf_subset,
-  test_pdf_pdfa
+  test_pdf_pdfa,
+  test_pdf_golden
   {$ifdef PDF_HASVCLCANVAS},
   test_report_crossplatform,
+  test_report_golden,
   test_coordinates,
   test_report_coordinates
   {$endif PDF_HASVCLCANVAS};
@@ -50,13 +52,13 @@ type
 procedure TIntegrationTests.TestPDF;
 begin
   AddCase([TPdfCrossPlatTests, TPdfSmokeTests, TPdfSubsetTests,
-    TPdfSubsetEngineTests, TPdfATests]);
+    TPdfSubsetEngineTests, TPdfATests, TPdfGoldenTests]);
 end;
 
 {$ifdef PDF_HASVCLCANVAS}
 procedure TIntegrationTests.TestReport;
 begin
-  AddCase([TReportTests]);
+  AddCase([TReportTests, TReportGoldenTests]);
 end;
 
 procedure TIntegrationTests.TestStructuredReport;
@@ -67,6 +69,8 @@ end;
 
 begin
   SetExecutableVersion(SYNOPSE_FRAMEWORK_VERSION);
+  GoldenRecord := Executable.Command.Option('golden-record',
+    'write the golden PDF baseline of this machine instead of comparing');
   TIntegrationTests.RunAsConsole('mORMot2 PDF and Report Tests',
     //LOG_VERBOSE +
     LOG_FILTER[lfExceptions] // + [sllErrors, sllWarning]
