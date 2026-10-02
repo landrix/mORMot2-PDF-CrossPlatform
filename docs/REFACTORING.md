@@ -155,7 +155,8 @@ checked against that record:
 
    **Windows done** (2026-10-02, `418e85e`, mORMot2 `d60cc6e80`): all
    rebuilt; `test_runner` 279/279 on all three compilers, nine golden files
-   each; 24 demo PDFs in `2026-10-02_phase0-baseline`. Across the compilers
+   each; 24 demo PDFs and three `tagged_unicode` in
+   `2026-10-02_phase0-baseline`. Across the compilers
    seven demos are identical after normalization; `chinese_demo` differs
    between FPC and Delphi (Delphi 7 = Delphi 2010) in the subset `cmap` only —
    the 32-bit `fontsub.dll` (`.claude/skills/fonts.md` §3), not a defect.
@@ -176,9 +177,11 @@ checked against that record:
 folder per state, named `<date>_<state>` (`2026-10-xx_phase0-baseline`,
 `2026-10-xx_phase0-pr2`), all systems flat in it. The demos' file names
 carry demo, OS, CPU and compiler, so `pdfcheck compare <old> <new>` pairs
-every system in one run, and veraPDF checks a folder in one go. Golden files
-are named without the system, which is in their folder name: copied with
-their `golden/<os_cpu_compiler>/` folder, if at all
+every system in one run, and veraPDF checks a folder in one go. With the
+demos goes `tagged_unicode_<system>.pdf`, which `test_runner` writes beside
+itself — one of the seven tagged files of ROADMAP V. The golden files stay
+out: named without the system, five of them untagged on purpose, and
+recorded again from the baseline commit if lost
 
 ### Phase 1 — Generic Font Layer
 
