@@ -149,7 +149,7 @@ var
   a, b: TFindFilesDynArray;
   i, j: integer;
   found: boolean;
-  diff: RawUtf8;
+  na, nb, erra, errb, diff: RawUtf8;
 begin
   a := FindFiles(DirA, '*.pdf', '', [ffoExcludesDir, ffoSortByName]);
   b := FindFiles(DirB, '*.pdf', '', [ffoExcludesDir, ffoSortByName]);
@@ -158,14 +158,21 @@ begin
   for i := 0 to high(a) do
     if not FileExists(DirB + a[i].Name) then
       Fail('MISSING ' + Utf8(a[i].Name))
-    else if ComparePdfText(
-              NormalizePdf(StringFromFile(DirA + a[i].Name)),
-              NormalizePdf(StringFromFile(DirB + a[i].Name)), diff) then
-      Say('OK      ' + Utf8(a[i].Name))
     else
     begin
-      Fail('DIFF    ' + Utf8(a[i].Name));
-      Say(diff);
+      na := NormalizePdf(StringFromFile(DirA + a[i].Name), erra);
+      nb := NormalizePdf(StringFromFile(DirB + a[i].Name), errb);
+      if erra <> '' then
+        Fail('BROKEN  ' + Utf8(DirA + a[i].Name) + ': ' + erra)
+      else if errb <> '' then
+        Fail('BROKEN  ' + Utf8(DirB + a[i].Name) + ': ' + errb)
+      else if ComparePdfText(na, nb, diff) then
+        Say('OK      ' + Utf8(a[i].Name))
+      else
+      begin
+        Fail('DIFF    ' + Utf8(a[i].Name));
+        Say(diff);
+      end;
     end;
   for j := 0 to high(b) do
   begin
@@ -181,6 +188,16 @@ begin
   end;
   Say(Int32ToUtf8(length(a)) + ' compared, ' + Int32ToUtf8(Problems) +
     ' problem(s)');
+end;
+
+// written even when broken: the text up to the error helps to find it
+procedure NormalizeFile(const Source, Dest: TFileName);
+var
+  err: RawUtf8;
+begin
+  FileFromString(NormalizePdf(StringFromFile(Source), err), Dest);
+  if err <> '' then
+    Fail('BROKEN  ' + Utf8(Source) + ': ' + err);
 end;
 
 procedure Usage;
@@ -206,7 +223,7 @@ begin
     CompareDirs(IncludeTrailingPathDelimiter(ExpandFileName(ParamStr(2))),
       IncludeTrailingPathDelimiter(ExpandFileName(ParamStr(3))))
   else if (cmd = 'normalize') and (ParamCount = 3) then
-    FileFromString(NormalizePdf(StringFromFile(ParamStr(2))), ParamStr(3))
+    NormalizeFile(ParamStr(2), ParamStr(3))
   else if (cmd = 'struct') and (ParamCount = 2) then
     ConsoleWrite(PdfStructRoles(StringFromFile(ParamStr(2))), ccLightGray, true)
   else if (cmd = 'fonts') and (ParamCount = 2) then

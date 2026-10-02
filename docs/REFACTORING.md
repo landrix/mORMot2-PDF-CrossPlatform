@@ -102,7 +102,7 @@ checked against that record:
    `struct` gives `zugferd_demo`'s roles as
    ROADMAP R-26 records them. `test_runner` unchanged, 259/259 on all three
    Windows compilers
-2. **Golden files** (Sven, PR #3): nine small documents, layers 1–3,
+2. ~~**Golden files**~~ done on Windows (Sven, PR #3): nine small documents, layers 1–3,
    recorded per machine and compiler by `test_runner --golden-record` and
    compared by every `test_runner` run. They complement `pdfcheck`, which
    covers the real demos and compares the compilers with each other.
@@ -112,11 +112,19 @@ checked against that record:
      `pdf_inspect.pas`; `pdfcheck compare` and `normalize` use it,
      `NormalizePdf` goes. Pattern matching over the whole file can hide a
      real difference
-   - the same assertion count with and without a recorded baseline (today
-     279 without, 288 with)
+   - the same assertion count with and without a recorded baseline: two per
+     case, a difference by `Check(false)`, not `TestFailed()`
+   - one report of a difference: `ComparePdfText` names the object, the byte
+     and the line of each side, for the golden files and `pdfcheck` alike
 
-   **Checked** as step 1: two runs per compiler compare equal, and all eight
-   demos normalize without an error, on Delphi 7 and 2010 as well
+   **Checked** on Windows (FPC Win64, Delphi 7, Delphi 2010): `test_runner`
+   279/279 without a baseline, while recording and comparing; a changed
+   golden file fails the run (exit code 1). `pdfcheck`: two demo runs per
+   compiler compare equal; all eight demos normalize without an error; a
+   `/Length` 7 bytes too long is reported as broken, one byte too long (the
+   end of line before `endstream`) as a difference; `fonts` and `struct` give
+   the same output as before for all eight demos (`DictValue` is now the
+   normalizer's). Linux and macOS: to run
 3. **mORMot2 trunk.** From here on the project builds against the trunk
    only: release 2.4-stable lacks functions the ported commits of step 5 use
    (`TTemp512`, `UINT_999`, `bswap16array`, `StrIEqual`, `SameTextS`,
