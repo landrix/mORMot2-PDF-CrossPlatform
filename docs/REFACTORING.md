@@ -57,7 +57,7 @@ section.
 | Check | Where |
 |---|---|
 | `test_runner` green, same assertion count, golden files unchanged | Windows: FPC Win64, Delphi 7, Delphi 2010 |
-| All eight demos build and run (GUI demos with `--export`) | the same |
+| All eight demos rebuilt (`-B`) and run (GUI demos with `--export`) — never an executable of an earlier state | the same |
 | Demo PDFs identical to the baseline after normalization | the same |
 | `test_runner`, demos, PDFs against the baseline | Linux and macOS — every step that touches POSIX code, otherwise at the end of the phase |
 | PAC 2024, veraPDF | only when a PDF differs, and at the end of each phase |
@@ -146,9 +146,12 @@ checked against that record:
    Windows compilers, the PDFs identical after normalization. FPC warns of
    a duplicate `mormot.lib.uniscribe` (the package's and our copy) — gone
    with step 5
-4. **Baseline:** on each platform in one session — build, `test_runner`,
-   `test_runner --golden-record`, `pdfcheck run` for every compiler; Windows
-   (FPC Win64, Delphi 7, Delphi 2010), Linux, macOS
+4. **Baseline:** on each platform in one session — first `test_runner`,
+   `pdfcheck` and the eight demos rebuilt (`lazbuild -B`, the Delphi build
+   scripts): `pdfcheck run` starts whatever executable is there, an old one
+   included. Then `test_runner`, `test_runner --golden-record`,
+   `pdfcheck run` for every compiler; Windows (FPC Win64, Delphi 7,
+   Delphi 2010), Linux, macOS
 5. **Sven's merge** (PR #2): the trunk commits to `mormot.ui.pdf`, the trunk's
    `mormot.ui.core` and `mormot.ui.gdiplus` instead of the copies, the copy
    of `mormot.lib.uniscribe` dropped (the `mormot2` package ships it).
