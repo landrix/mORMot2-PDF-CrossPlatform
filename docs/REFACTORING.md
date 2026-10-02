@@ -198,7 +198,7 @@ checked against that record:
    Linux and macOS: rebuilt, `test_runner` 318/318 and 337/337, golden files recorded,
    nine PDFs each. The folder: 45 PDFs, five systems. veraPDF on all of them
    (macOS): no errors, the known warnings only; PAC 2024 (Windows): passed
-5. **Sven's merge** (PR #2): the trunk commits to `mormot.ui.pdf`; the
+5. ~~**Sven's merge**~~ done (PR #2): the trunk commits to `mormot.ui.pdf`; the
    trunk's `mormot.ui.core` and `mormot.ui.gdiplus` replace the content of
    the copies in `src/core/`, which stay — identical to `d60cc6e80` but for
    `{$I mormot.defines.inc}`, since `src/ui` (`..\mormot.defines.inc`, the
@@ -228,7 +228,15 @@ checked against that record:
    rebuilt with `-B`, no warning left. `test_runner` 318/318, every golden
    file unchanged; nine PDFs in `2026-10-02_phase0-pr2`, `pdfcheck compare`
    against the baseline: all nine identical, before and after the deletion.
-   macOS: to run
+
+   **macOS done** (`43ec3a3`): no `mormot.lib.uniscribe` leftovers. The same
+   orphaned `mormot.ui.pdf`, `.core` and `.gdiplus` ppus — `mormot2ui`,
+   compiled in the fpcupdeluxe setup; its whole output deleted (15 files,
+   with `.controls`, `.grid.orm` and `mormot2ui.ppu`), all rebuilt with
+   `-B`, no warning left. `test_runner` 337/337 before and after, every
+   golden file unchanged; nine PDFs in `2026-10-02_phase0-pr2`, `pdfcheck
+   compare` against the baseline: all 45 identical — PR #2 changes no
+   output on any platform
 6. The run of step 5, once accepted, is the reference for Phase 1 — no
    session of its own
 
