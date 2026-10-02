@@ -323,9 +323,13 @@ parameter — pass `--noenter` when it runs unattended.
 to `golden/<os>_<cpu>_<compiler>/` next to the executable (not versioned:
 embedded faces depend on the fonts installed); a normal run compares against
 it and skips without one. Record on the commit before a change, then run on the
-change: a difference names the object and shows both excerpts, and the new file
-is kept as `<case>.actual.pdf`. Compared after inflating the streams and
-blanking `/ID`, subset tags, dates, `/Length` and offsets.
+change: a difference names the object, the byte and the line of each side,
+and the new file is kept as `<case>.actual.pdf`. Compared after inflating the
+streams and blanking `/ID`, subset tags, dates, `/Length` and offsets
+(`pdf_inspect.NormalizePdf`, also used by `pdfcheck`). The golden files stay
+in that folder: never copied with the demo PDFs, never given to veraPDF or
+PAC — how a check session runs and what goes where: `docs/REFACTORING.md`,
+"A Check Session".
 
 Every project builds to `bin/<cpu-os>/` — the executable, the PDF it writes
 and its logs — and its units to `lib/<cpu-os>/` (`<cpu-os>` as FPC names the

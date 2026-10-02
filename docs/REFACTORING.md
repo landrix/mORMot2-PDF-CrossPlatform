@@ -65,6 +65,37 @@ section.
 
 ---
 
+## A Check Session — the Same on Every Platform
+
+For a baseline and for every step checked against one. Each platform's
+session (Windows: per compiler) does exactly this:
+
+1. `git pull`; the mORMot2 clone at the pinned commit (Phase 0 step 3)
+2. `test_runner`, `pdfcheck` and the eight demos rebuilt — `lazbuild -B`, the
+   Delphi build scripts; never an executable of an earlier state
+3. `test_runner`: the expected count, no failure. At a baseline also
+   `test_runner --golden-record`; at a step, the plain run compares
+4. `pdfcheck run <compiler> <folder>` into the state's folder
+5. `tagged_unicode_<system>.pdf` from `test_runner`'s folder copied into it
+6. Reported: the count, the golden result, `pdfcheck`'s output
+
+**The folder** is on the Mac's drive (path in `CLAUDE.local.md`), one per
+state, named `<date>_<state>` (`2026-10-02_phase0-baseline`,
+`2026-10-xx_phase0-pr2`). It holds **nine PDFs per system and nothing
+else**: the eight demos and `tagged_unicode`. Their names carry demo, OS,
+CPU and compiler, so the systems sit flat side by side, `pdfcheck compare
+<old> <new>` pairs them in one run, and Martin checks the folder in one go —
+veraPDF `ua1` on the seven tagged files (six demos and `tagged_unicode`),
+`3u` on `zugferd_demo`, PAC; `chinese_demo` and `rtl_demo` are untagged.
+
+**The golden files never leave `golden/` beside `test_runner`:** not
+copied to the folder, not given to veraPDF or PAC. They are compared there
+automatically; their names lack the system; five are untagged on purpose,
+so a validator reports them as failures that are none; and they are
+recorded again from the baseline commit if lost
+
+---
+
 ## Phases
 
 ### Phase 0 — Baseline
@@ -146,12 +177,9 @@ checked against that record:
    Windows compilers, the PDFs identical after normalization. FPC warns of
    a duplicate `mormot.lib.uniscribe` (the package's and our copy) — gone
    with step 5
-4. **Baseline:** on each platform in one session — first `test_runner`,
-   `pdfcheck` and the eight demos rebuilt (`lazbuild -B`, the Delphi build
-   scripts): `pdfcheck run` starts whatever executable is there, an old one
-   included. Then `test_runner`, `test_runner --golden-record`,
-   `pdfcheck run` for every compiler; Windows (FPC Win64, Delphi 7,
-   Delphi 2010), Linux, macOS
+4. **Baseline:** a check session (above) with `--golden-record`, into
+   `2026-10-02_phase0-baseline`; Windows (FPC Win64, Delphi 7, Delphi 2010),
+   Linux, macOS
 
    **Windows done** (2026-10-02, `418e85e`, mORMot2 `d60cc6e80`): all
    rebuilt; `test_runner` 279/279 on all three compilers, nine golden files
@@ -172,16 +200,6 @@ checked against that record:
    2.4-stable
 6. The run of step 5, once accepted, is the reference for Phase 1 — no
    session of its own
-
-**Where the PDFs go:** on the Mac's drive (path in `CLAUDE.local.md`), one
-folder per state, named `<date>_<state>` (`2026-10-xx_phase0-baseline`,
-`2026-10-xx_phase0-pr2`), all systems flat in it. The demos' file names
-carry demo, OS, CPU and compiler, so `pdfcheck compare <old> <new>` pairs
-every system in one run, and veraPDF checks a folder in one go. With the
-demos goes `tagged_unicode_<system>.pdf`, which `test_runner` writes beside
-itself — one of the seven tagged files of ROADMAP V. The golden files stay
-out: named without the system, five of them untagged on purpose, and
-recorded again from the baseline commit if lost
 
 ### Phase 1 — Generic Font Layer
 
