@@ -277,9 +277,11 @@ Full guide: [docs/DEMOS.md](docs/DEMOS.md)
 
 ## Build
 
-Requirements: FreePascal 3.2+ with Lazarus and the mORMot2 sources (the
-Lazarus package `mormot2`), or Delphi 7 / Delphi 2010 for Win32, or Delphi 13
-— see below.
+Requirements: FreePascal 3.2+ with Lazarus and the mORMot2 sources of the
+**trunk** (the Lazarus package `mormot2`, with `static/` from
+`mormot2static`), or Delphi 7 / Delphi 2010 for Win32, or Delphi 13 — see
+below. The release mORMot2 2.4-stable lacks functions this project uses;
+v0.10.0 is the last version that builds with it.
 
 ```bash
 # Windows

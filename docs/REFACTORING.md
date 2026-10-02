@@ -72,7 +72,11 @@ session (Windows: per compiler) does exactly this:
 
 1. `git pull`; the mORMot2 clone at the pinned commit (Phase 0 step 3)
 2. `test_runner`, `pdfcheck` and the eight demos rebuilt — `lazbuild -B`, the
-   Delphi build scripts; never an executable of an earlier state
+   Delphi build scripts; never an executable of an earlier state. When a
+   step removed or moved a unit, its compiled leftovers go first (`.ppu`,
+   `.o` in the projects' `lib/<cpu-os>/`, `.dcu` in `bin/d7|d2010/*/dcu/`):
+   `-B` keeps them, and a stale one can be linked instead of the new unit.
+   `lazbuild` warns `Duplicate unit ... orphaned ppu` then
 3. `test_runner`: the expected count, no failure. At a baseline also
    `test_runner --golden-record`; at a step, the plain run compares
 4. `pdfcheck run <compiler> <folder>` into the state's folder
@@ -200,6 +204,15 @@ checked against that record:
    touch no demo). Then README, CHANGELOG (via ROADMAP "To Announce") and
    `CLAUDE.md` Dependencies: trunk only, v0.10.0 the last version for
    2.4-stable
+
+   **Windows done** (merged as `a5dab31`): the compiled leftovers of the
+   removed `mormot.lib.uniscribe` copy deleted (38 files; `lazbuild` had
+   warned of an orphaned ppu), all rebuilt with FPC Win64, Delphi 7 and
+   Delphi 2010, no duplicate-unit warning left. `test_runner` 279/279 on
+   all three, every golden file unchanged; 27 PDFs in
+   `2026-10-02_phase0-pr2`, `pdfcheck compare` against the baseline: all 27
+   identical — PR #2 changes no Windows output. README, ROADMAP "To
+   Announce" and `CLAUDE.md`: trunk only. Linux and macOS: to run
 6. The run of step 5, once accepted, is the reference for Phase 1 — no
    session of its own
 

@@ -36,7 +36,11 @@ v0.10.0 (2026-09-30).
 - **Builds on Windows aarch64 (FPC):** the fork's copy of
   `mormot.lib.uniscribe` is gone - the `mormot2` package ships the unit and
   hid the copy; `mormot.ui.core` and `mormot.ui.gdiplus` are the trunk
-  units again (R-28 step 1)
+  units again (R-28, refactoring Phase 0 step 5)
+- **Needs the mORMot2 trunk:** the trunk commits ported to `mormot.ui.pdf`
+  use functions the release 2.4-stable lacks (`TTemp512`, `UINT_999`,
+  `bswap16array`, `StrIEqual`, `SameTextS`, `SameExt`). v0.10.0 is the last
+  version that builds with 2.4-stable
 - **Coming with R-20** (announce when done): the preview and the GUI demos
   on Delphi
 
