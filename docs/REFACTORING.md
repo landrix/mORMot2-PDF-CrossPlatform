@@ -293,8 +293,10 @@ Process, agreed in the forum:
 
 - Tests into `mormot2tests` as `test.pdf.*.pas`
 - Demos: place in the trunk (`ex/`?)
-- `zugferd_demo`: the KoSIT invoice XML (Apache-2.0) replaced by a sample
-  under the mORMot licence (Sven)
+- ~~`zugferd_demo`: the KoSIT invoice XML (Apache-2.0) replaced by a sample
+  under the mORMot licence (Sven)~~ done: `Gesamtbeispiel` of XRechnung for
+  Delphi; the demo reads several VAT rates, billing period, due date and
+  bank accounts now
 - Licence headers, `OSWINDOWS`/`OSDARWIN`, the defines include, formatting,
   ASCII-only sources, roadmap references out of the comments (Sven)
 

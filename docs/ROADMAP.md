@@ -37,6 +37,11 @@ v0.10.0 (2026-09-30).
   `mormot.lib.uniscribe` is gone - the `mormot2` package ships the unit and
   hid the copy; `mormot.ui.core` and `mormot.ui.gdiplus` are the trunk
   units again (R-28, refactoring Phase 0 step 5)
+- **`zugferd_demo` with new invoice data:** the KoSIT test case (Apache-2.0,
+  which does not fit the GPL option of mORMot's licence) is replaced by the
+  sample `Gesamtbeispiel` of XRechnung for Delphi, contributed by Landrix
+  under this project's licence. The demo now reads every VAT rate, the
+  billing period, the due date and every bank account of the invoice
 - **Needs the mORMot2 trunk:** the trunk commits ported to `mormot.ui.pdf`
   use functions the release 2.4-stable lacks (`TTemp512`, `UINT_999`,
   `bswap16array`, `StrIEqual`, `SameTextS`, `SameExt`). v0.10.0 is the last
