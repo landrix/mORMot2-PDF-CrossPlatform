@@ -131,8 +131,8 @@ checked against that record:
      difference cannot be told from the change under test
 
    **Pinned:** `d60cc6e80` (2026-10-02). **Checked:** today's `main`,
-   `test_runner` 259/259 on Windows (FPC Win64, Delphi 7, Delphi 2010);
-   Linux and macOS with step 4
+   `test_runner` 259/259 on Windows (FPC Win64, Delphi 7, Delphi 2010),
+   298/298 on Linux, 317/317 on macOS (fpcupdeluxe, FPC 3.2.3)
 4. **Baseline:** on each platform in one session — build, `test_runner`,
    `test_runner --golden-record`, `pdfcheck run` for every compiler; Windows
    (FPC Win64, Delphi 7, Delphi 2010), Linux, macOS
