@@ -188,7 +188,7 @@ checked against that record:
    seven demos are identical after normalization; `chinese_demo` differs
    between FPC and Delphi (Delphi 7 = Delphi 2010) in the subset `cmap` only —
    the 32-bit `fontsub.dll` (`.claude/skills/fonts.md` §3), not a defect.
-   Linux and macOS: rebuilt, `test_runner` green, golden files recorded,
+   Linux and macOS: rebuilt, `test_runner` 318/318 and 337/337, golden files recorded,
    nine PDFs each. The folder: 45 PDFs, five systems. veraPDF on all of them
    (macOS): no errors, the known warnings only; PAC 2024 (Windows): passed
 5. **Sven's merge** (PR #2): the trunk commits to `mormot.ui.pdf`, the trunk's
