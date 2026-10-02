@@ -76,7 +76,10 @@ session (Windows: per compiler) does exactly this:
    step removed or moved a unit, its compiled leftovers go first (`.ppu`,
    `.o` in the projects' `lib/<cpu-os>/`, `.dcu` in `bin/d7|d2010/*/dcu/`):
    `-B` keeps them, and a stale one can be linked instead of the new unit.
-   `lazbuild` warns `Duplicate unit ... orphaned ppu` then
+   `lazbuild` warns `Duplicate unit ... orphaned ppu` then. Never compile
+   the `mormot2ui` package while `src/core` holds our own `mormot.ui.*`: no
+   project needs it, and it writes `mormot.ui.pdf`, `.core` and `.gdiplus`
+   into the output folder it shares with `mormot2`
 3. `test_runner`: the expected count, no failure. At a baseline also
    `test_runner --golden-record`; at a step, the plain run compares
 4. `pdfcheck run <compiler> <folder>` into the state's folder
@@ -195,9 +198,12 @@ checked against that record:
    Linux and macOS: rebuilt, `test_runner` 318/318 and 337/337, golden files recorded,
    nine PDFs each. The folder: 45 PDFs, five systems. veraPDF on all of them
    (macOS): no errors, the known warnings only; PAC 2024 (Windows): passed
-5. **Sven's merge** (PR #2): the trunk commits to `mormot.ui.pdf`, the trunk's
-   `mormot.ui.core` and `mormot.ui.gdiplus` instead of the copies, the copy
-   of `mormot.lib.uniscribe` dropped (the `mormot2` package ships it).
+5. **Sven's merge** (PR #2): the trunk commits to `mormot.ui.pdf`; the
+   trunk's `mormot.ui.core` and `mormot.ui.gdiplus` replace the content of
+   the copies in `src/core/`, which stay — identical to `d60cc6e80` but for
+   `{$I mormot.defines.inc}`, since `src/ui` (`..\mormot.defines.inc`, the
+   original `mormot.ui.pdf`/`report`) must not be on the search path; the
+   copy of `mormot.lib.uniscribe` dropped (the `mormot2` package ships it).
    Checked against step 4 on all three platforms — it touches `TPdfWrite` and
    the POSIX `GetTtfData`: `test_runner` against the golden files,
    `pdfcheck run` and `compare`; every difference explained (the EMF fixes
@@ -212,7 +218,17 @@ checked against that record:
    all three, every golden file unchanged; 27 PDFs in
    `2026-10-02_phase0-pr2`, `pdfcheck compare` against the baseline: all 27
    identical — PR #2 changes no Windows output. README, ROADMAP "To
-   Announce" and `CLAUDE.md`: trunk only. Linux and macOS: to run
+   Announce" and `CLAUDE.md`: trunk only. The `mormot2` package folder holds
+   no `mormot.ui.*` ppu (`mormot2ui` never compiled here).
+
+   **Linux done** (`d411886`): no `mormot.lib.uniscribe` leftovers — Windows
+   only, never compiled there. `lazbuild` warned of orphaned `mormot.ui.pdf`,
+   `.core` and `.gdiplus` ppus: `mormot2ui`, compiled once in the
+   fpcupdeluxe IDE, had put them into the `mormot2` package folder. Deleted,
+   rebuilt with `-B`, no warning left. `test_runner` 318/318, every golden
+   file unchanged; nine PDFs in `2026-10-02_phase0-pr2`, `pdfcheck compare`
+   against the baseline: all nine identical, before and after the deletion.
+   macOS: to run
 6. The run of step 5, once accepted, is the reference for Phase 1 — no
    session of its own
 
