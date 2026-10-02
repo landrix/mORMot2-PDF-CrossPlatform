@@ -102,7 +102,7 @@ checked against that record:
    `struct` gives `zugferd_demo`'s roles as
    ROADMAP R-26 records them. `test_runner` unchanged, 259/259 on all three
    Windows compilers
-2. ~~**Golden files**~~ done on Windows (Sven, PR #3): nine small documents, layers 1–3,
+2. ~~**Golden files**~~ done (Sven, PR #3): nine small documents, layers 1–3,
    recorded per machine and compiler by `test_runner --golden-record` and
    compared by every `test_runner` run. They complement `pdfcheck`, which
    covers the real demos and compares the compilers with each other.
@@ -124,7 +124,8 @@ checked against that record:
    `/Length` 7 bytes too long is reported as broken, one byte too long (the
    end of line before `endstream`) as a difference; `fonts` and `struct` give
    the same output as before for all eight demos (`DictValue` is now the
-   normalizer's). Linux and macOS: to run
+   normalizer's). Linux 318/318 and macOS 337/337 in the same four states,
+   nine cases recorded; two demo runs compare equal, none broken
 3. **mORMot2 trunk.** From here on the project builds against the trunk
    only: release 2.4-stable lacks functions the ported commits of step 5 use
    (`TTemp512`, `UINT_999`, `bswap16array`, `StrIEqual`, `SameTextS`,
