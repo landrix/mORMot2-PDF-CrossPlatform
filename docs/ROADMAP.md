@@ -16,9 +16,11 @@ and the `--export` of the two GUI demos give the same PDF as FPC. Delphi 13
 backends only (no VCL), on Linux64 and Android64. The files of
 macOS, Debian, FPC/Win64, Delphi 7 and Delphi 2010 all pass PAC 2024
 and veraPDF (V); the new `zugferd_demo` (R-26, on `TGDIPages`, its text from
-the invoice XML) also veraPDF `3u` and Mustang. **Next:** the rest of R-26,
-the other demos without code-point constants; then R-20 step 7, the preview
-on the VCL.
+the invoice XML) also veraPDF `3u` and Mustang. **Next:** R-28, the
+integration into the mORMot2 trunk, under a feature freeze. Alongside it only
+what stays out of `src/`: R-24 (CI) and the open checks in V. The rest of
+R-26, R-20 steps 7–8, R-22, the Windows subset size and thinner table
+borders wait until R-28 is done.
 
 ---
 
@@ -117,7 +119,7 @@ comparison is valid **within** one platform only — see V below.
 
 ## Open
 
-### R-28 — Integration Into the mORMot2 Trunk — under discussion
+### R-28 — Integration Into the mORMot2 Trunk — in progress, priority 1
 
 **Why.** Arnaud proposed taking the project into the trunk as `src/pdf`;
 Sven (landrix) offered to do the integration in small PRs, reviewed and
@@ -128,7 +130,21 @@ https://gist.github.com/synopse/9e31d8808ed2575ad5ad23da6fe41e4f
 
 **Plan:** [REFACTORING.md](REFACTORING.md) — phases, steps, checks.
 
-### R-26 — `zugferd_demo` on `TGDIPages`, Its Text From the XML — priority 1
+**Alongside it** only work outside `src/`, where every refactoring PR
+lands: R-24, the checks in V (old HarfBuzz, `.ttc` on Linux — the paths
+Phase 1 moves), and preparing the open decisions in REFACTORING.md. Waiting
+for R-28, because a refactoring step touches the same code or the freeze
+forbids it:
+
+| Item | Why it waits |
+|---|---|
+| R-26, the other demos | overlaps the ASCII-only sources of the formatting pass |
+| R-22 | overlaps the roadmap references taken out of the comments; every unit |
+| R-20 steps 7–8 | a feature; Phase 4 rebuilds report and preview |
+| Windows font subsets | `CreateFontPackage` moves to `mormot.lib.font.gdi` in Phase 1 |
+| Thinner table borders | a feature |
+
+### R-26 — `zugferd_demo` on `TGDIPages`, Its Text From the XML — done; the other demos after R-28
 
 **Why.** Since 3d0ab39 every non-ASCII character in the demos is a code-point
 constant (`{$ifdef HASCODEPAGE} #$00E4 {$else} #$C3#$A4 {$endif}`). That
@@ -214,7 +230,7 @@ the same way — ASCII labels, non-ASCII data from a UTF-8 file or a literal
 straight into a `RawUtf8`. Then the literal rule in `CLAUDE.md` (Coding
 Conventions) applies to `src/` and `tests/` only.
 
-### R-20 — Delphi: the TCanvas Bridge and `TGDIPages` — priority 2
+### R-20 — Delphi: the TCanvas Bridge and `TGDIPages` — steps 7–8 after R-28
 
 **The obstacle.** `TPdfVclCanvas = class(TCanvas)` overrides drawing methods
 that are virtual in the LCL but static in Delphi 7's `Graphics.pas`. A call
@@ -310,7 +326,7 @@ mORMot2 2.4-stable) and macOS 317/317, the demo PDFs unchanged.
   an NDK build as for FreeType would add shaping and subsetting
 - Delphi for macOS (OSX64/OSXARM64) untried
 
-### R-22 — Source Comments Back to the Why — priority 3
+### R-22 — Source Comments Back to the Why — after R-28
 
 **The rule** (`CLAUDE.md`, Coding Conventions, since 2026-09-26): a source
 comment says in a line or two why the code is as it is. Findings may sit in the
@@ -330,7 +346,7 @@ then cut the comment. Comments only — `test_runner` gives the same assertion
 count, and the demo PDFs are byte-identical apart from date and `/ID`.
 The `///` API documentation inherited from the original mORMot2 units stays.
 
-### Windows Font Subsets Are Larger — priority 4
+### Windows Font Subsets Are Larger — after R-28 Phase 1
 
 Harmless — the subsets are valid and pass veraPDF — but the Windows demo PDFs
 are 2–5 times the size of the POSIX ones (`markdown_demo` 230 KB against
@@ -350,7 +366,7 @@ highest kept ID and drops the hinting. Where to start: why `glyf` stays 15
 times larger (the keep list, or composite glyphs pulled in), then whether
 dropping the hinting tables is allowed after `CreateFontPackage`.
 
-### Thinner Table Borders — priority 4
+### Thinner Table Borders — after R-28
 
 Asked for on 2026-09-29, after `GridColor` (grey borders, accepted). The cell
 borders of `TGDIPages` tables are `LineWidth = 1` — screen pixels at 96 dpi,
@@ -362,7 +378,7 @@ width beside `Pen.Width` (as `TextOutFrac` does for text positions), then a
 `TTableLayout.GridWidth` in 1/100 mm, 0 = today's pixel. Delphi 7 draws
 through the bridge reference too (R-20), so both paths need it.
 
-### R-24 — Tests on GitHub Actions — priority 4
+### R-24 — Tests on GitHub Actions — priority 2, alongside R-28
 
 **Why.** `test_runner` runs by hand on three machines today; a push should
 build and test by itself on at least Linux and Windows.

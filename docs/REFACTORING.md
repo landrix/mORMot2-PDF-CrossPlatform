@@ -244,6 +244,12 @@ checked against that record:
 
 Gist §4–§6, §16. Behaviour unchanged.
 
+**Where the code lives** (agreed 2026-10-02, PR #2): here in `src/`, where
+`pdfcheck`, the golden files and the check machines are, but under the
+target unit names from this phase on (`mormot.lib.font*`, later the
+`mormot.pdf*` units of `src/pdf`), so the final move is a plain copy. Once
+this phase is done, `mormot.lib.font*` can go to the trunk on its own.
+
 - `mormot.lib.font`, `mormot.lib.font.gdi`, `mormot.lib.font.freetype`,
   `mormot.lib.font.harfbuzz` from `mormot.pdf.types` and the four backend units
 - `Pdf` dropped from names that are not PDF-specific
