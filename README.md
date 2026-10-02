@@ -364,6 +364,9 @@ sudo apt install fonts-droid-fallback            # optional — Droid Sans Fallb
 ```
 Fonts are detected automatically from `/usr/share/fonts`, `/usr/local/share/fonts`, `~/.fonts`.
 
+Font subsetting needs HarfBuzz 2.9 or later. Debian 11, Ubuntu 22.04 LTS and
+RHEL 8/9 ship older versions (1.7.5–2.7.4): there every face is embedded whole.
+
 **macOS:**
 ```bash
 brew install freetype

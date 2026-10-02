@@ -297,6 +297,26 @@ var PdfFontSubsetter: IPdfFontSubsetter;  // nil = no subsetter
   `libharfbuzz.so.0` / `libharfbuzz.0.dylib` (Homebrew paths tried on macOS)
 - Needs HarfBuzz 2.9+ (`hb_subset_or_fail`, `hb_subset_input_set_flags`); older
   libraries leave it unregistered → whole-face embedding
+- **HarfBuzz < 10.0 does not fail on a face without glyphs**: `hb_subset_or_fail`
+  returns a 12-byte sfnt with no tables instead of nil. Fixed upstream in
+  10.0.0 ("Subsetting will now fail if source font has no glyphs"). `Subset`
+  therefore treats `numTables = 0` as failure itself — never trust a non-nil
+  result alone. `TestSubsetAcceptsCff` (`'OTTO'` + 60 zero bytes) guards it;
+  it only bites on such a HarfBuzz (issue #4, Ubuntu 24.04)
+- HarfBuzz has no long-term releases. What the distributions ship (Repology,
+  2026-10-02):
+
+  | Distribution | HarfBuzz | Subsetting |
+  |---|---|---|
+  | RHEL / AlmaLinux / Rocky 8 | 1.7.5 | off (< 2.9) |
+  | Debian 11, Ubuntu 22.04 LTS, RHEL / AlmaLinux / Rocky 9 | 2.7.4 | off (< 2.9) |
+  | Debian 12 | 6.0.0 | on, empty result caught (< 10.0) |
+  | Ubuntu 24.04 LTS, openSUSE Leap 15.6 | 8.3.0 | on, empty result caught (< 10.0) |
+  | RHEL 10 (CentOS Stream 10) | 8.4.0 | on, empty result caught (< 10.0) |
+  | Debian 13 (the Linux dev machine), Ubuntu 25.04 / 25.10 | 10.2.0 | on |
+  | Ubuntu 26.04 LTS | 12.3.2 | on |
+  | Fedora 43 / 44 | 11.5.1 / 14.1.0 | on |
+  | macOS (Homebrew) | 14.5.1 | on |
 - Tuning globals: `HbSubsetFlags` (default `RETAIN_GIDS or NOTDEF_OUTLINE or
   NO_HINTING`; `RETAIN_GIDS` is always forced), `HbSubsetDropLayoutTables`
   (default true: drop `GSUB/GPOS/GDEF`). Measured on the untagged

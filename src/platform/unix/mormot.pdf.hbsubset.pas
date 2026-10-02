@@ -287,8 +287,11 @@ begin
       try
         len := 0;
         data := blob_get_data(subblob, len);
+        // HarfBuzz < 10.0 returns an sfnt without tables instead of nil for a
+        // face without glyphs: no table means failure, so the face goes whole
         if (data = nil) or
-           (len = 0) then
+           (len < 12) or
+           (((ord(data[4]) shl 8) or ord(data[5])) = 0) then
           exit;
         FastSetRawByteString(ASubset, data, len);
         result := true;

@@ -41,6 +41,12 @@ v0.10.0 (2026-09-30).
   use functions the release 2.4-stable lacks (`TTemp512`, `UINT_999`,
   `bswap16array`, `StrIEqual`, `SameTextS`, `SameExt`). v0.10.0 is the last
   version that builds with 2.4-stable
+- **Fixed (Linux/macOS, HarfBuzz < 10.0):** hb-subset returns an empty font
+  instead of failing for a face without glyphs; the engine now takes that as
+  a failure and embeds the whole face, as with HarfBuzz 10.0 and later
+  (issue #4, Ubuntu 24.04). The README now says which distributions ship a
+  HarfBuzz older than 2.9 and do not subset at all: Debian 11, Ubuntu 22.04,
+  RHEL 8/9
 - **Coming with R-20** (announce when done): the preview and the GUI demos
   on Delphi
 
@@ -409,7 +415,8 @@ the other tagged files of Debian and the three Windows compilers pass `ua1`
 
 | Open | Why it matters |
 |---|---|
-| HarfBuzz older than 2.9 | loads, but lacks `hb_subset_or_fail`. The **missing** library is covered by `tests/no_hbsubset.sh`; an old one needs an old distribution, e.g. Debian 11 |
+| HarfBuzz older than 2.9 | loads, but lacks `hb_subset_or_fail`. The **missing** library is covered by `tests/no_hbsubset.sh`; an old one is still the default on Ubuntu 22.04 LTS and RHEL 9 (2.7.4) — untested here |
+| HarfBuzz older than 10.0 | returns an empty font instead of failing for a face without glyphs; `Subset` catches it since issue #4. Checked 2026-10-02 in an `ubuntu:24.04` Docker container (8.3.0) with the Debian-built `test_runner`: 303/303, without the fix 2 failures in `TestSubsetAcceptsCff`. Needs `libgtk2.0-0t64`, `xvfb` and the README fonts in the container |
 | The U-2 width fix on Linux | exercised on macOS only: no Linux Arabic face reaches the shaper width path (`fonts.md` §10), and `TestShapedGlyphWidthFromHmtx` skips itself there |
 | veraPDF in the routine runs | installed on macOS with `ua1`, `3a`, `3b`, `3u` (path in `CLAUDE.local.md`); run by hand on each platform's files, not scripted |
 | The `.ttc` fix on Linux | `TestTtcFaceExtraction` skips itself: the Linux machine has no `.ttc` installed (e.g. `fonts-noto-cjk` would bring one) |

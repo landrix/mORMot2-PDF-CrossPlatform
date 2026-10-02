@@ -411,9 +411,11 @@ Runtime macOS: `libfreetype.6.dylib` (`brew install freetype`)
 
 Optional on Linux/macOS: HarfBuzz for shaping (`UseUniscribe`), and HarfBuzz 2.9+
 with its subset library for font subsetting (without it, the whole face is
-embedded). Both are loaded at run time; nothing to link
+embedded — so on Ubuntu 22.04 and RHEL 9, which ship 2.7.4). Both are loaded
+at run time; nothing to link. Versions per distribution:
+`.claude/skills/platform-backends.md` (IPdfFontSubsetter)
 ```bash
-sudo apt install libharfbuzz0b libharfbuzz-subset0   # Debian 12+/Ubuntu 22.04+
+sudo apt install libharfbuzz0b libharfbuzz-subset0   # Debian 12+/Ubuntu 24.04+ for subsetting
 sudo dnf install harfbuzz                            # Fedora/RHEL
 brew install harfbuzz                                # macOS
 ```
