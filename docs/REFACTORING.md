@@ -177,7 +177,7 @@ checked against that record:
    Windows compilers, the PDFs identical after normalization. FPC warns of
    a duplicate `mormot.lib.uniscribe` (the package's and our copy) — gone
    with step 5
-4. **Baseline:** a check session (above) with `--golden-record`, into
+4. ~~**Baseline:**~~ done 2026-10-02: a check session (above) with `--golden-record`, into
    `2026-10-02_phase0-baseline`; Windows (FPC Win64, Delphi 7, Delphi 2010),
    Linux, macOS
 
@@ -188,7 +188,9 @@ checked against that record:
    seven demos are identical after normalization; `chinese_demo` differs
    between FPC and Delphi (Delphi 7 = Delphi 2010) in the subset `cmap` only —
    the 32-bit `fontsub.dll` (`.claude/skills/fonts.md` §3), not a defect.
-   Linux and macOS: to run
+   Linux and macOS: rebuilt, `test_runner` green, golden files recorded,
+   nine PDFs each. The folder: 45 PDFs, five systems. veraPDF on all of them
+   (macOS): no errors, the known warnings only; PAC 2024 (Windows): passed
 5. **Sven's merge** (PR #2): the trunk commits to `mormot.ui.pdf`, the trunk's
    `mormot.ui.core` and `mormot.ui.gdiplus` instead of the copies, the copy
    of `mormot.lib.uniscribe` dropped (the `mormot2` package ships it).
