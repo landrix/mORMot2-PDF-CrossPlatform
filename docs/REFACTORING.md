@@ -132,7 +132,11 @@ checked against that record:
 
    **Pinned:** `d60cc6e80` (2026-10-02). **Checked:** today's `main`,
    `test_runner` 259/259 on Windows (FPC Win64, Delphi 7, Delphi 2010),
-   298/298 on Linux, 317/317 on macOS (fpcupdeluxe, FPC 3.2.3)
+   298/298 on Linux, 317/317 on macOS (fpcupdeluxe, FPC 3.2.3).
+   `mormot_demo` (SQLite from `static/`) builds and exports on all three
+   Windows compilers, the PDFs identical after normalization. FPC warns of
+   a duplicate `mormot.lib.uniscribe` (the package's and our copy) — gone
+   with step 5
 4. **Baseline:** on each platform in one session — build, `test_runner`,
    `test_runner --golden-record`, `pdfcheck run` for every compiler; Windows
    (FPC Win64, Delphi 7, Delphi 2010), Linux, macOS
