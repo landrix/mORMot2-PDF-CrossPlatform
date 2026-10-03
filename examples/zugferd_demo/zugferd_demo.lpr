@@ -9,7 +9,8 @@
 //   under the licence of this project. The page is drawn from what
 //   ReadInvoice finds in it, so the page and the embedded data cannot differ
 // - ReadInvoice is a demo reader, not an XML parser: fixed paths and
-//   prefixes, no entities, no validation. TInvoice is where the data of your
+//   prefixes, no entities, no validation - only a file that is not UTF-8 is
+//   refused (XmlProblem). TInvoice is where the data of your
 //   own application - a database, an ERP export - would go in instead
 // - the labels are ASCII; every umlaut on the page comes from the UTF-8 XML,
 //   so this source builds unchanged with FPC, Delphi 7 and Delphi 2010
@@ -326,15 +327,59 @@ begin
   until false;
 end;
 
+// why the file cannot be read, '' when it can: ZUGFeRD / Factur-X prescribe
+// UTF-8, and the page shows the bytes as they are. mORMot's check refuses
+// another encoding (Latin-1, UTF-16); it is no full RFC 3629 validator
+function XmlProblem(const Xml: RawUtf8): RawUtf8;
+var
+  Prolog, Enc: RawUtf8;
+  p, q: PtrInt;
+begin
+  result := '';
+  if not IsValidUtf8NotVoid(Xml) then
+  begin
+    result := 'not valid UTF-8';
+    exit;
+  end;
+  Prolog := Xml;
+  // the BOM by its bytes: a #$EF literal is a character on Unicode Delphi
+  if (length(Prolog) >= 3) and (ord(Prolog[1]) = $EF) and
+     (ord(Prolog[2]) = $BB) and (ord(Prolog[3]) = $BF) then
+    delete(Prolog, 1, 3);
+  // the declaration, not a processing instruction like <?xml-stylesheet
+  if not StartWithExact(Prolog, '<?xml') or (length(Prolog) < 6) or
+     not (Prolog[6] in [' ', #9, #10, #13]) then
+    exit;
+  Prolog := copy(Prolog, 1, PosEx('?>', Prolog));
+  p := PosEx('encoding', Prolog);
+  if p = 0 then
+    exit; // XML without a declared encoding is UTF-8
+  p := PosEx('=', Prolog, p);
+  while (p > 0) and (p < length(Prolog)) and not (Prolog[p] in ['"', '''']) do
+    inc(p);
+  if (p = 0) or (p >= length(Prolog)) then
+    exit;
+  q := PosEx(copy(Prolog, p, 1), Prolog, p + 1);
+  if q = 0 then
+    exit;
+  Enc := copy(Prolog, p + 1, q - p - 1);
+  if not IdemPropNameU(Enc, 'UTF-8') then
+    result := 'declares the encoding ' + Enc + ', not UTF-8';
+end;
+
 { ---------- formatting for a German invoice ---------- }
 
-// 336.9 -> 336,90 and 1234.5 -> 1.234,50
+// 336.9 -> 336,90, 1234.5 -> 1.234,50, 0.1275 -> 0,1275: two decimals at
+// least, never fewer than the XML has, so that the page shows what it holds
 function Amount(const Value: RawUtf8): RawUtf8;
 var
   Sign, Int, Frac: RawUtf8;
   p: PtrInt;
   n: integer;
 begin
+  result := '';
+  if Value = '' then
+    exit;
   Int := Value;
   Sign := '';
   if (Int <> '') and (Int[1] = '-') then
@@ -349,8 +394,10 @@ begin
     Frac := copy(Int, p + 1, maxInt);
     Int := copy(Int, 1, p - 1);
   end;
-  Frac := copy(Frac + '00', 1, 2);
-  result := '';
+  while length(Frac) < 2 do
+    Frac := Frac + '0';
+  if Int = '' then
+    Int := '0'; // .5
   n := length(Int);
   while n > 3 do
   begin
@@ -495,7 +542,7 @@ begin
   if Inv.SellerTradingName <> '' then
     Name := Name + ' (' + Inv.SellerTradingName + ')';
   Report.DrawParagraph('Von: ' + Join([Name, Inv.SellerStreet,
-    Inv.SellerPostcode + ' ' + Inv.SellerCity, Inv.SellerCountry]));
+    TrimU(Inv.SellerPostcode + ' ' + Inv.SellerCity), Inv.SellerCountry]));
   Text := Join([Labeled('USt-IdNr. ', Inv.SellerVatId),
     Labeled('Steuernummer ', Inv.SellerTaxNumber), Inv.SellerDescription]);
   if Text <> '' then
@@ -509,9 +556,11 @@ begin
   if Inv.BuyerId <> '' then
     Name := Name + ' (' + Inv.BuyerId + ')';
   Report.DrawParagraph('An: ' + Join([Name, Inv.BuyerStreet,
-    Inv.BuyerPostcode + ' ' + Inv.BuyerCity, Inv.BuyerCountry, Inv.BuyerEmail]));
+    TrimU(Inv.BuyerPostcode + ' ' + Inv.BuyerCity), Inv.BuyerCountry,
+    Inv.BuyerEmail]));
   Report.AddVerticalSpace(2);
-  Report.DrawParagraph('Rechnungsdatum: ' + GermanDate(Inv.IssueDate));
+  if Inv.IssueDate <> '' then
+    Report.DrawParagraph('Rechnungsdatum: ' + GermanDate(Inv.IssueDate));
   Text := Period(Inv.PeriodStart, Inv.PeriodEnd);
   if Text <> '' then
     Report.DrawParagraph('Leistungszeitraum: ' + Text);
@@ -533,10 +582,12 @@ begin
   Report.DrawTableFooter(['Summe netto', '', '', '', Amount(Inv.NetTotal)]);
   for n := 0 to high(Inv.Taxes) do
     Report.DrawTableFooter([TrimU('Umsatzsteuer ' + Rate(Inv.Taxes[n].Rate)) +
-      ' auf ' + Amount(Inv.Taxes[n].Basis), '', '', '',
+      Labeled(' auf ', Amount(Inv.Taxes[n].Basis)), '', '', '',
       Amount(Inv.Taxes[n].Amount)]);
-  Report.DrawTableFooter(['Gesamtbetrag (' + Inv.Currency + ')', '', '', '',
-    Amount(Inv.GrandTotal)]);
+  Text := 'Gesamtbetrag';
+  if Inv.Currency <> '' then
+    Text := Text + ' (' + Inv.Currency + ')';
+  Report.DrawTableFooter([Text, '', '', '', Amount(Inv.GrandTotal)]);
   Report.EndTable;
   Report.AddVerticalSpace(6);
   // what the items say beyond the table
@@ -670,6 +721,12 @@ begin
   if Xml = '' then
   begin
     writeln('Cannot find ', XML_NAME, ' - run from the demo folder');
+    ExitCode := 1;
+    exit;
+  end;
+  if XmlProblem(Xml) <> '' then
+  begin
+    writeln(XML_NAME, ' ', XmlProblem(Xml));
     ExitCode := 1;
     exit;
   end;

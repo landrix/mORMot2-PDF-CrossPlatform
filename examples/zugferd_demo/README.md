@@ -18,12 +18,15 @@ businesses in Germany and France. The file is PDF/A-3U and PDF/UA-1 at once.
 - `ReadInvoice` is a demo reader, not an XML parser: fixed element paths, the
   prefixes `rsm:`/`ram:`/`udt:` as in the file, no entities, no validation.
   mORMot2 has no XML reader; a `PosEx` search through the nested tags is
-  enough for one known file
+  enough for one known file. A file that is not UTF-8, or declares another
+  encoding, is refused: ZUGFeRD / Factur-X prescribe UTF-8
 - **The source is pure ASCII.** The labels are German without umlauts ("Ihre
-  Referenz", "Bankverbindung"); every umlaut and "…" on the page comes from the
-  UTF-8 XML as `RawUtf8`. So the same source builds with FPC, Delphi 7 and
-  Delphi 2010 without code-point constants. Amounts, dates and the IBAN are
-  formatted for a German invoice (`336,90`, `04.04.2016`, groups of four)
+  Referenz", "Bankverbindung"); every umlaut on the page ("Verkäufername",
+  "Käuferstraße 1") comes from the UTF-8 XML as `RawUtf8`. So the same source
+  builds with FPC, Delphi 7 and Delphi 2010 without code-point constants.
+  Amounts, dates and the IBAN are formatted for a German invoice (`226,00`,
+  `30.08.2026`, groups of four); an amount keeps every decimal the XML has,
+  two at least, and a label without its value is left out
 - `ExportPdfLevel := pdfa3U` and `ExportPdfTagged := True` before the first
   `NewPage`; `DrawHeading`, `DrawParagraph` and a `TTableLayout` table give
   `H1`, `P` and `Table` with `THead`, `TBody` and a `TFoot` for the
