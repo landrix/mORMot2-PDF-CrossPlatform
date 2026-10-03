@@ -619,6 +619,9 @@ businesses in Germany and France. The same file conforms to PDF/A-3U
 - `ExportPdfMetadataExtension := PdfMetadataFacturX('EN 16931', ...)` writes
   the `fx:` XMP properties a ZUGFeRD reader looks for, with their PDF/A
   extension schema
+- `ExportPdfPageMode := pmUseAttachments` opens the viewer on the
+  attachments panel; `TTableLayout.FooterRowHeader` makes the label of each
+  totals row a row header (`TH` with `/Scope /Row`) for screen readers
 - **Data in, page out:** the page is drawn from a record `TInvoice`, which a
   small demo reader fills from the XML the PDF embeds — so page and data
   cannot differ, and the record shows where your own data would go in

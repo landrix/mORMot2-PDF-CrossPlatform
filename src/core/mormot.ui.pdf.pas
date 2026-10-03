@@ -236,11 +236,14 @@ type
   EPdfInvalidOperation = class(ESynException);
 
   /// Page mode determines how the document should appear when opened
+  // - pmUseAttachments (PDF 1.6) opens the attachments panel, e.g. for the
+  // invoice XML of a ZUGFeRD / Factur-X file; it raises FileFormat to pdf16
   TPdfPageMode = (
     pmUseNone,
     pmUseOutlines,
     pmUseThumbs,
-    pmFullScreen);
+    pmFullScreen,
+    pmUseAttachments);
 
   /// Line cap style specifies the shape to be used at the ends of open
   // subpaths when they are stroked
@@ -3577,7 +3580,7 @@ const
   PDF_PAGE_LAYOUT_NAMES: array[TPdfPageLayout] of PdfString = (
     'SinglePage', 'OneColumn', 'TwoColumnLeft', 'TwoColumnRight');
   PDF_PAGE_MODE_NAMES: array[TPdfPageMode] of PdfString = (
-    'UseNone', 'UseOutlines', 'UseThumbs', 'FullScreen');
+    'UseNone', 'UseOutlines', 'UseThumbs', 'FullScreen', 'UseAttachments');
   PDF_ANNOTATION_TYPE_NAMES: array[0..12] of PdfString = (
     'Text', 'Link', 'Sound', 'FreeText', 'Stamp', 'Square', 'Circle',
     'StrikeOut', 'Highlight', 'Underline', 'Ink', 'FileAttachment', 'Popup');
@@ -8701,6 +8704,14 @@ var
 begin
   if fSaveToStreamWriter <> nil then
     raise EPdfInvalidOperation.Create('SaveToStreamDirectBegin called twice');
+  // /PageMode /UseAttachments needs PDF 1.6 (ISO 32000-1 table 28), which
+  // PDF/A-1 (PDF 1.4) excludes - checked before anything is written
+  if fRoot.PageMode = pmUseAttachments then
+    if fPdfA in [pdfa1A, pdfa1B] then
+      raise EPdfInvalidOperation.Create(
+        'PageMode UseAttachments not allowed with PDF/A-1')
+    else if fFileFormat < pdf16 then
+      fFileFormat := pdf16;
   // write all objects to specified stream
   if ForceModDate = 0 then
     fInfo.ModDate := Now
@@ -8929,7 +8940,8 @@ const
     'Figure',
     'Table', 'TR', 'TH', 'TD',
     'L', 'LI', 'Lbl', 'LBody',
-    'THead', 'TBody', 'TFoot');
+    'THead', 'TBody', 'TFoot',
+    'TH');
 
   /// roles which only group other elements: they own no marked-content region
   // - a container must not emit BDC/EMC, otherwise the MCID sequence would
@@ -8941,7 +8953,8 @@ const
     false,                                    // Figure
     true, true, false, false,                 // Table, TR, TH, TD
     true, true, false, false,                 // L, LI, Lbl, LBody
-    true, true, true);                        // THead, TBody, TFoot
+    true, true, true,                         // THead, TBody, TFoot
+    false);                                   // TH (psrTHRow)
 
 destructor TPdfStructElement.Destroy;
 begin
@@ -9124,10 +9137,12 @@ begin
     if elem.AltText <> '' then
       elem.Dic.AddItemTextUtf8('Alt', elem.AltText);
     // PDF/UA-1 7.5: a header cell has to name the cells it heads (PAC: "no
-    // associated subcells") - a TH is only emitted in a header row, i.e. it
-    // heads its column (ROADMAP B-11)
+    // associated subcells") - psrTH heads its column (ROADMAP B-11),
+    // psrTHRow its row, e.g. the label of a totals line
     if elem.Role = psrTH then
       elem.Dic.AddItem('A', TPdfRawText.Create('<</O/Table/Scope/Column>>'))
+    else if elem.Role = psrTHRow then
+      elem.Dic.AddItem('A', TPdfRawText.Create('<</O/Table/Scope/Row>>'))
     // PDF/UA-1 7.3: a Figure on one page needs its bounding box (PAC: "Figure
     // element on a single page with no bounding box", ROADMAP B-13)
     else if (elem.Role = psrFigure) and
@@ -12106,9 +12121,11 @@ begin
     d := TPdfDictionary.Create(Data.ObjectMgr);
     Data.AddItem('ViewerPreferences', d);
   end;
-  // if Value is pmFullScreen, remove 'PageMode' element (use default value)
+  // if Value is pmFullScreen, remove 'PageMode' element (use default value);
+  // UseAttachments is no allowed value here (ISO 32000-1 table 150)
   if (Value = pmFullScreen) or
-     (Value = pmUseNone) then
+     (Value = pmUseNone) or
+     (Value = pmUseAttachments) then
     d.RemoveItem('NonFullScreenPageMode')
   else
   begin

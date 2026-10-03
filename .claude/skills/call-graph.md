@@ -688,7 +688,8 @@ Table shape emitted by `TGDIPages.RenderPageToCanvas` (R-14):
 dckBeginTable            BeginStructContent(psrTable); fRenderRowGroup := psrTable
 dckBeginTR  Color=1      OpenRowGroup(psrTHead) → BeginStructContent(psrTR) → cells TH
             Color=0      OpenRowGroup(psrTBody) → TR → cells TD
-            Color=3      OpenRowGroup(psrTFoot) → TR → cells TD
+            Color=3      OpenRowGroup(psrTFoot) → TR → cells TD; with
+                         FooterRowHeader the first cell psrTHRow (Cmd.RowHeader)
             Color=2      BeginArtifact: repeated header, no struct, group untouched
 dckEndTable              close the open group, then the Table
 ```

@@ -247,6 +247,7 @@ Report.ExportPdfTagged := True;
 Report.AddExportPdfAttachment(Xml, 'factur-x.xml', 'Factur-X invoice data',
   'text/xml', afrAlternative);
 Report.ExportPdfMetadataExtension := PdfMetadataFacturX('EN 16931', 'factur-x.xml');
+Report.ExportPdfPageMode := pmUseAttachments; // optional: open the attachments panel
 Report.ExportPdfStream(Stream);
 ```
 
@@ -255,7 +256,10 @@ embeds `Content` as an associated file (`/AF` in the catalog). The attachments
 stay for every later export until `ClearExportPdfAttachments`.
 
 All of this needs `mormot.ui.report` only: it re-exports the PDF/A levels,
-`TPdfFileFormat`, the `afr*` values and `PdfMetadataFacturX`. Do not add
+`TPdfFileFormat`, the `afr*` values, `TPdfPageMode` with the `pm*` values and
+`PdfMetadataFacturX`. `ExportPdfPageMode` (default `pmUseNone`, which writes
+nothing) decides how a viewer opens the file; `pmUseAttachments` needs PDF 1.6
+and is refused with PDF/A-1. Do not add
 `mormot.ui.pdf` to a report program — its `psA4` and `TRect` hide the
 report's, depending on the order of the uses clause.
 
@@ -281,6 +285,7 @@ TTableLayout = record
   FooterFontStyle:   TFontStyles; // make the footer look like the header
   FooterBkColor:     TColor;
   GridColor:         TColor;   // cell borders; 0 = clBlack (the default)
+  FooterRowHeader:   boolean;  // first footer cell = row header (TH /Scope /Row)
 end;
 ```
 
@@ -290,7 +295,7 @@ Empty `FontName` and `FontSize = 0` inherit the current document font. The table
 
 **Automatic header repetition (R-9):** `DrawTableHeader` saves the column headers. When `DrawTableRow` triggers a page break, the headers are automatically re-drawn at the top of the continuation page. `EndTable` clears the saved headers.
 
-**Closing row and row groups (R-14):** `DrawTableFooter(Cells)` draws the last row of a table, e.g. a totals line, styled by the `Footer*` fields. In a tagged export the rows are grouped as `Table > THead | TBody | TFoot > TR > TH|TD` (ISO 32000-1 14.8.4.3.4), which tells a totals row apart from the data rows for assistive technology. The grouping follows from the row kind; no extra call is needed.
+**Closing row and row groups (R-14):** `DrawTableFooter(Cells)` draws the last row of a table, e.g. a totals line, styled by the `Footer*` fields. In a tagged export the rows are grouped as `Table > THead | TBody | TFoot > TR > TH|TD` (ISO 32000-1 14.8.4.3.4), which tells a totals row apart from the data rows for assistive technology. The grouping follows from the row kind; no extra call is needed. With `FooterRowHeader` the first cell of each footer row is a row header (`TH` with `/Scope /Row`), so a screen reader announces the label with the value; off by default.
 
 ---
 

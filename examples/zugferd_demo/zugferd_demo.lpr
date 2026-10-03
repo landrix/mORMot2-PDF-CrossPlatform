@@ -17,7 +17,9 @@
 // - ExportPdfLevel, ExportPdfTagged and the font mode are set before the first
 //   NewPage: the font flags decide which metrics the layout is measured with
 // - AddExportPdfAttachment and ExportPdfMetadataExtension give the export the
-//   associated file and the fx: XMP properties ZUGFeRD / Factur-X require
+//   associated file and the fx: XMP properties ZUGFeRD / Factur-X require;
+//   ExportPdfPageMode opens the viewer on it, FooterRowHeader makes the labels
+//   of the totals row headers
 //
 // Switches, to tell the sources of a checker failure apart:
 //   --no-attachment   leave factur-x.xml out (the page is still read from it)
@@ -509,6 +511,8 @@ begin
   result.FooterFontStyle := [fsBold];
   result.FooterBkColor := clWhite;
   result.GridColor := clSilver;          // quieter than the default black
+  // "Gesamtbetrag" heads its row: a screen reader reads it with the amount
+  result.FooterRowHeader := true;
 end;
 
 procedure DefineFormat(Report: TGDIPages; const Name, FontName: RawUtf8;
@@ -696,6 +700,8 @@ begin
       Report.AddExportPdfAttachment(Xml, XML_NAME, 'Factur-X invoice data',
         'text/xml', afrAlternative);
       Report.ExportPdfMetadataExtension := PdfMetadataFacturX(PROFILE, XML_NAME);
+      // the viewer opens with the attachments panel, factur-x.xml in sight
+      Report.ExportPdfPageMode := pmUseAttachments;
     end;
     Stream := TFileStream.Create(FileName, fmCreate);
     try

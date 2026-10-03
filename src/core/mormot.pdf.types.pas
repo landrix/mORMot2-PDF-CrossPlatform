@@ -63,6 +63,8 @@ type
   // - psrTHead=18, psrTBody=19, psrTFoot=20 group the rows of a table
   // (ISO 32000-1 14.8.4.3.4): a totals row in a TFoot is told apart from the
   // data rows by assistive technology (ROADMAP R-14)
+  // - psrTHRow=21 is a TH which heads its row (/Scope /Row), e.g. the label
+  // of a totals row; psrTH heads its column
   // - TPdfStructRole(Level) for heading Level 1..6 gives psrH1..psrH6
   // - new roles are appended at the end: TPdfStructRole(Level) and the
   // dckBeginTR logic in mormot.ui.report depend on the existing ordinals
@@ -71,7 +73,8 @@ type
                     psrFigure,
                     psrTable, psrTR, psrTH, psrTD,
                     psrL, psrLI, psrLbl, psrLBody,
-                    psrTHead, psrTBody, psrTFoot);
+                    psrTHead, psrTBody, psrTFoot,
+                    psrTHRow);
 
   /// platform-neutral font handle
   // - on Windows: HGDIOBJ (GDI font handle)
