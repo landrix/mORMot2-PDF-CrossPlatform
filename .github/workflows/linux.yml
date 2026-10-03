@@ -48,7 +48,7 @@ jobs:
             libfreetype6 libharfbuzz0b libharfbuzz-subset0 \
             fonts-dejavu-core fonts-liberation fonts-droid-fallback \
             fonts-noto-core fonts-noto-cjk \
-            xvfb xauth default-jre-headless
+            xvfb xauth default-jre-headless qpdf
           fpc -iV
           lazbuild --version
 
@@ -112,8 +112,27 @@ jobs:
           check 3u pdfs/zugferd_demo_*.pdf || rc=1
           exit $rc
 
+      # Mustang validates whatever is embedded: the attachment has to be the
+      # file of the repository, byte for byte
+      - name: Attachment
+        if: ${{ !cancelled() && steps.demos.outcome == 'success' }}
+        run: |
+          rc=0
+          for pdf in pdfs/zugferd_demo_*.pdf; do
+            if qpdf --show-attachment=factur-x.xml "$pdf" |
+               cmp - examples/zugferd_demo/factur-x.xml; then
+              echo "$pdf: factur-x.xml embedded unchanged"
+            else
+              qpdf --list-attachments "$pdf" || true
+              rc=1
+            fi
+          done
+          exit $rc
+
       # exits non-zero unless the invoice is completely valid; runs after a
-      # veraPDF failure too, so both reports are there
+      # veraPDF failure too, so both reports are there. The exit code alone
+      # would pass a file read as BASIC or MINIMUM: the report has to name
+      # the profile EN 16931, and every summary in it has to be valid
       - name: Mustang
         if: ${{ !cancelled() && steps.demos.outcome == 'success' }}
         run: |
@@ -125,6 +144,16 @@ jobs:
           java -jar mustang.jar --action validate --source pdfs/zugferd_demo_*.pdf \
             > reports/mustang.xml || rc=$?
           tail -5 reports/mustang.xml
+          if ! grep -q '>urn:cen\.eu:en16931:2017<' reports/mustang.xml; then
+            echo "Mustang: profile urn:cen.eu:en16931:2017 not detected"
+            rc=1
+          fi
+          all=$( { grep -o '<summary status=' reports/mustang.xml || true; } | wc -l)
+          valid=$( { grep -Eo "<summary status=[\"']valid[\"']" reports/mustang.xml || true; } | wc -l)
+          echo "Mustang: $valid of $all summaries valid"
+          if [ "$all" -eq 0 ] || [ "$valid" -ne "$all" ]; then
+            rc=1
+          fi
           exit $rc
 
       # only on failure: the files and reports to look at

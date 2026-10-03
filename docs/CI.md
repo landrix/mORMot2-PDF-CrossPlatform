@@ -108,7 +108,8 @@ packages `mormot2` and `LCL`, and the runner uses `Interfaces` and
    runs them and collects their PDFs, `tagged_unicode` comes from
    `test_runner` — the nine files of a check session
 3. **Validation:** veraPDF `ua1` on the seven tagged files (six demos and
-   `tagged_unicode`), `3u` on `zugferd_demo`; Mustang on `zugferd_demo`.
+   `tagged_unicode`), `3u` on `zugferd_demo`; Mustang on `zugferd_demo`,
+   whose attachment `qpdf` compares with `factur-x.xml` byte for byte.
    PDFs and reports are uploaded only when a step fails (kept 14 days, on
    the run's page under *Artifacts*)
 4. later: a second Linux job on `ubuntu-24.04` (HarfBuzz 8, below the 10.0
@@ -132,8 +133,14 @@ check means the pin is stale. `no_hbsubset.sh` needs
 (`verapdf/cli:v1.30.2`) — a `docker run`, not an action; its exit codes are
 not documented, so the step counts `isCompliant="true"` in the XML report.
 Mustang CLI from Maven Central, checked by SHA-256; it exits non-zero
-unless the file is completely valid (`Main.java`, `performValidate`). A
-new version means updating version and checksum in the workflow's `env`.
+unless the file is completely valid (`Main.java`, `performValidate`). The
+exit code alone would pass a file read as BASIC or MINIMUM, so the step also
+requires the profile `urn:cen.eu:en16931:2017` in the report and every
+`<summary status=…>` in it valid. Mustang validates whatever is embedded,
+not that it is our file: a separate step extracts the attachment with
+`qpdf --show-attachment=factur-x.xml` and compares it with
+`examples/zugferd_demo/factur-x.xml` (`cmp`). A new Mustang version means
+updating version and checksum in the workflow's `env`.
 
 **First run** (2026-10-03, run 37109060795, under two minutes, green):
 `lazbuild` finds the LCL without `--lazarusdir`; `test_runner` 330/330
