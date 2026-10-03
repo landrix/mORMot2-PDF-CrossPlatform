@@ -381,35 +381,14 @@ through the bridge reference too (R-20), so both paths need it.
 ### R-24 — Tests on GitHub Actions — priority 2, alongside R-28
 
 **Why.** `test_runner` runs by hand on three machines today; a push should
-build and test by itself on at least Linux and Windows.
+build and test by itself — on Linux first (`ubuntu-26.04`, Lazarus 4.4),
+Windows and macOS later.
 
-**Rule: no unmaintained actions.** `gcarreno/setup-lazarus` was checked on
-2026-09-26 and rejected — its maintainer has stepped back. Install the
-toolchain from maintained sources instead: `apt` on Ubuntu (FPC 3.2.2 and
-Lazarus in 24.04), Chocolatey or the official installer on Windows,
-Homebrew on macOS.
-
-**Work, in this order:**
-1. Linux job: FPC, Lazarus, `libfreetype6`, `libharfbuzz-subset0`, the GTK2
-   development packages (the LCL `Interfaces` link), fonts (Liberation, Noto
-   CJK and Arabic, so tests run instead of skipping); maybe `xvfb-run`
-2. Windows job (x86_64-win64), `test_runner --noenter`
-3. macOS: the GitHub runners are arm64 (`aarch64-darwin`); only if Homebrew
-   installs FPC and Lazarus for it cleanly
-4. build the eight demos too, and upload their PDFs as artifacts for PAC and
-   veraPDF
-
-**To check first:**
-- does mORMot2's `RunAsConsole` set a non-zero exit code on a failed
-  assertion — CI needs it
-- mORMot2 in CI: a checkout of `synopse/mORMot2` at a fixed revision,
-  registered with `lazbuild --add-package-link`, plus the static libraries
-  (`mormot2static`) — which of them `test_runner` links
-- which faces the Windows runners have (Calibri, Microsoft YaHei, an Arabic
-  face); missing ones turn tests into skips, not failures
-
-**Out of reach:** Delphi 7 (no licence on a runner) and PAC 2024 (a Windows
-GUI) stay manual. veraPDF runs on Java and could follow as a later step.
+**How:** `docs/CI.md` — the rule against unmaintained actions
+(`gcarreno/setup-lazarus` rejected 2026-09-26), the three ways to install
+FPC/Lazarus (chosen: package managers, an own script as fallback), the jobs
+in order, what is still to check and what stays manual. Settled:
+`RunAsConsole` sets `ExitCode := 1` on a failed test.
 
 ### V — Verification Outstanding
 

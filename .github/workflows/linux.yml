@@ -1,0 +1,168 @@
+# Build and test on Linux (R-24, docs/CI.md).
+# The toolchain comes from Ubuntu's own packages: no third-party actions.
+
+name: Linux
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # the commit pinned in the refactoring baseline (docs/REFACTORING.md, Phase 0 step 3)
+  MORMOT2_COMMIT: d60cc6e8035d296e60eb86df4d930b9c91c7a791
+  TARGET: x86_64-linux
+  # the official image of the veraPDF project
+  VERAPDF_IMAGE: verapdf/cli:v1.30.2
+  # ZUGFeRD/Factur-X validation, from Maven Central
+  MUSTANG_VERSION: 2.26.0
+  MUSTANG_SHA256: 42d7868cb68264874a7b8cab4c3587b03b23ccc7cd72373da917f66758bb9736
+
+jobs:
+  test:
+    # pinned: ubuntu-latest moves to the next release on its own
+    runs-on: ubuntu-26.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check out mORMot2
+        uses: actions/checkout@v7
+        with:
+          repository: synopse/mORMot2
+          ref: ${{ env.MORMOT2_COMMIT }}
+          path: mORMot2
+
+      - name: Install toolchain, libraries and fonts
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            fpc lcl-utils lcl-units lcl-gtk2 lazarus-src libgtk2.0-dev \
+            libfreetype6 libharfbuzz0b libharfbuzz-subset0 \
+            fonts-dejavu-core fonts-liberation fonts-droid-fallback \
+            fonts-noto-core fonts-noto-cjk \
+            xvfb xauth default-jre-headless qpdf
+          fpc -iV
+          lazbuild --version
+
+      # dev.sha256 of the pinned commit names the static archive that belongs
+      # to it; a mismatch means synopse.info moved on and the pin is stale
+      - name: Fetch mORMot2 static libraries
+        working-directory: mORMot2/static
+        run: |
+          curl -fsSLO https://synopse.info/files/mormot2static.tgz
+          tr -d '\r' < dev.sha256 | grep ' \*mormot2static.tgz$' | sha256sum -c -
+          tar -xzf mormot2static.tgz
+          rm mormot2static.tgz
+          ls
+
+      - name: Register the mORMot2 package
+        run: lazbuild --add-package-link mORMot2/packages/lazarus/mormot2.lpk
+
+      - name: Build test_runner
+        run: lazbuild tests/test_runner.lpi -B
+
+      - name: Run test_runner
+        run: xvfb-run -a tests/bin/$TARGET/test_runner
+
+      # Ubuntu's AppArmor blocks the unprivileged user namespace the script
+      # masks the library in
+      - name: Run test_runner without libharfbuzz-subset
+        run: |
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          xvfb-run -a tests/no_hbsubset.sh
+
+      # the nine PDFs of a check session (docs/REFACTORING.md): eight demos
+      # and tagged_unicode from test_runner
+      - name: Build and run the demos
+        id: demos
+        run: |
+          for lpi in examples/*/*.lpi tests/pdfcheck.lpi; do
+            lazbuild "$lpi" -B
+          done
+          xvfb-run -a tests/bin/$TARGET/pdfcheck run fpc pdfs
+          cp tests/bin/$TARGET/tagged_unicode_*.pdf pdfs/
+          ls -l pdfs
+
+      # chinese_demo and rtl_demo are untagged: nothing to check
+      - name: veraPDF
+        run: |
+          mkdir -p reports
+          verapdf() {
+            docker run --rm -v "$PWD:/data" -w /data "$VERAPDF_IMAGE" --format xml "$@"
+          }
+          check() {  # check <flavour> <files...>
+            local flavour=$1; shift
+            verapdf -f "$flavour" "$@" > reports/verapdf-$flavour.xml
+            local ok
+            ok=$(grep -o 'isCompliant="true"' reports/verapdf-$flavour.xml | wc -l)
+            echo "veraPDF $flavour: $ok of $# compliant"
+            [ "$ok" = "$#" ]
+          }
+          rc=0
+          check ua1 pdfs/{pdf,report,markdown,mormot,zugferd,layer1}_demo_*.pdf \
+            pdfs/tagged_unicode_*.pdf || rc=1
+          check 3u pdfs/zugferd_demo_*.pdf || rc=1
+          exit $rc
+
+      # Mustang validates whatever is embedded: the attachment has to be the
+      # file of the repository, byte for byte
+      - name: Attachment
+        if: ${{ !cancelled() && steps.demos.outcome == 'success' }}
+        run: |
+          rc=0
+          for pdf in pdfs/zugferd_demo_*.pdf; do
+            if qpdf --show-attachment=factur-x.xml "$pdf" |
+               cmp - examples/zugferd_demo/factur-x.xml; then
+              echo "$pdf: factur-x.xml embedded unchanged"
+            else
+              qpdf --list-attachments "$pdf" || true
+              rc=1
+            fi
+          done
+          exit $rc
+
+      # exits non-zero unless the invoice is completely valid; runs after a
+      # veraPDF failure too, so both reports are there. The exit code alone
+      # would pass a file read as BASIC or MINIMUM: the report has to name
+      # the profile EN 16931, and every summary in it has to be valid
+      - name: Mustang
+        if: ${{ !cancelled() && steps.demos.outcome == 'success' }}
+        run: |
+          curl -fsSLo mustang.jar \
+            https://repo1.maven.org/maven2/org/mustangproject/Mustang-CLI/$MUSTANG_VERSION/Mustang-CLI-$MUSTANG_VERSION.jar
+          echo "$MUSTANG_SHA256  mustang.jar" | sha256sum -c -
+          mkdir -p reports
+          rc=0
+          java -jar mustang.jar --action validate --source pdfs/zugferd_demo_*.pdf \
+            > reports/mustang.xml || rc=$?
+          tail -5 reports/mustang.xml
+          if ! grep -q '>urn:cen\.eu:en16931:2017<' reports/mustang.xml; then
+            echo "Mustang: profile urn:cen.eu:en16931:2017 not detected"
+            rc=1
+          fi
+          all=$( { grep -o '<summary status=' reports/mustang.xml || true; } | wc -l)
+          valid=$( { grep -Eo "<summary status=[\"']valid[\"']" reports/mustang.xml || true; } | wc -l)
+          echo "Mustang: $valid of $all summaries valid"
+          if [ "$all" -eq 0 ] || [ "$valid" -ne "$all" ]; then
+            rc=1
+          fi
+          exit $rc
+
+      # only on failure: the files and reports to look at
+      - name: Upload PDFs and reports
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: pdfs-${{ env.TARGET }}
+          path: |
+            pdfs/
+            reports/
+          retention-days: 14
