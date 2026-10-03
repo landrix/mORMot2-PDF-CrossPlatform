@@ -1,0 +1,98 @@
+# Build and test on Linux (R-24, docs/CI.md).
+# The toolchain comes from Ubuntu's own packages: no third-party actions.
+
+name: Linux
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # the commit pinned in the refactoring baseline (docs/REFACTORING.md, Phase 0 step 3)
+  MORMOT2_COMMIT: d60cc6e8035d296e60eb86df4d930b9c91c7a791
+  TARGET: x86_64-linux
+
+jobs:
+  test:
+    # pinned: ubuntu-latest moves to the next release on its own
+    runs-on: ubuntu-26.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check out mORMot2
+        uses: actions/checkout@v7
+        with:
+          repository: synopse/mORMot2
+          ref: ${{ env.MORMOT2_COMMIT }}
+          path: mORMot2
+
+      - name: Install toolchain, libraries and fonts
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            fpc lcl-utils lcl-units lcl-gtk2 lazarus-src libgtk2.0-dev \
+            libfreetype6 libharfbuzz0b libharfbuzz-subset0 \
+            fonts-dejavu-core fonts-liberation fonts-droid-fallback \
+            fonts-noto-core fonts-noto-cjk \
+            xvfb xauth
+          fpc -iV
+          lazbuild --version
+
+      # dev.sha256 of the pinned commit names the static archive that belongs
+      # to it; a mismatch means synopse.info moved on and the pin is stale
+      - name: Fetch mORMot2 static libraries
+        working-directory: mORMot2/static
+        run: |
+          curl -fsSLO https://synopse.info/files/mormot2static.tgz
+          tr -d '\r' < dev.sha256 | grep ' \*mormot2static.tgz$' | sha256sum -c -
+          tar -xzf mormot2static.tgz
+          rm mormot2static.tgz
+          ls
+
+      - name: Register the mORMot2 package
+        run: lazbuild --add-package-link mORMot2/packages/lazarus/mormot2.lpk
+
+      - name: Build test_runner
+        run: lazbuild tests/test_runner.lpi -B
+
+      - name: Run test_runner
+        run: xvfb-run -a tests/bin/$TARGET/test_runner
+
+      # Ubuntu's AppArmor blocks the unprivileged user namespace the script
+      # masks the library in
+      - name: Run test_runner without libharfbuzz-subset
+        run: |
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          xvfb-run -a tests/no_hbsubset.sh
+
+      - name: Build and run the demos
+        run: |
+          for lpi in examples/*/*.lpi; do
+            lazbuild "$lpi" -B
+          done
+          # from the demo folder: zugferd_demo and mormot_demo read files there
+          for demo in pdf_demo_crossplat:pdf_demo markdown_demo:markdown_demo \
+                      chinese_demo:chinese_demo rtl_demo:rtl_demo \
+                      layer1_demo:layer1_demo zugferd_demo:zugferd_demo; do
+            exe=${demo%%:*}; dir=${demo##*:}
+            (cd examples/$dir && xvfb-run -a bin/$TARGET/$exe)
+          done
+          for dir in report_demo mormot_demo; do
+            (cd examples/$dir && xvfb-run -a bin/$TARGET/$dir --export)
+          done
+
+      - name: Upload the demo PDFs
+        uses: actions/upload-artifact@v7
+        with:
+          name: demo-pdfs-${{ env.TARGET }}
+          path: examples/*/bin/${{ env.TARGET }}/*.pdf
+          if-no-files-found: error

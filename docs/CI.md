@@ -98,8 +98,9 @@ packages `mormot2` and `LCL`, and the runner uses `Interfaces` and
 **Steps:**
 1. **Linux** on `ubuntu-26.04` (Lazarus 4.4, FPC 3.2.2, way A):
    Lazarus with the GTK2 widgetset from `apt`, `libfreetype6`,
-   `libharfbuzz0b`, `libharfbuzz-subset0`, fonts (Liberation, Noto CJK,
-   Noto Naskh Arabic), then `lazbuild tests/test_runner.lpi -B` and
+   `libharfbuzz0b`, `libharfbuzz-subset0`, the faces the tests name
+   (DejaVu, Liberation, Droid Sans Fallback, Noto Naskh Arabic, Noto CJK),
+   then `lazbuild tests/test_runner.lpi -B` and
    `tests/bin/x86_64-linux/test_runner`, under `xvfb-run` if the widgetset
    wants a display. A second step may run `tests/no_hbsubset.sh` for the
    path without hb-subset
@@ -113,11 +114,19 @@ packages `mormot2` and `LCL`, and the runner uses `Interfaces` and
 **mORMot2:** `actions/checkout` of `synopse/mORMot2` at the commit pinned in
 the refactoring baseline (`docs/REFACTORING.md`, Phase 0 step 3), its
 packages registered with `lazbuild --add-package-link`, plus the static
-libraries from `mormot2static.7z` of the matching release.
+libraries from `mormot2static.tgz`.
+
+**The workflow:** `.github/workflows/linux.yml`. On Ubuntu 26.04 `lazbuild`
+is in `lcl-utils`, the GTK2 LCL in `lcl-gtk2`. The whole
+`mormot2static.tgz` is unpacked, checked against `static/dev.sha256` of the
+pinned commit: synopse.info serves only the newest archive, so a failed
+check means the pin is stale. `no_hbsubset.sh` needs
+`kernel.apparmor_restrict_unprivileged_userns=0` on Ubuntu.
 
 **Still to check:**
-- which static libraries `test_runner` links (all of `static/`, or only some)
-- the Ubuntu package names for `lazbuild` and the GTK2 LCL of Lazarus 4.4
+- the first run: whether `lazbuild` finds the LCL without `--lazarusdir`,
+  whether `test_runner` needs `xvfb-run`, and how many assertions run
+  instead of skipping (318 on the Debian machine)
 - later, for Windows: which faces the runner has (Calibri, Microsoft YaHei,
   an Arabic face) — missing ones turn tests into skips — and whether
   Chocolatey's Lazarus is current enough; else way B for that job
