@@ -46,7 +46,10 @@ TPdfALevel = (pdfaNone, pdfa1A, pdfa1B, pdfa2A, pdfa2B, pdfa3A, pdfa3B, pdfa3U);
 TPdfFileFormat = (pdf13, pdf14, pdf15, pdf16, pdf17);
 
 // How the document appears when opened in a viewer
-TPdfPageMode = (pmUseNone, pmUseOutlines, pmUseThumbs, pmFullScreen);
+TPdfPageMode = (pmUseNone, pmUseOutlines, pmUseThumbs, pmFullScreen,
+                pmUseAttachments);  // PDF 1.6: SaveToStreamDirectBegin raises
+                                    // FileFormat to pdf16; not allowed (and
+                                    // dropped) for NonFullScreenPageMode
 
 // Page layout used when document is opened
 TPdfPageLayout = (plSinglePage, plOneColumn, plTwoColumnLeft, plTwoColumnRight);
@@ -447,6 +450,8 @@ Brush: `Color`, `Style` (bsSolid/bsClear)
 Tagged PDF adds structure tags (H1–H6, P, …) that screen readers and PDF/UA validators require.
 Table roles: `psrTable`, `psrTR`, `psrTH`, `psrTD`, plus the row groups
 `psrTHead`, `psrTBody` and `psrTFoot` (ISO 32000-1 14.8.4.3.4, R-14).
+`psrTHRow` is a `TH` that heads its row, e.g. the label of a totals line: it
+writes `/S /TH` with `/Scope /Row` (PDF/UA-1 7.5); `psrTH` heads its column.
 
 ### Enum
 
@@ -549,7 +554,10 @@ When `Tagged = true`:
 - Each page gains `/StructParents N`
 - A `StructTreeRoot` with `Document` root, leaf StructElems, and `ParentTree` number tree is serialized at `SaveToStreamDirectEnd`
 - The catalog gets `/ViewerPreferences <</DisplayDocTitle true>>`, and the XMP packet (`pdfuaid:part` 1, `dc:title` = `Info.Title`) is written at `SaveToStreamDirectEnd`. Set `Info.Title`: PDF/UA needs one
-- Every `TH` gets `/A <</O/Table/Scope/Column>>`
+- Every `TH` gets `/A <</O/Table/Scope/Column>>`; a `psrTHRow` element
+  (also `/S /TH`) gets `/A <</O/Table/Scope/Row>>`. The role is appended to
+  `TPdfStructRole` instead of a scope parameter on `BeginStructContent`, so
+  it passes the bridge and `TGDIPages` unchanged
 - **Low-level API, caller's duties:** PDF/UA wants one bookmark per heading. Create the document with `AUseOutlines = true` and call `CreateOutline(Title, Level, TopPosition)` after each heading (`TopPosition` in PDF points from the page bottom); the engine cannot do it for you, because `BeginStructContent(psrHx)` never sees the heading text. `TGDIPages` does it itself. Text drawn inside a `Figure` is part of the image: a reader gets the `/Alt` instead, so the `/Alt` has to describe that text too. PAC 2024 gives the hint "Possibly inappropriate use of figure structure element" on every Figure - path or image, with or without text or `/BBox` (measured) - so it is accepted (ROADMAP W-1)
 - A `Figure` on one page gets `/A <</O/Layout/BBox[l b r t]>>`. `TPdfCanvas` collects it from the path points (widened by half the line width), from `TextOut`/`TextOutW` (width from the font engine; descent approximated as ¼ size) and from `DrawXObject`. Points drawn under a `ConcatToCTM` that is still active are ignored, because they are not in page space
 - **Artifacts:** a path object (`m l c v y re` … paint/`n`) or an image `Do` drawn while no struct region is open is wrapped in `/Artifact BMC … EMC` automatically. Inside a region (e.g. `Figure`) it stays real content. For other skipped content, e.g. a repeated table header or a running page header, use `Canvas.BeginArtifact`/`EndArtifact` (also on `TPdfDocumentVcl`). Do not open a struct element inside it: `BeginArtifact` inside a region and an unmatched `EndArtifact` raise `EPdfInvalidOperation`

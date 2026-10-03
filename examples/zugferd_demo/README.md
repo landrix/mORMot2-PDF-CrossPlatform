@@ -30,10 +30,12 @@ businesses in Germany and France. The file is PDF/A-3U and PDF/UA-1 at once.
 - `ExportPdfLevel := pdfa3U` and `ExportPdfTagged := True` before the first
   `NewPage`; `DrawHeading`, `DrawParagraph` and a `TTableLayout` table give
   `H1`, `P` and `Table` with `THead`, `TBody` and a `TFoot` for the
-  totals — no `BeginStructContent` in the demo
+  totals — no `BeginStructContent` in the demo. `FooterRowHeader` makes the
+  label of each totals row its row header (`TH`, `/Scope /Row`)
 - `AddExportPdfAttachment(..., afrAlternative)` embeds the XML;
   `ExportPdfMetadataExtension := PdfMetadataFacturX('EN 16931', ...)` writes
-  the `fx:` XMP properties with their PDF/A extension schema. The engine adds
+  the `fx:` XMP properties with their PDF/A extension schema;
+  `ExportPdfPageMode := pmUseAttachments` opens the viewer on the attachment. The engine adds
   the `pdfuaid` schema to the same list
 
 **The invoice data** is the sample `Gesamtbeispiel` of

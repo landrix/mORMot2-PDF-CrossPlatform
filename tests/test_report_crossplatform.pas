@@ -45,6 +45,8 @@ type
     procedure TestListItemBullet;
     procedure TestParagraphKeepsQuotes;
     procedure TestExportPdfAttachment;
+    procedure TestTableFooterRowHeader;
+    procedure TestExportPdfPageMode;
   end;
 
 implementation
@@ -775,6 +777,139 @@ begin
       'fx: file name in the XMP');
     Check(PosEx('<pdfaSchema:prefix>fx</pdfaSchema:prefix>', s) > 0,
       'fx: schema described');
+  finally
+    MS.Free;
+    Report.Free;
+  end;
+end;
+
+// how often Sub occurs in s
+function CountOf(const s, Sub: RawUtf8): Integer;
+var
+  p: PtrInt;
+begin
+  result := 0;
+  p := PosEx(Sub, s);
+  while p > 0 do
+  begin
+    inc(result);
+    p := PosEx(Sub, s, p + length(Sub));
+  end;
+end;
+
+procedure TReportTests.TestTableFooterRowHeader;
+
+  // the inflated tagged PDF of a table with two footer rows
+  function MakePdf(RowHeader: boolean; out Marked: Integer): RawUtf8;
+  var
+    Report: TGDIPages;
+    Layout: TTableLayout;
+    MS: TMemoryStream;
+    p, i: Integer;
+  begin
+    result := '';
+    Marked := 0;
+    Report := TGDIPages.Create(nil);
+    MS := TMemoryStream.Create;
+    try
+      Report.ExportPdfTagged := true;
+      Report.NewPage;
+      Report.DrawHeading(1, 'Totals');
+      FillChar(Layout, SizeOf(Layout), 0);
+      SetLength(Layout.ColumnWidths, 2);
+      SetLength(Layout.ColumnAligns, 2);
+      Layout.ColumnWidths[0] := 5000;
+      Layout.ColumnWidths[1] := 5000;
+      Layout.ColumnAligns[0] := tcaLeft;
+      Layout.ColumnAligns[1] := tcaRight;
+      Layout.FooterRowHeader := RowHeader;
+      Report.BeginTable(Layout);
+      Report.DrawTableHeader(['Item', 'Value']);
+      Report.DrawTableRow(['Row 1', '10']);
+      Report.DrawTableFooter(['Net', '10']);
+      Report.DrawTableFooter(['Total', '12']);
+      Report.EndTable;
+      Report.EndDoc;
+      for p := 0 to Report.PageCount - 1 do
+        for i := 0 to High(Report.Pages[p].Commands) do
+          if Report.Pages[p].Commands[i].RowHeader then
+            inc(Marked);
+      Check(Report.ExportPdfStream(MS), 'tagged export with row headers');
+      FastSetString(result, MS.Memory, MS.Size);
+      result := InflatePdf(result);
+    finally
+      MS.Free;
+      Report.Free;
+    end;
+  end;
+
+var
+  s: RawUtf8;
+  Marked: Integer;
+begin
+  { opt-in: the first cell of each footer row heads its row (PDF/UA-1 7.5) }
+  s := MakePdf(true, Marked);
+  CheckEqual(2, Marked, 'the first cell of both footer rows is recorded as a row header');
+  CheckEqual(2, CountOf(s, '/Scope/Row'), 'two TH with /Scope /Row');
+  CheckEqual(2, CountOf(s, '/Scope/Column'), 'the header row keeps /Scope /Column');
+  { off by default: footer cells stay TD }
+  s := MakePdf(false, Marked);
+  CheckEqual(0, Marked, 'no row header without the option');
+  CheckEqual(0, CountOf(s, '/Scope/Row'), 'no /Scope /Row without the option');
+end;
+
+procedure TReportTests.TestExportPdfPageMode;
+
+  function MakePdf(Mode: TPdfPageMode; Level: TPdfALevel): RawUtf8;
+  var
+    Report: TGDIPages;
+    MS: TMemoryStream;
+  begin
+    result := '';
+    Report := TGDIPages.Create(nil);
+    MS := TMemoryStream.Create;
+    try
+      Report.ExportPdfLevel := Level;
+      Report.ExportPdfTagged := Level <> pdfaNone;
+      Report.NewPage;
+      Report.DrawHeading(1, 'Invoice');
+      Report.EndDoc;
+      Report.AddExportPdfAttachment('<x/>', 'factur-x.xml', 'data',
+        'text/xml', afrAlternative);
+      Report.ExportPdfPageMode := Mode;
+      Check(Report.ExportPdfStream(MS), 'export with a page mode');
+      FastSetString(result, MS.Memory, MS.Size);
+      result := InflatePdf(result);
+    finally
+      MS.Free;
+      Report.Free;
+    end;
+  end;
+
+var
+  s: RawUtf8;
+  Report: TGDIPages;
+  MS: TMemoryStream;
+begin
+  s := MakePdf(pmUseNone, pdfaNone);
+  CheckEqual(0, PosEx('/PageMode', s), 'pmUseNone writes no /PageMode');
+  Check(PosEx('%PDF-1.3', s) = 1, 'and leaves the version alone');
+  s := MakePdf(pmUseAttachments, pdfaNone);
+  Check(PosEx('/PageMode/UseAttachments', s) > 0, '/PageMode /UseAttachments');
+  Check(PosEx('%PDF-1.6', s) = 1, 'UseAttachments raises the version to 1.6');
+  s := MakePdf(pmUseAttachments, pdfa3U);
+  Check(PosEx('/PageMode/UseAttachments', s) > 0, 'with PDF/A-3U as well');
+  Check(PosEx('%PDF-1.7', s) = 1, 'PDF/A-3 stays at 1.7');
+  { PDF/A-1 is PDF 1.4: the mode is refused, even without any attachment }
+  Report := TGDIPages.Create(nil);
+  MS := TMemoryStream.Create;
+  try
+    Report.ExportPdfLevel := pdfa1B;
+    Report.NewPage;
+    Report.DrawHeading(1, 'Invoice');
+    Report.EndDoc;
+    Report.ExportPdfPageMode := pmUseAttachments;
+    Check(not Report.ExportPdfStream(MS), 'UseAttachments refused with PDF/A-1');
   finally
     MS.Free;
     Report.Free;

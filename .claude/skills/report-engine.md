@@ -249,6 +249,7 @@ const TABLE_LAYOUT: TTableLayout = (
   FooterFontStyle:   [];
   FooterBkColor:     0;
   GridColor:         clSilver; // cell borders; 0 = clBlack, as before the field existed
+  FooterRowHeader:   false;    // true: first footer cell is a row header (TH /Scope /Row)
 );
 
 Report.BeginTable(TABLE_LAYOUT);
@@ -274,7 +275,11 @@ least 1 when rendered — 0.75 pt is the thinnest border until the bridge
 takes fractional pen widths. The legacy `AddTableRow` keeps black.
 
 **`DrawTableFooter(Cells)`** draws the closing row — a totals line, typically.
-Its cells are `TD`, not `TH`. It breaks the page like `DrawTableRow` does, so
+Its cells are `TD`, not `TH` — unless `TTableLayout.FooterRowHeader` is set:
+then its first cell is a row header (`psrTHRow`, `/S /TH` with `/Scope /Row`),
+so a screen reader announces the label with the amount. `EmitTextCmd` marks
+the cell through `fEmitRowHeader` → `TDrawCommand.RowHeader`, which
+`TextStructRole` reads. It breaks the page like `DrawTableRow` does, so
 the footer is never orphaned on a page of its own.
 
 **Internal lifecycle of BeginTable(TTableLayout):**
@@ -350,6 +355,8 @@ Report.Subject := 'Subject';
 Report.AddExportPdfAttachment(Xml, 'factur-x.xml', 'Factur-X invoice data',
   'text/xml', afrAlternative);       // kept until ClearExportPdfAttachments
 Report.ExportPdfMetadataExtension := PdfMetadataFacturX('EN 16931', 'factur-x.xml');
+Report.ExportPdfPageMode := pmUseAttachments; // opens the attachments panel;
+                                     // pmUseNone (default) writes no /PageMode
 ```
 
 `ExportPdfStream` owns its `TPdfDocumentVcl`, so these are the only way to
@@ -361,7 +368,7 @@ there; the attachments are created after the outlines, before
 
 **A report program uses `mormot.ui.report` only.** It re-exports what the
 `ExportPdf*` options take — `TPdfALevel`/`pdfa*`, `TPdfFileFormat`/`pdf1x`,
-`TPdfAFRelationship`/`afr*`, `PdfMetadataFacturX` — through
+`TPdfAFRelationship`/`afr*`, `TPdfPageMode`/`pm*`, `PdfMetadataFacturX` — through
 `mormot.ui.pdfcanvas`. Never add `mormot.ui.pdf` beside it: its
 `TPdfPaperSize` has a `psA4` as `TGdiPagePaperSize` does, and its `TRect`
 differs from the LCL's, so the uses order decides which one a name means

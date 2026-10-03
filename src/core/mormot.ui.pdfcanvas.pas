@@ -58,6 +58,9 @@ type
   /// Re-export TPdfAFRelationship for TGDIPages.AddExportPdfAttachment
   TPdfAFRelationship = mormot.ui.pdf.TPdfAFRelationship;
 
+  /// Re-export TPdfPageMode for TGDIPages.ExportPdfPageMode
+  TPdfPageMode = mormot.ui.pdf.TPdfPageMode;
+
   /// Re-export TPdfFontMeasurer so TGDIPages can lay out its pages with the
   // metrics of the PDF font engine without pulling all of mormot.ui.pdf — that
   // unit re-exports Windows-style TRect/TPoint which clash with the LCL ones
@@ -253,6 +256,12 @@ const
   afrData = mormot.ui.pdf.afrData;
   afrAlternative = mormot.ui.pdf.afrAlternative;
   afrSupplement = mormot.ui.pdf.afrSupplement;
+  /// Re-export the page modes from mormot.ui.pdf
+  pmUseNone = mormot.ui.pdf.pmUseNone;
+  pmUseOutlines = mormot.ui.pdf.pmUseOutlines;
+  pmUseThumbs = mormot.ui.pdf.pmUseThumbs;
+  pmFullScreen = mormot.ui.pdf.pmFullScreen;
+  pmUseAttachments = mormot.ui.pdf.pmUseAttachments;
 
 /// Re-export mormot.ui.pdf.PdfMetadataFacturX for mormot.ui.report, which
 // does not use mormot.ui.pdf: its psA4 and TRect would hide the report's

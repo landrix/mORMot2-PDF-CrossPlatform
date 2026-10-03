@@ -34,6 +34,7 @@ type
   TPdfALevel = mormot.ui.pdfcanvas.TPdfALevel;
   TPdfFileFormat = mormot.pdf.types.TPdfFileFormat;
   TPdfAFRelationship = mormot.ui.pdfcanvas.TPdfAFRelationship;
+  TPdfPageMode = mormot.ui.pdfcanvas.TPdfPageMode;
 
 const
   pdfaNone = mormot.ui.pdfcanvas.pdfaNone;
@@ -54,6 +55,11 @@ const
   afrData = mormot.ui.pdfcanvas.afrData;
   afrAlternative = mormot.ui.pdfcanvas.afrAlternative;
   afrSupplement = mormot.ui.pdfcanvas.afrSupplement;
+  pmUseNone = mormot.ui.pdfcanvas.pmUseNone;
+  pmUseOutlines = mormot.ui.pdfcanvas.pmUseOutlines;
+  pmUseThumbs = mormot.ui.pdfcanvas.pmUseThumbs;
+  pmFullScreen = mormot.ui.pdfcanvas.pmFullScreen;
+  pmUseAttachments = mormot.ui.pdfcanvas.pmUseAttachments;
 
 { =========================================================================
   Phase 1 – Types and structure
@@ -142,6 +148,7 @@ type
                              // one wrapped paragraph share the id (Tagged PDF)
     IsInline:    boolean;    // true = inline run continuing the current line
     InlineStyle: TInlineStyle; // style of an inline run (Tagged PDF Span role)
+    RowHeader:   boolean;    // dckDrawText: a table cell heading its row (TH)
   end;
 
   /// ordered list of drawing commands for one page
@@ -208,6 +215,9 @@ type
     // - leave all four Footer* fields at their default ('' / 0 / [] / 0) to
     // make DrawTableFooter look exactly like the header row
     GridColor: TColor;                        // cell borders; 0 = clBlack
+    // - true: the first cell of a footer row heads that row, e.g. the label of
+    // a totals line - tagged as TH with /Scope /Row instead of TD
+    FooterRowHeader: boolean;
   end;
 
   /// heading information tracked for PDF outline generation
@@ -316,6 +326,7 @@ type
     fInlineBlockId:    Integer;  // block id of the line being filled, 0 = none
     fEmitInline:       boolean;  // true while an inline overload emits
     fEmitInlineStyle:  TInlineStyle;  // style of the run being emitted
+    fEmitRowHeader:    boolean;  // true while a row-heading cell is emitted
     fInParagraph:    Integer;  // depth counter for nested paragraph begin/end
 
     { --- Phase 6: PDF export options --- }
@@ -331,6 +342,7 @@ type
     fExportPdfLanguage:    RawUtf8;
     fExportPdfAttachments: array of TReportPdfAttachment;
     fExportPdfMetadataExtension: RawUtf8;
+    fExportPdfPageMode:    TPdfPageMode;
     fActivePdfDoc:        TPdfDocumentVcl;  // non-nil during tagged PDF export only
 
 
@@ -641,6 +653,10 @@ type
     // - e.g. PdfMetadataFacturX() from mormot.ui.pdf
     property ExportPdfMetadataExtension: RawUtf8
       read fExportPdfMetadataExtension write fExportPdfMetadataExtension;
+    /// how a viewer opens the exported PDF, pmUseNone (default) by its choice
+    // - e.g. pmUseAttachments shows the files of AddExportPdfAttachment
+    property ExportPdfPageMode: TPdfPageMode
+      read fExportPdfPageMode write fExportPdfPageMode;
 
     /// Get font names based on current embedding mode
     // - When ExportPdfEmbeddedTTF=true: returns platform-specific TTF fonts
@@ -763,6 +779,7 @@ begin
   fExportPdfTagged        := False;
   fRenderRowGroup         := psrTable; // no row group open
   fExportPdfLanguage      := 'en';
+  fExportPdfPageMode      := pmUseNone;
 
   // Phase 5: Initialize format registry with default Markdown-style formats
   fHeadingCount := 0;
@@ -774,6 +791,7 @@ begin
   fInlineBlockId    := 0;
   fEmitInline       := false;
   fEmitInlineStyle  := isPlain;
+  fEmitRowHeader    := false;
   fRenderBlockId    := 0;
   fRenderBlockElem  := -1;
   fRenderBlockOpen  := false;
@@ -1701,6 +1719,7 @@ begin
   Cmd.BlockId      := fCurrentBlockId;
   Cmd.IsInline     := fEmitInline;
   Cmd.InlineStyle  := fEmitInlineStyle;
+  Cmd.RowHeader    := fEmitRowHeader;
   { Measure text width ONCE at recording time in normalized units }
   TextWidthMM := MeasureTextWidthMM(S);
   Cmd.TextWidthMM := TextWidthMM;
@@ -2035,15 +2054,23 @@ begin
     else
       AlignValue := 0;
     end;
-    { WICHTIG: Für Rechtsbündigkeit muss Textlänge SCHON in X-Position eingerechnet sein! }
-    case AlignValue of
-      1: { Right: X = right_edge - text_width, dann wird Text linksbündig gerendert }
-        EmitTextCmd(NormalizeX(CellX + CellWidth - CELL_PADDING - MeasureTextWidthMM(Cells[i])), NormalizeY(CellY), Cells[i], 0);
-      2: { Center: use middle of cell }
-        EmitTextCmd(NormalizeX(CellX + CellWidth div 2), NormalizeY(CellY), Cells[i], AlignValue);
-    else
-      { Left: normal left-aligned }
-      EmitTextCmd(NormalizeX(CellX + CELL_PADDING), NormalizeY(CellY), Cells[i], AlignValue);
+    { the flag must not outlive this cell, or a later cell becomes a TH }
+    fEmitRowHeader := (i = 0) and
+                      (ARowKind = 3) and
+                      fTableLayout.FooterRowHeader;
+    try
+      { WICHTIG: Für Rechtsbündigkeit muss Textlänge SCHON in X-Position eingerechnet sein! }
+      case AlignValue of
+        1: { Right: X = right_edge - text_width, dann wird Text linksbündig gerendert }
+          EmitTextCmd(NormalizeX(CellX + CellWidth - CELL_PADDING - MeasureTextWidthMM(Cells[i])), NormalizeY(CellY), Cells[i], 0);
+        2: { Center: use middle of cell }
+          EmitTextCmd(NormalizeX(CellX + CellWidth div 2), NormalizeY(CellY), Cells[i], AlignValue);
+      else
+        { Left: normal left-aligned }
+        EmitTextCmd(NormalizeX(CellX + CELL_PADDING), NormalizeY(CellY), Cells[i], AlignValue);
+      end;
+    finally
+      fEmitRowHeader := false;
     end;
 
     CellX := CellX + CellWidth;
@@ -2468,6 +2495,8 @@ var
     else if InTableRow then
       if InHeaderRow then
         result := psrTH
+      else if Cmd.RowHeader then
+        result := psrTHRow
       else
         result := psrTD
     else if InListItem then
@@ -2714,7 +2743,7 @@ begin
       dckBeginTR:
       begin
         { only rows 1 and 2 hold header cells; 3 is the footer, whose cells
-          are TD like any data cell }
+          are TD like any data cell - except a row header (Cmd.RowHeader) }
         InHeaderRow := Cmd.Color in [1, 2];
         InTableRow  := true;
         if fActivePdfDoc <> nil then
@@ -2895,6 +2924,9 @@ begin
       PDF.StandardFontsReplace := fExportPdfStandardFonts;
       // before SaveToStreamDirectBegin: PDF/A writes its XMP packet there
       PDF.PdfAMetadaExtension := fExportPdfMetadataExtension;
+      // pmUseNone writes nothing, as before the option existed
+      if fExportPdfPageMode <> pmUseNone then
+        PDF.Root.PageMode := fExportPdfPageMode;
       PDF.SaveToStreamDirectBegin(aDest);
       { logical block state is per export run (see ROADMAP B-2) }
       fRenderBlockId   := 0;
