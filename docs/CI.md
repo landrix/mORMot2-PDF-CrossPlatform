@@ -135,11 +135,15 @@ Mustang CLI from Maven Central, checked by SHA-256; it exits non-zero
 unless the file is completely valid (`Main.java`, `performValidate`). A
 new version means updating version and checksum in the workflow's `env`.
 
+**First run** (2026-10-03, run 37109060795, under two minutes, green):
+`lazbuild` finds the LCL without `--lazarusdir`; `test_runner` 330/330
+(Debian machine: 318); `no_hbsubset.sh` masks the library, 304/304 with the
+subset suite at 7 of 19 assertions — the fallback holds; veraPDF `ua1` 7 of
+7, `3u` 1 of 1; Mustang valid, with the one warning and two notices
+`examples/zugferd_demo/THIRD_PARTY.md` names. Whether `xvfb-run` is needed
+was not tried; it stays.
+
 **Still to check:**
-- the first run: whether `lazbuild` finds the LCL without `--lazarusdir`,
-  whether `test_runner` needs `xvfb-run`, how many assertions run instead
-  of skipping (318 on the Debian machine), and whether veraPDF's XML report
-  carries `isCompliant` as expected
 - later, for Windows: which faces the runner has (Calibri, Microsoft YaHei,
   an Arabic face) — missing ones turn tests into skips — and whether
   Chocolatey's Lazarus is current enough; else way B for that job
