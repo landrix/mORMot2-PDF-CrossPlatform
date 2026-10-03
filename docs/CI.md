@@ -104,9 +104,14 @@ packages `mormot2` and `LCL`, and the runner uses `Interfaces` and
    `tests/bin/x86_64-linux/test_runner`, under `xvfb-run` if the widgetset
    wants a display. A second step may run `tests/no_hbsubset.sh` for the
    path without hb-subset
-2. **Demos:** build the eight demos (the GUI demos with `--export`) and
-   upload their PDFs as artifacts, for PAC and veraPDF by hand
-3. later: a second Linux job on `ubuntu-24.04` (HarfBuzz 8, below the 10.0
+2. **Demos:** build the eight demos and `pdfcheck`; `pdfcheck run fpc pdfs`
+   runs them and collects their PDFs, `tagged_unicode` comes from
+   `test_runner` — the nine files of a check session
+3. **Validation:** veraPDF `ua1` on the seven tagged files (six demos and
+   `tagged_unicode`), `3u` on `zugferd_demo`; Mustang on `zugferd_demo`.
+   PDFs and reports are uploaded only when a step fails (kept 14 days, on
+   the run's page under *Artifacts*)
+4. later: a second Linux job on `ubuntu-24.04` (HarfBuzz 8, below the 10.0
    that commit 7de7b9b, the empty hb-subset result, is about); **Windows**
    (`windows-latest`, `test_runner.exe --noenter`); **macOS**
    (`aarch64-darwin`) only if Homebrew installs FPC and Lazarus cleanly
@@ -123,17 +128,26 @@ pinned commit: synopse.info serves only the newest archive, so a failed
 check means the pin is stale. `no_hbsubset.sh` needs
 `kernel.apparmor_restrict_unprivileged_userns=0` on Ubuntu.
 
+**Validators, pinned:** veraPDF as the veraPDF project's own Docker image
+(`verapdf/cli:v1.30.2`) — a `docker run`, not an action; its exit codes are
+not documented, so the step counts `isCompliant="true"` in the XML report.
+Mustang CLI from Maven Central, checked by SHA-256; it exits non-zero
+unless the file is completely valid (`Main.java`, `performValidate`). A
+new version means updating version and checksum in the workflow's `env`.
+
 **Still to check:**
 - the first run: whether `lazbuild` finds the LCL without `--lazarusdir`,
-  whether `test_runner` needs `xvfb-run`, and how many assertions run
-  instead of skipping (318 on the Debian machine)
+  whether `test_runner` needs `xvfb-run`, how many assertions run instead
+  of skipping (318 on the Debian machine), and whether veraPDF's XML report
+  carries `isCompliant` as expected
 - later, for Windows: which faces the runner has (Calibri, Microsoft YaHei,
   an Arabic face) — missing ones turn tests into skips — and whether
   Chocolatey's Lazarus is current enough; else way B for that job
 
 **Not in CI:** golden files (the baseline depends on the fonts installed, see
-`CLAUDE.md`), Delphi 7 and Delphi 2010 (no licence on a runner), PAC 2024 (a
-Windows GUI). veraPDF runs on Java and could follow later.
+`CLAUDE.md`), Delphi 7 and Delphi 2010 (no licence on a runner). PAC 2024 (a
+Windows GUI) is dropped: veraPDF and Mustang in CI replace the manual
+validator round, and everything is tested locally before a push anyway.
 
 **After R-28** the code lives in the mORMot2 trunk as `src/pdf`; paths and the
 mORMot2 checkout in the workflow change then. Keep the workflow small until

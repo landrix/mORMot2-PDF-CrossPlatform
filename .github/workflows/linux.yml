@@ -19,6 +19,11 @@ env:
   # the commit pinned in the refactoring baseline (docs/REFACTORING.md, Phase 0 step 3)
   MORMOT2_COMMIT: d60cc6e8035d296e60eb86df4d930b9c91c7a791
   TARGET: x86_64-linux
+  # the official image of the veraPDF project
+  VERAPDF_IMAGE: verapdf/cli:v1.30.2
+  # ZUGFeRD/Factur-X validation, from Maven Central
+  MUSTANG_VERSION: 2.26.0
+  MUSTANG_SHA256: 42d7868cb68264874a7b8cab4c3587b03b23ccc7cd72373da917f66758bb9736
 
 jobs:
   test:
@@ -43,7 +48,7 @@ jobs:
             libfreetype6 libharfbuzz0b libharfbuzz-subset0 \
             fonts-dejavu-core fonts-liberation fonts-droid-fallback \
             fonts-noto-core fonts-noto-cjk \
-            xvfb xauth
+            xvfb xauth default-jre-headless
           fpc -iV
           lazbuild --version
 
@@ -74,25 +79,61 @@ jobs:
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
           xvfb-run -a tests/no_hbsubset.sh
 
+      # the nine PDFs of a check session (docs/REFACTORING.md): eight demos
+      # and tagged_unicode from test_runner
       - name: Build and run the demos
+        id: demos
         run: |
-          for lpi in examples/*/*.lpi; do
+          for lpi in examples/*/*.lpi tests/pdfcheck.lpi; do
             lazbuild "$lpi" -B
           done
-          # from the demo folder: zugferd_demo and mormot_demo read files there
-          for demo in pdf_demo_crossplat:pdf_demo markdown_demo:markdown_demo \
-                      chinese_demo:chinese_demo rtl_demo:rtl_demo \
-                      layer1_demo:layer1_demo zugferd_demo:zugferd_demo; do
-            exe=${demo%%:*}; dir=${demo##*:}
-            (cd examples/$dir && xvfb-run -a bin/$TARGET/$exe)
-          done
-          for dir in report_demo mormot_demo; do
-            (cd examples/$dir && xvfb-run -a bin/$TARGET/$dir --export)
-          done
+          xvfb-run -a tests/bin/$TARGET/pdfcheck run fpc pdfs
+          cp tests/bin/$TARGET/tagged_unicode_*.pdf pdfs/
+          ls -l pdfs
 
-      - name: Upload the demo PDFs
+      # chinese_demo and rtl_demo are untagged: nothing to check
+      - name: veraPDF
+        run: |
+          mkdir -p reports
+          verapdf() {
+            docker run --rm -v "$PWD:/data" -w /data "$VERAPDF_IMAGE" --format xml "$@"
+          }
+          check() {  # check <flavour> <files...>
+            local flavour=$1; shift
+            verapdf -f "$flavour" "$@" > reports/verapdf-$flavour.xml
+            local ok
+            ok=$(grep -o 'isCompliant="true"' reports/verapdf-$flavour.xml | wc -l)
+            echo "veraPDF $flavour: $ok of $# compliant"
+            [ "$ok" = "$#" ]
+          }
+          rc=0
+          check ua1 pdfs/{pdf,report,markdown,mormot,zugferd,layer1}_demo_*.pdf \
+            pdfs/tagged_unicode_*.pdf || rc=1
+          check 3u pdfs/zugferd_demo_*.pdf || rc=1
+          exit $rc
+
+      # exits non-zero unless the invoice is completely valid; runs after a
+      # veraPDF failure too, so both reports are there
+      - name: Mustang
+        if: ${{ !cancelled() && steps.demos.outcome == 'success' }}
+        run: |
+          curl -fsSLo mustang.jar \
+            https://repo1.maven.org/maven2/org/mustangproject/Mustang-CLI/$MUSTANG_VERSION/Mustang-CLI-$MUSTANG_VERSION.jar
+          echo "$MUSTANG_SHA256  mustang.jar" | sha256sum -c -
+          mkdir -p reports
+          rc=0
+          java -jar mustang.jar --action validate --source pdfs/zugferd_demo_*.pdf \
+            > reports/mustang.xml || rc=$?
+          tail -5 reports/mustang.xml
+          exit $rc
+
+      # only on failure: the files and reports to look at
+      - name: Upload PDFs and reports
+        if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: demo-pdfs-${{ env.TARGET }}
-          path: examples/*/bin/${{ env.TARGET }}/*.pdf
-          if-no-files-found: error
+          name: pdfs-${{ env.TARGET }}
+          path: |
+            pdfs/
+            reports/
+          retention-days: 14
