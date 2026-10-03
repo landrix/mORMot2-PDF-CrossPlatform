@@ -88,8 +88,17 @@ newer but only reachable through a container. Pin the runner label;
 
 ## 4. This Project (R-24)
 
-**Goal.** A push builds and runs `test_runner` on Linux. Windows and macOS
-come later, each as a job of its own.
+**Goal.** A push to `main` or a pull request builds and runs `test_runner`
+on Linux. Windows and macOS come later, each as a job of its own.
+
+**When it runs:** on a push to `main` and on every pull request, also from
+a fork. A push to another branch runs nothing — with an open PR it would run
+twice, once for the push and once for the PR; without one, start the run by
+hand (*Actions* → *Linux* → *Run workflow*, `workflow_dispatch`). A commit
+that changes nothing but Markdown, `docs/` or `.claude/` runs nothing
+(`paths-ignore`); one code file in it and everything runs. Should the CI
+become a required check, a docs-only PR would wait for a check that never
+starts — then the filter has to go.
 
 **Lazarus is needed, not FPC alone:** `tests/test_runner.lpi` requires the
 packages `mormot2` and `LCL`, and the runner uses `Interfaces` and
