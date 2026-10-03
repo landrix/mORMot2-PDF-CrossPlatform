@@ -39,6 +39,13 @@ v0.10.0 (2026-09-30).
   `mormot.lib.uniscribe` is gone - the `mormot2` package ships the unit and
   hid the copy; `mormot.ui.core` and `mormot.ui.gdiplus` are the trunk
   units again (R-28, refactoring Phase 0 step 5)
+- **`zugferd_demo` with new invoice data:** the KoSIT test case (Apache-2.0,
+  which does not fit the GPL option of mORMot's licence) is replaced by the
+  sample `Gesamtbeispiel` of XRechnung for Delphi, contributed by Landrix
+  under this project's licence, with real umlauts. The demo now reads every
+  VAT rate, the billing period, the due date and every bank account of the
+  invoice, shows amounts with every decimal of the XML and refuses a file
+  that is not UTF-8
 - **Needs the mORMot2 trunk:** the trunk commits ported to `mormot.ui.pdf`
   use functions the release 2.4-stable lacks (`TTemp512`, `UINT_999`,
   `bswap16array`, `StrIEqual`, `SameTextS`, `SameExt`). v0.10.0 is the last
@@ -166,15 +173,17 @@ around every element, hand-broken lines, and a page that repeats
   `rsm:`/`ram:`/`udt:` are fixed, no entities, no CDATA, no validation — the
   engine still neither generates nor validates invoice XML. mORMot2 has no XML
   reader (only `JsonToXML`/`XmlEscape`); a small `PosEx` search through the
-  nested tags is enough. The XML stays unchanged (licence, checksum in
-  `THIRD_PARTY.md`)
+  nested tags is enough. Refused is only a file that is not UTF-8. The
+  XML is the `Gesamtbeispiel` of XRechnung for Delphi, under this project's
+  licence (PR #5 replaced the KoSIT test case, Apache-2.0)
 - **Labels in ASCII German**, so the source is pure ASCII without
   `HASCODEPAGE`: "Ihre Referenz" for "Käuferreferenz", "Bankverbindung:
-  IBAN …" for "SEPA-Überweisung auf IBAN …". The umlauts and "…" on the page
-  come from the UTF-8 XML. Amounts `336.9` → `336,90`, dates `20160404` →
-  `04.04.2016`, the IBAN in groups of four
-- The source line in the footer (KoSIT, Apache-2.0) stays in the code — a
-  licence duty, not user text; `--no-attachment` and `--untagged` stay
+  IBAN …" for "SEPA-Überweisung auf IBAN …". The umlauts on the page come
+  from the UTF-8 XML. Amounts `336.9` → `336,90`, `0.1275` → `0,1275`
+  (every decimal of the XML, two at least), dates `20160404` → `04.04.2016`,
+  the IBAN in groups of four
+- The footer names the source of the sample data (XRechnung for Delphi);
+  `--no-attachment` and `--untagged` stay
 
 **The library extension.** `TGDIPages.ExportPdfStream` creates its
 `TPdfDocumentVcl` as a local, streams it page by page

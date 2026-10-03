@@ -629,16 +629,15 @@ businesses in Germany and France. The same file conforms to PDF/A-3U
   which the engine writes; `pdfa3A` additionally needs the structure tree, so
   it requires the tagged export
 - What the engine does **not** do: generate or validate invoice XML. That is
-  the caller's, and here it is third-party test data. The demo's reader is no
+  the caller's, and here it is a sample file. The demo's reader is no
   parser either: fixed paths and prefixes, no entities, no validation
 
 **Scope.** Invoices to German public authorities take pure XML (XRechnung),
 not a PDF, so they are not what this demo — or this project — produces.
 
-**The invoice data** is test case `01.01a` of the KoSIT xrechnung-testsuite
-(Apache-2.0), with its specification identifier changed to EN 16931 and
-renamed `factur-x.xml`; `examples/zugferd_demo/THIRD_PARTY.md` records the
-source, the change and the checksums.
+**The invoice data** is the sample `Gesamtbeispiel` of XRechnung for Delphi,
+contributed by Landrix under the licence of this project: two VAT rates, a
+billing period, a due date and two bank accounts, each drawn on the page.
 
 **Core pattern:**
 
@@ -659,7 +658,7 @@ begin
   Report.NewPage;
   Report.DrawHeading(1, 'Rechnung ' + Invoice.Number);
   Report.DrawParagraph('Rechnungsdatum: ' + GermanDate(Invoice.IssueDate));
-  // ... one TTableLayout table: header, the items, three totals as footer rows
+  // ... one TTableLayout table: header, the items, the totals as footer rows
   Report.EndDoc;
   Report.AddExportPdfAttachment(Xml, 'factur-x.xml', 'Factur-X invoice data',
     'text/xml', afrAlternative);

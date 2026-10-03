@@ -1,16 +1,16 @@
-/// ZUGFeRD / Factur-X Demo — mORMot2 PDF Cross-Platform
+/// ZUGFeRD / Factur-X Demo - mORMot2 PDF Cross-Platform
 // Reads the invoice data from factur-x.xml, draws the invoice with TGDIPages
 // and embeds the same file into the PDF/A-3 it exports: a tagged hybrid
 // invoice of the profile EN 16931, for Germany (ZUGFeRD) and France
 // (Factur-X). Invoices to German authorities take pure XML, not a PDF.
 //
 // Worth noting:
-// - factur-x.xml is third-party test data: test case 01.01a of the KoSIT
-//   xrechnung-testsuite, Apache-2.0, with its specification identifier changed
-//   to EN 16931 (see THIRD_PARTY.md). The page is drawn from what ReadInvoice
-//   finds in it, so the page and the embedded data cannot differ
+// - factur-x.xml is a sample invoice of XRechnung for Delphi, contributed
+//   under the licence of this project. The page is drawn from what
+//   ReadInvoice finds in it, so the page and the embedded data cannot differ
 // - ReadInvoice is a demo reader, not an XML parser: fixed paths and
-//   prefixes, no entities, no validation. TInvoice is where the data of your
+//   prefixes, no entities, no validation - only a file that is not UTF-8 is
+//   refused (XmlProblem). TInvoice is where the data of your
 //   own application - a database, an ERP export - would go in instead
 // - the labels are ASCII; every umlaut on the page comes from the UTF-8 XML,
 //   so this source builds unchanged with FPC, Delphi 7 and Delphi 2010
@@ -51,17 +51,26 @@ type
     Quantity, Price, VatRate, Total: RawUtf8;
   end;
 
+  /// the VAT of one rate
+  TInvoiceTax = record
+    Basis, Rate, Amount: RawUtf8;
+  end;
+
   /// the invoice as the page shows it - amounts with a decimal point, dates
   // as yyyymmdd, formatted only when drawn
   TInvoice = record
     Number, IssueDate, Note, BuyerReference: RawUtf8;
-    SellerName, SellerTradingName, SellerDescription, SellerVatId: RawUtf8;
+    PeriodStart, PeriodEnd: RawUtf8;
+    SellerName, SellerTradingName, SellerDescription: RawUtf8;
+    SellerVatId, SellerTaxNumber: RawUtf8;
     SellerStreet, SellerPostcode, SellerCity, SellerCountry: RawUtf8;
     SellerContact, SellerPhone, SellerEmail: RawUtf8;
     BuyerId, BuyerName, BuyerEmail: RawUtf8;
     BuyerStreet, BuyerPostcode, BuyerCity, BuyerCountry: RawUtf8;
-    Currency, Iban, PaymentTerms: RawUtf8;
-    NetTotal, TaxBasis, TaxRate, TaxAmount, GrandTotal: RawUtf8;
+    Currency, PaymentTerms, DueDate, PaymentReference: RawUtf8;
+    Ibans, AccountNames: array of RawUtf8;
+    NetTotal, GrandTotal: RawUtf8;
+    Taxes: array of TInvoiceTax;
     Items: array of TInvoiceItem;
   end;
 
@@ -116,13 +125,80 @@ begin
   result := TrimU(result);
 end;
 
-function ReadItem(const Line: RawUtf8): TInvoiceItem;
+// "a, b, c" from the parts that are not empty
+function Join(const Parts: array of RawUtf8): RawUtf8;
+var
+  n: integer;
 begin
-  result.Name := XmlText(Line, ['ram:SpecifiedTradeProduct', 'ram:Name']);
-  result.SellerId := XmlText(Line, ['ram:SpecifiedTradeProduct',
-    'ram:SellerAssignedID']);
-  result.Description := XmlText(Line, ['ram:SpecifiedTradeProduct',
-    'ram:Description']);
+  result := '';
+  for n := 0 to high(Parts) do
+    if Parts[n] <> '' then
+      if result = '' then
+        result := Parts[n]
+      else
+        result := result + ', ' + Parts[n];
+end;
+
+// Xml up to the first <Tag: XmlText searches all descendants, so a child is
+// looked for only in the part before the elements that hold the same name
+function Before(const Xml, Tag: RawUtf8): RawUtf8;
+var
+  p: PtrInt;
+begin
+  p := PosEx('<' + Tag, Xml);
+  if p = 0 then
+    result := Xml
+  else
+    result := copy(Xml, 1, p - 1);
+end;
+
+// the text of the <ram:ID> whose schemeID is Scheme, '' when there is none
+function SchemeId(const Xml, Scheme: RawUtf8): RawUtf8;
+var
+  p, q, e: PtrInt;
+  Tag: RawUtf8;
+begin
+  result := '';
+  p := PosEx('<ram:ID ', Xml);
+  while p > 0 do
+  begin
+    q := PosEx('>', Xml, p);
+    if q = 0 then
+      exit;
+    Tag := StringReplaceAll(copy(Xml, p, q - p), [' ', '', '''', '"']);
+    if PosEx('schemeID="' + Scheme + '"', Tag) > 0 then
+    begin
+      e := PosEx('</ram:ID>', Xml, q);
+      if e > q then
+        result := TrimU(copy(Xml, q + 1, e - q - 1));
+      exit;
+    end;
+    p := PosEx('<ram:ID ', Xml, q);
+  end;
+end;
+
+// LineOne, LineTwo and LineThree of a PostalTradeAddress, joined
+function AddressLines(const Party: RawUtf8): RawUtf8;
+var
+  Lines: array[0..2] of RawUtf8;
+begin
+  Lines[0] := XmlText(Party, ['ram:PostalTradeAddress', 'ram:LineOne']);
+  Lines[1] := XmlText(Party, ['ram:PostalTradeAddress', 'ram:LineTwo']);
+  Lines[2] := XmlText(Party, ['ram:PostalTradeAddress', 'ram:LineThree']);
+  result := Join(Lines);
+end;
+
+function ReadItem(const Line: RawUtf8): TInvoiceItem;
+var
+  Product: RawUtf8;
+begin
+  // the characteristics after them hold a ram:Description of their own
+  Product := Before(XmlText(Line, ['ram:SpecifiedTradeProduct']),
+    'ram:ApplicableProductCharacteristic');
+  result.Name := XmlText(Product, ['ram:Name']);
+  result.SellerId := XmlText(Product, ['ram:SellerAssignedID']);
+  result.Description := StringReplaceAll(XmlText(Product, ['ram:Description']),
+    [#13, '', #10, ', ']);
   result.ClassCode := XmlText(Line, ['ram:SpecifiedTradeProduct',
     'ram:DesignatedProductClassification', 'ram:ClassCode']);
   result.Note := XmlText(Line, ['ram:AssociatedDocumentLineDocument',
@@ -144,10 +220,10 @@ begin
 end;
 
 // fills TInvoice from a CII invoice of the profile EN 16931 - only the fields
-// this page shows, and only one VAT rate
+// this page shows
 function ReadInvoice(const Xml: RawUtf8): TInvoice;
 var
-  Doc, Trade, Agreement, Seller, Buyer, Settlement, Line: RawUtf8;
+  Doc, Trade, Agreement, Seller, Buyer, Settlement, Line, Tax, Means: RawUtf8;
   From: PtrInt;
   n: integer;
 begin
@@ -165,8 +241,9 @@ begin
   result.SellerTradingName := XmlText(Seller, ['ram:SpecifiedLegalOrganization',
     'ram:TradingBusinessName']);
   result.SellerDescription := XmlText(Seller, ['ram:Description']);
-  result.SellerVatId := XmlText(Seller, ['ram:SpecifiedTaxRegistration', 'ram:ID']);
-  result.SellerStreet := XmlText(Seller, ['ram:PostalTradeAddress', 'ram:LineOne']);
+  result.SellerVatId := SchemeId(Seller, 'VA');
+  result.SellerTaxNumber := SchemeId(Seller, 'FC');
+  result.SellerStreet := AddressLines(Seller);
   result.SellerPostcode := XmlText(Seller, ['ram:PostalTradeAddress',
     'ram:PostcodeCode']);
   result.SellerCity := XmlText(Seller, ['ram:PostalTradeAddress', 'ram:CityName']);
@@ -179,9 +256,10 @@ begin
   result.SellerEmail := XmlText(Seller, ['ram:DefinedTradeContact',
     'ram:EmailURIUniversalCommunication', 'ram:URIID']);
   Buyer := XmlText(Agreement, ['ram:BuyerTradeParty']);
-  result.BuyerId := XmlText(Buyer, ['ram:ID']);
+  // the party's own ID precedes its name; a later ram:ID is a registration
+  result.BuyerId := XmlText(copy(Buyer, 1, PosEx('<ram:Name', Buyer)), ['ram:ID']);
   result.BuyerName := XmlText(Buyer, ['ram:Name']);
-  result.BuyerStreet := XmlText(Buyer, ['ram:PostalTradeAddress', 'ram:LineOne']);
+  result.BuyerStreet := AddressLines(Buyer);
   result.BuyerPostcode := XmlText(Buyer, ['ram:PostalTradeAddress',
     'ram:PostcodeCode']);
   result.BuyerCity := XmlText(Buyer, ['ram:PostalTradeAddress', 'ram:CityName']);
@@ -191,16 +269,46 @@ begin
   // payment and totals
   Settlement := XmlText(Trade, ['ram:ApplicableHeaderTradeSettlement']);
   result.Currency := XmlText(Settlement, ['ram:InvoiceCurrencyCode']);
-  result.Iban := XmlText(Settlement, ['ram:SpecifiedTradeSettlementPaymentMeans',
-    'ram:PayeePartyCreditorFinancialAccount', 'ram:IBANID']);
+  result.PaymentReference := XmlText(Settlement, ['ram:PaymentReference']);
   result.PaymentTerms := XmlText(Settlement, ['ram:SpecifiedTradePaymentTerms',
     'ram:Description']);
-  result.TaxBasis := XmlText(Settlement, ['ram:ApplicableTradeTax',
-    'ram:BasisAmount']);
-  result.TaxRate := XmlText(Settlement, ['ram:ApplicableTradeTax',
-    'ram:RateApplicablePercent']);
-  result.TaxAmount := XmlText(Settlement, ['ram:ApplicableTradeTax',
-    'ram:CalculatedAmount']);
+  result.DueDate := XmlText(Settlement, ['ram:SpecifiedTradePaymentTerms',
+    'ram:DueDateDateTime', 'udt:DateTimeString']);
+  result.PeriodStart := XmlText(Settlement, ['ram:BillingSpecifiedPeriod',
+    'ram:StartDateTime', 'udt:DateTimeString']);
+  result.PeriodEnd := XmlText(Settlement, ['ram:BillingSpecifiedPeriod',
+    'ram:EndDateTime', 'udt:DateTimeString']);
+  // one account per means of payment, one breakdown per VAT rate
+  result.Ibans := nil;
+  result.AccountNames := nil;
+  n := 0;
+  From := 1;
+  repeat
+    Means := NextElement(Settlement, 'ram:SpecifiedTradeSettlementPaymentMeans',
+      From);
+    if Means = '' then
+      break;
+    SetLength(result.Ibans, n + 1);
+    SetLength(result.AccountNames, n + 1);
+    result.Ibans[n] := XmlText(Means, ['ram:PayeePartyCreditorFinancialAccount',
+      'ram:IBANID']);
+    result.AccountNames[n] := XmlText(Means,
+      ['ram:PayeePartyCreditorFinancialAccount', 'ram:AccountName']);
+    inc(n);
+  until false;
+  result.Taxes := nil;
+  n := 0;
+  From := 1;
+  repeat
+    Tax := NextElement(Settlement, 'ram:ApplicableTradeTax', From);
+    if Tax = '' then
+      break;
+    SetLength(result.Taxes, n + 1);
+    result.Taxes[n].Basis := XmlText(Tax, ['ram:BasisAmount']);
+    result.Taxes[n].Rate := XmlText(Tax, ['ram:RateApplicablePercent']);
+    result.Taxes[n].Amount := XmlText(Tax, ['ram:CalculatedAmount']);
+    inc(n);
+  until false;
   result.NetTotal := XmlText(Settlement,
     ['ram:SpecifiedTradeSettlementHeaderMonetarySummation', 'ram:LineTotalAmount']);
   result.GrandTotal := XmlText(Settlement,
@@ -219,15 +327,59 @@ begin
   until false;
 end;
 
+// why the file cannot be read, '' when it can: ZUGFeRD / Factur-X prescribe
+// UTF-8, and the page shows the bytes as they are. mORMot's check refuses
+// another encoding (Latin-1, UTF-16); it is no full RFC 3629 validator
+function XmlProblem(const Xml: RawUtf8): RawUtf8;
+var
+  Prolog, Enc: RawUtf8;
+  p, q: PtrInt;
+begin
+  result := '';
+  if not IsValidUtf8NotVoid(Xml) then
+  begin
+    result := 'not valid UTF-8';
+    exit;
+  end;
+  Prolog := Xml;
+  // the BOM by its bytes: a #$EF literal is a character on Unicode Delphi
+  if (length(Prolog) >= 3) and (ord(Prolog[1]) = $EF) and
+     (ord(Prolog[2]) = $BB) and (ord(Prolog[3]) = $BF) then
+    delete(Prolog, 1, 3);
+  // the declaration, not a processing instruction like <?xml-stylesheet
+  if not StartWithExact(Prolog, '<?xml') or (length(Prolog) < 6) or
+     not (Prolog[6] in [' ', #9, #10, #13]) then
+    exit;
+  Prolog := copy(Prolog, 1, PosEx('?>', Prolog));
+  p := PosEx('encoding', Prolog);
+  if p = 0 then
+    exit; // XML without a declared encoding is UTF-8
+  p := PosEx('=', Prolog, p);
+  while (p > 0) and (p < length(Prolog)) and not (Prolog[p] in ['"', '''']) do
+    inc(p);
+  if (p = 0) or (p >= length(Prolog)) then
+    exit;
+  q := PosEx(copy(Prolog, p, 1), Prolog, p + 1);
+  if q = 0 then
+    exit;
+  Enc := copy(Prolog, p + 1, q - p - 1);
+  if not IdemPropNameU(Enc, 'UTF-8') then
+    result := 'declares the encoding ' + Enc + ', not UTF-8';
+end;
+
 { ---------- formatting for a German invoice ---------- }
 
-// 336.9 -> 336,90 and 1234.5 -> 1.234,50
+// 336.9 -> 336,90, 1234.5 -> 1.234,50, 0.1275 -> 0,1275: two decimals at
+// least, never fewer than the XML has, so that the page shows what it holds
 function Amount(const Value: RawUtf8): RawUtf8;
 var
   Sign, Int, Frac: RawUtf8;
   p: PtrInt;
   n: integer;
 begin
+  result := '';
+  if Value = '' then
+    exit;
   Int := Value;
   Sign := '';
   if (Int <> '') and (Int[1] = '-') then
@@ -242,8 +394,10 @@ begin
     Frac := copy(Int, p + 1, maxInt);
     Int := copy(Int, 1, p - 1);
   end;
-  Frac := copy(Frac + '00', 1, 2);
-  result := '';
+  while length(Frac) < 2 do
+    Frac := Frac + '0';
+  if Int = '' then
+    Int := '0'; // .5
   n := length(Int);
   while n > 3 do
   begin
@@ -253,10 +407,23 @@ begin
   result := Sign + copy(Int, 1, n) + result + ',' + Frac;
 end;
 
-// a quantity or a rate: 1 -> 1, 2.5 -> 2,5
+// a quantity or a rate: 1 -> 1, 2.5000 -> 2,5, 19.00 -> 19
 function Decimal(const Value: RawUtf8): RawUtf8;
 begin
-  result := StringReplaceAll(Value, '.', ',');
+  result := Value;
+  if (result <> '') and (result[1] = '.') then
+    result := '0' + result // .5 -> 0.5
+  else if (length(result) > 1) and (result[1] in ['-', '+']) and
+          (result[2] = '.') then
+    insert('0', result, 2); // -.5 -> -0.5
+  if PosEx('.', result) > 0 then
+  begin
+    while (result <> '') and (result[length(result)] = '0') do
+      SetLength(result, length(result) - 1);
+    if (result <> '') and (result[length(result)] = '.') then
+      SetLength(result, length(result) - 1);
+  end;
+  result := StringReplaceAll(result, '.', ',');
 end;
 
 // 20160404 -> 04.04.2016
@@ -283,18 +450,35 @@ begin
   end;
 end;
 
-// "a, b, c" from the parts that are not empty
-function Join(const Parts: array of RawUtf8): RawUtf8;
-var
-  n: integer;
+// "a bis b", "ab a" or "bis b" - '' when neither date is there
+function Period(const StartDate, EndDate: RawUtf8): RawUtf8;
 begin
-  result := '';
-  for n := 0 to high(Parts) do
-    if Parts[n] <> '' then
-      if result = '' then
-        result := Parts[n]
-      else
-        result := result + ', ' + Parts[n];
+  if (StartDate <> '') and (EndDate <> '') then
+    result := GermanDate(StartDate) + ' bis ' + GermanDate(EndDate)
+  else if StartDate <> '' then
+    result := 'ab ' + GermanDate(StartDate)
+  else if EndDate <> '' then
+    result := 'bis ' + GermanDate(EndDate)
+  else
+    result := '';
+end;
+
+// a rate as "19 %", '' when the XML has none
+function Rate(const Value: RawUtf8): RawUtf8;
+begin
+  if Value = '' then
+    result := ''
+  else
+    result := Decimal(Value) + ' %';
+end;
+
+// Prefix + Value, or '' when there is no value - a label never stands alone
+function Labeled(const Prefix, Value: RawUtf8): RawUtf8;
+begin
+  if Value = '' then
+    result := ''
+  else
+    result := Prefix + Value;
 end;
 
 { ---------- the page ---------- }
@@ -347,27 +531,41 @@ procedure DrawInvoice(Report: TGDIPages; const Inv: TInvoice; const Sans: RawUtf
 var
   n: integer;
   Item: TInvoiceItem;
-  Name, Period: RawUtf8;
+  Name, Text, Banks, Pay: RawUtf8;
 begin
   DefineFormat(Report, 'H1', Sans, 20, [fsBold], clBlack, 0, 600);
   DefineFormat(Report, 'P', Sans, 10, [], clBlack, 0, 250);
   Report.SetFont(Sans, 10);
   Report.DrawHeading(1, 'Rechnung ' + Inv.Number);
   // parties, dates and references
-  Report.DrawParagraph('Von: ' + Join([Inv.SellerName + ' (' +
-    Inv.SellerTradingName + ')', Inv.SellerStreet,
-    Inv.SellerPostcode + ' ' + Inv.SellerCity, Inv.SellerCountry]));
-  Report.DrawParagraph(Join(['USt-IdNr. ' + Inv.SellerVatId,
-    Inv.SellerDescription]));
-  Report.DrawParagraph('Kontakt: ' + Join([Inv.SellerContact,
-    'Tel. ' + Inv.SellerPhone, Inv.SellerEmail]));
+  Name := Inv.SellerName;
+  if Inv.SellerTradingName <> '' then
+    Name := Name + ' (' + Inv.SellerTradingName + ')';
+  Report.DrawParagraph('Von: ' + Join([Name, Inv.SellerStreet,
+    TrimU(Inv.SellerPostcode + ' ' + Inv.SellerCity), Inv.SellerCountry]));
+  Text := Join([Labeled('USt-IdNr. ', Inv.SellerVatId),
+    Labeled('Steuernummer ', Inv.SellerTaxNumber), Inv.SellerDescription]);
+  if Text <> '' then
+    Report.DrawParagraph(Text);
+  Text := Join([Inv.SellerContact, Labeled('Tel. ', Inv.SellerPhone),
+    Inv.SellerEmail]);
+  if Text <> '' then
+    Report.DrawParagraph('Kontakt: ' + Text);
   Report.AddVerticalSpace(2);
-  Report.DrawParagraph('An: ' + Join([Inv.BuyerName + ' (' + Inv.BuyerId + ')',
-    Inv.BuyerStreet, Inv.BuyerPostcode + ' ' + Inv.BuyerCity, Inv.BuyerCountry,
+  Name := Inv.BuyerName;
+  if Inv.BuyerId <> '' then
+    Name := Name + ' (' + Inv.BuyerId + ')';
+  Report.DrawParagraph('An: ' + Join([Name, Inv.BuyerStreet,
+    TrimU(Inv.BuyerPostcode + ' ' + Inv.BuyerCity), Inv.BuyerCountry,
     Inv.BuyerEmail]));
   Report.AddVerticalSpace(2);
-  Report.DrawParagraph('Rechnungsdatum: ' + GermanDate(Inv.IssueDate));
-  Report.DrawParagraph('Ihre Referenz: ' + Inv.BuyerReference);
+  if Inv.IssueDate <> '' then
+    Report.DrawParagraph('Rechnungsdatum: ' + GermanDate(Inv.IssueDate));
+  Text := Period(Inv.PeriodStart, Inv.PeriodEnd);
+  if Text <> '' then
+    Report.DrawParagraph('Leistungszeitraum: ' + Text);
+  if Inv.BuyerReference <> '' then
+    Report.DrawParagraph('Ihre Referenz: ' + Inv.BuyerReference);
   Report.AddVerticalSpace(4);
   // the items; the table breaks the page and repeats its header on its own
   Report.BeginTable(ItemTableLayout);
@@ -379,34 +577,52 @@ begin
     if Item.SellerId <> '' then
       Name := Name + ', Art.-Nr. ' + Item.SellerId;
     Report.DrawTableRow([Name, Decimal(Item.Quantity), Amount(Item.Price),
-      Decimal(Item.VatRate) + ' %', Amount(Item.Total)]);
+      Rate(Item.VatRate), Amount(Item.Total)]);
   end;
   Report.DrawTableFooter(['Summe netto', '', '', '', Amount(Inv.NetTotal)]);
-  Report.DrawTableFooter(['Umsatzsteuer ' + Decimal(Inv.TaxRate) + ' % auf ' +
-    Amount(Inv.TaxBasis), '', '', '', Amount(Inv.TaxAmount)]);
-  Report.DrawTableFooter(['Gesamtbetrag (' + Inv.Currency + ')', '', '', '',
-    Amount(Inv.GrandTotal)]);
+  for n := 0 to high(Inv.Taxes) do
+    Report.DrawTableFooter([TrimU('Umsatzsteuer ' + Rate(Inv.Taxes[n].Rate)) +
+      Labeled(' auf ', Amount(Inv.Taxes[n].Basis)), '', '', '',
+      Amount(Inv.Taxes[n].Amount)]);
+  Text := 'Gesamtbetrag';
+  if Inv.Currency <> '' then
+    Text := Text + ' (' + Inv.Currency + ')';
+  Report.DrawTableFooter([Text, '', '', '', Amount(Inv.GrandTotal)]);
   Report.EndTable;
   Report.AddVerticalSpace(6);
   // what the items say beyond the table
   for n := 0 to high(Inv.Items) do
   begin
     Item := Inv.Items[n];
-    Period := '';
-    if Item.PeriodStart <> '' then
-      Period := 'Abrechnungszeitraum ' + GermanDate(Item.PeriodStart) + ' bis ' +
-        GermanDate(Item.PeriodEnd);
-    if (Item.Description <> '') or (Item.Note <> '') then
-      Report.DrawParagraph(Item.Name + ': ' + Join([Item.Description,
-        'ISSN ' + Item.ClassCode, Period, 'Bestellposition ' + Item.OrderLine]) +
-        '. ' + Item.Note);
+    Text := Join([Item.Description, Labeled('Klassifikation ', Item.ClassCode),
+      Labeled('Abrechnungszeitraum ', Period(Item.PeriodStart, Item.PeriodEnd)),
+      Labeled('Bestellposition ', Item.OrderLine)]);
+    if Text <> '' then
+      Text := Text + '.';
+    if (Text <> '') or (Item.Note <> '') then
+      Report.DrawParagraph(TrimU(Item.Name + ': ' + Text +
+        Labeled(' ', Item.Note)));
   end;
-  // payment and terms
-  Report.DrawParagraph(Inv.PaymentTerms + ' Bankverbindung: IBAN ' +
-    IbanGroups(Inv.Iban) + '.');
+  // payment and terms; each account a line of its own, so that no line break
+  // falls into an IBAN
+  Pay := Inv.PaymentTerms;
+  if Inv.DueDate <> '' then
+    Pay := TrimU(Pay + ' Zahlbar bis ' + GermanDate(Inv.DueDate) + '.');
+  if Pay <> '' then
+    Report.DrawParagraph(Pay);
+  if Inv.PaymentReference <> '' then
+    Report.DrawParagraph('Zahlungsreferenz: ' + Inv.PaymentReference);
+  Banks := 'Bankverbindung: ';
+  for n := 0 to high(Inv.Ibans) do
+    if Inv.Ibans[n] <> '' then
+    begin
+      Report.DrawParagraph(Banks + Join([Inv.AccountNames[n],
+        'IBAN ' + IbanGroups(Inv.Ibans[n])]));
+      Banks := 'oder ';
+    end;
   if Inv.Note <> '' then
     Report.DrawParagraph(Inv.Note);
-  // where the data comes from - also required by its license
+  // where the data comes from
   Report.AddVerticalSpace(10);
   DefineFormat(Report, 'P', Sans, 8, [], $505050, 0, 100);
   if WithAttachment then
@@ -415,8 +631,8 @@ begin
   else
     Report.DrawParagraph('Ohne eingebettete Rechnungsdaten erzeugt ' +
       '(--no-attachment), die Seite ist aus ' + XML_NAME + ' gelesen.');
-  Report.DrawParagraph('Nach Testdatensatz 01.01a der KoSIT xrechnung-testsuite, ' +
-    'Apache License 2.0, angepasst - siehe THIRD_PARTY.md der Demo.');
+  Report.DrawParagraph('Beispieldaten aus XRechnung for Delphi (Landrix ' +
+    'Software) - keine echte Rechnung.');
 end;
 
 { ---------- the program ---------- }
@@ -505,6 +721,12 @@ begin
   if Xml = '' then
   begin
     writeln('Cannot find ', XML_NAME, ' - run from the demo folder');
+    ExitCode := 1;
+    exit;
+  end;
+  if XmlProblem(Xml) <> '' then
+  begin
+    writeln(XML_NAME, ' ', XmlProblem(Xml));
     ExitCode := 1;
     exit;
   end;

@@ -150,7 +150,7 @@ For interface and backend details: `.claude/skills/platform-backends.md`
 | mormot_demo | `TGDIPages` + ORM | GUI | SQLite via TRestClientDB, TTableLayout, tagged PDF, `--export` batch mode |
 | chinese_demo | `TPdfDocumentVcl` | Console | CJK text, subset embedding |
 | rtl_demo | `TPdfDocumentVcl` | Console | Arabic RTL, HarfBuzz/Uniscribe shaping |
-| zugferd_demo | `TGDIPages` | Console | PDF/A-3U + PDF/UA-1, page read from the embedded XML, `AddExportPdfAttachment`, `PdfMetadataFacturX`, third-party invoice XML (KoSIT, Apache-2.0) |
+| zugferd_demo | `TGDIPages` | Console | PDF/A-3U + PDF/UA-1, page read from the embedded XML, `AddExportPdfAttachment`, `PdfMetadataFacturX`, sample invoice XML of XRechnung for Delphi |
 | layer1_demo | `TPdfDocument` | Console | Layer 1 only, PDF points (Y=0 bottom), tagged H1/H2/P/Figure and a Table with THead/TBody/TFoot, UTF-8 via `TextOutW`; builds with Delphi 7, as do all console demos |
 
 Detailed description with code examples: `docs/DEMOS.md`
@@ -366,7 +366,7 @@ itself is in each demo's `uReport.pas`; the form only passes its options.
 - **Table pagination**: no row break within a cell (roadmap R-10)
 - **Symbol fonts on POSIX**: excluded from subsetting, the whole face is embedded (roadmap R-15b); neither side is covered by a demo or test
 - **PDF/A** (R-17): A-3U + PDF/UA-1, A-3A (tagged) and A-3B verified on all three platforms with veraPDF, Mustang and PAC; A-1 and A-2 implemented, unverified. Pass the level to the constructor — the `PdfA` setter calls `NewDoc`. A levels need `Tagged := True`. With PDF/A + Tagged the engine describes `pdfuaid` in the XMP extension schemas, inside the caller's `<pdfaExtension:schemas><rdf:Bag>` if `PdfAMetadaExtension` has one — keep that single list
-- **E-invoices**: the engine writes the PDF/A-3 container (`CreateFileAttachmentFrom` + `PdfMetadataFacturX`; in `TGDIPages` `AddExportPdfAttachment` + `ExportPdfMetadataExtension`) and never generates or validates invoice XML. Scope is B2B (ZUGFeRD/Factur-X profile EN 16931); invoices to German authorities are pure XML and out of scope. Third-party material only with a verified license, recorded in the demo's `THIRD_PARTY.md`
+- **E-invoices**: the engine writes the PDF/A-3 container (`CreateFileAttachmentFrom` + `PdfMetadataFacturX`; in `TGDIPages` `AddExportPdfAttachment` + `ExportPdfMetadataExtension`) and never generates or validates invoice XML. Scope is B2B (ZUGFeRD/Factur-X profile EN 16931); invoices to German authorities are pure XML and out of scope. Sample data only under the licence of this project (mORMot's MPL/GPL/LGPL)
 - **Charts**: out of scope — no chart engine, as no invoice XML. A chart is an
   image from a chart library in a `Figure` with `/Alt`, its values as a table
   besides. `layer1_demo`'s figure is deliberately a set of shapes, not a
