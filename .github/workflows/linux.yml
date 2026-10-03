@@ -3,9 +3,15 @@
 
 name: Linux
 
+# main and pull requests only: a push to a branch with an open PR would run
+# twice. A commit that changes nothing but documentation runs nothing.
+# workflow_dispatch starts a run by hand
 on:
   push:
+    branches: [main]
+    paths-ignore: ['**.md', 'docs/**', '.claude/**']
   pull_request:
+    paths-ignore: ['**.md', 'docs/**', '.claude/**']
   workflow_dispatch:
 
 permissions:
