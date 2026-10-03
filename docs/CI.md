@@ -145,9 +145,10 @@ new version means updating version and checksum in the workflow's `env`.
   Chocolatey's Lazarus is current enough; else way B for that job
 
 **Not in CI:** golden files (the baseline depends on the fonts installed, see
-`CLAUDE.md`), Delphi 7 and Delphi 2010 (no licence on a runner). PAC 2024 (a
-Windows GUI) is dropped: veraPDF and Mustang in CI replace the manual
-validator round, and everything is tested locally before a push anyway.
+`CLAUDE.md`), Delphi 7 and Delphi 2010 (no licence on a runner), PAC 2024 (a
+Windows GUI). The CI is an addition: the check session of
+`docs/REFACTORING.md`, with PAC and veraPDF on the files of every platform
+and compiler, stays as it is.
 
 **After R-28** the code lives in the mORMot2 trunk as `src/pdf`; paths and the
 mORMot2 checkout in the workflow change then. Keep the workflow small until
