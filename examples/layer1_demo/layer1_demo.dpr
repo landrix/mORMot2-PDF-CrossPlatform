@@ -1,4 +1,4 @@
-/// Layer 1 Demo — mORMot2 PDF Cross-Platform
+/// Layer 1 Demo - mORMot2 PDF Cross-Platform
 // Produces a two-page tagged PDF with TPdfDocument and TPdfCanvas alone - no
 // TCanvas bridge, no report engine - so it builds with FPC on every platform
 // and with Delphi 7 on Win32 (tests\build_delphi7.bat): text, a figure, and
@@ -45,10 +45,10 @@ uses
   mormot.ui.pdf;      // registers the platform backend itself
 
 const
-  /// the face's full cmap, not the ANSI part only (fonts.md §10)
+  /// the face's full cmap, not the ANSI part only (fonts.md 10)
   DEFAULT_CHARSET = 1;
   LEFT = 56;
-  /// 'Umlauts and symbols: ä ö ü Ä Ö Ü ß € § °'
+  /// 'Umlauts and symbols: ä ö ü Ä Ö Ü ß € °'
   UMLAUTS: RawUtf8 = 'Umlauts and symbols: ' + {$ifdef HASCODEPAGE}
     #$00E4' '#$00F6' '#$00FC' '#$00C4' '#$00D6' '#$00DC' '#$00DF' '#$20AC' '#$00A7' '#$00B0 {$else}
     #$C3#$A4' '#$C3#$B6' '#$C3#$BC' '#$C3#$84' '#$C3#$96' '#$C3#$9C' '#$C3#$9F' ' +

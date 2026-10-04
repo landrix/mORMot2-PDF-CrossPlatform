@@ -154,7 +154,7 @@ forbids it:
 | R-26, the other demos | overlaps the ASCII-only sources of the formatting pass |
 | R-22 | overlaps the roadmap references taken out of the comments; every unit |
 | R-20 steps 7–8 | a feature; Phase 4 rebuilds report and preview |
-| Windows font subsets | `CreateFontPackage` moves to `mormot.lib.font.gdi` in Phase 1 |
+| Windows font subsets | `CreateFontPackage` moves behind the subsetter interface in `mormot.lib.uniscribe` in Phase 1 |
 | Thinner table borders | a feature |
 
 ### R-26 — `zugferd_demo` on `TGDIPages`, Its Text From the XML — done; the other demos after R-28

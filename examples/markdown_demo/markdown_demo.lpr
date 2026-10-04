@@ -1,6 +1,6 @@
-/// Markdown-Style Document Demo — mORMot2 PDF Cross-Platform
-// Renders a semantic document with TGDIPages — headings H1-H6, paragraphs,
-// quotes, lists, inline runs and a table — as a console app, no GUI.
+/// Markdown-Style Document Demo - mORMot2 PDF Cross-Platform
+// Renders a semantic document with TGDIPages - headings H1-H6, paragraphs,
+// quotes, lists, inline runs and a table - as a console app, no GUI.
 //
 // Worth noting:
 // - the same content is rendered twice with two TPageConfig records, to show
@@ -303,7 +303,7 @@ begin
   Report.DrawParagraph(
     'Tables are defined with flexible layouts (column widths, fonts, colors) and rendered row-by-row with automatic page breaks and alternating colors.');
 
-  { Draw table with 20 rows — enough to cross a page boundary and demonstrate
+  { Draw table with 20 rows - enough to cross a page boundary and demonstrate
     automatic table header repetition (R-9): the header is re-drawn at the top
     of every continuation page without any extra code. }
   Report.BeginTable(InvoiceItemsLayout);
@@ -367,7 +367,7 @@ begin
     Report.Orientation := poPortrait;
     { ExportPdfTagged := True wraps all draw commands in struct elements and
       auto-raises FileFormat to pdf17 (ISO 32000-1). It also selects the PDF/UA
-      font mode — embedded TrueType instead of the base-14 Type1 faces — which
+      font mode - embedded TrueType instead of the base-14 Type1 faces - which
       is why it has to be set before anything is drawn: the export font flags
       decide which metrics the layout is measured with. }
     Report.ExportPdfTagged := True;
@@ -397,13 +397,13 @@ begin
     Config2.BodyFontName := SerifFont;
     Config2.BodyFontSize := 9;
     Config2.MonoFontName      := MonoFont;
-    Config2.LineHeightFactor  := 1.4;   // more open despite compact margins — contrast with page 1
+    Config2.LineHeightFactor  := 1.4;   // more open despite compact margins - contrast with page 1
     Config2.PageLabel := '2 ' + EM_DASH + ' Compact (10mm margins, ' + SerifFont + ', 9pt body, LineHeight=1.4)';
     RenderMarkdownPage(Report, Config2);
 
     Report.EndDoc;
 
-    { Export to PDF — ExportPdfTagged was set before drawing, see above. }
+    { Export to PDF - ExportPdfTagged was set before drawing, see above. }
     MS := TMemoryStream.Create;
     try
       if Report.ExportPdfStream(MS) then

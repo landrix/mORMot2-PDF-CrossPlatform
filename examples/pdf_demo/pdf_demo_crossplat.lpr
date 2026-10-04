@@ -1,5 +1,5 @@
-/// Cross-Platform PDF Demo — mORMot2 PDF Cross-Platform
-// Produces a 3-page tagged PDF — text and fonts, vector graphics, a table —
+/// Cross-Platform PDF Demo - mORMot2 PDF Cross-Platform
+// Produces a 3-page tagged PDF - text and fonts, vector graphics, a table -
 // from plain TCanvas calls, with no report engine and no GUI.
 //
 // Worth noting:
@@ -46,7 +46,7 @@ begin
 end;
 
 const
-  // "ä ö ü Ä Ö Ü ß € § °"
+  // "ä ö ü Ä Ö Ü ß € °"
   SPECIAL_CHARS: RawUtf8 = 'Special chars: ' + {$ifdef HASCODEPAGE}
     #$00E4' '#$00F6' '#$00FC' '#$00C4' '#$00D6' '#$00DC' '#$00DF' '#$20AC' '#$00A7' '#$00B0 {$else}
     #$C3#$A4' '#$C3#$B6' '#$C3#$BC' '#$C3#$84' '#$C3#$96' '#$C3#$9C' ' +
@@ -70,7 +70,7 @@ begin
   // low-level API leaves the outline to the caller (TGDIPages builds its own)
   Doc := TPdfDocumentVcl.Create(true);
   try
-    // Tagged PDF (ISO 32000-1 §14) — must be set BEFORE AddPage and before the
+    // Tagged PDF (ISO 32000-1 14) - must be set BEFORE AddPage and before the
     // font names are resolved: Tagged := True auto-raises FileFormat to pdf17
     // and selects the PDF/UA font mode (EmbeddedTTF on, StandardFontsReplace
     // off), because PDF/UA does not allow the viewer's own base-14 faces.
@@ -87,7 +87,7 @@ begin
     Doc.AddPage;
     C := Doc.VclCanvas;
 
-    // Title — Tagged PDF: H1 heading
+    // Title - Tagged PDF: H1 heading
     Doc.BeginStructContent(psrH1);
     C.Font.Name  := SansFont;
     C.Font.Size  := 24;
@@ -100,7 +100,7 @@ begin
     Doc.CreateOutline('mORMot2 PDF Cross-Platform Test', 1,
       Doc.DefaultPageHeight - 40 * 72 / 96);
 
-    // Font samples — Tagged PDF: paragraph (P)
+    // Font samples - Tagged PDF: paragraph (P)
     Doc.BeginStructContent(psrP);
     C.Font.Style := [];
     C.Font.Size  := 12;
@@ -132,7 +132,7 @@ begin
     Doc.AddPage;
     C := Doc.VclCanvas;
 
-    // Vector graphics — Tagged PDF: one figure (with /Alt text for screen
+    // Vector graphics - Tagged PDF: one figure (with /Alt text for screen
     // readers) for the whole page, the numbers included: they are part of the
     // drawing (text in an image), so a reader gets the /Alt instead of them
     // - PAC 2024 keeps a warning here, also listed under WCAG: "Possibly
@@ -167,7 +167,7 @@ begin
     C.Pen.Width := 6;
     C.MoveTo(40, 210); C.LineTo(550, 210);
 
-    // Text with bounding boxes — increasing font size
+    // Text with bounding boxes - increasing font size
     C.Pen.Width := 1;
     C.Font.Color := clBlack;
     MyY := 300;
@@ -199,7 +199,7 @@ begin
     Data[3,0] := 'Dowel 8mm';     Data[3,1] := '50';  Data[3,2] := '0.12'; Data[3,3] := '6.00';
     Data[4,0] := 'Tape 25mm';     Data[4,1] := '5';   Data[4,2] := '2.50'; Data[4,3] := '12.50';
 
-    // Table — Tagged PDF: Table / THead|TBody / TR / TH|TD structure.
+    // Table - Tagged PDF: Table / THead|TBody / TR / TH|TD structure.
     // The row groups of ISO 32000-1 14.8.4.3.4 tell the header rows from the
     // data rows; TGDIPages emits them on its own, the low-level API asks the
     // caller to open them (ROADMAP R-14).

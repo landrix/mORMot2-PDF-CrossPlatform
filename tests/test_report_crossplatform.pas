@@ -53,11 +53,11 @@ implementation
 
 procedure TReportTests.TestMMHelpers;
 begin
-  // 2540 units (= 1 inch) at 96 DPI → 96 pixels
+  // 2540 units (= 1 inch) at 96 DPI -> 96 pixels
   CheckEqual(96,  MMToPixels(2540, 96),  'MMToPixels(2540,96)');
-  // half inch at 96 DPI → 48 pixels (MulDiv rounding)
+  // half inch at 96 DPI -> 48 pixels (MulDiv rounding)
   CheckEqual(48,  MMToPixels(1270, 96),  'MMToPixels(1270,96)');
-  // A4 width 21000 units at 96 DPI → 794 pixels (MulDiv rounding)
+  // A4 width 21000 units at 96 DPI -> 794 pixels (MulDiv rounding)
   CheckEqual(794, MMToPixels(21000, 96), 'A4 width @ 96 DPI');
   // round-trip: PixelsToMM(MMToPixels(x,dpi),dpi) ≈ x  (MulDiv precision)
   CheckEqual(2540, PixelsToMM(MMToPixels(2540, 96), 96), 'round-trip 2540');
@@ -124,7 +124,7 @@ begin
     Report.SetFont('Helvetica', 24);
     Report.TextColor := clRed;
     Report.RestoreLayout;
-    // Draw — should use the restored Arial 12 / clBlack
+    // Draw - should use the restored Arial 12 / clBlack
     Report.DrawText(0, 0, 'Restored');
     Report.EndDoc;
     Cmd := Report.Pages[0].Commands[0];
@@ -144,9 +144,9 @@ begin
   try
     Report.NewPage;
     Report.SetFont('Arial', 10);
-    Report.SaveLayout;               // depth 1 — Arial 10
+    Report.SaveLayout;               // depth 1 - Arial 10
     Report.SetFont('Helvetica', 14);
-    Report.SaveLayout;               // depth 2 — Helvetica 14
+    Report.SaveLayout;               // depth 2 - Helvetica 14
     Report.SetFont('Courier', 18);
     Report.RestoreLayout;            // back to Helvetica 14
     Report.DrawText(0, 0, 'H14');
@@ -183,13 +183,13 @@ begin
     Layout.BodyFontSize := 10;
     Layout.HeaderBkColor := clSilver;
     Layout.BodyBkColor := clWhite;
-    // BeginTable → SaveLayout (Arial 14 wird gespeichert)
+    // BeginTable -> SaveLayout (Arial 14 wird gespeichert)
     Report.BeginTable(Layout);
     // Ändere Font innerhalb der Tabelle
     Report.SetFont('Courier', 9);
-    // EndTable → RestoreLayout (soll Arial 14 wiederherstellen)
+    // EndTable -> RestoreLayout (soll Arial 14 wiederherstellen)
     Report.EndTable;
-    // Zeichne Text NACH der Tabelle — muss Arial 14 verwenden
+    // Zeichne Text NACH der Tabelle - muss Arial 14 verwenden
     Report.DrawText(0, 0, 'NachTabelle');
     Report.EndDoc;
     // Letzter Command = DrawText nach EndTable
@@ -213,7 +213,7 @@ begin
     Report.MarginTop := 2000;
     Report.MarginBottom := 2000;
     Report.NewPage;
-    // A4 paper: 21000 × 29700; minus 4 × 2000 mm margins
+    // A4 paper: 21000 x 29700; minus 4 x 2000 mm margins
     CheckEqual(17000, Report.PageWidth, 'A4 portrait PageWidth');
     CheckEqual(25700, Report.PageHeight, 'A4 portrait PageHeight');
     Report.EndDoc;
@@ -350,7 +350,7 @@ begin
     CheckEqual(350, Report.CurrentY, 'After +350');
     Report.MoveToNextLine(200);
     CheckEqual(550, Report.CurrentY, 'After +200');
-    { AddVerticalSpace takes millimetres, MoveToNextLine 1/100 mm — both land
+    { AddVerticalSpace takes millimetres, MoveToNextLine 1/100 mm - both land
       in the same fCurrentY, so 5 mm must be 500 units }
     Report.AddVerticalSpace(5);
     CheckEqual(1050, Report.CurrentY, 'After +5 mm');
@@ -365,7 +365,8 @@ begin
   Check(REPORT_FONT_SANS  <> '', 'REPORT_FONT_SANS not empty');
   Check(REPORT_FONT_SERIF <> '', 'REPORT_FONT_SERIF not empty');
   Check(REPORT_FONT_MONO  <> '', 'REPORT_FONT_MONO not empty');
-  { the three branches must match mormot.ui.report.pas:48-52 one for one -
+  { the three branches must match PDF_FONT_TTF_* in mormot.pdf.types one for
+    one (REPORT_FONT_* only aliases them) -
     this test expected Arial/Times New Roman/Courier New long after the
     constants moved to the ClearType families, and had no OSDARWIN branch at
     all, so it failed on Windows and would have failed on macOS too }

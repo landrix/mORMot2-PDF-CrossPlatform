@@ -1,10 +1,10 @@
-/// Arabic RTL PDF Demo — mORMot2 PDF Cross-Platform
+/// Arabic RTL PDF Demo - mORMot2 PDF Cross-Platform
 // Draws Arabic with TPdfDocumentVcl, once unshaped and once shaped, so the two
 // paths can be compared side by side in the same PDF.
 //
 // Worth noting:
 // - section 1 draws without a shaper: isolated letters only, resolved through
-//   the CMAP — it verifies the per-glyph advance widths
+//   the CMAP - it verifies the per-glyph advance widths
 // - section 2 shapes with UseUniscribe := true - Uniscribe on Windows,
 //   HarfBuzz on Linux/macOS - and RightToLeftText := true for the direction
 // - builds with FPC and Delphi 7: the canvas is held as TPdfVclCanvas and the
@@ -13,9 +13,9 @@
 //   IDs, so the GSUB output survives
 //
 // Font requirement:
-//   Windows  : Tahoma — covers Arabic, pre-installed on all versions
-//   macOS    : Geeza Pro — pre-installed
-//   Linux    : Noto Naskh Arabic — sudo apt install fonts-noto-core
+//   Windows  : Tahoma - covers Arabic, pre-installed on all versions
+//   macOS    : Geeza Pro - pre-installed
+//   Linux    : Noto Naskh Arabic - sudo apt install fonts-noto-core
 //              (without it the fallback face shows boxes instead of Arabic)
 //
 // HarfBuzz requirement (Linux/macOS):
@@ -52,14 +52,14 @@ const
   // Noto Naskh Arabic covers Arabic Unicode block with proper contextual forms.
   // Install: sudo apt install fonts-noto-core
   // If not found, the engine falls back to FontFallBackName (usually DejaVu Sans
-  // which has no Arabic glyphs — squares will appear instead).
+  // which has no Arabic glyphs - squares will appear instead).
   ARABIC_FONT = 'Noto Naskh Arabic';
   {$endif OSDARWIN}
   {$endif OSWINDOWS}
 
   // UTF-8 encoded strings, drawn with TextOutUtf8: TextOut reads a string as
   // the compiler holds it, the ANSI code page on Delphi 7
-  // U+0628 ARABIC LETTER BA — isolated form
+  // U+0628 ARABIC LETTER BA - isolated form
   ARABIC_BA: RawUtf8 = {$ifdef HASCODEPAGE} #$0628 {$else} #$D8#$A8 {$endif};
   // مرحبا  (marhaba = Hello)
   // م=U+0645 ر=U+0631 ح=U+062D ب=U+0628 ا=U+0627
@@ -113,7 +113,7 @@ begin
   try
     Doc.EmbeddedTTF      := true;
     // subset: both subsetters are fed the shaped glyph IDs themselves, so the
-    // GSUB output survives — hb-subset on Linux/macOS (R-12), CreateFontPackage
+    // GSUB output survives - hb-subset on Linux/macOS (R-12), CreateFontPackage
     // with a glyph keep list on Windows (R-15)
     Doc.EmbeddedWholeTtf := false;
     Doc.Info.Title       := 'Arabic RTL Demo';
@@ -128,7 +128,7 @@ begin
     Doc.UseUniscribe     := false;
     PdfC.RightToLeftText := false;
 
-    // --- 1a: Single isolated letter — CMAP fix test ---
+    // --- 1a: Single isolated letter - CMAP fix test ---
     C.Font.Name  := SansFont;
     C.Font.Size  := 13;
     C.Font.Style := [fsBold];
@@ -145,7 +145,7 @@ begin
     C.Font.Color := $00808080;
     C.TextOut(40, 112, 'Expected: U+0628 BA visible. Box = DEFAULT_CHARSET fix missing.');
 
-    // --- 1b: Multiple isolated letters — advance width test ---
+    // --- 1b: Multiple isolated letters - advance width test ---
     C.Font.Name  := SansFont;
     C.Font.Size  := 13;
     C.Font.Style := [fsBold];
@@ -217,7 +217,7 @@ begin
     C.Font.Name  := ARABIC_FONT;
     C.Font.Size  := 36;
     PdfC.RightToLeftText := true;
-    C.TextOutUtf8(500, 472, ARABIC_HELLO);    // مرحبا — connected contextual forms
+    C.TextOutUtf8(500, 472, ARABIC_HELLO);    // مرحبا - connected contextual forms
     C.TextOutUtf8(500, 516, ARABIC_BOOK);     // كتاب
     C.TextOutUtf8(500, 560, ARABIC_SCHOOL);   // مدرسة
     C.TextOutUtf8(500, 604, ARABIC_HOUSE);    // بيت

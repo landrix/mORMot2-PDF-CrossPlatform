@@ -99,7 +99,7 @@ begin
     font := PdfPlatformFont.CreateFont(lf);
     if font = nil then
     begin
-      // Arial not available — try DejaVu Sans (Linux) or system default
+      // Arial not available - try DejaVu Sans (Linux) or system default
       lf.FaceName := 'DejaVu Sans';
       font := PdfPlatformFont.CreateFont(lf);
     end;
@@ -655,7 +655,7 @@ begin
       exit;
     end;
     prev := PdfPlatformFont.SelectFont(dc, font);
-    // Read the 'head' table — every TrueType font has it
+    // Read the 'head' table - every TrueType font has it
     // tag is 4 bytes: 'h','e','a','d' in big-endian = $68656164
     tag := (Ord('h') shl 24) or (Ord('e') shl 16) or
            (Ord('a') shl  8) or  Ord('d');

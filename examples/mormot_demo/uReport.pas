@@ -107,7 +107,7 @@ begin
 end;
 
 { ============================================================
-  DefineHeadingFormats – appearance of DrawHeading(1..2)
+  DefineHeadingFormats - appearance of DrawHeading(1..2)
   ============================================================ }
 procedure DefineHeadingFormats(Report: TGDIPages);
 var
@@ -127,7 +127,7 @@ begin
 end;
 
 { ============================================================
-  DrawInvoiceTable – order table from ORM data (uses TTableLayout)
+  DrawInvoiceTable - order table from ORM data (uses TTableLayout)
   ============================================================ }
 procedure DrawInvoiceTable(Report: TGDIPages; const Options: TReportOptions;
   const Items: TDtoInvoiceRowDynArray);
@@ -258,7 +258,7 @@ begin
 end;
 
 { ============================================================
-  BuildReport – central build routine
+  BuildReport - central build routine
   ============================================================ }
 function BuildReport(const Options: TReportOptions;
   const Items: TDtoInvoiceRowDynArray): TGDIPages;
