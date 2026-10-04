@@ -19,8 +19,8 @@ and veraPDF (V); the new `zugferd_demo` (R-26, on `TGDIPages`, its text from
 the invoice XML) also veraPDF `3u` and Mustang. **Next:** R-28, the
 integration into the mORMot2 trunk, under a feature freeze. Alongside it only
 what stays out of `src/`: R-24 (CI) and the open checks in V. The rest of
-R-26, R-20 steps 7–8, R-22, the Windows subset size and thinner table
-borders wait until R-28 is done.
+R-26, R-20 steps 7–8, R-22, the Windows subset size, thinner table
+borders and the richer structure of R-29 wait until R-28 is done.
 
 ---
 
@@ -156,6 +156,7 @@ forbids it:
 | R-20 steps 7–8 | a feature; Phase 4 rebuilds report and preview |
 | Windows font subsets | `CreateFontPackage` moves behind the subsetter interface in `mormot.lib.uniscribe` in Phase 1 |
 | Thinner table borders | a feature |
+| R-29 | features in `mormot.ui.report.pas`, which Phase 4 rebuilds |
 
 ### R-26 — `zugferd_demo` on `TGDIPages`, Its Text From the XML — done; the other demos after R-28
 
@@ -393,6 +394,78 @@ width beside `Pen.Width` (as `TextOutFrac` does for text positions), then a
 `TTableLayout.GridWidth` in 1/100 mm, 0 = today's pixel. Delphi 7 draws
 through the bridge reference too (R-20), so both paths need it.
 
+### R-29 — Richer Logical Structure — after R-28
+
+**Why.** `zugferd_demo` passes veraPDF and PAC, yet its structure tree is an
+`H1`, a `Table` and a run of `P`: a screen reader user gets two jump targets.
+`examples/invoice_demo` (2026-10-04, for review, not in the learning path
+yet) lays out the same invoice with one `H2` per section, so the headings
+list and the bookmarks lead to invoice data, parties, items and payment.
+Label/value data is in tables, the accounts are an `L`, and letterhead and
+footer are artifacts. PAC 2024 shows it well structured. It uses the API as it
+is; building it found the gaps below. Its README holds the questions for the
+accessibility review, whose answers may change this list.
+
+**Open decision — label/value data** ("Rechnungsnummer: R2020-0815" and
+seven more). Today: two tables of one header row and one data row each,
+the labels as column headers (`TH /Scope /Column`), drawn without grid. That
+is compact, but it is two tables in the structure tree. Two ways to get one:
+
+| | Row headers | Wrapped columns |
+|---|---|---|
+| Layout | label left of value, 2 columns × 8 rows | as today: 8 columns wrapped into two bands of 4 |
+| Structure | one `Table`, each label `TH /Scope /Row` | one `Table` of 8 columns, header row and data row |
+| API | `TTableLayout.RowHeader`: the first cell of a body row is a `TH`, as `FooterRowHeader` does for footer rows | `TTableLayout.WrapColumns`: cells recorded in logical order, each placed in its band |
+| Effort, rough | under a day | 1–2 days, the table on one page only |
+| Caveat | twice the height | visual order (band by band) differs from the logical one (row by row): PDF/UA asks only for the logical one, open for magnification and reflow users |
+
+**The other gaps**, each its own fix:
+
+1. **Frames.** `BeginFrame(X, Y, Width)` … `EndFrame`: headings, paragraphs,
+   tables and lists flow inside a rectangle; `EndFrame` leaves `CurrentY`
+   below the tallest frame. This gives the window address of a DIN 5008
+   letter, an info block beside it, and side-by-side headings ("Kunde",
+   "Rechnungssteller"). The order of the frames in the code is the order in
+   the structure tree. Simplest rule: no page break inside a frame. Today
+   headings and tables always start at the left margin with the full width.
+   Rough effort 2–3 days with tests
+2. **Text artifacts at a free position**: the return address line above a
+   window address. Layer 1 has `BeginArtifact`/`EndArtifact`; `TGDIPages`
+   has no way to it except `SetHeader`/`SetFooter`. Possibly a flag of (1)
+3. **Multi-line table cells**: wrap a cell's text to its column width, the
+   row as tall as its tallest cell, one `TD` per cell (the `BlockId` of
+   wrapped paragraphs). Today a cell is one line and long text runs into the
+   next cell. Not R-10: a row that does not fit still moves to the next page
+   as a whole. Rough effort 1–2 days
+4. **`DrawHeading` ignores `SpaceBefore`/`SpaceAfter`** of the `Hx` format:
+   it adds a third of the font size after the heading and nothing before.
+   `invoice_demo` adds the space itself. Fixing it changes the layout of
+   every demo that defines heading formats: decide on a fix or an option
+5. **Running header and footer**: one line, left-aligned, in the font that
+   is current at export time (`invoice_demo` ends with `SetFont`). Wanted:
+   several lines, left/centre/right parts, a font of their own
+6. **List items**: `DrawListItem` writes the bullet into `LBody` (no `Lbl`)
+   and does not wrap, so a long item runs past the margin
+7. **Tagged links** (was R-18; asked for on 2026-10-04, also layer 1).
+   `CreateHyperLink` writes a link annotation, but the engine has no `Link`
+   structure element: `TPdfStructRole` has no `psrLink`, and nothing writes
+   the object reference (`OBJR`) to the annotation, its `/StructParent` or
+   the parent-tree entry behind it. **Measured 2026-09-24 (macOS):** a tagged
+   document with one `CreateHyperLink(…, 'mailto:…')` fails veraPDF `ua1` on
+   four rules, 102/106 — 7.18.1-2 (annotation without `/Contents`), 7.18.3-1
+   (page without `/Tabs /S`), 7.18.5-1 (link not tagged as a `Link`
+   element), 7.18.5-2 (link without an alternate description). So
+   `CreateHyperLink` does not belong in tagged output until this is done.
+   `TGDIPages.DrawLink` is safe but not a link: measured with
+   `DrawLink('example.com', 'https://example.com')`, tagged export, the text
+   is drawn link-styled and tagged as a `Span` inside the line's `P`, the URL
+   is dropped (no annotation, no `/URI`), and `ua1` passes 106/106.
+   `markdown_demo` calls it without a URL at all. Work: the role, `OBJR` and
+   `/StructParent` for annotations, the parent-tree entries, `/Contents` and
+   `/Tabs /S`; then `mailto:` links for the e-mail addresses of
+   `zugferd_demo` and `invoice_demo`, and `DrawLink` writing a real
+   annotation for its URL. Done, it clears W-2
+
 ### R-24 — Tests on GitHub Actions — priority 2, alongside R-28
 
 **Why.** `test_runner` runs by hand on three machines today; a push should
@@ -496,33 +569,9 @@ PAC 2024 passes the demo but keeps one quality hint: "Link in text does not
 have a Link element". It points at `seller@email.de` and `buyer@info.de`,
 which the invoice data carries and the page draws as plain text. Not a
 PDF/UA failure — veraPDF `ua1` passes 106/106 and PAC is green. A real link
-would need a tagged link annotation, which the engine cannot write (R-18),
-so the hint is accepted, like W-1.
-
-### R-18 — Tagged Link Annotations — only on explicit request
-
-`CreateHyperLink` writes a link annotation, but the engine has no `Link`
-structure role: `TPdfStructRole` has no `psrLink`, and nothing writes the
-object reference (`OBJR`) to the annotation, its `/StructParent` or the
-parent-tree entry behind it.
-
-**Measured 2026-09-24 (macOS):** a tagged document with one
-`CreateHyperLink(…, 'mailto:…')` fails veraPDF `ua1` on four rules, 102/106 —
-7.18.1-2 (annotation without `/Contents`), 7.18.3-1 (page without
-`/Tabs /S`), 7.18.5-1 (link not tagged as a `Link` element), 7.18.5-2 (link
-without an alternate description). **So `CreateHyperLink` does not belong in
-tagged output today.**
-
-**`TGDIPages.DrawLink` is safe but not a link.** Measured with a URL
-(`DrawLink('example.com', 'https://example.com')`, tagged export): the text is
-drawn link-styled and tagged as a `Span` inside the line's `P`, the URL is
-dropped — no annotation, no `/URI` — and `ua1` passes 106/106. Conformant,
-not clickable. `markdown_demo` calls it without a URL at all.
-
-Work: the role, `OBJR` and `/StructParent` for annotations, the parent-tree
-entries, `/Contents` and `/Tabs /S`; then `mailto:` links for addresses, and
-`DrawLink` writing a real annotation for its URL. Done, it would also clear
-W-2. Not planned: build it only when someone asks for it.
+would need a tagged link annotation, which the engine cannot write yet
+(R-29, item 7), so the hint is accepted, like W-1. `invoice_demo` draws its
+addresses the same way.
 
 ### `RunRedirect` Hangs on POSIX — mORMot2 fix, unprioritised
 
