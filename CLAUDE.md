@@ -398,7 +398,7 @@ Current verification status per platform, and the open items in detail:
 
 ## Dependencies
 
-Build: FreePascal 3.2+ with Lazarus (what mORMot2 requires; used here: FPC 3.2.2 on Windows, 3.2.3 on Linux and macOS), or Delphi 7 / Delphi 2010 for Win32 (no preview window yet, R-20), or Delphi 13 for Win32, Win64, Linux64 and Android64 (R-27; on Linux/Android layer 1 only); mORMot2 sources of the trunk, not 2.4-stable (v0.10.0 is the last version for it), pinned per refactoring baseline (`docs/REFACTORING.md`, Phase 0 step 3)
+Build: FreePascal 3.2+ with Lazarus (what mORMot2 requires; used here: FPC 3.2.2 on Windows, 3.2.3 on Linux and macOS), or Delphi 7 / Delphi 2010 for Win32 (no preview window yet, R-20), or Delphi 13 for Win32, Win64, Linux64 and Android64 (R-27; on Linux/Android layer 1 only); mORMot2 sources of the trunk, not 2.4-stable (v0.10.0 is the last version for it), pinned per refactoring baseline (`docs/REFACTORING.md`, Phase 0 step 3) - during the refactoring a commit of the `pdf-font-layer` branch of `landrix/mORMot2`, the trunk plus the new `mormot.lib.*` units
 
 Runtime Windows: none (GDI is part of the OS)
 

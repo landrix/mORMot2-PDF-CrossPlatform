@@ -143,8 +143,9 @@ https://gist.github.com/synopse/9e31d8808ed2575ad5ad23da6fe41e4f
 
 **Plan:** [REFACTORING.md](REFACTORING.md) — phases, steps, checks.
 
-**Alongside it** only work outside `src/`, where every refactoring PR
-lands: R-24, the checks in V (old HarfBuzz, `.ttc` on Linux — the paths
+**Alongside it** only work outside `src/`, where the refactoring PRs of this
+repository land (the `mormot.lib.*` units of Phase 1 are written in the
+`pdf-font-layer` branch of `landrix/mORMot2`): R-24, the checks in V (old HarfBuzz, `.ttc` on Linux — the paths
 Phase 1 moves), and preparing the open decisions in REFACTORING.md. Waiting
 for R-28, because a refactoring step touches the same code or the freeze
 forbids it:

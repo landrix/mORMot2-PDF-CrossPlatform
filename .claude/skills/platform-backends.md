@@ -459,6 +459,8 @@ for library units, so the contracts go to one `mormot.lib.core` and the
 implementations into the units of their libraries - `mormot.lib.uniscribe`
 (the GDI font part, the Uniscribe shaper, the FontSub subsetter),
 `mormot.lib.freetype`, `mormot.lib.harfbuzz` (shaping and subsetting). The
-gist's `mormot.lib.font*` is replaced. `mormot.lib.uniscribe` is a trunk
-unit: its additions and `mormot.lib.core` go to the trunk as PRs, a copy
-here would shadow the package's unit (`docs/REFACTORING.md`, Phase 1).
+gist's `mormot.lib.font*` is replaced. They are written in the branch
+`pdf-font-layer` of `landrix/mORMot2` at `src/lib`, where
+`mormot.lib.uniscribe` is extended in place - a copy here would shadow the
+package's unit; this repository builds against a pinned commit of that
+branch (`docs/REFACTORING.md`, Phase 1, "Where the code lives").
