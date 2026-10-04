@@ -8,10 +8,10 @@ unit mormot.pdf.harfbuzz;
 
    HarfBuzz Text Shaper for POSIX
    - Minimal HarfBuzz API bindings (dynamic loading)
-   - THarfBuzzTextShaper implements IPdfTextShaper, using the FreeType face
+   - THarfBuzzTextShaper implements IFontShaper, using the FreeType face
    - Shapes RTL/Arabic/complex-script text using OpenType GSUB/GPOS rules
    - Advance widths returned in 1000/em units (design-unit scale)
-   - initialization registers PdfTextShaper when libharfbuzz.so.0 /
+   - initialization registers FontShaper when libharfbuzz.so.0 /
      libharfbuzz.0.dylib loads; shaping runs where UseUniscribe is set
 
   *****************************************************************************
@@ -26,7 +26,7 @@ interface
 uses
   mormot.core.base,
   mormot.core.os,
-  mormot.pdf.types,
+  mormot.lib.core,
   mormot.pdf.freetype;
 
 /// load the HarfBuzz shared library dynamically; returns false if not found
@@ -218,18 +218,17 @@ begin // round half away from zero, the sign being kept for x_offset
 end;
 
 type
-  THarfBuzzTextShaper = class(TInterfacedObject, IPdfTextShaper)
+  THarfBuzzTextShaper = class(TInterfacedObject, IFontShaper)
   public
-    function ShapeText(AText: PWideChar; ALen: integer;
-      AFontHandle: TPdfPlatformFontHandle; AIsRTL: boolean;
-      out AGlyphs: TWordDynArray; out AAdvances: TIntegerDynArray;
-      out AOffsets: TIntegerDynArray; out AClusters: TIntegerDynArray): boolean;
+    function Shape(AText: PWideChar; ALen: integer;
+      AFontHandle: TFontHandle; AIsRTL: boolean;
+      out ARuns: TFontShapedRuns): boolean;
   end;
 
-function THarfBuzzTextShaper.ShapeText(AText: PWideChar; ALen: integer;
-  AFontHandle: TPdfPlatformFontHandle; AIsRTL: boolean;
-  out AGlyphs: TWordDynArray; out AAdvances: TIntegerDynArray;
-  out AOffsets: TIntegerDynArray; out AClusters: TIntegerDynArray): boolean;
+// the whole text in one call: one fskShaped run, every glyph kept
+function THarfBuzzTextShaper.Shape(AText: PWideChar; ALen: integer;
+  AFontHandle: TFontHandle; AIsRTL: boolean;
+  out ARuns: TFontShapedRuns): boolean;
 var
   ctx:       PPdfFTContext;
   font:      hb_font_t;
@@ -241,10 +240,7 @@ var
 
 begin
   result    := false;
-  AGlyphs   := nil;
-  AAdvances := nil;
-  AOffsets  := nil;
-  AClusters := nil;
+  ARuns     := nil;
   if not HarfBuzz.Loaded or (AFontHandle = nil) or
      (AText = nil) or (ALen <= 0) then
     exit;
@@ -275,17 +271,24 @@ begin
     positions := HarfBuzz.buffer_get_glyph_positions(buf, count);
     if (count = 0) or (infos = nil) or (positions = nil) then
       exit;
-    SetLength(AGlyphs,   count);
-    SetLength(AAdvances, count);
-    SetLength(AOffsets,  count);
-    SetLength(AClusters, count);
-    for i := 0 to integer(count) - 1 do
+    SetLength(ARuns, 1);
+    with ARuns[0] do
     begin
-      AGlyphs[i]   := word(infos[i].codepoint);
-      AClusters[i] := integer(infos[i].cluster);
-      // one em = 1000 units, so the 26.6 values are PDF units shifted by 6 bits
-      AAdvances[i] := From26Dot6(positions[i].x_advance);
-      AOffsets[i]  := From26Dot6(positions[i].x_offset);
+      Kind      := fskShaped;
+      TextStart := 0;
+      TextLen   := ALen;
+      SetLength(Glyphs,   count);
+      SetLength(Advances, count);
+      SetLength(Offsets,  count);
+      SetLength(Clusters, count);
+      for i := 0 to integer(count) - 1 do
+      begin
+        Glyphs[i]   := word(infos[i].codepoint);
+        Clusters[i] := integer(infos[i].cluster);
+        // one em = 1000 units, so the 26.6 values are PDF units shifted by 6 bits
+        Advances[i] := From26Dot6(positions[i].x_advance);
+        Offsets[i]  := From26Dot6(positions[i].x_offset);
+      end;
     end;
     result := true;
   finally
@@ -300,10 +303,10 @@ end;
 
 initialization
   if LoadHarfBuzz then
-    PdfTextShaper := THarfBuzzTextShaper.Create;
+    FontShaper := THarfBuzzTextShaper.Create;
 
 finalization
-  PdfTextShaper := nil; // release interface ref before unloading library
+  FontShaper := nil; // release interface ref before unloading library
   if HarfBuzz.Loaded then
   begin
     LibraryClose(HarfBuzz.Handle);

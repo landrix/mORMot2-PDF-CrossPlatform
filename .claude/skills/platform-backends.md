@@ -1,8 +1,12 @@
-# Platform Backends — IPdfPlatformFont / IPdfSystemFonts / IPdfPlatformDC (+ optional IPdfFontSubsetter)
+# Platform Backends — IFontProvider / IFontEnumerator / IFontDC (+ optional IFontShaper / IFontSubsetter)
 
-Source: `src/core/mormot.pdf.types.pas`
+Contracts: `src/lib/mormot.lib.core.pas` of mORMot2 (during the refactoring
+the branch `pdf-font-layer` of `landrix/mORMot2`, see `docs/REFACTORING.md`)
+Former names, as aliases: `src/core/mormot.pdf.types.pas`
 Windows backend: `src/platform/windows/mormot.pdf.gdi.pas`
-Unix/macOS backend: `src/platform/unix/mormot.pdf.freetype.pas`
+Unix/macOS backends: `src/platform/unix/mormot.pdf.freetype.pas`,
+`mormot.pdf.harfbuzz.pas`, `mormot.pdf.hbsubset.pas` (their successors
+`mormot.lib.freetype` and `mormot.lib.harfbuzz` are in the branch already)
 
 ---
 
@@ -18,67 +22,83 @@ for the tables and the embedded face, plus `CreateFontPackage` and Uniscribe
 (`USE_UNISCRIBE`). The GDI backend's interfaces are used on Windows only by
 `TPdfFontMeasurer`, i.e. the `TGDIPages` layout. A replacement backend (e.g. a
 test stub) therefore reaches the PDF output on POSIX only; moving this path
-behind `IPdfPlatformFont` is part of the refactoring (R-28).
+behind `IFontProvider` is part of the refactoring (R-28).
 
-### IPdfPlatformFont — Font Operations
+### IFontProvider — Font Operations
 
 ```pascal
-IPdfPlatformFont = interface
-  // Create a font object from a logical font descriptor
-  function  CreateFont(const ALogFont: TPdfLogFont): TPdfPlatformFontHandle;
+IFontProvider = interface
+  // Create a font object from a logical font descriptor; nil on failure
+  function  CreateFont(const Request: TFontRequest): TFontHandle;
   // Release a previously created font
-  procedure DeleteFont(AFont: TPdfPlatformFontHandle);
+  procedure DeleteFont(Font: TFontHandle);
   // Select font into DC; returns the previously selected font handle
-  function  SelectFont(ADC: TPdfPlatformDC;
-                       AFont: TPdfPlatformFontHandle): TPdfPlatformFontHandle;
+  // (transitional, as TFontDC)
+  function  SelectFont(DC: TFontDC; Font: TFontHandle): TFontHandle;
   // Retrieve basic text metrics for the currently selected font
-  function  GetTextMetrics(ADC: TPdfPlatformDC;
-                           out AMetrics: TPdfTextMetrics): boolean;
+  function  GetTextMetrics(DC: TFontDC; out Metrics: TFontMetrics): boolean;
   // Retrieve extended outline metrics (ascent, descent, em-square, etc.)
-  function  GetOutlineMetrics(ADC: TPdfPlatformDC;
-                              out AMetrics: TPdfOutlineMetrics): boolean;
+  function  GetOutlineMetrics(DC: TFontDC;
+                              out Metrics: TFontOutlineMetrics): boolean;
   // Retrieve ABC advance widths for characters FirstChar..LastChar.
   // FirstChar/LastChar are WinAnsi (cp1252) BYTE values, not Unicode code
   // points - the engine calls (32, 255) and indexes the result by WinAnsi
   // byte. Bytes 128..159 are printable punctuation in WinAnsi but unassigned
   // C1 controls in Unicode, so a backend doing a Unicode lookup must
   // translate first (see U-1).
-  function  GetCharABCWidths(ADC: TPdfPlatformDC;
-                             FirstChar, LastChar: cardinal;
-                             out AWidths: TPdfCharABCArray): boolean;
-  // Read raw TrueType/OpenType table bytes (tag = 4-byte table name, e.g. 'cmap')
-  // Returns bytes read, or FontDataError on failure
-  function  GetFontData(ADC: TPdfPlatformDC;
-                        ATableTag, AOffset: cardinal;
-                        ABuffer: pointer; ABufferSize: cardinal): cardinal;
+  function  GetCharAbcWidths(DC: TFontDC; FirstChar, LastChar: cardinal;
+                             out Widths: TFontCharAbcArray): boolean;
+  // Read raw TrueType/OpenType table bytes (tag = 4-byte table name, e.g. 'cmap',
+  // 0 = the whole font); returns bytes read, or FontDataError on failure
+  function  GetFontData(DC: TFontDC; TableTag, Offset: cardinal;
+                        Buffer: pointer; BufferSize: cardinal): cardinal;
   // Sentinel value returned by GetFontData on error ($FFFFFFFF on all platforms)
   function  FontDataError: cardinal;
 end;
 ```
 
-### IPdfSystemFonts — Font Enumeration
+### IFontEnumerator — Font Enumeration
 
 ```pascal
-IPdfSystemFonts = interface
+IFontEnumerator = interface
   // Fill List with UTF-8 encoded font family names available on the system
-  procedure EnumTrueTypeFonts(ADC: TPdfPlatformDC;
-                              var List: TRawUtf8DynArray);
+  procedure EnumTrueTypeFonts(DC: TFontDC; var List: TRawUtf8DynArray);
 end;
 ```
 
-### IPdfPlatformDC — Device Context
+### IFontDC — Device Context (transitional, removed in Phase 1b)
 
 ```pascal
-IPdfPlatformDC = interface
+IFontDC = interface
   // Create a compatible device context for font measurements
   // Windows: CreateCompatibleDC(0); Unix/macOS: returns non-nil dummy pointer
-  function  CreateDC: TPdfPlatformDC;
+  function  CreateDC: TFontDC;
   // Release a device context created by CreateDC
-  procedure DeleteDC(ADC: TPdfPlatformDC);
+  procedure DeleteDC(DC: TFontDC);
   // Return screen DPI (Y axis); Unix/macOS always returns 96
-  function  GetScreenLogPixels(ADC: TPdfPlatformDC): integer;
+  function  GetScreenLogPixels(DC: TFontDC): integer;
 end;
 ```
+
+### IFontShaper — Text Shaping (optional, HarfBuzz on Linux/macOS)
+
+```pascal
+IFontShaper = interface
+  // false: draw the whole text unshaped. RightToLeft forces the direction,
+  // false lets the script decide
+  function Shape(Text: PWideChar; Len: integer; Font: TFontHandle;
+    RightToLeft: boolean; out Runs: TFontShapedRuns): boolean;
+end;
+```
+
+The result is a list of parts in visual order (`TFontShapedRun`): `Kind`
+(`fskShaped` - glyphs hold the result; `fskPlain` - draw this part unshaped;
+`fskSkip` - draw nothing for it), `TextStart`/`TextLen` in UTF-16 code units
+of the whole text, then `Glyphs` and the parallel `Advances`, `Offsets`
+(1/1000 em) and `Clusters`. The itemized shape is for Uniscribe (Phase 1
+Notes below); HarfBuzz returns one `fskShaped` part over the whole text and
+keeps every glyph, and `TPdfWrite.AddUnicodeHexTextHarfBuzz` takes exactly
+that shape, anything else draws unshaped.
 
 ---
 
@@ -89,24 +109,29 @@ Each backend registers its implementations in the `initialization` section:
 ```pascal
 // In mormot.pdf.gdi.pas (Windows):
 initialization
-  RegisterPdfPlatform(
+  RegisterFontPlatform(
     TPdfGdiFontProvider.Create,
     TPdfGdiSystemFonts.Create,
     TPdfGdiDCProvider.Create);
 
 // In mormot.pdf.freetype.pas (Unix/macOS):
 initialization
-  RegisterPdfPlatform(
+  RegisterFontPlatform(
     TPdfFreeTypeFontProvider.Create,
     TPdfFreeTypeSystemFonts.Create,
     TPdfFreeTypeDCProvider.Create);
 ```
 
-The global variables `PdfPlatformFont`, `PdfSystemFonts`, `PdfPlatformDCProvider` in `mormot.pdf.types.pas` are set. The core calls them directly.
+`RegisterFontPlatform` of `mormot.lib.core` sets the globals `FontProvider`,
+`FontEnumerator`, `FontDC`; the HarfBuzz units assign `FontShaper` and
+`FontSubsetter` themselves. The core calls them directly. `mormot.pdf.types`
+keeps the former type names as aliases (`TPdfLogFont`, `IPdfPlatformFont`...)
+for code outside this repository; the globals, `IPdfTextShaper` and
+`IPdfFontSubsetter` have none (renamed 2026-10-04, R-28 Phase 1).
 
 ```pascal
 // Check whether a platform backend has been registered:
-if not PdfPlatformRegistered then
+if not FontPlatformRegistered then
   raise ESynException.Create('No PDF platform registered');
 ```
 
@@ -142,70 +167,72 @@ required FreeType before HarfBuzz.
 
 ---
 
-## Data Types (mormot.pdf.types.pas)
+## Data Types (mormot.lib.core)
 
-### TPdfLogFont — Font Request Descriptor
+### TFontRequest — Font Request Descriptor
 
 ```pascal
-TPdfLogFont = record
+TFontRequest = record
   FaceName:       SynUnicode;  // font family name (e.g. 'Calibri')
-  Height:         integer;     // character height in logical units (negative = cell height)
+  Height:         integer;     // character height in logical units (negative = em height)
   Weight:         integer;     // FW_NORMAL=400, FW_BOLD=700
-  Italic:         integer;     // 0 = upright, 1 = italic
-  CharSet:        integer;     // 0 = ANSI_CHARSET
-  PitchAndFamily: integer;     // FF_SWISS, FF_ROMAN, etc.
+  Italic:         byte;        // 0 = upright, 1 = italic
+  CharSet:        byte;        // 0 = ANSI_CHARSET
+  PitchAndFamily: byte;        // FF_SWISS, FF_ROMAN, etc.
 end;
 ```
 
-### TPdfPlatformFontHandle / TPdfPlatformDC
+### TFontHandle / TFontDC
 
 ```pascal
-TPdfPlatformFontHandle = type pointer;  // opaque font handle
-TPdfPlatformDC         = type pointer;  // opaque device context
+TFontHandle = type pointer;  // opaque font handle (HFONT, PFreeTypeFont)
+TFontDC     = type pointer;  // opaque device context - transitional
 ```
 
-### TPdfTextMetrics
+### TFontMetrics
 
 ```pascal
-TPdfTextMetrics = record
+TFontMetrics = record
   tmHeight, tmAscent, tmDescent: integer;
   tmInternalLeading, tmExternalLeading: integer;
   tmAveCharWidth, tmMaxCharWidth: integer;
   tmWeight: integer;
   tmOverhang: integer;
-  tmFirstChar, tmLastChar, tmDefaultChar, tmBreakChar: integer;
-  tmItalic, tmUnderlined, tmStruckOut: byte;
-  tmPitchAndFamily, tmCharSet: byte;
+  tmFirstChar, tmLastChar, tmDefaultChar, tmBreakChar: WideChar;
+  tmItalic, tmCharSet, tmPitchAndFamily: byte;
 end;
 ```
 
-### TPdfOutlineMetrics
+### TFontOutlineMetrics
 
 ```pascal
-TPdfOutlineMetrics = record
+TFontOutlineMetrics = record
   otmSize:         cardinal;
   otmAscent:       integer;
   otmDescent:      integer;
-  otmLineGap:      cardinal;
+  otmLineGap:      integer;
   otmItalicAngle:  integer;
+  otmrcFontBox:    record Left, Top, Right, Bottom: integer; end;
+  otmMacAscent, otmMacDescent: integer;
+  otmMacLineGap:   cardinal;
   otmEMSquare:     cardinal;
-  otmrcFontBox:    TRect;        // tight bounding box of all glyphs
-  otmMacAscent, otmMacDescent, otmMacLineGap: integer;
-  otmCapEmHeight, otmXHeight: cardinal;
-  otmStrikeoutPosition, otmStrikeoutSize: integer;
-  otmUnderscorePosition, otmUnderscoreSize: integer;
+  otmCapEmHeight, otmXHeight: integer;
+  otmStrikeoutPosition: integer;
+  otmStrikeoutSize: cardinal;
+  otmUnderscorePosition: integer;
+  otmUnderscoreSize: cardinal;
 end;
 ```
 
-### TPdfCharABC
+### TFontCharAbc
 
 ```pascal
-TPdfCharABC = record
+TFontCharAbc = record
   abcA: integer;   // pre-character spacing (can be negative)
   abcB: cardinal;  // glyph width (always positive)
   abcC: integer;   // post-character spacing (can be negative)
 end;
-TPdfCharABCArray = array of TPdfCharABC;
+TFontCharAbcArray = array of TFontCharAbc;
 ```
 
 Total character advance = `abcA + abcB + abcC`, and that sum is what reaches
@@ -231,7 +258,7 @@ GDI API mapping:
 | `SelectFont` | `SelectObject` |
 | `GetTextMetrics` | `GetTextMetricsW` |
 | `GetOutlineMetrics` | `GetOutlineTextMetricsW` |
-| `GetCharABCWidths` | `GetCharABCWidthsA` (ANSI — maps the byte through the DC codepage, so bytes 128..159 resolve to their WinAnsi characters; code points above 255 are not reachable through this call) |
+| `GetCharAbcWidths` | `GetCharABCWidthsA` (ANSI — maps the byte through the DC codepage, so bytes 128..159 resolve to their WinAnsi characters; code points above 255 are not reachable through this call) |
 | `GetFontData` | `GetFontData` |
 | `FontDataError` | returns `GDI_ERROR` ($FFFFFFFF) |
 | `EnumTrueTypeFonts` | `EnumFontFamiliesExW` with TRUETYPE_FONTTYPE |
@@ -254,7 +281,7 @@ FreeType2 API mapping:
 | `SelectFont` | internal context switch |
 | `GetTextMetrics` | `FT_FaceRec.ascender/descender/height` |
 | `GetOutlineMetrics` | `FT_FaceRec.bbox` + scaled values |
-| `GetCharABCWidths` | `WinAnsiConvert.AnsiToWide[]`, then `FT_Load_Char` + `horiAdvance` |
+| `GetCharAbcWidths` | `WinAnsiConvert.AnsiToWide[]`, then `FT_Load_Char` + `horiAdvance` |
 | `GetFontData` | `FT_Load_Sfnt_Table` |
 | `FontDataError` | returns $FFFFFFFF |
 | `EnumTrueTypeFonts` | filesystem scan + `FT_New_Face` |
@@ -280,28 +307,30 @@ If a font is not found: fallback to DejaVu Sans (Linux) or Helvetica (macOS).
 
 ---
 
-## Optional: IPdfFontSubsetter (mormot.pdf.hbsubset, Linux/macOS) — R-12
+## Optional: IFontSubsetter (mormot.pdf.hbsubset, Linux/macOS) — R-12
 
 ```pascal
-TPdfFontSubsetRequest = record
+TFontSubsetRequest = record
   Unicodes: TIntegerDynArray;  // code points whose cmap entries must survive
   Glyphs: TIntegerDynArray;    // glyph IDs that must survive
 end;
 
-IPdfFontSubsetter = interface
-  // false: face cannot be subset (CFF, invalid, library error) -> caller
-  // embeds AFace unchanged; glyph IDs of ASubset equal those of AFace
-  function Subset(const AFace: RawByteString;
-    const ARequest: TPdfFontSubsetRequest; out ASubset: RawByteString): boolean;
+IFontSubsetter = interface
+  // false: face cannot be subset (invalid, library error) -> caller embeds
+  // Face unchanged; glyph IDs of Output equal those of Face. Font is the
+  // handle Face was read from - hb-subset ignores it (the engine hands it a
+  // face already extracted from a .ttc), FontSub will need it for the .ttc
+  function Subset(const Face: RawByteString; const Request: TFontSubsetRequest;
+    Font: TFontHandle; out Output: RawByteString): boolean;
 end;
 
-var PdfFontSubsetter: IPdfFontSubsetter;  // nil = no subsetter
+var FontSubsetter: IFontSubsetter;  // mormot.lib.core; nil = no subsetter
 ```
 
 - `mormot.ui.pdf` uses `mormot.pdf.hbsubset` on POSIX itself, like the FreeType
   backend: no project-side `uses` needed. Its `initialization` calls
   `LoadHarfBuzzSubset` and registers only when every symbol resolved, so
-  `PdfFontSubsetter <> nil` means "usable"
+  `FontSubsetter <> nil` means "usable"
 - Two libraries: `hb_subset_*` from `libharfbuzz-subset.so.0` /
   `libharfbuzz-subset.0.dylib`, `hb_blob_*`/`hb_face_*`/`hb_set_*` from
   `libharfbuzz.so.0` / `libharfbuzz.0.dylib` (Homebrew paths tried on macOS)
@@ -355,10 +384,10 @@ finally
 end;
 ```
 
-- `SetFont` repeats `TPdfCanvas.SetFont`'s resolution order: the base-14 AFM tables (`STANDARDFONTS`) when `aStandardFonts` is set and the name is Helvetica/Times/Courier or an alias, otherwise `PdfPlatformFont.CreateFont` on a `Height = -1000` logfont plus `GetCharABCWidths(32, 255)` — i.e. 1000-per-em units, like every other width in the engine.
+- `SetFont` repeats `TPdfCanvas.SetFont`'s resolution order: the base-14 AFM tables (`STANDARDFONTS`) when `aStandardFonts` is set and the name is Helvetica/Times/Courier or an alias, otherwise `FontProvider.CreateFont` on a `Height = -1000` logfont plus `GetCharAbcWidths(32, 255)` — i.e. 1000-per-em units, like every other width in the engine.
 - Returns `false` when nothing resolves (no backend registered); the caller then falls back to its own measurement.
 - Faces are cached per (name, bold, italic, standard-flag) on the measurer instance; `TPdfFaceMetrics` owns the platform font handle and its DC until the measurer is freed.
-- Code points above WinAnsi use `DefaultWidth` — the GDI backend's `GetCharABCWidths` is the ANSI call, so per-code-point Unicode widths are not available through this path.
+- Code points above WinAnsi use `DefaultWidth` — the GDI backend's `GetCharAbcWidths` is the ANSI call, so per-code-point Unicode widths are not available through this path.
 
 ---
 
@@ -379,10 +408,10 @@ Every unit starts with `{$I mormot.defines.inc}` after `interface` (by name, no 
 
 1. Create new unit `mormot.pdf.<platform>.pas`
 2. Implement three classes:
-   - `TPdf<Platform>FontProvider(TInterfacedObject, IPdfPlatformFont)`
-   - `TPdf<Platform>SystemFonts(TInterfacedObject, IPdfSystemFonts)`
-   - `TPdf<Platform>DCProvider(TInterfacedObject, IPdfPlatformDC)`
-3. Register in `initialization` via `RegisterPdfPlatform(...)`
+   - `TPdf<Platform>FontProvider(TInterfacedObject, IFontProvider)`
+   - `TPdf<Platform>SystemFonts(TInterfacedObject, IFontEnumerator)`
+   - `TPdf<Platform>DCProvider(TInterfacedObject, IFontDC)`
+3. Register in `initialization` via `RegisterFontPlatform(...)`
 4. Add conditional `uses` in the application project
 
 No changes to `mormot.ui.pdf.pas` required.
@@ -394,13 +423,18 @@ No changes to `mormot.ui.pdf.pas` required.
 Read from the source on 2026-10-03 for the cut into `mormot.lib.core` and
 the library units (`docs/REFACTORING.md`, Phase 1). Facts, not yet decisions.
 
+The names in these notes are those of the time; since 2026-10-04 the engine
+uses those of `mormot.lib.core` (`PdfPlatformFont` -> `FontProvider`,
+`PdfPlatformDCProvider` -> `FontDC`, `IPdfTextShaper.ShapeText` ->
+`IFontShaper.Shape`...).
+
 **Global use in `mormot.ui.pdf`** (code references, comments not counted):
 `PdfPlatformFont` 29, `PdfPlatformDCProvider` 6, `PdfFontSubsetter` 4,
 `PdfTextShaper` 3, `PdfSystemFonts` 1 - 43 in all. Besides,
 `PdfPlatformRegistered` in `mormot.pdf.types` reads three of them, and the
 backends register. A document-local copy (gist §18) touches those places.
 
-**`mormot.pdf.types` mixes two kinds:** generic font types (the three
+**`mormot.pdf.types` mixed two kinds:** generic font types (the three
 platform interfaces, `IPdfTextShaper`, `IPdfFontSubsetter`,
 `TPdfFontSubsetRequest`, `TPdfLogFont`, `TPdfTextMetrics`,
 `TPdfOutlineMetrics`, `TPdfCharABC*`, the handles, `RegisterPdfPlatform`) and
@@ -464,3 +498,39 @@ gist's `mormot.lib.font*` is replaced. They are written in the branch
 `mormot.lib.uniscribe` is extended in place - a copy here would shadow the
 package's unit; this repository builds against a pinned commit of that
 branch (`docs/REFACTORING.md`, Phase 1, "Where the code lives").
+
+**The POSIX backends, read on 2026-10-04** (for `mormot.lib.freetype` /
+`mormot.lib.harfbuzz`; files: the three in `src/platform/unix` and
+`mormot.pdf.types`):
+- The records of `mormot.pdf.types` match `mormot.lib.core` field for field
+  (`TPdfLogFont` = `TFontRequest` with byte `Italic`/`CharSet`/
+  `PitchAndFamily`; `TPdfTextMetrics` = `TFontMetrics` with `WideChar`
+  character fields and no `tmUnderlined`/`tmStruckOut`). The data types
+  section was older than the code (corrected since). Type aliases are
+  enough, nothing is copied
+- `mormot.pdf.freetype` does not compile on Windows: `TPdfFTContext`,
+  `ExtractSfntFromTtc` and `PdfFTSetEmSize1000` sit outside its
+  `{$ifndef OSWINDOWS}`, while `uses` and `FT_Face` are inside. Nobody built
+  it there; the trunk package builds every unit on every target, so the
+  library unit has to compile empty on Windows
+- The HarfBuzz shaper reaches the FreeType face through the public
+  `TPdfFTContext` record behind the font handle, and sizes it to 1000 per em
+  with `PdfFTSetEmSize1000` first (`hb_ft_font_create` copies the scale)
+- `NeedsShaping` is not in the shaper: `mormot.ui.pdf` decides before it
+  calls `ShapeText`. The shaper returns one run - glyphs, advances, offsets,
+  clusters - or false; it filters nothing
+- `hbsubset` ignores any face index (`hb_face_create(blob, 0)`): the engine
+  hands it a face already extracted from a `.ttc`. It opens `libharfbuzz`
+  itself, for `hb_blob/face/set`, beside `libharfbuzz-subset`
+- Loading: records of function pointers with `LibraryOpen`/`LibraryResolve`
+  (needed for Delphi on Linux/Android), not the trunk's `TSynLibrary`
+- Assigned from outside: the tests save, clear and restore
+  `PdfFontSubsetter`; the Android form calls `LoadFreeType`. A global
+  turned into a function would break them
+
+**Phase 1 steps done:** `mormot.lib.core` (89d652a77), `mormot.lib.freetype`
+and `mormot.lib.harfbuzz` moved and renamed (80e78bb4d, compared against the
+old units on Linux: 206 families, 19850 checks, identical), loaded through
+`TSynLibrary` (5a1fb60fc). In this repository the engine, the backends and
+the tests use the `mormot.lib.core` names (2026-10-04, rename only); next
+the old POSIX backends are replaced by the library units (move only).

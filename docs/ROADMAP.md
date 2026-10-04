@@ -626,7 +626,7 @@ stopgap (it too lacks `/Widths`) is to be checked with it.
 
 The one remaining difference between the platforms that is **not** a property of
 the platform. `PrepareFontSubsets` skips a symbolic font when
-`PdfFontSubsetter <> nil`: such a font reaches its glyphs through the `(3,0)`
+`FontSubsetter <> nil`: such a font reaches its glyphs through the `(3,0)`
 cmap under the `F0xx` convention, and `AddToSubsetRequest` knows neither those
 code points nor the glyph IDs behind them, so hb-subset would drop every glyph
 the WinAnsi instance draws. Keeping the whole face is the safe answer there.
@@ -634,7 +634,7 @@ the WinAnsi instance draws. Keeping the whole face is the safe answer there.
 Windows does not need the exclusion since R-15a: `AddWinAnsiGlyphs` resolves the
 characters to glyph indices through the face itself, which works whatever cmap
 the lookup goes through. Aligning the two therefore means **improving POSIX**,
-not restricting Windows — give `IPdfPlatformFont` a character-to-glyph lookup
+not restricting Windows — give `IFontProvider` a character-to-glyph lookup
 (FreeType has `FT_Get_Char_Index`) and let `AddToSubsetRequest` fill the glyph
 list on both platforms, then drop the exclusion.
 
@@ -660,8 +660,8 @@ text blocks (B-2) and is the model to follow.
 
 ### R-11 — TTC Face Index — unprioritised
 
-**Effort:** 1 day | **Files:** `src/platform/unix/mormot.pdf.freetype.pas`,
-`src/core/mormot.pdf.types.pas`
+**Effort:** 1 day | **Files:** `src/platform/unix/mormot.pdf.freetype.pas`
+(`mormot.lib.freetype` once the POSIX backends are replaced), `mormot.lib.core`
 
 Only face index 0 of a `.ttc` is reachable, because `TPdfFontMap` carries no
 face index. Add one so the remaining faces can be selected by name. The

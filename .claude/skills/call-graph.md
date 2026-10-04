@@ -17,9 +17,9 @@ This document traces all major call paths through the framework, from applicatio
 ├─────────────────────────────┴───────────────────────────────────┤
 │              TPdfCanvas  /  TPdfDocument                        │
 ├─────────────────────────────────────────────────────────────────┤
-│  IPdfPlatformFont  │  IPdfSystemFonts  │  IPdfPlatformDC        │
+│  IFontProvider     │  IFontEnumerator  │  IFontDC               │
 ├────────────────────┴───────────────────┴────────────────────────┤
-│  IPdfTextShaper  (HarfBuzz — Unix/macOS; nil on Windows)        │
+│  IFontShaper  (HarfBuzz — Unix/macOS; nil on Windows)           │
 ├────────────────────┬───────────────────┬────────────────────────┤
 │  GDI (Windows)     │                   │  FreeType2 (Unix/macOS)│
 └────────────────────┴───────────────────┴────────────────────────┘
@@ -46,13 +46,13 @@ Application
   │
   TPdfCanvas.SetFont(Name, Size, Style)
   │  TPdfDocument.GetRegisteredTrueTypeFont(LogFont)
-  │  │  if not cached: PdfPlatformDCProvider.CreateDC
-  │  │                 PdfPlatformFont.CreateFont(TPdfLogFont)
-  │  │                 PdfPlatformFont.SelectFont(DC, Handle)
-  │  │                 PdfPlatformFont.GetTextMetrics(DC)
-  │  │                 PdfPlatformFont.GetOutlineMetrics(DC)
-  │  │                 PdfPlatformFont.GetCharABCWidths(DC, 0, 255)
-  │  │                 PdfPlatformFont.GetFontData(DC, 'head'/…)  ← TTF bytes
+  │  │  if not cached: FontDC.CreateDC
+  │  │                 FontProvider.CreateFont(TFontRequest)
+  │  │                 FontProvider.SelectFont(DC, Handle)
+  │  │                 FontProvider.GetTextMetrics(DC)
+  │  │                 FontProvider.GetOutlineMetrics(DC)
+  │  │                 FontProvider.GetCharAbcWidths(DC, 0, 255)
+  │  │                 FontProvider.GetFontData(DC, 'head'/…)  ← TTF bytes
   │  └─ returns TPdfFontTrueType (or TPdfFontStandard for Type1)
   │
   TPdfCanvas.TextOut(X, Y, Text)
@@ -316,14 +316,14 @@ TPdfDocument.GetRegisteredTrueTypeFont(LogFont)
 │
 │  TPdfDocument.GetTrueTypeFontIndex('Calibri')
 │  │  if not in fTrueTypeFonts list:
-│  │    DC := PdfPlatformDCProvider.CreateDC
-│  │    PdfSystemFonts.EnumTrueTypeFonts(DC, List)   ← system font scan
+│  │    DC := FontDC.CreateDC
+│  │    FontEnumerator.EnumTrueTypeFonts(DC, List)   ← system font scan
 │  │    searches List for 'Calibri'; stores in fTrueTypeFonts
 │  │
 │  creates TPdfFontTrueType (WinAnsi instance, fUnicode=false)   (pdf.pas:6252)
 │  │  CreateFontIndirectW(@lf)     ← HFONT with lfCharSet from above
 │  │  GetDCWithFont → select HFONT into fDoc.fDC
-│  │  GetTextMetrics / GetOutlineMetrics / GetCharABCWidths
+│  │  GetTextMetrics / GetOutlineMetrics / GetCharAbcWidths
 │  stores in fRegisteredFonts; fFontList
 │
 │  Note: UnicodeFont (fUnicode=true) is created lazily by CreateAssociatedUnicodeFont
@@ -387,7 +387,7 @@ AddUnicodeHexText (pdf.pas) — UseUniscribe gates both platforms' shaper:
     {$endif}
 
     {$ifndef OSWINDOWS}  — the same UseUniscribe switch
-    if not shaped and UseUniscribe and PdfTextShaper <> nil   (Linux/macOS HarfBuzz)
+    if not shaped and UseUniscribe and FontShaper <> nil   (Linux/macOS HarfBuzz)
        and ttf present
        and (Canvas.RightToLeftText or NeedsShaping(PW, Len)):
       ← NeedsShaping: a char of a complex script (U+0590–109F, …); Latin
@@ -396,8 +396,9 @@ AddUnicodeHexText (pdf.pas) — UseUniscribe gates both platforms' shaper:
       shaped := AddUnicodeHexTextHarfBuzz(PW, Len, ttf.WinAnsiFont, NL, Canvas)
         if WinAnsiTtf.UnicodeFont = nil: CreateAssociatedUnicodeFont
         Canvas.SetPdfFont(WinAnsiTtf.UnicodeFont, size)   ← switches to CID font
-        PdfTextShaper.ShapeText(PW, Len, WinAnsiTtf.fHGDI, RTL,
-          Glyphs, Advances, Offsets, Clusters)  ← libharfbuzz.so.0 / harfbuzz.dylib
+        FontShaper.Shape(PW, Len, WinAnsiTtf.fHGDI, RTL,
+          Runs)                                 ← libharfbuzz.so.0 / harfbuzz.dylib
+          (exactly one fskShaped run, or unshaped: Glyphs/Advances/Offsets of Runs[0])
           hb_ft_font_create(ctx^.Face)          ← FT_Face from PPdfFTContext
           hb_buffer_set_direction(RTL/LTR)
           hb_buffer_guess_segment_properties
@@ -441,16 +442,16 @@ AddGlyphs(OutGlyphs, count, Canvas) (pdf.pas:5573):
 ```
 TPdfDocument.SaveToStream / SaveToFile → SaveToStreamDirectEnd
   TPdfDocument.PrepareFontSubsets                 (R-12, runs first)
-    exit unless PdfFontSubsetter <> nil (POSIX + libharfbuzz-subset)
+    exit unless FontSubsetter <> nil (POSIX + libharfbuzz-subset)
                 and not EmbeddedWholeTtf and PdfA not in [pdfa1A, pdfa1B]
     for every WinAnsi TPdfFontTrueType that IsEmbedded and not IsSymbolic:
-      GetFaceData → whole face (PdfPlatformFont.GetFontData, tag 0)
+      GetFaceData → whole face (FontProvider.GetFontData, tag 0)
       group by face bytes (crc32c + compare) in fFontSubsets[]
         ← Regular + Bold of one .ttc face land in the same entry
       AddToSubsetRequest: Unicodes += fWinAnsiUsed (via WinAnsi table) +
                           fUsedWideChar; Glyphs += fUsedWide[].Glyph
       fSubsetIndex := entry + 1
-    per entry: PdfFontSubsetter.Subset(Face, Request) → Subset bytes
+    per entry: FontSubsetter.Subset(Face, Request, Font.fHGDI) → Subset bytes
                Tag := 'ABCDEF+' from crc32c(Subset)   (deterministic)
                failure (CFF, error) → Subset = '' → whole face
   for every font in fFontList:
@@ -535,7 +536,7 @@ GetTtfData (pdf.pas:3604) — Linux/macOS path
 │
 │  tag := PCardinal(aTableName)^    ← LE: 'cmap' → $70616D63
 │
-│  PdfPlatformFont.GetFontData(aDC, tag, 0, nil, 0)
+│  FontProvider.GetFontData(aDC, tag, 0, nil, 0)
 │    → TPdfFreeTypeFontProvider.GetFontData (freetype.pas:658)
 │       SwapEndian($70616D63) = $636D6170   ← FT_MAKE_TAG('c','m','a','p')
 │       FT_Load_Sfnt_Table(face, $636D6170, ...)  → returns CMAP bytes
@@ -704,7 +705,7 @@ TPdfDocument.SetTagged(true)
   fTagged := true
   fFileFormat raised to pdf17
   PDF/UA font mode: fStandardFontsReplace := false; fEmbeddedTtf := true;
-                    fEmbeddedWholeTtf := PdfFontSubsetter = nil
+                    fEmbeddedWholeTtf := FontSubsetter = nil
                     ← POSIX subsets (retain-gids keeps /ToUnicode valid, R-12);
                       Windows embeds the whole face
   Catalog: /MarkInfo << /Marked true >> /Lang 'en' /StructTreeRoot→fStructTree

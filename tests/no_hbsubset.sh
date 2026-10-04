@@ -4,10 +4,10 @@
 # out of reach, to exercise the fallback that embeds the whole face.
 #
 # Why this is a script and not a test case: mormot.pdf.hbsubset loads the
-# library and registers PdfFontSubsetter in its initialization section, which
+# library and registers FontSubsetter in its initialization section, which
 # runs before any test code exists. A test can observe the outcome but cannot
 # choose it. TestSubsetFallbackWithoutSubsetter only simulates the state by
-# clearing PdfFontSubsetter; the loader itself is reached only by starting the
+# clearing FontSubsetter; the loader itself is reached only by starting the
 # process with the library missing, which is what this script arranges.
 #
 # How it hides the library: the loader calls dlopen("libharfbuzz-subset.so.0"),

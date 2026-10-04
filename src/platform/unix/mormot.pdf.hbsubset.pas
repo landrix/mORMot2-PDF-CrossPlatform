@@ -8,9 +8,9 @@ unit mormot.pdf.hbsubset;
 
    HarfBuzz Font Subsetter for POSIX
    - Minimal hb-subset API bindings (dynamic loading)
-   - THarfBuzzFontSubsetter implements IPdfFontSubsetter
+   - THarfBuzzFontSubsetter implements IFontSubsetter
    - Glyph IDs are retained, so the PDF engine needs no glyph remapping
-   - initialization registers PdfFontSubsetter when libharfbuzz-subset and
+   - initialization registers FontSubsetter when libharfbuzz-subset and
      libharfbuzz (HarfBuzz 2.9+) load
 
   *****************************************************************************
@@ -25,7 +25,7 @@ interface
 uses
   mormot.core.base,
   mormot.core.os,
-  mormot.pdf.types;
+  mormot.lib.core;
 
 const
   /// hb_subset_flags_t values from harfbuzz/hb-subset.h (HarfBuzz 10.2.0)
@@ -219,10 +219,10 @@ end;
 // ---------------------------------------------------------------------------
 
 type
-  THarfBuzzFontSubsetter = class(TInterfacedObject, IPdfFontSubsetter)
+  THarfBuzzFontSubsetter = class(TInterfacedObject, IFontSubsetter)
   public
     function Subset(const AFace: RawByteString;
-      const ARequest: TPdfFontSubsetRequest;
+      const ARequest: TFontSubsetRequest; AFont: TFontHandle;
       out ASubset: RawByteString): boolean;
   end;
 
@@ -237,8 +237,10 @@ begin
              (copy(AFace, 1, 4) = 'OTTO'));
 end;
 
+// AFont is not used: the engine hands a face already extracted from a .ttc
 function THarfBuzzFontSubsetter.Subset(const AFace: RawByteString;
-  const ARequest: TPdfFontSubsetRequest; out ASubset: RawByteString): boolean;
+  const ARequest: TFontSubsetRequest; AFont: TFontHandle;
+  out ASubset: RawByteString): boolean;
 var
   blob, subblob: hb_blob_t;
   face, subface: hb_face_t;
@@ -314,10 +316,10 @@ end;
 
 initialization
   if LoadHarfBuzzSubset then
-    PdfFontSubsetter := THarfBuzzFontSubsetter.Create;
+    FontSubsetter := THarfBuzzFontSubsetter.Create;
 
 finalization
-  PdfFontSubsetter := nil; // release interface ref before unloading library
+  FontSubsetter := nil; // release interface ref before unloading library
   UnloadHarfBuzzSubset;
 
 {$endif OSWINDOWS}

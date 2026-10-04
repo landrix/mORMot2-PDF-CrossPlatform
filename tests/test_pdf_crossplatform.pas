@@ -1,5 +1,5 @@
 /// Cross-platform PDF engine unit tests
-// - tests IPdfPlatformFont, IPdfSystemFonts, IPdfPlatformDC contracts
+// - tests IFontProvider, IFontEnumerator, IFontDC contracts
 // - tests TPdfDocument basic PDF generation on all platforms
 // - migrated to TSynTestCase framework for mORMot2 compatibility
 unit test_pdf_crossplatform;
@@ -15,11 +15,12 @@ uses
   mormot.core.unicode,
   mormot.core.os,
   mormot.core.test,
+  mormot.lib.core,
   mormot.pdf.types,
   {$ifndef OSWINDOWS}
   mormot.pdf.freetype,  // ExtractSfntFromTtc + FreeType face validation
   {$endif OSWINDOWS}
-  mormot.ui.pdf;        // registers the backend and PdfTextShaper itself
+  mormot.ui.pdf;        // registers the backend and FontShaper itself
 
 type
   /// Cross-platform PDF test cases
@@ -45,81 +46,99 @@ type
 
 implementation
 
+// HarfBuzz returns its result as one shaped run: give its arrays to the checks
+function ShapeSingleRun(Text: PWideChar; Len: integer; Font: TFontHandle;
+  out Glyphs: TWordDynArray; out Advances, Offsets,
+  Clusters: TIntegerDynArray): boolean;
+var
+  runs: TFontShapedRuns;
+begin
+  result := FontShaper.Shape(Text, Len, Font, true, runs) and
+            (length(runs) = 1) and
+            (runs[0].Kind = fskShaped);
+  if not result then
+    exit;
+  Glyphs := runs[0].Glyphs;
+  Advances := runs[0].Advances;
+  Offsets := runs[0].Offsets;
+  Clusters := runs[0].Clusters;
+end;
+
 procedure TPdfCrossPlatTests.TestPlatformRegistration;
 begin
-  Check(PdfPlatformRegistered, 'RegisterPdfPlatform must be called in initialization');
-  Check(PdfPlatformFont <> nil, 'PdfPlatformFont is nil');
-  Check(PdfSystemFonts  <> nil, 'PdfSystemFonts is nil');
-  Check(PdfPlatformDCProvider <> nil, 'PdfPlatformDCProvider is nil');
+  Check(FontPlatformRegistered, 'RegisterFontPlatform must be called in initialization');
+  Check(FontProvider <> nil, 'FontProvider is nil');
+  Check(FontEnumerator  <> nil, 'FontEnumerator is nil');
+  Check(FontDC <> nil, 'FontDC is nil');
 end;
 
 procedure TPdfCrossPlatTests.TestDCProvider;
 var
-  dc: TPdfPlatformDC;
+  dc: TFontDC;
   dpi: integer;
 begin
-  dc := PdfPlatformDCProvider.CreateDC;
+  dc := FontDC.CreateDC;
   Check(dc <> nil, 'CreateDC returned nil');
-  dpi := PdfPlatformDCProvider.GetScreenLogPixels(dc);
+  dpi := FontDC.GetScreenLogPixels(dc);
   Check(dpi > 0, 'GetScreenLogPixels must be > 0');
   Check(dpi <= 600, 'GetScreenLogPixels must be <= 600 (sanity)');
-  PdfPlatformDCProvider.DeleteDC(dc);
+  FontDC.DeleteDC(dc);
 end;
 
 procedure TPdfCrossPlatTests.TestFontEnumeration;
 var
-  dc: TPdfPlatformDC;
+  dc: TFontDC;
   list: TRawUtf8DynArray;
 begin
-  dc := PdfPlatformDCProvider.CreateDC;
+  dc := FontDC.CreateDC;
   try
-    PdfSystemFonts.EnumTrueTypeFonts(dc, list);
+    FontEnumerator.EnumTrueTypeFonts(dc, list);
     Check(Length(list) > 0, 'EnumTrueTypeFonts must return at least one font');
   finally
-    PdfPlatformDCProvider.DeleteDC(dc);
+    FontDC.DeleteDC(dc);
   end;
 end;
 
 procedure TPdfCrossPlatTests.TestFontMetrics;
 var
-  dc: TPdfPlatformDC;
-  lf: TPdfLogFont;
-  font: TPdfPlatformFontHandle;
-  prev: TPdfPlatformFontHandle;
-  tm: TPdfTextMetrics;
-  otm: TPdfOutlineMetrics;
-  abc: TPdfCharABCArray;
+  dc: TFontDC;
+  lf: TFontRequest;
+  font: TFontHandle;
+  prev: TFontHandle;
+  tm: TFontMetrics;
+  otm: TFontOutlineMetrics;
+  abc: TFontCharAbcArray;
 begin
-  dc := PdfPlatformDCProvider.CreateDC;
+  dc := FontDC.CreateDC;
   try
     FillChar(lf, SizeOf(lf), 0);
     lf.FaceName := 'Arial';
     lf.Height := -1000;
     lf.Weight := 400; // FW_NORMAL
-    font := PdfPlatformFont.CreateFont(lf);
+    font := FontProvider.CreateFont(lf);
     if font = nil then
     begin
       // Arial not available - try DejaVu Sans (Linux) or system default
       lf.FaceName := 'DejaVu Sans';
-      font := PdfPlatformFont.CreateFont(lf);
+      font := FontProvider.CreateFont(lf);
     end;
     if font = nil then
     begin
       Check(true, 'SKIP: no test font found on this system');
       exit;
     end;
-    prev := PdfPlatformFont.SelectFont(dc, font);
+    prev := FontProvider.SelectFont(dc, font);
     // Text metrics
-    Check(PdfPlatformFont.GetTextMetrics(dc, tm), 'GetTextMetrics must succeed');
+    Check(FontProvider.GetTextMetrics(dc, tm), 'GetTextMetrics must succeed');
     Check(tm.tmAscent > 0, 'tmAscent must be > 0');
     Check(tm.tmDescent > 0, 'tmDescent must be > 0');
     Check(tm.tmHeight >= tm.tmAscent + tm.tmDescent - 10,
       'tmHeight should be >= ascent + descent (approx)');
     // Outline metrics
-    Check(PdfPlatformFont.GetOutlineMetrics(dc, otm), 'GetOutlineMetrics must succeed');
+    Check(FontProvider.GetOutlineMetrics(dc, otm), 'GetOutlineMetrics must succeed');
     Check(otm.otmAscent > 0, 'otmAscent must be > 0');
     // ABC widths for ' '..'z'
-    Check(PdfPlatformFont.GetCharABCWidths(dc, 32, 90, abc), 'GetCharABCWidths must succeed');
+    Check(FontProvider.GetCharAbcWidths(dc, 32, 90, abc), 'GetCharAbcWidths must succeed');
     Check(Length(abc) = 59, 'ABC widths: expected 59 entries (32..90)');
     // Space width should be > 0 for a normal font: the advance is the sum of
     // the three ABC members - abcB alone is the ink width, which is legitimately
@@ -128,20 +147,20 @@ begin
       'Space advance width must be > 0');
     // Restore previous font
     if prev <> nil then
-      PdfPlatformFont.SelectFont(dc, prev);
-    PdfPlatformFont.DeleteFont(font);
+      FontProvider.SelectFont(dc, prev);
+    FontProvider.DeleteFont(font);
   finally
-    PdfPlatformDCProvider.DeleteDC(dc);
+    FontDC.DeleteDC(dc);
   end;
 end;
 
 procedure TPdfCrossPlatTests.TestWinAnsiHighRangeWidths;
 var
-  dc: TPdfPlatformDC;
-  lf: TPdfLogFont;
-  font: TPdfPlatformFontHandle;
-  prev: TPdfPlatformFontHandle;
-  abc: TPdfCharABCArray;
+  dc: TFontDC;
+  lf: TFontRequest;
+  font: TFontHandle;
+  prev: TFontHandle;
+  abc: TFontCharAbcArray;
   notdef, bullet, emdash, letter: integer;
 
   function Advance(aCode: cardinal): integer;
@@ -151,32 +170,32 @@ var
   end;
 
 begin
-  // U-1b: GetCharABCWidths takes WinAnsi byte values, because that is what the
+  // U-1b: GetCharAbcWidths takes WinAnsi byte values, because that is what the
   // Windows GetCharABCWidthsA counterpart takes. Codes 128..159 map to code
   // points well above U+00FF - the bullet #$95 is U+2022, the em dash #$97 is
   // U+2014 - so a backend that hands the byte to a Unicode lookup unchanged
   // lands on an unassigned C1 control, misses the CMAP and returns .notdef.
   // That wrote a wrong /Widths entry and broke ISO 14289-1 7.21.5 on POSIX.
-  dc := PdfPlatformDCProvider.CreateDC;
+  dc := FontDC.CreateDC;
   try
     FillChar(lf, SizeOf(lf), 0);
     lf.FaceName := 'Arial';
     lf.Height := -1000;
     lf.Weight := 400; // FW_NORMAL
-    font := PdfPlatformFont.CreateFont(lf);
+    font := FontProvider.CreateFont(lf);
     if font = nil then
     begin
       lf.FaceName := 'DejaVu Sans';
-      font := PdfPlatformFont.CreateFont(lf);
+      font := FontProvider.CreateFont(lf);
     end;
     if font = nil then
     begin
       Check(true, 'SKIP: no test font found on this system');
       exit;
     end;
-    prev := PdfPlatformFont.SelectFont(dc, font);
-    Check(PdfPlatformFont.GetCharABCWidths(dc, 32, 255, abc),
-      'GetCharABCWidths must succeed');
+    prev := FontProvider.SelectFont(dc, font);
+    Check(FontProvider.GetCharAbcWidths(dc, 32, 255, abc),
+      'GetCharAbcWidths must succeed');
     Check(Length(abc) = 224, 'ABC widths: expected 224 entries (32..255)');
     bullet := Advance($95);
     emdash := Advance($97);
@@ -213,10 +232,10 @@ begin
         'bullet and em dash must not both fall back to .notdef');
     end;
     if prev <> nil then
-      PdfPlatformFont.SelectFont(dc, prev);
-    PdfPlatformFont.DeleteFont(font);
+      FontProvider.SelectFont(dc, prev);
+    FontProvider.DeleteFont(font);
   finally
-    PdfPlatformDCProvider.DeleteDC(dc);
+    FontDC.DeleteDC(dc);
   end;
 end;
 
@@ -230,9 +249,9 @@ const
   ARABIC_FONTS: array[0..3] of RawUtf8 = (
     'Geeza Pro', 'Noto Naskh Arabic', 'Tahoma', 'DejaVu Sans');
 var
-  dc: TPdfPlatformDC;
-  lf: TPdfLogFont;
-  font, prev: TPdfPlatformFontHandle;
+  dc: TFontDC;
+  lf: TFontRequest;
+  font, prev: TFontHandle;
   glyphs: TWordDynArray;
   advances, offsets, clusters: TIntegerDynArray;
   tbl: TWordDynArray;
@@ -318,13 +337,13 @@ var
     n: cardinal;
   begin
     result := false;
-    n := PdfPlatformFont.GetFontData(dc, PCardinal(pointer(aTag))^, 0, nil, 0);
-    if (n = PdfPlatformFont.FontDataError) or
+    n := FontProvider.GetFontData(dc, PCardinal(pointer(aTag))^, 0, nil, 0);
+    if (n = FontProvider.FontDataError) or
        (n < 4) then
       exit;
     SetLength(aWords, n shr 1);
-    result := PdfPlatformFont.GetFontData(dc, PCardinal(pointer(aTag))^, 0,
-      pointer(aWords), n) <> PdfPlatformFont.FontDataError;
+    result := FontProvider.GetFontData(dc, PCardinal(pointer(aTag))^, 0,
+      pointer(aWords), n) <> FontProvider.FontDataError;
   end;
 
 begin
@@ -335,12 +354,12 @@ begin
   // dictionary disagree with the embedded font program (ISO 14289-1 7.21.5)
   // while the page still looked right, because the shortened advance and the
   // offset cancelled each other out on screen.
-  if PdfTextShaper = nil then
+  if FontShaper = nil then
   begin
-    Check(true, 'SKIP: no IPdfTextShaper registered (libharfbuzz absent)');
+    Check(true, 'SKIP: no IFontShaper registered (libharfbuzz absent)');
     exit;
   end;
-  dc := PdfPlatformDCProvider.CreateDC;
+  dc := FontDC.CreateDC;
   try
     font := nil;
     for f := 0 to high(ARABIC_FONTS) do
@@ -349,7 +368,7 @@ begin
       lf.FaceName := ARABIC_FONTS[f];
       lf.Height := -1000;
       lf.Weight := 400;
-      font := PdfPlatformFont.CreateFont(lf);
+      font := FontProvider.CreateFont(lf);
       if font <> nil then
         break;
     end;
@@ -358,10 +377,10 @@ begin
       Check(true, 'SKIP: no Arabic-capable font found on this system');
       exit;
     end;
-    prev := PdfPlatformFont.SelectFont(dc, font);
+    prev := FontProvider.SelectFont(dc, font);
     try
-      Check(PdfTextShaper.ShapeText(@MARHABA[0], length(MARHABA), font, true,
-        glyphs, advances, offsets, clusters), 'ShapeText must succeed');
+      Check(ShapeSingleRun(@MARHABA[0], length(MARHABA), font,
+        glyphs, advances, offsets, clusters), 'Shape must succeed');
       shifted := 0;
       for i := 0 to high(glyphs) do
         if offsets[i] <> 0 then
@@ -450,11 +469,11 @@ begin
         end;
     finally
       if prev <> nil then
-        PdfPlatformFont.SelectFont(dc, prev);
-      PdfPlatformFont.DeleteFont(font);
+        FontProvider.SelectFont(dc, prev);
+      FontProvider.DeleteFont(font);
     end;
   finally
-    PdfPlatformDCProvider.DeleteDC(dc);
+    FontDC.DeleteDC(dc);
   end;
 end;
 {$endif OSWINDOWS}
@@ -492,19 +511,19 @@ const
   ARABIC_FONTS: array[0..3] of RawUtf8 = (
     'Noto Naskh Arabic', 'Geeza Pro', 'Tahoma', 'DejaVu Sans');
 var
-  dc: TPdfPlatformDC;
-  lf: TPdfLogFont;
-  font, prev: TPdfPlatformFontHandle;
+  dc: TFontDC;
+  lf: TFontRequest;
+  font, prev: TFontHandle;
   glyphs: TWordDynArray;
   advances, offsets, clusters: TIntegerDynArray;
   i, f: integer;
 begin
-  if PdfTextShaper = nil then
+  if FontShaper = nil then
   begin
-    Check(true, 'SKIP: no IPdfTextShaper registered (libharfbuzz absent)');
+    Check(true, 'SKIP: no IFontShaper registered (libharfbuzz absent)');
     exit;
   end;
-  dc := PdfPlatformDCProvider.CreateDC;
+  dc := FontDC.CreateDC;
   try
     font := nil;
     for f := 0 to high(ARABIC_FONTS) do
@@ -513,7 +532,7 @@ begin
       lf.FaceName := ARABIC_FONTS[f];
       lf.Height := -1000;
       lf.Weight := 400;
-      font := PdfPlatformFont.CreateFont(lf);
+      font := FontProvider.CreateFont(lf);
       if font <> nil then
         break;
     end;
@@ -522,10 +541,10 @@ begin
       Check(true, 'SKIP: no Arabic-capable font found on this system');
       exit;
     end;
-    prev := PdfPlatformFont.SelectFont(dc, font);
-    Check(PdfTextShaper.ShapeText(@MARHABA[0], length(MARHABA), font, true,
-      glyphs, advances, offsets, clusters), 'ShapeText must succeed');
-    Check(length(glyphs) > 0, 'ShapeText must return glyphs');
+    prev := FontProvider.SelectFont(dc, font);
+    Check(ShapeSingleRun(@MARHABA[0], length(MARHABA), font,
+        glyphs, advances, offsets, clusters), 'Shape must succeed');
+    Check(length(glyphs) > 0, 'Shape must return glyphs');
     Check(length(advances) = length(glyphs), 'one advance per glyph');
     for i := 0 to high(advances) do
     begin
@@ -537,10 +556,10 @@ begin
       Check(advances[i] < 4000, 'shaped advance must be in 1000/em units');
     end;
     if prev <> nil then
-      PdfPlatformFont.SelectFont(dc, prev);
-    PdfPlatformFont.DeleteFont(font);
+      FontProvider.SelectFont(dc, prev);
+    FontProvider.DeleteFont(font);
   finally
-    PdfPlatformDCProvider.DeleteDC(dc);
+    FontDC.DeleteDC(dc);
   end;
 end;
 
@@ -631,51 +650,51 @@ end;
 
 procedure TPdfCrossPlatTests.TestFontData;
 var
-  dc: TPdfPlatformDC;
-  lf: TPdfLogFont;
-  font: TPdfPlatformFontHandle;
-  prev: TPdfPlatformFontHandle;
+  dc: TFontDC;
+  lf: TFontRequest;
+  font: TFontHandle;
+  prev: TFontHandle;
   buf: array[0..3] of byte;
   len: cardinal;
   tag: cardinal;
 begin
-  dc := PdfPlatformDCProvider.CreateDC;
+  dc := FontDC.CreateDC;
   try
     FillChar(lf, SizeOf(lf), 0);
     lf.FaceName := 'Arial';
     lf.Height := -1000;
     lf.Weight := 400;
-    font := PdfPlatformFont.CreateFont(lf);
+    font := FontProvider.CreateFont(lf);
     if font = nil then
       lf.FaceName := 'DejaVu Sans';
-    font := PdfPlatformFont.CreateFont(lf);
+    font := FontProvider.CreateFont(lf);
     if font = nil then
     begin
       Check(true, 'SKIP: no test font found');
       exit;
     end;
-    prev := PdfPlatformFont.SelectFont(dc, font);
+    prev := FontProvider.SelectFont(dc, font);
     // Read the 'head' table - every TrueType font has it
     // tag is 4 bytes: 'h','e','a','d' in big-endian = $68656164
     tag := (Ord('h') shl 24) or (Ord('e') shl 16) or
            (Ord('a') shl  8) or  Ord('d');
     // First call: get size
-    len := PdfPlatformFont.GetFontData(dc, tag, 0, nil, 0);
-    if len <> PdfPlatformFont.FontDataError then
+    len := FontProvider.GetFontData(dc, tag, 0, nil, 0);
+    if len <> FontProvider.FontDataError then
     begin
       Check(len >= 4, 'head table must be at least 4 bytes');
       // Second call: read first 4 bytes
-      len := PdfPlatformFont.GetFontData(dc, tag, 0, @buf[0], 4);
-      if len <> PdfPlatformFont.FontDataError then
+      len := FontProvider.GetFontData(dc, tag, 0, @buf[0], 4);
+      if len <> FontProvider.FontDataError then
         Check(len = 4, 'GetFontData(head,4 bytes) must return 4');
     end
     else
       Check(true, 'SKIP: GetFontData not available on this platform');
     if prev <> nil then
-      PdfPlatformFont.SelectFont(dc, prev);
-    PdfPlatformFont.DeleteFont(font);
+      FontProvider.SelectFont(dc, prev);
+    FontProvider.DeleteFont(font);
   finally
-    PdfPlatformDCProvider.DeleteDC(dc);
+    FontDC.DeleteDC(dc);
   end;
 end;
 
