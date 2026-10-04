@@ -386,3 +386,79 @@ Every unit starts with `{$I mormot.defines.inc}` after `interface` (by name, no 
 4. Add conditional `uses` in the application project
 
 No changes to `mormot.ui.pdf.pas` required.
+
+---
+
+## Phase 1 Notes (R-28) — What the Font Layer Has to Absorb
+
+Read from the source on 2026-10-03 for the cut into `mormot.lib.core` and
+the library units (`docs/REFACTORING.md`, Phase 1). Facts, not yet decisions.
+
+**Global use in `mormot.ui.pdf`** (code references, comments not counted):
+`PdfPlatformFont` 29, `PdfPlatformDCProvider` 6, `PdfFontSubsetter` 4,
+`PdfTextShaper` 3, `PdfSystemFonts` 1 - 43 in all. Besides,
+`PdfPlatformRegistered` in `mormot.pdf.types` reads three of them, and the
+backends register. A document-local copy (gist §18) touches those places.
+
+**`mormot.pdf.types` mixes two kinds:** generic font types (the three
+platform interfaces, `IPdfTextShaper`, `IPdfFontSubsetter`,
+`TPdfFontSubsetRequest`, `TPdfLogFont`, `TPdfTextMetrics`,
+`TPdfOutlineMetrics`, `TPdfCharABC*`, the handles, `RegisterPdfPlatform`) and
+PDF types (`TPdfFileFormat`, `TPdfStructRole`, `PDF_FONT_STD_*`,
+`PDF_FONT_TTF_*`, `GetPdfFonts`). Gist §17: the second kind stays on the PDF
+side.
+
+**Windows shaping is not behind `IPdfTextShaper`.**
+`TPdfWrite.AddUnicodeHexTextUniScribe` (`USE_UNISCRIBE`) calls
+`ScriptItemize`/`ScriptGetProperties`/`ScriptLayout`/`ScriptShape` itself.
+It differs from the HarfBuzz path in shape, not only in library:
+- Uniscribe itemizes the run; it returns early (unshaped) when no item is
+  complex or RTL, and inside a shaped run every item is shaped on its own,
+  appended in visual order (`ScriptLayout`). Per item, `ScriptShape`:
+  - succeeds: its glyphs are added
+  - `E_OUTOFMEMORY`: the item goes through `AddUnicodeHexTextNoUniScribe`
+  - `E_PENDING` / `USP_E_SCRIPT_NOT_IN_FONT`: retried with the DC; if that
+    fails too, the simple path as above
+  - any other error: the item is **dropped** - nothing is written for it
+  An unchanged-output refactor has to keep all four outcomes
+- the result goes to `AddGlyphs(glyphs, count, Canvas, TScriptVisAttr[])`:
+  glyph IDs plus visual attributes, widths from the font
+- HarfBuzz (`AddUnicodeHexTextHarfBuzz`, POSIX) shapes the whole run in one
+  call (`NeedsShaping` decides first). `/W` keeps the font's own `hmtx`
+  width; where the shaper's advance or offset differs, a `TJ` adjusts the
+  position, otherwise a plain `Tj` is written (U-2)
+- `ScriptShape` needs the DC with the font selected on `E_PENDING`
+  (`fDoc.GetDCWithFont`)
+A common shaper interface therefore needs an itemized result (per item:
+shaped glyphs, "leave to the simple path" or "drop"), or the Windows output
+changes.
+
+**Windows subsetting is not behind `IPdfFontSubsetter`.**
+`PrepareFontSubsets` groups the fonts by face and merges their requests on
+both platforms, then subsets each face once: `PdfFontSubsetter.Subset` when
+one is registered, otherwise `TPdfFontTrueType.SubsetWithFontPackage`
+(`USE_UNISCRIBE`); `PrepareForSaving` uses the shared result. The Windows call
+differs from hb-subset:
+- reads the face through the DC: whole `.ttc` plus its index
+  (`TTCF_TABLE`, `GetTtcIndex`) — hb-subset gets the extracted face
+- keeps by glyph list only (`TTFCFP_FLAGS_GLYPHLIST`): the WinAnsi
+  characters are resolved to glyphs first (`AddWinAnsiGlyphs`,
+  `GetGlyphIndicesW` on the DC); hb-subset takes `Unicodes` and `Glyphs`
+- `ReduceTTF` on the result; `PdfCanSubsetRetainingGids` ORs
+  `HasCreateFontPackage` in
+
+**The bindings already in the trunk:** `mormot.lib.uniscribe` holds Uniscribe
+and the FontSub API (`CreateFontPackage`, `HasCreateFontPackage`) — the
+fork's copy was dropped in PR #2. FreeType and HarfBuzz have no trunk
+binding; theirs sit in `mormot.pdf.freetype` (FT types and loader),
+`mormot.pdf.harfbuzz` (uses `mormot.pdf.freetype` for the face) and
+`mormot.pdf.hbsubset` (its own `hb_blob/face/set` imports).
+
+**Unit names, decided** (gist, 2026-10-03): the trunk keeps `mormot.lib.*`
+for library units, so the contracts go to one `mormot.lib.core` and the
+implementations into the units of their libraries - `mormot.lib.uniscribe`
+(the GDI font part, the Uniscribe shaper, the FontSub subsetter),
+`mormot.lib.freetype`, `mormot.lib.harfbuzz` (shaping and subsetting). The
+gist's `mormot.lib.font*` is replaced. `mormot.lib.uniscribe` is a trunk
+unit: its additions and `mormot.lib.core` go to the trunk as PRs, a copy
+here would shadow the package's unit (`docs/REFACTORING.md`, Phase 1).

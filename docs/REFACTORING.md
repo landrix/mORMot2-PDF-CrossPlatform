@@ -30,11 +30,11 @@ section.
 **Architecture**
 
 3. **No new dependency without justification.** Every new `uses` follows the
-   gist's dependency graph (§14). Forbidden: `mormot.lib.font` →
+   gist's dependency graph (§14). Forbidden: `mormot.lib.core` →
    `mormot.pdf.*`, `mormot.pdf.core` → GUI, `mormot.pdf` → GUI.
 4. **No generic abstraction without need.** An interface only when there are
    two implementations or a clear testing or injection need.
-5. **Low-level units stay small.** `mormot.lib.font` and `mormot.pdf.core`
+5. **Low-level units stay small.** `mormot.lib.core` and `mormot.pdf.core`
    depend on little.
 6. **Capabilities, not platform emulation.** No Unix equivalent of a Windows
    handle to keep the old internal model when a direct abstraction is possible.
@@ -244,18 +244,33 @@ checked against that record:
 
 Gist §4–§6, §16. Behaviour unchanged.
 
-**Where the code lives** (agreed 2026-10-02, PR #2): here in `src/`, where
-`pdfcheck`, the golden files and the check machines are, but under the
-target unit names from this phase on (`mormot.lib.font*`, later the
-`mormot.pdf*` units of `src/pdf`), so the final move is a plain copy. Once
-this phase is done, `mormot.lib.font*` can go to the trunk on its own.
+**Unit names** (Arnaud, gist, 2026-10-03 - replacing the gist's
+`mormot.lib.font*`): the contracts in one unit, the implementations in the
+units of their libraries:
 
-- `mormot.lib.font`, `mormot.lib.font.gdi`, `mormot.lib.font.freetype`,
-  `mormot.lib.font.harfbuzz` from `mormot.pdf.types` and the four backend units
-- `Pdf` dropped from names that are not PDF-specific
+| Unit | Content | From |
+|---|---|---|
+| `mormot.lib.core` | abstract font types and interfaces, registration; later other contracts (UI, printers) | the generic part of `mormot.pdf.types` |
+| `mormot.lib.uniscribe` | the GDI font part, the Uniscribe shaper, the FontSub subsetter | `mormot.pdf.gdi`, the Uniscribe and `CreateFontPackage` code of `mormot.ui.pdf` |
+| `mormot.lib.freetype` | FreeType bindings and backend | `mormot.pdf.freetype` |
+| `mormot.lib.harfbuzz` | HarfBuzz shaping and subsetting | `mormot.pdf.harfbuzz`, `mormot.pdf.hbsubset` |
+
+**Where the code lives** (agreed 2026-10-02 in PR #2, adjusted 2026-10-03):
+the new units `mormot.lib.freetype` and `mormot.lib.harfbuzz` here in `src/`,
+where `pdfcheck`, the golden files and the check machines are, under their
+target names, so the final move is a plain copy. `mormot.lib.uniscribe` is a
+trunk unit - a copy here would shadow the package's one, as before PR #2 - so
+`mormot.lib.core` and the additions to `mormot.lib.uniscribe` go to the trunk
+as small PRs of their own, and the pin moves with them.
+
+- `Pdf` dropped from names that are not PDF-specific; the PDF types
+  (`TPdfFileFormat`, `TPdfStructRole`, the font name constants) stay on the
+  PDF side (gist §17)
 - **Windows shaping and subsetting behind the interfaces:** Uniscribe and
   `CreateFontPackage` are called from `mormot.ui.pdf` today; they become the
-  shaper and subsetter of `mormot.lib.font.gdi` (not in the gist)
+  shaper and subsetter in `mormot.lib.uniscribe` (not in the gist). The two
+  paths differ in shape, not only in library - see
+  `.claude/skills/platform-backends.md`, "Phase 1 Notes"
 - `libharfbuzz` and `libharfbuzz-subset` stay separately loaded
 - The device-context interface moves unchanged, marked transitional
 
@@ -319,7 +334,8 @@ Process, agreed in the forum:
     before the phase that moves the unit: `mormot.ui.pdf` and
     `mormot.ui.pdfcanvas` before Phase 2, `mormot.ui.report` before
     Phase 4. `mormot.pdf.types` and the backends get it as they become
-    `mormot.lib.font*` in Phase 1 - no work on code about to be replaced
+    `mormot.lib.core` and the library units in Phase 1 - no work on code
+    about to be replaced
 
 ## Open Decisions
 

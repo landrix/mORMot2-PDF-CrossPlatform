@@ -1,4 +1,4 @@
-/// Chinese (CJK) PDF Demo — mORMot2 PDF Cross-Platform
+/// Chinese (CJK) PDF Demo - mORMot2 PDF Cross-Platform
 // Draws multi-line CJK text with TPdfDocumentVcl and embeds the face as a
 // subset on every platform.
 //
@@ -13,9 +13,9 @@
 //   /FontFile3 with /Subtype /OpenType instead of /FontFile2 (roadmap R-15c)
 //
 // Font requirement:
-//   Windows : Microsoft YaHei — pre-installed on Vista+ (all locales)
-//   macOS   : Hiragino Sans GB — pre-installed
-//   Linux   : Droid Sans Fallback — sudo apt install fonts-droid-fallback
+//   Windows : Microsoft YaHei - pre-installed on Vista+ (all locales)
+//   macOS   : Hiragino Sans GB - pre-installed
+//   Linux   : Droid Sans Fallback - sudo apt install fonts-droid-fallback
 program chinese_demo;
 
 {$I mormot.defines.inc}
@@ -60,7 +60,7 @@ const
   CJK_NUMBERS: RawUtf8 = {$ifdef HASCODEPAGE}
     #$4E00#$4E8C#$4E09#$56DB#$4E94#$516D#$4E03#$516B#$4E5D#$5341 {$else}
     #$E4#$B8#$80#$E4#$BA#$8C#$E4#$B8#$89#$E5#$9B#$9B#$E4#$BA#$94#$E5#$85#$AD#$E4#$B8#$83#$E5#$85#$AB#$E4#$B9#$9D#$E5#$8D#$81 {$endif};
-  // 一二三四五六七八九十  (1–10 as Chinese numerals)
+  // 一二三四五六七八九十  (1-10 as Chinese numerals)
   CJK_FONT_TEST: RawUtf8 = {$ifdef HASCODEPAGE}
     #$5B57#$4F53#$5D4C#$5165#$6D4B#$8BD5 {$else}
     #$E5#$AD#$97#$E4#$BD#$93#$E5#$B5#$8C#$E5#$85#$A5#$E6#$B5#$8B#$E8#$AF#$95 {$endif};
@@ -100,7 +100,7 @@ begin
   try
     Doc.EmbeddedTTF      := true;
     Doc.EmbeddedWholeTtf := false; // subset: hb-subset on POSIX (R-12),
-                                   // CreateFontPackage on Windows (R-15) —
+                                   // CreateFontPackage on Windows (R-15) -
                                    // both keep the glyph IDs CJK is drawn with
     // CJK needs no contextual shaping; the property exists on every platform
     Doc.UseUniscribe     := false;
@@ -129,7 +129,7 @@ begin
     C.Font.Size  := 28;
     C.TextOutUtf8(40, 125, CJK_HELLO);
 
-    // Chinese numerals 1–10
+    // Chinese numerals 1-10
     C.Font.Size  := 22;
     C.TextOutUtf8(40, 175, CJK_NUMBERS);
 

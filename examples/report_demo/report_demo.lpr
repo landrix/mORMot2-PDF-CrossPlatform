@@ -1,4 +1,4 @@
-/// Report Engine Demo — mORMot2 PDF Cross-Platform
+/// Report Engine Demo - mORMot2 PDF Cross-Platform
 // A Lazarus GUI around TGDIPages: WYSIWYG preview, print and tagged PDF export
 // from the form in uMainForm.pas; the report itself is built in uReport.pas.
 //

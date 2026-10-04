@@ -157,7 +157,7 @@ var
 begin
   SaveDialog1.Filter      := 'PDF Document (*.pdf)|*.pdf';
   SaveDialog1.DefaultExt  := 'pdf';
-  // DateToIso8601 (mORMot) returns 'YYYYMMDD' — preferred over FormatDateTime
+  // DateToIso8601 (mORMot) returns 'YYYYMMDD' - preferred over FormatDateTime
   SaveDialog1.FileName    := 'report_' +
     Utf8ToString(DateToIso8601(Now, {Expanded=}false)) + '.pdf';
 

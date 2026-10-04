@@ -121,7 +121,7 @@ begin
 end;
 
 { ============================================================
-  DefineHeadingFormats – appearance of DrawHeading(1..2)
+  DefineHeadingFormats - appearance of DrawHeading(1..2)
   ============================================================ }
 procedure DefineHeadingFormats(Report: TGDIPages);
 var
@@ -141,7 +141,7 @@ begin
 end;
 
 { ============================================================
-  DrawSampleTable – table via TTableLayout
+  DrawSampleTable - table via TTableLayout
 
   BeginTable/DrawTableHeader/DrawTableRow build a real Table > TR > TH|TD
   structure in the tagged PDF, break pages on their own and repeat the header
@@ -272,7 +272,7 @@ begin
 end;
 
 { ============================================================
-  BuildReport – central build routine
+  BuildReport - central build routine
   ============================================================ }
 function BuildReport(const Options: TReportOptions): TGDIPages;
 begin

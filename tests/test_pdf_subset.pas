@@ -71,7 +71,7 @@ const
   /// the charset TPdfVclCanvas passes to TPdfCanvas.SetFont (LCL default)
   // - DEFAULT_CHARSET: without it, Windows falls back to the document charset
   // (ANSI_CHARSET on a Western system) and exposes only the ANSI part of the
-  // cmap - see fonts.md §10
+  // cmap - see fonts.md 10
   PDF_DEFAULT_CHARSET = 1;
 
 /// draw UTF-8 bytes held in a string, decoded as TPdfVclCanvas.TextOut does

@@ -726,15 +726,15 @@ begin
     PDF := TPdfDocument.Create(false, 0, pdfaNone);
     try
       PDF.Info.Title := 'Different Sizes';
-      // A4: 210mm × 297mm = 595 × 842 points
+      // A4: 210mm x 297mm = 595 x 842 points
       PDF.DefaultPageWidth  := 595;
       PDF.DefaultPageHeight := 842;
       PDF.AddPage;
-      // US Letter: 216mm × 279mm = 612 × 792 points
+      // US Letter: 216mm x 279mm = 612 x 792 points
       PDF.DefaultPageWidth  := 612;
       PDF.DefaultPageHeight := 792;
       PDF.AddPage;
-      // A3: 297mm × 420mm = 842 × 1191 points
+      // A3: 297mm x 420mm = 842 x 1191 points
       PDF.DefaultPageWidth  := 842;
       PDF.DefaultPageHeight := 1191;
       PDF.AddPage;
@@ -1101,7 +1101,7 @@ begin
       entry in a Type 2 CID font" }
     CheckEqual(FontsWithout(s, '/Subtype/CIDFontType2', '/CIDToGIDMap/Identity'), 0,
       'every CIDFontType2 has CIDToGIDMap Identity');
-    { a .ttc face is embedded alone, a CFF face in /FontFile3 (fonts.md §3);
+    { a .ttc face is embedded alone, a CFF face in /FontFile3 (fonts.md 3);
       the defect behind this depended on the heap, so it may not show }
     CheckEqual(CountOf('stream'#10'ttcf', s), 0,
       'no whole .ttc collection embedded');

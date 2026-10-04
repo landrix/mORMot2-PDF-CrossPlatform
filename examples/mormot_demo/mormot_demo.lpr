@@ -1,11 +1,11 @@
-/// mORMot ORM Report Demo — mORMot2 PDF Cross-Platform
+/// mORMot ORM Report Demo - mORMot2 PDF Cross-Platform
 // A Lazarus GUI report whose data comes from a live SQLite database through
 // the mORMot ORM: data.pas holds the TOrm classes, server.pas the service that
 // returns the rows, uReport.pas the TGDIPages rendering, uMainForm.pas the form.
 //
 // Worth noting:
 // - a service method returns a DTO array, so data retrieval and rendering stay
-//   separate — the report never touches the ORM
+//   separate - the report never touches the ORM
 // - the invoice table is a TTableLayout; DrawTableRow paginates and repeats
 //   the header row on its own
 // - tagged PDF/UA export, switched on before the first drawing command
