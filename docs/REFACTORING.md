@@ -177,7 +177,11 @@ checked against that record:
      and its commit recorded here — never between two baselines, or a
      difference cannot be told from the change under test
 
-   **Pinned:** `d60cc6e80` (2026-10-02). **Checked:** today's `main`,
+   **Pinned:** `d60cc6e80` (2026-10-02); from Phase 1 on a commit of the
+   `pdf-font-layer` branch of `landrix/mORMot2`, which is `d60cc6e80` plus
+   the new `mormot.lib.*` units (see Phase 1, "Where the code lives"):
+   `89d652a77` (2026-10-04, `mormot.lib.core` added, no other change).
+   **Checked:** today's `main`,
    `test_runner` 259/259 on Windows (FPC Win64, Delphi 7, Delphi 2010),
    298/298 on Linux, 317/317 on macOS (fpcupdeluxe, FPC 3.2.3).
    `mormot_demo` (SQLite from `static/`) builds and exports on all three
@@ -255,13 +259,16 @@ units of their libraries:
 | `mormot.lib.freetype` | FreeType bindings and backend | `mormot.pdf.freetype` |
 | `mormot.lib.harfbuzz` | HarfBuzz shaping and subsetting | `mormot.pdf.harfbuzz`, `mormot.pdf.hbsubset` |
 
-**Where the code lives** (agreed 2026-10-02 in PR #2, adjusted 2026-10-03):
-the new units `mormot.lib.freetype` and `mormot.lib.harfbuzz` here in `src/`,
-where `pdfcheck`, the golden files and the check machines are, under their
-target names, so the final move is a plain copy. `mormot.lib.uniscribe` is a
-trunk unit - a copy here would shadow the package's one, as before PR #2 - so
-`mormot.lib.core` and the additions to `mormot.lib.uniscribe` go to the trunk
-as small PRs of their own, and the pin moves with them.
+**Where the code lives** (agreed with Martin 2026-10-04, replacing the plan
+of PR #2): the `mormot.lib.*` units in the branch `pdf-font-layer` of
+`landrix/mORMot2`, at their final place `src/lib` - `mormot.lib.uniscribe` is
+extended in place, where a copy here would shadow the package's unit, as
+before PR #2. This repository keeps the PDF units, the tests, the golden
+files, `pdfcheck`, the demos and the CI, and builds against a pinned commit
+of that branch (Phase 0 step 3); it gets PRs only where it has to follow -
+the pin, the PDF units switching to the new interfaces. The branch starts
+from the pinned trunk commit and is synchronized with the trunk per
+baseline; the end of Phase 1 is one PR to `synopse/mORMot2`.
 
 - `Pdf` dropped from names that are not PDF-specific; the PDF types
   (`TPdfFileFormat`, `TPdfStructRole`, the font name constants) stay on the
