@@ -195,7 +195,14 @@ checked against that record:
    Win32/Win64, 335/335 on Debian 13 aarch64 and 354/354 on macOS aarch64
    (FPC 3.2.3), 347/347 on Linux aarch64 (WSL, FPC 3.2.2); golden files
    unchanged, the 45 demo PDFs identical to `2026-10-04_pr9` but for the
-   date in two footers.
+   date in two footers. Still against `5a1fb60fc`, PR #14 (HarfBuzz guard)
+   and PR #15 (the old POSIX backends replaced by `mormot.lib.freetype` and
+   `mormot.lib.harfbuzz`): 296/296 on Windows x64 (FPC 3.2.2) and Windows x86
+   (Delphi 7, Delphi 2010), 335/335 on Debian 13 aarch64, 354/354 on macOS
+   aarch64 (FPC 3.2.3), 347/347 on Linux aarch64 (WSL, FPC 3.2.2), 296/296
+   on Windows aarch64 (FPC 3.3.1); golden files unchanged, the 45 demo PDFs
+   of `2026-10-07_pr15` identical to `2026-10-07_pr13` after normalization,
+   veraPDF 1.30.2 `ua1` 35/35 and `3u` 5/5.
    `mormot_demo` (SQLite from `static/`) builds and exports on all three
    Windows compilers, the PDFs identical after normalization. FPC warns of
    a duplicate `mormot.lib.uniscribe` (the package's and our copy) — gone

@@ -485,10 +485,11 @@ differs from hb-subset:
 
 **The bindings already in the trunk:** `mormot.lib.uniscribe` holds Uniscribe
 and the FontSub API (`CreateFontPackage`, `HasCreateFontPackage`) — the
-fork's copy was dropped in PR #2. FreeType and HarfBuzz have no trunk
-binding; theirs sit in `mormot.pdf.freetype` (FT types and loader),
-`mormot.pdf.harfbuzz` (uses `mormot.pdf.freetype` for the face) and
-`mormot.pdf.hbsubset` (its own `hb_blob/face/set` imports).
+fork's copy was dropped in PR #2. FreeType and HarfBuzz had no trunk
+binding; theirs sat in `mormot.pdf.freetype` (FT types and loader),
+`mormot.pdf.harfbuzz` (used `mormot.pdf.freetype` for the face) and
+`mormot.pdf.hbsubset` (its own `hb_blob/face/set` imports) - since PR #15
+they are `mormot.lib.freetype` and `mormot.lib.harfbuzz`.
 
 **Unit names, decided** (gist, 2026-10-03): the trunk keeps `mormot.lib.*`
 for library units, so the contracts go to one `mormot.lib.core` and the

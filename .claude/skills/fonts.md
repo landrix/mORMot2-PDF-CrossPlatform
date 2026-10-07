@@ -688,7 +688,7 @@ a 4-char ASCII name read as a little-endian DWORD on LE machines.
 
 FreeType's `FT_Load_Sfnt_Table` uses the `FT_MAKE_TAG` big-endian convention.
 `TFreeTypeFontProvider.GetFontData` applies `bswap32(TableTag)` before calling
-`FT_Load_Sfnt_Table`. `SwapEndian(0)` = 0, preserving the tag=0 convention
+`FT_Load_Sfnt_Table`. `bswap32(0)` = 0, preserving the tag=0 convention
 ("return entire font file") used by the whole-font embedding path.
 
 | Table | LE tag (PDF engine) | BE tag (FreeType) |

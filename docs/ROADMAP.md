@@ -74,9 +74,9 @@ v0.10.0 (2026-09-30).
   `PdfPlatformRegistered` (now `FontProvider`, `FontEnumerator`, `FontDC`,
   `FontShaper`, `FontSubsetter`, `RegisterFontPlatform`,
   `FontPlatformRegistered`), and `IPdfTextShaper` and `IPdfFontSubsetter`,
-  whose signatures changed (`IFontShaper.Shape` returns `TFontShapedRuns`,
-  `IFontSubsetter.Subset` takes the font handle). The PDF output is
-  unchanged
+  whose signatures changed (`IFontShaper.Shape` returns a boolean and the
+  shaped parts through `out Runs: TFontShapedRuns`, `IFontSubsetter.Subset`
+  takes the font handle). The PDF output is unchanged
 - **POSIX backends moved to mORMot2 (R-28, refactoring Phase 1):**
   `mormot.pdf.freetype`, `mormot.pdf.harfbuzz` and `mormot.pdf.hbsubset` are
   gone; `mormot.lib.freetype` and `mormot.lib.harfbuzz` of mORMot2 replace

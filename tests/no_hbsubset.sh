@@ -55,6 +55,16 @@ if [ "${NO_HBSUBSET_INNER:-}" = 1 ]; then
     exit 3
   fi
   echo "== masked $masked libharfbuzz-subset file(s) inside the namespace"
+  # the golden files hold subset faces, so without the subsetter every case
+  # would differ: hide this machine's baseline too, the golden suites skip
+  golden="$(dirname "$RUNNER")/golden"
+  if [ -d "$golden" ]; then
+    hidden="$(mktemp -d)" && mount --bind "$hidden" "$golden" 2>/dev/null || {
+      echo "GOLDEN-MASK-FAILED"
+      exit 3
+    }
+    echo "== golden baseline hidden inside the namespace (whole faces embedded)"
+  fi
   echo
   echo "== test_runner WITHOUT libharfbuzz-subset"
   "$RUNNER" 2>&1
@@ -106,11 +116,16 @@ out="$(unshare --mount --map-root-user "$0" 2>&1)"
 rc=$?
 unset NO_HBSUBSET_INNER NO_HBSUBSET_LIBS
 
-if printf '%s' "$out" | grep -q MASK-FAILED; then
+if printf '%s' "$out" | grep -qx MASK-FAILED; then
   die "could not bind-mount over the library inside the namespace.
   Your kernel may not allow unprivileged user namespaces. Check with:
     sysctl kernel.unprivileged_userns_clone
   Then either enable it, or run this script with sudo."
+fi
+if printf '%s' "$out" | grep -qx GOLDEN-MASK-FAILED; then
+  die "could not hide the golden baseline inside the namespace: without the
+  subsetter every golden case would differ. Move $(dirname "$RUNNER")/golden
+  aside and run this script again."
 fi
 if [ "$rc" != 0 ] && [ -z "$out" ]; then
   die "unshare failed (exit $rc) - unprivileged user namespaces may be disabled"
