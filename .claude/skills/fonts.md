@@ -1,7 +1,7 @@
 # Font Handling — Deep Reference
 
 Sources: `src/core/mormot.ui.pdf.pas`, `src/core/mormot.pdf.types.pas`,
-`src/platform/windows/mormot.pdf.gdi.pas`, mORMot2 `src/lib/mormot.lib.freetype.pas`
+mORMot2 `src/lib/mormot.lib.uniscribe.pas` (GDI), `src/lib/mormot.lib.freetype.pas`
 
 **Skill boundaries:**
 - User-facing font mode selection → brief overview here; see also `.claude/skills/pdf-engine.md` §"Font Strategy"
