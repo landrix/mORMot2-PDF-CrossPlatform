@@ -529,7 +529,7 @@ AddUnicodeHexTextNoUniScribe (U+4E2D):
 Table tags from `GetTtfData` are little-endian DWORDs (`PCardinal(name)^`).
 FreeType's `FT_Load_Sfnt_Table` expects big-endian (`FT_MAKE_TAG` convention).
 `TFreeTypeFontProvider.GetFontData` applies `bswap32(TableTag)` before the call.
-`SwapEndian(0)` = 0 — the tag=0 "return whole font file" convention is preserved.
+`bswap32(0)` = 0 — the tag=0 "return whole font file" convention is preserved.
 
 ```
 GetTtfData (pdf.pas:3604) — Linux/macOS path
@@ -538,7 +538,7 @@ GetTtfData (pdf.pas:3604) — Linux/macOS path
 │
 │  FontProvider.GetFontData(aDC, tag, 0, nil, 0)
 │    → TFreeTypeFontProvider.GetFontData (mormot.lib.freetype)
-│       SwapEndian($70616D63) = $636D6170   ← FT_MAKE_TAG('c','m','a','p')
+│       bswap32($70616D63) = $636D6170   ← FT_MAKE_TAG('c','m','a','p')
 │       FT_Load_Sfnt_Table(face, $636D6170, ...)  → returns CMAP bytes
 │    → returns byte count
 │
