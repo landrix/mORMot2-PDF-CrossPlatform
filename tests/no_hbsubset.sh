@@ -45,8 +45,16 @@ RUNNER="$(ls "$ROOT"/tests/bin/*-linux/test_runner 2>/dev/null | head -1)"
 if [ "${NO_HBSUBSET_INNER:-}" = 1 ]; then
   masked=0
   empty="$(mktemp)"
+  hidden=""
+  trap 'rm -f "$empty"; [ -n "$hidden" ] && rmdir "$hidden"' EXIT
+  # the names are symlinks to one file: mask each real file once, or a later
+  # mount lands on the empty file itself, which then cannot be removed
+  seen=" "
   for so in $NO_HBSUBSET_LIBS; do
-    if mount --bind "$empty" "$so" 2>/dev/null; then
+    real="$(readlink -f "$so")"
+    case "$seen" in *" $real "*) continue ;; esac
+    seen="$seen$real "
+    if mount --bind "$empty" "$real" 2>/dev/null; then
       masked=$((masked + 1))
     fi
   done
@@ -110,11 +118,35 @@ echo
 
 command -v unshare >/dev/null 2>&1 || die "unshare not found (package util-linux)"
 
+# the masked run writes its PDFs (tagged_unicode_*.pdf) next to the runner,
+# with whole faces embedded: keep those of the reference run, and put them
+# back however this script ends
+runner_dir="$(dirname "$RUNNER")"
+keep="$(mktemp -d)" || die "cannot create a temporary folder"
+kept=0
+restore_pdfs() {
+  # only a complete backup goes back: a partial one could hold a cut file
+  if [ "$kept" = 1 ] && ls "$keep"/*.pdf >/dev/null 2>&1; then
+    cp -p "$keep"/*.pdf "$runner_dir"/ || {
+      echo "error: could not put the PDFs back - they are kept in $keep" >&2
+      return
+    }
+  fi
+  rm -rf "$keep"
+}
+trap restore_pdfs EXIT
+trap 'exit 130' INT TERM
+if ls "$runner_dir"/*.pdf >/dev/null 2>&1; then
+  cp -p "$runner_dir"/*.pdf "$keep"/ || die "cannot keep the PDFs of the reference run"
+fi
+kept=1
+
 export NO_HBSUBSET_INNER=1
 export NO_HBSUBSET_LIBS="$libs"
 out="$(unshare --mount --map-root-user "$0" 2>&1)"
 rc=$?
 unset NO_HBSUBSET_INNER NO_HBSUBSET_LIBS
+
 
 if printf '%s' "$out" | grep -qx MASK-FAILED; then
   die "could not bind-mount over the library inside the namespace.
@@ -154,12 +186,20 @@ echo
 if [ "$status" = 0 ]; then
   echo "RESULT: the fallback holds."
   echo
-  echo "Rebuild the demos and run them the same way to see the size difference -"
-  echo "without the subsetter the whole face is embedded, so the PDFs grow a lot"
-  echo "(chinese_demo is the clearest case, a CJK face being large):"
+  echo "To see the size difference, run a demo with the library masked the same"
+  echo "way - without the subsetter the whole face is embedded, so the PDFs grow"
+  echo "a lot (chinese_demo is the clearest case, a CJK face being large):"
   echo
-  echo "  NO_HBSUBSET_INNER=1 NO_HBSUBSET_LIBS='$libs' \\"
-  echo "    unshare --mount --map-root-user <your-demo-binary>"
+  mounts=""
+  reals=" "
+  for so in $libs; do
+    real="$(readlink -f "$so")"
+    case "$reals" in *" $real "*) continue ;; esac
+    reals="$reals$real "
+    mounts="${mounts}mount --bind /dev/null $real && "
+  done
+  echo "  unshare --mount --map-root-user sh -c \\"
+  echo "    '${mounts}exec <your-demo-binary>'"
   echo
   echo "Still untested: a HarfBuzz OLDER than 2.9, which loads but lacks"
   echo "hb_subset_or_fail. That needs an old distribution, e.g. Debian 11."
