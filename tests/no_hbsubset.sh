@@ -3,7 +3,7 @@
 # Run the test suite and the console demos with libharfbuzz-subset genuinely
 # out of reach, to exercise the fallback that embeds the whole face.
 #
-# Why this is a script and not a test case: mormot.pdf.hbsubset loads the
+# Why this is a script and not a test case: mormot.lib.harfbuzz loads the
 # library and registers FontSubsetter in its initialization section, which
 # runs before any test code exists. A test can observe the outcome but cannot
 # choose it. TestSubsetFallbackWithoutSubsetter only simulates the state by

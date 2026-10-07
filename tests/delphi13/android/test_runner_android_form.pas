@@ -60,7 +60,7 @@ uses
   mormot.core.log,
   mormot.pdf.types,
   mormot.lib.core,
-  mormot.pdf.freetype,
+  mormot.lib.freetype,
   mormot.core.os,
   mormot.core.unicode,
   mormot.core.text,

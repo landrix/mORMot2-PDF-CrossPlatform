@@ -96,9 +96,8 @@ uses
   {$endif USE_UNISCRIBE}
   mormot.pdf.gdi,        // registers GDI backend via RegisterFontPlatform()
   {$else}
-  mormot.pdf.freetype,   // registers FreeType2 backend via RegisterFontPlatform()
-  mormot.pdf.harfbuzz,   // registers FontShaper when libharfbuzz loads
-  mormot.pdf.hbsubset,   // registers FontSubsetter when libharfbuzz-subset loads
+  mormot.lib.freetype,   // registers the FreeType2 services via RegisterFontPlatform()
+  mormot.lib.harfbuzz,   // FontShaper / FontSubsetter when libharfbuzz(-subset) loads
   {$endif OSWINDOWS}
   mormot.lib.core,       // font interfaces, set by the backends above
   mormot.pdf.types,      // PDF types: file format, structure roles
@@ -8011,7 +8010,7 @@ begin
   if FontDC = nil then
     raise ESynException.Create(
       'TPdfDocument: no platform backend registered - ' +
-      'ensure libfreetype is installed and mormot.pdf.freetype is used');
+      'ensure libfreetype is installed and mormot.lib.freetype is used');
   fDC := FontDC.CreateDC;
   fScreenLogPixels := FontDC.GetScreenLogPixels(fDC);
   {$endif OSWINDOWS}

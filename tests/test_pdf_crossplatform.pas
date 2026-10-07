@@ -18,7 +18,7 @@ uses
   mormot.lib.core,
   mormot.pdf.types,
   {$ifndef OSWINDOWS}
-  mormot.pdf.freetype,  // ExtractSfntFromTtc + FreeType face validation
+  mormot.lib.freetype,  // ExtractSfntFromTtc + FreeType face validation
   {$endif OSWINDOWS}
   mormot.ui.pdf;        // registers the backend and FontShaper itself
 
