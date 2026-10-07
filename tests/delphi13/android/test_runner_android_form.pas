@@ -59,6 +59,7 @@ uses
   {$endif OSANDROID}
   mormot.core.log,
   mormot.pdf.types,
+  mormot.lib.core,
   mormot.pdf.freetype,
   mormot.core.os,
   mormot.core.unicode,
@@ -122,7 +123,7 @@ var
 {$endif OSANDROID}
 begin
   result := FormatUtf8('FreeType loaded: %, platform registered: %' + CRLF,
-    [BOOL_STR[LoadFreeType], BOOL_STR[PdfPlatformRegistered]]);
+    [BOOL_STR[LoadFreeType], BOOL_STR[FontPlatformRegistered]]);
   {$ifdef OSANDROID}
   if not FreeType.Loaded then
   begin

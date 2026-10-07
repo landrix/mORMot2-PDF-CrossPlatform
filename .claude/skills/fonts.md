@@ -5,7 +5,7 @@ Sources: `src/core/mormot.ui.pdf.pas`, `src/core/mormot.pdf.types.pas`,
 
 **Skill boundaries:**
 - User-facing font mode selection → brief overview here; see also `.claude/skills/pdf-engine.md` §"Font Strategy"
-- Platform interface (IPdfPlatformFont, etc.) → see `.claude/skills/platform-backends.md`
+- Platform interface (IFontProvider, etc.) → see `.claude/skills/platform-backends.md`
 - Call graph of font paths → see `.claude/skills/call-graph.md` Path 4a–4f
 
 ---
@@ -65,7 +65,7 @@ untagged output.
 | `EmbeddedWholeTtf` | Behaviour |
 |---|---|
 | `true` | Complete TTF bytes embedded. Safe for all scripts including RTL/Arabic. For a `.ttc`, the loaded face alone is extracted as a standalone sfnt — a raw `ttcf` container is not a valid `/FontFile2`. |
-| `false` (default), Linux/macOS | Subset via `IPdfFontSubsetter` (`mormot.pdf.hbsubset`, `libharfbuzz-subset`, R-12). Glyph IDs retained, so content streams, `/W` and `/ToUnicode` stay valid. Safe for Latin, CJK, shaped RTL and tagged output. |
+| `false` (default), Linux/macOS | Subset via `IFontSubsetter` (`mormot.pdf.hbsubset`, `libharfbuzz-subset`, R-12). Glyph IDs retained, so content streams, `/W` and `/ToUnicode` stay valid. Safe for Latin, CJK, shaped RTL and tagged output. |
 | `false` (default), Windows | Subset via `CreateFontPackage` with a glyph keep list (`TTFCFP_FLAGS_GLYPHLIST`, R-15). Glyph IDs retained, so it is safe for the same cases as hb-subset — Latin, CJK, shaped Arabic (Uniscribe), tagged output. |
 
 The whole face is embedded instead — silently, as before R-12 — when no
@@ -185,7 +185,7 @@ Arabic output (R-19, 2026-09-26):
 | `fUsedWide` | `TUsedWide` (dyn. array) | WinAnsi | parallel to `fUsedWideChar`: packed `(Width: word; Glyph: word)` per code point |
 | `fWinAnsiUsed` | `TSynAnsicharSet` | WinAnsi | 256-bit set of WinAnsi chars used (U+0020–U+00FF); drives `/FirstChar`–`/LastChar /Widths` |
 | `fDefaultWidth` | `cardinal` | WinAnsi | advance width of space char; used as PDF `/DW` for unregistered glyphs |
-| `fHGDI` | `TPdfPlatformFontHandle` | both | platform font handle (GDI `HFONT` or FreeType `FT_Face`) |
+| `fHGDI` | `TFontHandle` | both | platform font handle (GDI `HFONT` or FreeType `FT_Face`) |
 | `fFixedWidth` | `boolean` | WinAnsi | true = monospace; `/W` is omitted, all glyphs use `/DW` |
 | `fIsSymbolFont` | `boolean` | Unicode | true = Symbol charset (glyphs at U+F0xx) |
 
@@ -210,7 +210,7 @@ the WinAnsi font's arrays only contain actually-used code points.
 
 Called once per Unicode font instance: `TPdfTtf.Create(self).Free`.
 Uses `GetDCWithFont` to select the font into the DC.
-Reads three TTF tables via `PdfPlatformFont.GetFontData`:
+Reads three TTF tables via `FontProvider.GetFontData`:
 
 1. **`head` + `hhea`** — provides `UnitsPerEm` and `numOfLongHorMetrics`
 2. **`cmap`** — Format 4 segment map: populates
@@ -293,7 +293,7 @@ TPdfWrite.AddUnicodeHexText (pdf.pas:5549):
     {$ifdef USE_UNISCRIBE}                       // Windows only
     shaped := AddUnicodeHexTextUniScribe(PW, Len, ttf.WinAnsiFont, NextLine, Canvas)
     {$endif}
-    if not shaped and PdfTextShaper <> nil:      // Linux/macOS HarfBuzz
+    if not shaped and FontShaper <> nil:      // Linux/macOS HarfBuzz
       shaped := AddUnicodeHexTextHarfBuzz(...)
   if not shaped:
     AddUnicodeHexTextNoUniScribe(...)            // Latin fallback
@@ -447,8 +447,8 @@ if WinAnsiFont.fUsedWideChar.Count = 0:
 
 Font embedding decision:
   if EmbeddedWholeTtf = true (set by Tagged on Windows):
-    PdfPlatformFont.GetFontData(DC, 0, 0, nil, 0)   → total byte count
-    PdfPlatformFont.GetFontData(DC, 0, 0, Buf, Size) → full TTF bytes → embed as /FontFile2
+    FontProvider.GetFontData(DC, 0, 0, nil, 0)   → total byte count
+    FontProvider.GetFontData(DC, 0, 0, Buf, Size) → full TTF bytes → embed as /FontFile2
     safe for all scripts; shaped GSUB glyph IDs are valid in the complete font
     .ttc: the FreeType backend returns just the loaded face, rebuilt as an sfnt
           (ExtractSfntFromTtc); Windows does the same via CreateFontPackage
@@ -554,7 +554,7 @@ back as 0** and all shaped glyphs stacked on one spot. Measured on HarfBuzz
 | **yes** | **default / `NO_HINTING`** | **253 292 636 404 456** (26.6, `div 64`) |
 | yes | `NO_SCALE` | 0 0 1 0 0 |
 
-`ShapeText` therefore sizes the face, sets `FT_LOAD_NO_HINTING`, and converts
+`Shape` therefore sizes the face, sets `FT_LOAD_NO_HINTING`, and converts
 26.6 to PDF units with `From26Dot6()`. Regression test:
 `TestTextShaperAdvances` in `tests/test_pdf_crossplatform.pas`.
 
@@ -583,15 +583,15 @@ Fix (P3-C, applied): `(int64(hmtx_advance) * 1000) div UnitsPerEm` in `TPdfTtf.C
 
 ---
 
-### P3-B — Implementiert (aktuell wirkungslos für Noto Naskh Arabic)
+### P3-B — Implemented (no effect with Noto Naskh Arabic)
 
-P3-B ist implementiert:
-- `IPdfTextShaper.ShapeText` hat `out AOffsets: TIntegerDynArray` (`mormot.pdf.types.pas`)
-- `ShapeText` fills `AOffsets[i] = From26Dot6(positions[i].x_offset)` (`harfbuzz.pas`)
-- `AddUnicodeHexTextHarfBuzz` verwendet `TJ`-Operator wenn ein Offset ≠ 0
+- `IFontShaper.Shape` returns the offset per glyph in `Runs[0].Offsets`
+  (`TFontShapedRun`, `mormot.lib.core`)
+- the HarfBuzz shaper fills `Offsets[i] = From26Dot6(positions[i].x_offset)`
+- `AddUnicodeHexTextHarfBuzz` writes a `TJ` when an offset is not 0
 
-Für Noto Naskh Arabic sind alle `x_offset = 0` → `hasOffsets` immer false → `Tj`-Pfad immer aktiv.
-P3-B kann bei anderen Fonts mit GPOS-Kerning relevant werden.
+With Noto Naskh Arabic every `x_offset` is 0, so `hasOffsets` stays false and
+the `Tj` path is taken; fonts with GPOS positioning take the `TJ` path.
 
 ---
 
@@ -676,7 +676,7 @@ For full interface documentation see `.claude/skills/platform-backends.md`.
 `GetFontData` / `FT_Load_Sfnt_Table` are used by `TPdfTtf.Create` to read raw TTF table bytes
 (`cmap`, `hmtx`, `head`, `hhea`) for CMAP loading and glyph width extraction.
 
-The platform layer is reached via the global `PdfPlatformFont: IPdfPlatformFont` interface.
+The platform layer is reached via the global `FontProvider: IFontProvider` interface.
 Registration happens in the `initialization` section of the backend unit.
 
 ---

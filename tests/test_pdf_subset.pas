@@ -1,5 +1,5 @@
 /// Font subsetting unit tests (ROADMAP R-12)
-// - tests IPdfFontSubsetter in isolation, on raw sfnt bytes
+// - tests IFontSubsetter in isolation, on raw sfnt bytes
 // - POSIX only: Windows subsets through CreateFontPackage, not this interface
 // - every test skips when libharfbuzz-subset is not installed
 unit test_pdf_subset;
@@ -16,6 +16,7 @@ uses
   mormot.core.text,
   mormot.core.unicode,
   mormot.core.test,
+  mormot.lib.core,
   mormot.pdf.types,
   {$ifndef OSWINDOWS}
   mormot.pdf.hbsubset,
@@ -23,7 +24,7 @@ uses
   mormot.ui.pdf;
 
 type
-  /// IPdfFontSubsetter test cases
+  /// IFontSubsetter test cases
   TPdfSubsetTests = class(TSynTestCase)
   protected
     fFace: RawByteString;
@@ -262,7 +263,7 @@ end;
 
 
 { an empty request - Default() does not exist in Delphi 7 }
-procedure ClearRequest(out req: TPdfFontSubsetRequest);
+procedure ClearRequest(out req: TFontSubsetRequest);
 begin
   req.Unicodes := nil;
   req.Glyphs := nil;
@@ -275,16 +276,16 @@ const
   FONTS: array[0..3] of RawUtf8 = (
     'Liberation Sans', 'Arial', 'DejaVu Sans', 'Verdana');
 var
-  dc: TPdfPlatformDC;
-  lf: TPdfLogFont;
-  font, prev: TPdfPlatformFontHandle;
+  dc: TFontDC;
+  lf: TFontRequest;
+  font, prev: TFontHandle;
   size: cardinal;
   f: PtrInt;
 begin
   result := false;
-  if PdfFontSubsetter = nil then
+  if FontSubsetter = nil then
   begin
-    Check(true, 'SKIP: no IPdfFontSubsetter registered (libharfbuzz-subset absent)');
+    Check(true, 'SKIP: no IFontSubsetter registered (libharfbuzz-subset absent)');
     exit;
   end;
   if fFace <> '' then
@@ -292,7 +293,7 @@ begin
     result := true;
     exit;
   end;
-  dc := PdfPlatformDCProvider.CreateDC;
+  dc := FontDC.CreateDC;
   try
     for f := 0 to high(FONTS) do
     begin
@@ -300,19 +301,19 @@ begin
       lf.FaceName := SynUnicode(FONTS[f]);
       lf.Height := -1000;
       lf.Weight := 400;
-      font := PdfPlatformFont.CreateFont(lf);
+      font := FontProvider.CreateFont(lf);
       if font = nil then
         continue;
-      prev := PdfPlatformFont.SelectFont(dc, font);
-      size := PdfPlatformFont.GetFontData(dc, 0, 0, nil, 0);
-      if size <> PdfPlatformFont.FontDataError then
+      prev := FontProvider.SelectFont(dc, font);
+      size := FontProvider.GetFontData(dc, 0, 0, nil, 0);
+      if size <> FontProvider.FontDataError then
       begin
         SetLength(fFace, size);
-        if PdfPlatformFont.GetFontData(dc, 0, 0, pointer(fFace), size) <> size then
+        if FontProvider.GetFontData(dc, 0, 0, pointer(fFace), size) <> size then
           fFace := '';
       end;
-      PdfPlatformFont.SelectFont(dc, prev);
-      PdfPlatformFont.DeleteFont(font);
+      FontProvider.SelectFont(dc, prev);
+      FontProvider.DeleteFont(font);
       if (fFace <> '') and
          (copy(fFace, 1, 4) = #0#1#0#0) and
          (SfntCmapLookup(fFace, ord('A')) <> 0) then
@@ -323,7 +324,7 @@ begin
       fFace := '';
     end;
   finally
-    PdfPlatformDCProvider.DeleteDC(dc);
+    FontDC.DeleteDC(dc);
   end;
   result := fFace <> '';
   if not result then
@@ -336,14 +337,14 @@ const
   CFF_FONTS: array[0..2] of RawUtf8 = (
     'Hiragino Sans GB', 'Hiragino Mincho ProN', 'Source Han Sans');
 var
-  dc: TPdfPlatformDC;
-  lf: TPdfLogFont;
-  font, prev: TPdfPlatformFontHandle;
+  dc: TFontDC;
+  lf: TFontRequest;
+  font, prev: TFontHandle;
   size: cardinal;
   f: PtrInt;
 begin
   aFace := '';
-  dc := PdfPlatformDCProvider.CreateDC;
+  dc := FontDC.CreateDC;
   try
     for f := 0 to high(CFF_FONTS) do
     begin
@@ -351,25 +352,25 @@ begin
       lf.FaceName := SynUnicode(CFF_FONTS[f]);
       lf.Height := -1000;
       lf.Weight := 400;
-      font := PdfPlatformFont.CreateFont(lf);
+      font := FontProvider.CreateFont(lf);
       if font = nil then
         continue;
-      prev := PdfPlatformFont.SelectFont(dc, font);
-      size := PdfPlatformFont.GetFontData(dc, 0, 0, nil, 0);
-      if size <> PdfPlatformFont.FontDataError then
+      prev := FontProvider.SelectFont(dc, font);
+      size := FontProvider.GetFontData(dc, 0, 0, nil, 0);
+      if size <> FontProvider.FontDataError then
       begin
         SetLength(aFace, size);
-        if PdfPlatformFont.GetFontData(dc, 0, 0, pointer(aFace), size) <> size then
+        if FontProvider.GetFontData(dc, 0, 0, pointer(aFace), size) <> size then
           aFace := '';
       end;
-      PdfPlatformFont.SelectFont(dc, prev);
-      PdfPlatformFont.DeleteFont(font);
+      FontProvider.SelectFont(dc, prev);
+      FontProvider.DeleteFont(font);
       if copy(aFace, 1, 4) = 'OTTO' then
         break;
       aFace := '';
     end;
   finally
-    PdfPlatformDCProvider.DeleteDC(dc);
+    FontDC.DeleteDC(dc);
   end;
   result := aFace <> '';
   if not result then
@@ -379,7 +380,7 @@ end;
 function TPdfSubsetTests.SubsetOf(const Unicodes, Glyphs: array of integer;
   out Sub: RawByteString): boolean;
 var
-  req: TPdfFontSubsetRequest;
+  req: TFontSubsetRequest;
   i: PtrInt;
 begin
   SetLength(req.Unicodes, length(Unicodes));
@@ -388,16 +389,16 @@ begin
   SetLength(req.Glyphs, length(Glyphs));
   for i := 0 to high(Glyphs) do
     req.Glyphs[i] := Glyphs[i];
-  result := PdfFontSubsetter.Subset(fFace, req, Sub);
+  result := FontSubsetter.Subset(fFace, req, nil, Sub);
 end;
 
 procedure TPdfSubsetTests.TestSubsetterRegistered;
 begin
   {$ifdef OSWINDOWS}
-  Check(PdfFontSubsetter = nil, 'Windows subsets via CreateFontPackage');
+  Check(FontSubsetter = nil, 'Windows subsets via CreateFontPackage');
   {$else}
   if LoadHarfBuzzSubset then
-    Check(PdfFontSubsetter <> nil, 'libharfbuzz-subset loaded but not registered')
+    Check(FontSubsetter <> nil, 'libharfbuzz-subset loaded but not registered')
   else
     Check(true, 'SKIP: libharfbuzz-subset not installed');
   {$endif OSWINDOWS}
@@ -464,16 +465,16 @@ end;
 procedure TPdfSubsetTests.TestSubsetAcceptsCff;
 var
   face, sub: RawByteString;
-  req: TPdfFontSubsetRequest;
+  req: TFontSubsetRequest;
 begin
-  if PdfFontSubsetter = nil then
+  if FontSubsetter = nil then
   begin
-    Check(true, 'SKIP: no IPdfFontSubsetter registered');
+    Check(true, 'SKIP: no IFontSubsetter registered');
     exit;
   end;
   // a malformed OTTO header is still refused, like any other garbage
   ClearRequest(req);
-  Check(not PdfFontSubsetter.Subset('OTTO' + StringOfChar(#0, 60), req, sub),
+  Check(not FontSubsetter.Subset('OTTO' + StringOfChar(#0, 60), req, nil, sub),
     'a truncated CFF face must not be subset');
   CheckEqual(sub, '', 'no output expected');
   // a real CFF face is subset like any other: it goes to /FontFile3 with
@@ -484,7 +485,7 @@ begin
   SetLength(req.Glyphs, 2);
   req.Glyphs[0] := 1;
   req.Glyphs[1] := 2;
-  Check(PdfFontSubsetter.Subset(face, req, sub), 'a CFF face must be subset');
+  Check(FontSubsetter.Subset(face, req, nil, sub), 'a CFF face must be subset');
   Check(sub <> '', 'subset output expected');
   CheckEqual(copy(sub, 1, 4), 'OTTO', 'a CFF subset stays CFF');
   Check(length(sub) < length(face) div 2, 'the subset must be much smaller');
@@ -493,12 +494,12 @@ end;
 procedure TPdfSubsetTests.TestSubsetRejectsGarbage;
 var
   sub, junk: RawByteString;
-  req: TPdfFontSubsetRequest;
+  req: TFontSubsetRequest;
   i: PtrInt;
 begin
-  if PdfFontSubsetter = nil then
+  if FontSubsetter = nil then
   begin
-    Check(true, 'SKIP: no IPdfFontSubsetter registered');
+    Check(true, 'SKIP: no IFontSubsetter registered');
     exit;
   end;
   SetLength(junk, 4096);
@@ -509,7 +510,7 @@ begin
   SetLength(req.Unicodes, 1);
   req.Unicodes[0] := ord('A');
   // must not crash; whatever comes back, it must not claim to hold glyph A
-  if PdfFontSubsetter.Subset(junk, req, sub) then
+  if FontSubsetter.Subset(junk, req, nil, sub) then
     Check(SfntGlyphLength(sub, 1) <= 0, 'garbage produced a glyph')
   else
     CheckEqual(sub, '', 'failure must not return data');
@@ -580,9 +581,9 @@ procedure TPdfSubsetEngineTests.TestSubsetEmbeddedIsSmaller;
 var
   whole, sub: RawByteString;
 begin
-  if PdfFontSubsetter = nil then
+  if FontSubsetter = nil then
   begin
-    Check(true, 'SKIP: no IPdfFontSubsetter registered');
+    Check(true, 'SKIP: no IFontSubsetter registered');
     exit;
   end;
   whole := BuildPdf(SansFont, 'Hello World', true, false, false);
@@ -596,9 +597,9 @@ procedure TPdfSubsetEngineTests.TestSubsetSharedStreamAndTag;
 var
   pdf, ttf, tag: RawByteString;
 begin
-  if PdfFontSubsetter = nil then
+  if FontSubsetter = nil then
   begin
-    Check(true, 'SKIP: no IPdfFontSubsetter registered');
+    Check(true, 'SKIP: no IFontSubsetter registered');
     exit;
   end;
   // Latin runs through the WinAnsi instance, Omega through the Type0 one
@@ -623,9 +624,9 @@ const
 var
   pdf, ttf: RawByteString;
 begin
-  if PdfFontSubsetter = nil then
+  if FontSubsetter = nil then
   begin
-    Check(true, 'SKIP: no IPdfFontSubsetter registered');
+    Check(true, 'SKIP: no IFontSubsetter registered');
     exit;
   end;
   // Droid Sans Fallback has no bold face: Bold resolves to the same file, so
@@ -647,9 +648,9 @@ procedure TPdfSubsetEngineTests.TestSubsetTagIsDeterministic;
 var
   a, b: RawByteString;
 begin
-  if PdfFontSubsetter = nil then
+  if FontSubsetter = nil then
   begin
-    Check(true, 'SKIP: no IPdfFontSubsetter registered');
+    Check(true, 'SKIP: no IFontSubsetter registered');
     exit;
   end;
   a := BuildPdf(SansFont, 'Same input', false, false, false);
@@ -661,16 +662,16 @@ end;
 
 procedure TPdfSubsetEngineTests.TestSubsetFallbackWithoutSubsetter;
 var
-  saved: IPdfFontSubsetter;
+  saved: IFontSubsetter;
   whole, sub: RawByteString;
 begin
-  saved := PdfFontSubsetter;
-  PdfFontSubsetter := nil;
+  saved := FontSubsetter;
+  FontSubsetter := nil;
   try
     whole := BuildPdf(SansFont, 'Hello', true, false, false);
     sub := BuildPdf(SansFont, 'Hello', false, false, false);
   finally
-    PdfFontSubsetter := saved;
+    FontSubsetter := saved;
   end;
   {$ifdef OSWINDOWS}
   Check(true, 'Windows subsets through CreateFontPackage, not through this');

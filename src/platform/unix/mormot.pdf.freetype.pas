@@ -9,10 +9,10 @@ unit mormot.pdf.freetype;
    FreeType2 Platform Backend for POSIX
    - FreeType2 minimal API bindings (dynamic loading)
    - Font discovery: /usr/share/fonts, ~/.fonts, macOS /Library/Fonts
-   - TPdfFreeTypeFontProvider  implements IPdfPlatformFont
-   - TPdfFreeTypeSystemFonts   implements IPdfSystemFonts
-   - TPdfFreeTypeDCProvider    implements IPdfPlatformDC
-   - initialization registers all three via RegisterPdfPlatform(); the unit
+   - TPdfFreeTypeFontProvider  implements IFontProvider
+   - TPdfFreeTypeSystemFonts   implements IFontEnumerator
+   - TPdfFreeTypeDCProvider    implements IFontDC
+   - initialization registers all three via RegisterFontPlatform(); the unit
      is used by mormot.ui.pdf on POSIX, no program has to name it
 
   *****************************************************************************
@@ -30,7 +30,7 @@ uses
   mormot.core.base,
   mormot.core.os,
   mormot.core.unicode,
-  mormot.pdf.types;
+  mormot.lib.core;
 
 // ---------------------------------------------------------------------------
 // Minimal FreeType2 type bindings
@@ -193,60 +193,60 @@ function LoadFreeType: boolean;
 // ---------------------------------------------------------------------------
 
 type
-  /// FreeType2 implementation of IPdfPlatformFont
-  // - each TPdfPlatformFontHandle is actually a pointer to an internal record
+  /// FreeType2 implementation of IFontProvider
+  // - each TFontHandle is actually a pointer to an internal record
   //   that stores FT_Face + the path used to load it
-  TPdfFreeTypeFontProvider = class(TInterfacedObject, IPdfPlatformFont)
+  TPdfFreeTypeFontProvider = class(TInterfacedObject, IFontProvider)
   private
     fFontMap: TPdfFontMapDynArray;
   public
     constructor Create;
-    function CreateFont(const ALogFont: TPdfLogFont): TPdfPlatformFontHandle;
-    procedure DeleteFont(AFont: TPdfPlatformFontHandle);
-    function SelectFont(ADC: TPdfPlatformDC;
-      AFont: TPdfPlatformFontHandle): TPdfPlatformFontHandle;
-    function GetTextMetrics(ADC: TPdfPlatformDC;
-      out AMetrics: TPdfTextMetrics): boolean;
-    function GetOutlineMetrics(ADC: TPdfPlatformDC;
-      out AMetrics: TPdfOutlineMetrics): boolean;
-    function GetCharABCWidths(ADC: TPdfPlatformDC;
+    function CreateFont(const ALogFont: TFontRequest): TFontHandle;
+    procedure DeleteFont(AFont: TFontHandle);
+    function SelectFont(ADC: TFontDC;
+      AFont: TFontHandle): TFontHandle;
+    function GetTextMetrics(ADC: TFontDC;
+      out AMetrics: TFontMetrics): boolean;
+    function GetOutlineMetrics(ADC: TFontDC;
+      out AMetrics: TFontOutlineMetrics): boolean;
+    function GetCharAbcWidths(ADC: TFontDC;
       FirstChar, LastChar: cardinal;
-      out AWidths: TPdfCharABCArray): boolean;
-    function GetFontData(ADC: TPdfPlatformDC; ATableTag: cardinal;
+      out AWidths: TFontCharAbcArray): boolean;
+    function GetFontData(ADC: TFontDC; ATableTag: cardinal;
       AOffset: cardinal; ABuffer: pointer; ABufferSize: cardinal): cardinal;
     function FontDataError: cardinal;
   end;
 
-  /// FreeType2 implementation of IPdfSystemFonts
-  TPdfFreeTypeSystemFonts = class(TInterfacedObject, IPdfSystemFonts)
+  /// FreeType2 implementation of IFontEnumerator
+  TPdfFreeTypeSystemFonts = class(TInterfacedObject, IFontEnumerator)
   private
     fFontMap: TPdfFontMapDynArray;
     procedure BuildFontMap;
   public
     constructor Create;
-    procedure EnumTrueTypeFonts(ADC: TPdfPlatformDC;
+    procedure EnumTrueTypeFonts(ADC: TFontDC;
       var List: TRawUtf8DynArray);
   end;
 
-  /// FreeType2 implementation of IPdfPlatformDC
-  TPdfFreeTypeDCProvider = class(TInterfacedObject, IPdfPlatformDC)
+  /// FreeType2 implementation of IFontDC
+  TPdfFreeTypeDCProvider = class(TInterfacedObject, IFontDC)
   public
-    function CreateDC: TPdfPlatformDC;
-    procedure DeleteDC(ADC: TPdfPlatformDC);
-    function GetScreenLogPixels(ADC: TPdfPlatformDC): integer;
+    function CreateDC: TFontDC;
+    procedure DeleteDC(ADC: TFontDC);
+    function GetScreenLogPixels(ADC: TFontDC): integer;
   end;
 
 {$endif OSWINDOWS}
 
 // ---------------------------------------------------------------------------
-// Internal FT context stored behind TPdfPlatformFontHandle
+// Internal FT context stored behind TFontHandle
 // Exported here so that mormot.pdf.harfbuzz can access the FT_Face pointer.
 // ---------------------------------------------------------------------------
 
 type
-  /// internal record behind TPdfPlatformFontHandle on POSIX
+  /// internal record behind TFontHandle on POSIX
   // - exported in the interface section so mormot.pdf.harfbuzz can cast
-  //   TPdfPlatformFontHandle to PPdfFTContext to obtain the FT_Face
+  //   TFontHandle to PPdfFTContext to obtain the FT_Face
   TPdfFTContext = record
     Face:         FT_Face;   // FreeType2 face handle
     FilePath:     RawUtf8;   // absolute path (for diagnostics)
@@ -574,7 +574,7 @@ begin
 end;
 
 function TPdfFreeTypeFontProvider.CreateFont(
-  const ALogFont: TPdfLogFont): TPdfPlatformFontHandle;
+  const ALogFont: TFontRequest): TFontHandle;
 var
   filePath: RawUtf8;
   face:     FT_Face;
@@ -603,7 +603,7 @@ begin
   if FreeType.NewFace(FreeType.FTLibrary, PAnsiChar(AnsiString(filePath)),
      0, face) <> 0 then
     exit;
-  // GetCharABCWidths will use FT_LOAD_NO_SCALE to get raw design units,
+  // GetCharAbcWidths will use FT_LOAD_NO_SCALE to get raw design units,
   // so SetCharSize is not needed here anymore
   faceRec := PFT_FaceRec(face);
   New(ctx);
@@ -616,10 +616,10 @@ begin
   ctx^.IsFixedWidth := (faceRec^.face_flags and FT_FACE_FLAG_FIXED_WIDTH) <> 0;
   ctx^.FaceIndex    := 0; // FT_New_Face() above always opens the first face
   ctx^.SfntChecked  := false; // New() initializes managed fields only
-  result := TPdfPlatformFontHandle(ctx);
+  result := TFontHandle(ctx);
 end;
 
-procedure TPdfFreeTypeFontProvider.DeleteFont(AFont: TPdfPlatformFontHandle);
+procedure TPdfFreeTypeFontProvider.DeleteFont(AFont: TFontHandle);
 var
   ctx: PPdfFTContext;
 begin
@@ -631,18 +631,18 @@ begin
   Dispose(ctx);
 end;
 
-function TPdfFreeTypeFontProvider.SelectFont(ADC: TPdfPlatformDC;
-  AFont: TPdfPlatformFontHandle): TPdfPlatformFontHandle;
+function TPdfFreeTypeFontProvider.SelectFont(ADC: TFontDC;
+  AFont: TFontHandle): TFontHandle;
 var
   dc: PPdfFTDC;
 begin
   dc := PPdfFTDC(ADC);
-  result := TPdfPlatformFontHandle(dc^.Current);
+  result := TFontHandle(dc^.Current);
   dc^.Current := PPdfFTContext(AFont);
 end;
 
-function TPdfFreeTypeFontProvider.GetTextMetrics(ADC: TPdfPlatformDC;
-  out AMetrics: TPdfTextMetrics): boolean;
+function TPdfFreeTypeFontProvider.GetTextMetrics(ADC: TFontDC;
+  out AMetrics: TFontMetrics): boolean;
 var
   dc:  PPdfFTDC;
   ctx: PPdfFTContext;
@@ -678,8 +678,8 @@ begin
   result := true;
 end;
 
-function TPdfFreeTypeFontProvider.GetOutlineMetrics(ADC: TPdfPlatformDC;
-  out AMetrics: TPdfOutlineMetrics): boolean;
+function TPdfFreeTypeFontProvider.GetOutlineMetrics(ADC: TFontDC;
+  out AMetrics: TFontOutlineMetrics): boolean;
 var
   dc:  PPdfFTDC;
   ctx: PPdfFTContext;
@@ -707,9 +707,9 @@ begin
   result := true;
 end;
 
-function TPdfFreeTypeFontProvider.GetCharABCWidths(ADC: TPdfPlatformDC;
+function TPdfFreeTypeFontProvider.GetCharAbcWidths(ADC: TFontDC;
   FirstChar, LastChar: cardinal;
-  out AWidths: TPdfCharABCArray): boolean;
+  out AWidths: TFontCharAbcArray): boolean;
 var
   dc:    PPdfFTDC;
   ctx:   PPdfFTContext;
@@ -775,7 +775,7 @@ begin
   result := true;
 end;
 
-function TPdfFreeTypeFontProvider.GetFontData(ADC: TPdfPlatformDC;
+function TPdfFreeTypeFontProvider.GetFontData(ADC: TFontDC;
   ATableTag: cardinal; AOffset: cardinal; ABuffer: pointer;
   ABufferSize: cardinal): cardinal;
 var
@@ -854,7 +854,7 @@ begin
   {$endif OSDARWIN}
 end;
 
-procedure TPdfFreeTypeSystemFonts.EnumTrueTypeFonts(ADC: TPdfPlatformDC;
+procedure TPdfFreeTypeSystemFonts.EnumTrueTypeFonts(ADC: TFontDC;
   var List: TRawUtf8DynArray);
 var
   i: integer;
@@ -870,22 +870,22 @@ end;
 // TPdfFreeTypeDCProvider
 // ---------------------------------------------------------------------------
 
-function TPdfFreeTypeDCProvider.CreateDC: TPdfPlatformDC;
+function TPdfFreeTypeDCProvider.CreateDC: TFontDC;
 var
   dc: PPdfFTDC;
 begin
   New(dc);
   dc^.Current := nil;
-  result := TPdfPlatformDC(dc);
+  result := TFontDC(dc);
 end;
 
-procedure TPdfFreeTypeDCProvider.DeleteDC(ADC: TPdfPlatformDC);
+procedure TPdfFreeTypeDCProvider.DeleteDC(ADC: TFontDC);
 begin
   if ADC <> nil then
     Dispose(PPdfFTDC(ADC));
 end;
 
-function TPdfFreeTypeDCProvider.GetScreenLogPixels(ADC: TPdfPlatformDC): integer;
+function TPdfFreeTypeDCProvider.GetScreenLogPixels(ADC: TFontDC): integer;
 begin
   result := PDF_SCREEN_DPI;
 end;
@@ -896,7 +896,7 @@ end;
 
 initialization
   if LoadFreeType then
-    RegisterPdfPlatform(
+    RegisterFontPlatform(
       TPdfFreeTypeFontProvider.Create,
       TPdfFreeTypeSystemFonts.Create,
       TPdfFreeTypeDCProvider.Create);

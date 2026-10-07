@@ -180,7 +180,9 @@ checked against that record:
    **Pinned:** `d60cc6e80` (2026-10-02); from Phase 1 on a commit of the
    `pdf-font-layer` branch of `landrix/mORMot2`, which is `d60cc6e80` plus
    the new `mormot.lib.*` units (see Phase 1, "Where the code lives"):
-   `89d652a77` (2026-10-04, `mormot.lib.core` added, no other change).
+   `89d652a77` (2026-10-04, `mormot.lib.core` added, no other change), then
+   `5a1fb60fc` (2026-10-04, `mormot.lib.freetype` and `mormot.lib.harfbuzz`
+   added, unused here until the old POSIX backends are replaced).
    **Checked:** today's `main`,
    `test_runner` 259/259 on Windows (FPC Win64, Delphi 7, Delphi 2010),
    298/298 on Linux, 317/317 on macOS (fpcupdeluxe, FPC 3.2.3).
@@ -285,7 +287,7 @@ baseline; the end of Phase 1 is one PR to `synopse/mORMot2`.
 
 Gist §19. Its own phase: the step most likely to change metrics.
 
-- `IPdfPlatformDC`, `SelectFont`, `CreateDC`, the screen `LOGPIXELSY`
+- `IFontDC`, `SelectFont`, `CreateDC`, the screen `LOGPIXELSY`
   replaced by a face object that owns its state
 - Output identical; every difference explained
 

@@ -7,10 +7,10 @@ unit mormot.pdf.gdi;
   *****************************************************************************
 
    Windows GDI Platform Backend
-   - TPdfGdiFontProvider   implements IPdfPlatformFont
-   - TPdfGdiSystemFonts    implements IPdfSystemFonts
-   - TPdfGdiDCProvider     implements IPdfPlatformDC
-   - initialization registers all three via RegisterPdfPlatform(); the unit
+   - TPdfGdiFontProvider   implements IFontProvider
+   - TPdfGdiSystemFonts    implements IFontEnumerator
+   - TPdfGdiDCProvider     implements IFontDC
+   - initialization registers all three via RegisterFontPlatform(); the unit
      is used by mormot.ui.pdf on Windows, no program has to name it
 
   *****************************************************************************
@@ -27,41 +27,41 @@ uses
   SysUtils,
   mormot.core.base,
   mormot.core.unicode,
-  mormot.pdf.types;
+  mormot.lib.core;
 
 type
-  /// Windows GDI implementation of IPdfPlatformFont
-  TPdfGdiFontProvider = class(TInterfacedObject, IPdfPlatformFont)
+  /// Windows GDI implementation of IFontProvider
+  TPdfGdiFontProvider = class(TInterfacedObject, IFontProvider)
   public
-    function CreateFont(const ALogFont: TPdfLogFont): TPdfPlatformFontHandle;
-    procedure DeleteFont(AFont: TPdfPlatformFontHandle);
-    function SelectFont(ADC: TPdfPlatformDC;
-      AFont: TPdfPlatformFontHandle): TPdfPlatformFontHandle;
-    function GetTextMetrics(ADC: TPdfPlatformDC;
-      out AMetrics: TPdfTextMetrics): boolean;
-    function GetOutlineMetrics(ADC: TPdfPlatformDC;
-      out AMetrics: TPdfOutlineMetrics): boolean;
-    function GetCharABCWidths(ADC: TPdfPlatformDC;
+    function CreateFont(const ALogFont: TFontRequest): TFontHandle;
+    procedure DeleteFont(AFont: TFontHandle);
+    function SelectFont(ADC: TFontDC;
+      AFont: TFontHandle): TFontHandle;
+    function GetTextMetrics(ADC: TFontDC;
+      out AMetrics: TFontMetrics): boolean;
+    function GetOutlineMetrics(ADC: TFontDC;
+      out AMetrics: TFontOutlineMetrics): boolean;
+    function GetCharAbcWidths(ADC: TFontDC;
       FirstChar, LastChar: cardinal;
-      out AWidths: TPdfCharABCArray): boolean;
-    function GetFontData(ADC: TPdfPlatformDC; ATableTag: cardinal;
+      out AWidths: TFontCharAbcArray): boolean;
+    function GetFontData(ADC: TFontDC; ATableTag: cardinal;
       AOffset: cardinal; ABuffer: pointer; ABufferSize: cardinal): cardinal;
     function FontDataError: cardinal;
   end;
 
-  /// Windows GDI implementation of IPdfSystemFonts
-  TPdfGdiSystemFonts = class(TInterfacedObject, IPdfSystemFonts)
+  /// Windows GDI implementation of IFontEnumerator
+  TPdfGdiSystemFonts = class(TInterfacedObject, IFontEnumerator)
   public
-    procedure EnumTrueTypeFonts(ADC: TPdfPlatformDC;
+    procedure EnumTrueTypeFonts(ADC: TFontDC;
       var List: TRawUtf8DynArray);
   end;
 
-  /// Windows GDI implementation of IPdfPlatformDC
-  TPdfGdiDCProvider = class(TInterfacedObject, IPdfPlatformDC)
+  /// Windows GDI implementation of IFontDC
+  TPdfGdiDCProvider = class(TInterfacedObject, IFontDC)
   public
-    function CreateDC: TPdfPlatformDC;
-    procedure DeleteDC(ADC: TPdfPlatformDC);
-    function GetScreenLogPixels(ADC: TPdfPlatformDC): integer;
+    function CreateDC: TFontDC;
+    procedure DeleteDC(ADC: TFontDC);
+    function GetScreenLogPixels(ADC: TFontDC): integer;
   end;
 
 {$endif OSWINDOWS}
@@ -73,7 +73,7 @@ implementation
 { TPdfGdiFontProvider }
 
 function TPdfGdiFontProvider.CreateFont(
-  const ALogFont: TPdfLogFont): TPdfPlatformFontHandle;
+  const ALogFont: TFontRequest): TFontHandle;
 var
   lf: TLogFontW;
 begin
@@ -89,23 +89,23 @@ begin
   if ALogFont.FaceName <> '' then
     Move(ALogFont.FaceName[1], lf.lfFaceName[0],
       MinPtrInt(Length(ALogFont.FaceName), LF_FACESIZE - 1) * SizeOf(WideChar));
-  result := TPdfPlatformFontHandle(CreateFontIndirectW(lf));
+  result := TFontHandle(CreateFontIndirectW(lf));
 end;
 
-procedure TPdfGdiFontProvider.DeleteFont(AFont: TPdfPlatformFontHandle);
+procedure TPdfGdiFontProvider.DeleteFont(AFont: TFontHandle);
 begin
   if AFont <> nil then
     DeleteObject(HGDIOBJ(AFont));
 end;
 
-function TPdfGdiFontProvider.SelectFont(ADC: TPdfPlatformDC;
-  AFont: TPdfPlatformFontHandle): TPdfPlatformFontHandle;
+function TPdfGdiFontProvider.SelectFont(ADC: TFontDC;
+  AFont: TFontHandle): TFontHandle;
 begin
-  result := TPdfPlatformFontHandle(SelectObject(HDC(ADC), HGDIOBJ(AFont)));
+  result := TFontHandle(SelectObject(HDC(ADC), HGDIOBJ(AFont)));
 end;
 
-function TPdfGdiFontProvider.GetTextMetrics(ADC: TPdfPlatformDC;
-  out AMetrics: TPdfTextMetrics): boolean;
+function TPdfGdiFontProvider.GetTextMetrics(ADC: TFontDC;
+  out AMetrics: TFontMetrics): boolean;
 var
   tm: TTextMetric;
 begin
@@ -131,8 +131,8 @@ begin
   end;
 end;
 
-function TPdfGdiFontProvider.GetOutlineMetrics(ADC: TPdfPlatformDC;
-  out AMetrics: TPdfOutlineMetrics): boolean;
+function TPdfGdiFontProvider.GetOutlineMetrics(ADC: TFontDC;
+  out AMetrics: TFontOutlineMetrics): boolean;
 var
   otm: TOutlineTextmetric;
 begin
@@ -163,9 +163,9 @@ begin
   end;
 end;
 
-function TPdfGdiFontProvider.GetCharABCWidths(ADC: TPdfPlatformDC;
+function TPdfGdiFontProvider.GetCharAbcWidths(ADC: TFontDC;
   FirstChar, LastChar: cardinal;
-  out AWidths: TPdfCharABCArray): boolean;
+  out AWidths: TFontCharAbcArray): boolean;
 var
   n: integer;
   W: array of TABC;
@@ -191,7 +191,7 @@ begin
   end;
 end;
 
-function TPdfGdiFontProvider.GetFontData(ADC: TPdfPlatformDC;
+function TPdfGdiFontProvider.GetFontData(ADC: TFontDC;
   ATableTag: cardinal; AOffset: cardinal; ABuffer: pointer;
   ABufferSize: cardinal): cardinal;
 begin
@@ -228,7 +228,7 @@ begin
   result := 1; // continue enumeration
 end;
 
-procedure TPdfGdiSystemFonts.EnumTrueTypeFonts(ADC: TPdfPlatformDC;
+procedure TPdfGdiSystemFonts.EnumTrueTypeFonts(ADC: TFontDC;
   var List: TRawUtf8DynArray);
 var
   LFont: TLogFontW;
@@ -241,24 +241,24 @@ end;
 
 { TPdfGdiDCProvider }
 
-function TPdfGdiDCProvider.CreateDC: TPdfPlatformDC;
+function TPdfGdiDCProvider.CreateDC: TFontDC;
 begin
-  result := TPdfPlatformDC(Windows.CreateCompatibleDC(0));
+  result := TFontDC(Windows.CreateCompatibleDC(0));
 end;
 
-procedure TPdfGdiDCProvider.DeleteDC(ADC: TPdfPlatformDC);
+procedure TPdfGdiDCProvider.DeleteDC(ADC: TFontDC);
 begin
   if ADC <> nil then
     Windows.DeleteDC(HDC(ADC));
 end;
 
-function TPdfGdiDCProvider.GetScreenLogPixels(ADC: TPdfPlatformDC): integer;
+function TPdfGdiDCProvider.GetScreenLogPixels(ADC: TFontDC): integer;
 begin
   result := GetDeviceCaps(HDC(ADC), LOGPIXELSY);
 end;
 
 initialization
-  RegisterPdfPlatform(
+  RegisterFontPlatform(
     TPdfGdiFontProvider.Create,
     TPdfGdiSystemFonts.Create,
     TPdfGdiDCProvider.Create);

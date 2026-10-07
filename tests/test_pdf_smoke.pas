@@ -21,6 +21,7 @@ uses
   mormot.core.os,       // FileFromString
   mormot.core.test,
   mormot.core.unicode,  // StringToUtf8
+  mormot.lib.core,      // FontShaper
   mormot.pdf.types,     // TPdfStructRole, GetPdfFonts
   mormot.ui.pdf,        // TPdfDocument, TPdfCanvas
   test_pdf_subset;      // DrawUtf8Text
@@ -409,7 +410,7 @@ begin
       Check(PDF.EmbeddedTTF, 'Tagged turns embedding on');
       Check(not PDF.StandardFontsReplace, 'Tagged drops the base-14 Type1 mode');
       // a retain-GID subset keeps the round-trip, so Tagged may subset:
-      // through PdfFontSubsetter on POSIX (R-12), through CreateFontPackage
+      // through FontSubsetter on POSIX (R-12), through CreateFontPackage
       // with a glyph keep list on Windows (R-15) - only a platform offering
       // neither falls back to the whole face
       Check(PDF.EmbeddedWholeTtf = not PdfCanSubsetRetainingGids,
@@ -1088,7 +1089,7 @@ begin
     { joined Arabic letters are presentation forms (U+FExx) or, in a face
       without them, PUA slots (U+Exxx); unshaped text maps to U+06xx only
       (R-13). POSIX shapes only when libharfbuzz loaded }
-    if {$ifdef OSWINDOWS} true {$else} PdfTextShaper <> nil {$endif} then
+    if {$ifdef OSWINDOWS} true {$else} FontShaper <> nil {$endif} then
       Check((Pos(RawByteString('> <FE'), s) > 0) or
             (Pos(RawByteString('> <E'), s) > 0), 'the Arabic text is shaped');
     { the WinAnsi peers of the CJK and Arabic faces show no character, and
@@ -1155,7 +1156,7 @@ begin
     only the direction: HarfBuzz used to run on RightToLeftText alone and to
     force LTR otherwise, which shaped Arabic in the wrong order }
   {$ifndef OSWINDOWS} // Uniscribe is part of Windows
-  if PdfTextShaper = nil then
+  if FontShaper = nil then
   begin
     Check(true, 'SKIP: no text shaper (libharfbuzz absent)');
     exit;

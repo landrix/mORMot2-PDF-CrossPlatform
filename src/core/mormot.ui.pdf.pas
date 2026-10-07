@@ -94,13 +94,14 @@ uses
   {$ifdef USE_UNISCRIBE}
   mormot.lib.uniscribe,
   {$endif USE_UNISCRIBE}
-  mormot.pdf.gdi,        // registers GDI backend via RegisterPdfPlatform()
+  mormot.pdf.gdi,        // registers GDI backend via RegisterFontPlatform()
   {$else}
-  mormot.pdf.freetype,   // registers FreeType2 backend via RegisterPdfPlatform()
-  mormot.pdf.harfbuzz,   // registers PdfTextShaper when libharfbuzz loads
-  mormot.pdf.hbsubset,   // registers PdfFontSubsetter when libharfbuzz-subset loads
+  mormot.pdf.freetype,   // registers FreeType2 backend via RegisterFontPlatform()
+  mormot.pdf.harfbuzz,   // registers FontShaper when libharfbuzz loads
+  mormot.pdf.hbsubset,   // registers FontSubsetter when libharfbuzz-subset loads
   {$endif OSWINDOWS}
-  mormot.pdf.types,      // platform-neutral interfaces and records
+  mormot.lib.core,       // font interfaces, set by the backends above
+  mormot.pdf.types,      // PDF types: file format, structure roles
   {$ifdef USE_GRAPHICS_UNIT}
     {$ifdef FPC}
     lcltype,
@@ -619,7 +620,7 @@ function PdfCoord(MM: single): integer;
 /// true when this platform can subset a face and keep its glyph IDs
 // - a subset that renumbers glyphs would break Identity-H and the /ToUnicode
 // round-trip, so tagged output only subsets where this returns true:
-// PdfFontSubsetter on POSIX, CreateFontPackage driven by a glyph keep
+// FontSubsetter on POSIX, CreateFontPackage driven by a glyph keep
 // list on Windows - elsewhere the whole face is embedded
 function PdfCanSubsetRetainingGids: boolean;
 
@@ -743,7 +744,7 @@ type
     /// internal method using HarfBuzz for RTL/complex-script shaping on Unix/macOS
     // - called when UseUniscribe is set and the run is RightToLeftText or
     // holds a script that needs shaping
-    // - returns false if PdfTextShaper.ShapeText fails (caller falls back)
+    // - returns false if FontShaper.Shape fails (caller falls back)
     function AddUnicodeHexTextHarfBuzz(PW: PWideChar; PWLen: integer;
       WinAnsiTtf: TPdfFontTrueType; NextLine: boolean; Canvas: TPdfCanvas): boolean;
     {$endif OSWINDOWS}
@@ -1389,7 +1390,7 @@ type
   end;
   TPdfFontFile2DynArray = array of TPdfFontFile2;
 
-  /// one physical font face to be subset by PdfFontSubsetter at save time
+  /// one physical font face to be subset by FontSubsetter at save time
   // - every TPdfFontTrueType resolving to the same bytes - its WinAnsi and
   // Unicode instances, but also e.g. Regular and Bold of one .ttc face - adds
   // its used glyphs to the same Request, so all of them share one subset
@@ -1399,7 +1400,7 @@ type
     /// the whole face, as the platform backend returns it
     Face: PdfString;
     /// union of the code points and glyphs used by all sharing fonts
-    Request: TPdfFontSubsetRequest;
+    Request: TFontSubsetRequest;
     /// the subset bytes, or '' if the face could not be subset
     Subset: PdfString;
     /// the 'ABCDEF+' name prefix of ISO 32000-1 9.6.4, derived from Subset
@@ -1447,8 +1448,8 @@ type
     fDC: HDC;
     fSelectedDCFontOld: HGDIOBJ;
     {$else}
-    fDC: TPdfPlatformDC;
-    fSelectedDCFontOld: TPdfPlatformFontHandle;
+    fDC: TFontDC;
+    fSelectedDCFontOld: TFontHandle;
     {$endif OSWINDOWS}
     fScreenLogPixels: integer;
     fPrinterPxPerInch: TPoint;
@@ -1466,7 +1467,7 @@ type
     fFontFallBackIndex: integer;
     // embedded font files, shared between fonts with identical data
     fFontFile2: TPdfFontFile2DynArray;
-    // faces to be subset by PdfFontSubsetter, only valid while saving
+    // faces to be subset by FontSubsetter, only valid while saving
     fFontSubsets: TPdfFontSubsetDynArray;
     // a list of Bookmark text keys, associated to a TPdfDest object
     fBookMarks: TRawUtf8List;
@@ -1545,7 +1546,7 @@ type
     // which only applies to the glyf flavour: the caller picks the matching
     // /FontFile2 or /FontFile3 key with PdfFontFileKey()
     function GetOrCreateFontFile2(const aTtf: PdfString): TPdfStream;
-    /// subset every embedded face with PdfFontSubsetter, before PrepareForSaving
+    /// subset every embedded face with FontSubsetter, before PrepareForSaving
     // - the union of the glyphs of all fonts sharing a face has to be known
     // before the first of them is serialized
     procedure PrepareFontSubsets;
@@ -1553,7 +1554,7 @@ type
     {$ifdef OSWINDOWS}
     function GetDCWithFont(Ttf: TPdfFontTrueType): HDC;
     {$else}
-    function GetDCWithFont(Ttf: TPdfFontTrueType): TPdfPlatformDC;
+    function GetDCWithFont(Ttf: TPdfFontTrueType): TFontDC;
     {$endif OSWINDOWS}
     /// build and write the Tagged PDF structure tree into the document
     // - called from SaveToStreamDirectEnd when Tagged=true
@@ -2839,7 +2840,7 @@ type
     {$ifdef OSWINDOWS}
     fHGDI: HGDIOBJ;
     {$else}
-    fHGDI: TPdfPlatformFontHandle;
+    fHGDI: TFontHandle;
     {$endif OSWINDOWS}
     fFixedWidth: boolean;
     fFontDescriptor: TPdfDictionary;
@@ -2859,9 +2860,9 @@ type
     fM: TTextMetric;
     fOTM: TOutlineTextmetric;
     {$else}
-    fLogFont: TPdfLogFont;
-    fM: TPdfTextMetrics;
-    fOTM: TPdfOutlineMetrics;
+    fLogFont: TFontRequest;
+    fM: TFontMetrics;
+    fOTM: TFontOutlineMetrics;
     {$endif OSWINDOWS}
     procedure CreateAssociatedUnicodeFont;
     // update font description from used chars
@@ -2874,13 +2875,13 @@ type
     function GetFaceData(out aTtf: PdfString): boolean;
     {$ifdef USE_UNISCRIBE}
     /// subset this font's face with CreateFontPackage, keeping aGlyphs
-    // - the Windows counterpart of IPdfFontSubsetter.Subset: called once per
+    // - the Windows counterpart of IFontSubsetter.Subset: called once per
     // face from PrepareFontSubsets with the glyphs of every font sharing it
     function SubsetWithFontPackage(const aGlyphs: TIntegerDynArray;
       out aSubset: PdfString): boolean;
     {$endif USE_UNISCRIBE}
     // add the code points and glyphs used by this WinAnsi font to aRequest
-    procedure AddToSubsetRequest(var aRequest: TPdfFontSubsetRequest);
+    procedure AddToSubsetRequest(var aRequest: TFontSubsetRequest);
     {$ifdef USE_UNISCRIBE}
     /// append the glyph indices the WinAnsi characters of this font resolve to
     procedure AddWinAnsiGlyphs(var aGlyphs: TIntegerDynArray);
@@ -2912,7 +2913,7 @@ type
       AWinAnsiFont: TPdfFontTrueType); reintroduce;
     {$else}
     constructor Create(ADoc: TPdfDocument; AFontIndex: integer;
-      AStyle: TPdfFontStyles; const ALogFont: TPdfLogFont;
+      AStyle: TPdfFontStyles; const ALogFont: TFontRequest;
       AWinAnsiFont: TPdfFontTrueType); reintroduce;
     {$endif OSWINDOWS}
     /// release the associated memory and handles
@@ -3251,8 +3252,8 @@ type
     fDefaultWidth: word;
     fFixedWidth: boolean;
     fWidth: array[32..255] of word;
-    fDC: TPdfPlatformDC;
-    fHandle: TPdfPlatformFontHandle;
+    fDC: TFontDC;
+    fHandle: TFontHandle;
     fValid: boolean;
     procedure FromStandardFont(Index: PtrInt);
     function FromPlatformFont: boolean;
@@ -3977,18 +3978,18 @@ begin
   bswap16array(result, L shr 1);
 end;
 {$else}
-function GetTtfData(aDC: TPdfPlatformDC; aTableName: PAnsiChar; var Ref: TWordDynArray): pointer;
+function GetTtfData(aDC: TFontDC; aTableName: PAnsiChar; var Ref: TWordDynArray): pointer;
 var
   L: cardinal;
   tag: cardinal;
 begin
   result := nil;
   tag := PCardinal(aTableName)^;
-  L := PdfPlatformFont.GetFontData(aDC, tag, 0, nil, 0);
-  if L = PdfPlatformFont.FontDataError then
+  L := FontProvider.GetFontData(aDC, tag, 0, nil, 0);
+  if L = FontProvider.FontDataError then
     exit;
   SetLength(Ref, L shr 1 + 1);
-  if PdfPlatformFont.GetFontData(aDC, tag, 0, pointer(Ref), L) = PdfPlatformFont.FontDataError then
+  if FontProvider.GetFontData(aDC, tag, 0, pointer(Ref), L) = FontProvider.FontDataError then
     exit;
   result := pointer(Ref);
   bswap16array(result, L shr 1);
@@ -3996,7 +3997,7 @@ end;
 {$endif OSWINDOWS}
 
 // EnumFontsProcW and EnumFontFamiliesExW moved to mormot.pdf.gdi
-// (GDI backend registered via RegisterPdfPlatform)
+// (GDI backend registered via RegisterFontPlatform)
 
 {$ifdef OSWINDOWS}
 function LCIDToCodePage(ALcid: LCID): integer;
@@ -5855,20 +5856,26 @@ end;
 function TPdfWrite.AddUnicodeHexTextHarfBuzz(PW: PWideChar; PWLen: integer;
   WinAnsiTtf: TPdfFontTrueType; NextLine: boolean; Canvas: TPdfCanvas): boolean;
 var
+  Runs:     TFontShapedRuns;
   Glyphs:   TWordDynArray;
   Advances: TIntegerDynArray;
   Offsets:  TIntegerDynArray;
-  Clusters: TIntegerDynArray;
   i, kern:  integer;
   hasOffsets: boolean;
   Widths:   TIntegerDynArray;
 begin
   result := false;
-  if (PdfTextShaper = nil) or (WinAnsiTtf = nil) then
+  if (FontShaper = nil) or (WinAnsiTtf = nil) then
     exit;
-  if not PdfTextShaper.ShapeText(PW, PWLen, WinAnsiTtf.fHGDI,
-       Canvas.RightToLeftText, Glyphs, Advances, Offsets, Clusters) then
+  // HarfBuzz shapes the whole run at once: one shaped part, or none
+  if not FontShaper.Shape(PW, PWLen, WinAnsiTtf.fHGDI,
+       Canvas.RightToLeftText, Runs) or
+     (length(Runs) <> 1) or
+     (Runs[0].Kind <> fskShaped) then
     exit;
+  Glyphs   := Runs[0].Glyphs;
+  Advances := Runs[0].Advances;
+  Offsets  := Runs[0].Offsets;
   if length(Glyphs) = 0 then
     exit;
   if WinAnsiTtf.UnicodeFont = nil then
@@ -6098,7 +6105,7 @@ begin
     {$ifndef OSWINDOWS}
     // the same switch as Uniscribe; Latin runs stay in the simple font, as
     // Uniscribe leaves them there too
-    if not shaped and Canvas.fDoc.UseUniScribe and (PdfTextShaper <> nil) and
+    if not shaped and Canvas.fDoc.UseUniScribe and (FontShaper <> nil) and
        (ttf <> nil) and
        (Canvas.RightToLeftText or NeedsShaping(PW, PWLen)) then
       shaped := AddUnicodeHexTextHarfBuzz(PW, PWLen, ttf.WinAnsiFont, NextLine, Canvas);
@@ -6523,7 +6530,7 @@ function SubsetTag(const aSubset: PdfString): PdfString; forward;
 
 function PdfCanSubsetRetainingGids: boolean;
 begin
-  result := PdfFontSubsetter <> nil;
+  result := FontSubsetter <> nil;
   {$ifdef USE_UNISCRIBE}
   // CreateFontPackage keeps the glyph numbering when its keep list is a glyph
   // list, which is what the Windows subset path passes
@@ -6965,13 +6972,13 @@ constructor TPdfFontTrueType.Create(ADoc: TPdfDocument; AFontIndex: integer;
   AStyle: TPdfFontStyles; const ALogFont: TLogFontW; AWinAnsiFont: TPdfFontTrueType);
 {$else}
 constructor TPdfFontTrueType.Create(ADoc: TPdfDocument; AFontIndex: integer;
-  AStyle: TPdfFontStyles; const ALogFont: TPdfLogFont; AWinAnsiFont: TPdfFontTrueType);
+  AStyle: TPdfFontStyles; const ALogFont: TFontRequest; AWinAnsiFont: TPdfFontTrueType);
 {$endif OSWINDOWS}
 var
   {$ifdef OSWINDOWS}
   W: packed array of TABC;
   {$else}
-  W: TPdfCharABCArray;
+  W: TFontCharAbcArray;
   {$endif OSWINDOWS}
   c: AnsiChar;
   nam: PdfString;
@@ -6994,7 +7001,7 @@ begin
     fHGDI := CreateFontIndirectW(ALogFont);
     {$endif FPC}
     {$else}
-    fHGDI := PdfPlatformFont.CreateFont(ALogFont);
+    fHGDI := FontProvider.CreateFont(ALogFont);
     {$endif OSWINDOWS}
   end;
   if AWinAnsiFont <> nil then // we use the Postscript Name here
@@ -7051,10 +7058,10 @@ begin
         with W[ord(c) - 32] do
           fWinAnsiWidth[c] := integer(abcA + integer(abcB) + abcC);
     {$else}
-    PdfPlatformFont.GetTextMetrics(fDoc.fDC, fM);
-    PdfPlatformFont.GetOutlineMetrics(fDoc.fDC, fOTM);
+    FontProvider.GetTextMetrics(fDoc.fDC, fM);
+    FontProvider.GetOutlineMetrics(fDoc.fDC, fOTM);
     GetMem(fWinAnsiWidth, SizeOf(fWinAnsiWidth^));
-    PdfPlatformFont.GetCharABCWidths(fDoc.fDC, 32, 255, W);
+    FontProvider.GetCharAbcWidths(fDoc.fDC, 32, 255, W);
     with W[0] do
       fDefaultWidth := cardinal(abcA + integer(abcB) + abcC);
     if fM.tmPitchAndFamily and 1 {TMPF_FIXED_PITCH} = 0 then
@@ -7112,7 +7119,7 @@ begin
     {$ifdef OSWINDOWS}
     DeleteObject(fHGDI);
     {$else}
-    PdfPlatformFont.DeleteFont(fHGDI);
+    FontProvider.DeleteFont(fHGDI);
     {$endif OSWINDOWS}
   end;
   inherited;
@@ -7263,17 +7270,17 @@ end;
 
 function TPdfFontTrueType.GetFaceData(out aTtf: PdfString): boolean;
 var
-  dc: TPdfPlatformDC;
+  dc: TFontDC;
   size: cardinal;
 begin
   result := false;
-  dc := TPdfPlatformDC(fDoc.GetDCWithFont(self));
-  size := PdfPlatformFont.GetFontData(dc, 0, 0, nil, 0);
-  if (size = PdfPlatformFont.FontDataError) or
+  dc := TFontDC(fDoc.GetDCWithFont(self));
+  size := FontProvider.GetFontData(dc, 0, 0, nil, 0);
+  if (size = FontProvider.FontDataError) or
      (size = 0) then
     exit;
   SetLength(aTtf, size);
-  result := PdfPlatformFont.GetFontData(dc, 0, 0, pointer(aTtf), size) = size;
+  result := FontProvider.GetFontData(dc, 0, 0, pointer(aTtf), size) = size;
   if not result then
     aTtf := '';
 end;
@@ -7343,7 +7350,7 @@ end;
 {$endif USE_UNISCRIBE}
 
 procedure TPdfFontTrueType.AddToSubsetRequest(
-  var aRequest: TPdfFontSubsetRequest);
+  var aRequest: TFontSubsetRequest);
 var
   c: AnsiChar;
   i, n: PtrInt;
@@ -7641,12 +7648,12 @@ begin
           begin
         {$else}
         // POSIX: use platform font interface to retrieve font data
-        ttfSize := PdfPlatformFont.GetFontData(fDoc.fDC, TTCF_TABLE, 0, nil, 0);
-        if ttfSize <> PdfPlatformFont.FontDataError then
+        ttfSize := FontProvider.GetFontData(fDoc.fDC, TTCF_TABLE, 0, nil, 0);
+        if ttfSize <> FontProvider.FontDataError then
         begin
           // TTC collection
-          if PdfPlatformFont.GetFontData(
-               fDoc.fDC, TTCF_TABLE, 8, @ttcNumFonts, 4) <> PdfPlatformFont.FontDataError then
+          if FontProvider.GetFontData(
+               fDoc.fDC, TTCF_TABLE, 8, @ttcNumFonts, 4) <> FontProvider.FontDataError then
             ttcNumFonts := bswap32(ttcNumFonts)
           else
             ttcNumFonts := 1;
@@ -7658,18 +7665,18 @@ begin
         end
         else
         begin
-          ttfSize := PdfPlatformFont.GetFontData(fDoc.fDC, 0, 0, nil, 0);
+          ttfSize := FontProvider.GetFontData(fDoc.fDC, 0, 0, nil, 0);
           ttcIndex := 0;
           tableTag := 0;
         end;
-        if ttfSize <> PdfPlatformFont.FontDataError then
+        if ttfSize <> FontProvider.FontDataError then
         begin
           SetLength(ttf, ttfSize);
-          if PdfPlatformFont.GetFontData(
-               fDoc.fDC, tableTag, 0, pointer(ttf), ttfSize) <> PdfPlatformFont.FontDataError then
+          if FontProvider.GetFontData(
+               fDoc.fDC, tableTag, 0, pointer(ttf), ttfSize) <> FontProvider.FontDataError then
           begin
         {$endif OSWINDOWS}
-            // subset prepared by PdfFontSubsetter for all fonts sharing it
+            // subset prepared by FontSubsetter for all fonts sharing it
             sub := GetSubset;
             if sub <> nil then
             begin
@@ -7996,16 +8003,16 @@ begin
   fDC := CreateCompatibleDC(0);
   fScreenLogPixels := GetDeviceCaps(fDC, LOGPIXELSY);
   {$else}
-  if PdfPlatformDCProvider = nil then
+  if FontDC = nil then
     raise ESynException.Create(
       'TPdfDocument: no platform backend registered - ' +
       'ensure libfreetype is installed and mormot.pdf.freetype is used');
-  fDC := PdfPlatformDCProvider.CreateDC;
-  fScreenLogPixels := PdfPlatformDCProvider.GetScreenLogPixels(fDC);
+  fDC := FontDC.CreateDC;
+  fScreenLogPixels := FontDC.GetScreenLogPixels(fDC);
   {$endif OSWINDOWS}
   fCanvas := TPdfCanvas.Create(Self); // need fScreenLogPixels
   // retrieve true type fonts available for all charsets (via platform backend)
-  PdfSystemFonts.EnumTrueTypeFonts(TPdfPlatformDC(PtrUInt(fDC)), fTrueTypeFonts);
+  FontEnumerator.EnumTrueTypeFonts(TFontDC(PtrUInt(fDC)), fTrueTypeFonts);
   QuickSortRawUtf8(fTrueTypeFonts, length(fTrueTypeFonts), nil, @StrIComp);
   fCompressionMethod := cmFlateDecode; // deflate by default
   fDefaultLanguage := 'en';
@@ -8063,8 +8070,8 @@ begin
   DeleteDC(fDC);
   {$else}
   if fSelectedDCFontOld <> nil then
-    PdfPlatformFont.SelectFont(fDC, fSelectedDCFontOld);
-  PdfPlatformDCProvider.DeleteDC(fDC);
+    FontProvider.SelectFont(fDC, fSelectedDCFontOld);
+  FontDC.DeleteDC(fDC);
   {$endif OSWINDOWS}
   FEmbeddedTtfIgnore.Free;
   fRawPages.Free;
@@ -9383,7 +9390,7 @@ begin
        // IDs - hb-subset would drop them, so the whole face is kept. The
        // Windows path resolves the WinAnsi characters to glyph indices
        // through the face itself, so it does not need the exclusion
-       ((PdfFontSubsetter <> nil) and fnt.IsSymbolic) or
+       ((FontSubsetter <> nil) and fnt.IsSymbolic) or
        not fnt.GetFaceData(face) then
       continue;
     h := crc32c(0, pointer(face), length(face));
@@ -9408,8 +9415,9 @@ begin
   for j := 0 to high(fFontSubsets) do
     with fFontSubsets[j] do
     begin
-      if PdfFontSubsetter <> nil then
-        ok := PdfFontSubsetter.Subset(Face, Request, Subset)
+      if FontSubsetter <> nil then
+        ok := FontSubsetter.Subset(Face, Request,
+          TFontHandle(TPdfFontTrueType(Font).fHGDI), Subset)
       else
         {$ifdef USE_UNISCRIBE}
         ok := TPdfFontTrueType(Font).SubsetWithFontPackage(Request.Glyphs, Subset);
@@ -9533,15 +9541,15 @@ begin
   end;
 end;
 {$else}
-function TPdfDocument.GetDCWithFont(Ttf: TPdfFontTrueType): TPdfPlatformDC;
+function TPdfDocument.GetDCWithFont(Ttf: TPdfFontTrueType): TFontDC;
 begin
   if self = nil then
     result := nil
   else
   begin
     if fSelectedDCFontOld <> nil then // prevent resource leak
-      PdfPlatformFont.SelectFont(fDC, fSelectedDCFontOld);
-    fSelectedDCFontOld := PdfPlatformFont.SelectFont(fDC, Ttf.fHGDI);
+      FontProvider.SelectFont(fDC, fSelectedDCFontOld);
+    fSelectedDCFontOld := FontProvider.SelectFont(fDC, Ttf.fHGDI);
     result := fDC;
   end;
 end;
@@ -9991,7 +9999,7 @@ begin
   fStandardFontsReplace := false;
   fEmbeddedTtf := true;
   // PDF/UA allows subsets as long as every glyph drawn survives and still
-  // maps back to Unicode: PdfFontSubsetter keeps the glyph IDs on POSIX,
+  // maps back to Unicode: FontSubsetter keeps the glyph IDs on POSIX,
   // and CreateFontPackage does the same on Windows with its glyph keep
   // list - set EmbeddedWholeTtf afterwards to override
   fEmbeddedWholeTtf := not PdfCanSubsetRetainingGids;
@@ -10438,9 +10446,9 @@ end;
 destructor TPdfFaceMetrics.Destroy;
 begin
   if fHandle <> nil then
-    PdfPlatformFont.DeleteFont(fHandle);
+    FontProvider.DeleteFont(fHandle);
   if fDC <> nil then
-    PdfPlatformDCProvider.DeleteDC(fDC);
+    FontDC.DeleteDC(fDC);
   inherited Destroy;
 end;
 
@@ -10475,14 +10483,14 @@ end;
 
 function TPdfFaceMetrics.FromPlatformFont: boolean;
 var
-  lf: TPdfLogFont;
-  otm: TPdfOutlineMetrics;
-  tm: TPdfTextMetrics;
-  abc: TPdfCharABCArray;
+  lf: TFontRequest;
+  otm: TFontOutlineMetrics;
+  tm: TFontMetrics;
+  abc: TFontCharAbcArray;
   c: AnsiChar;
 begin
   result := false;
-  if not PdfPlatformRegistered then
+  if not FontPlatformRegistered then
     exit;
   FillCharFast(lf, SizeOf(lf), 0);
   lf.FaceName := Utf8ToSynUnicode(fName);
@@ -10492,24 +10500,24 @@ begin
   else
     lf.Weight := 400; // FW_NORMAL
   lf.Italic := ord(fItalic);
-  fHandle := PdfPlatformFont.CreateFont(lf);
+  fHandle := FontProvider.CreateFont(lf);
   if fHandle = nil then
     exit;
-  fDC := PdfPlatformDCProvider.CreateDC;
+  fDC := FontDC.CreateDC;
   if fDC = nil then
     exit;
-  PdfPlatformFont.SelectFont(fDC, fHandle);
-  if PdfPlatformFont.GetOutlineMetrics(fDC, otm) then
+  FontProvider.SelectFont(fDC, fHandle);
+  if FontProvider.GetOutlineMetrics(fDC, otm) then
   begin
     fAscent := otm.otmAscent;
     fDescent := otm.otmDescent;
   end;
-  if not PdfPlatformFont.GetCharABCWidths(fDC, 32, 255, abc) or
+  if not FontProvider.GetCharAbcWidths(fDC, 32, 255, abc) or
      (length(abc) < 224) then
     exit;
   with abc[0] do
     fDefaultWidth := abcA + integer(abcB) + abcC; // the space character
-  fFixedWidth := PdfPlatformFont.GetTextMetrics(fDC, tm) and
+  fFixedWidth := FontProvider.GetTextMetrics(fDC, tm) and
                  (tm.tmPitchAndFamily and 1 {TMPF_FIXED_PITCH} = 0);
   if fFixedWidth then
     for c := #32 to #255 do
@@ -10623,7 +10631,7 @@ var
   {$ifdef OSWINDOWS}
   lf: TLogFontW;
   {$else}
-  lf: TPdfLogFont;
+  lf: TFontRequest;
   {$endif OSWINDOWS}
   ndx: integer;
   f: TPdfFontStandard;

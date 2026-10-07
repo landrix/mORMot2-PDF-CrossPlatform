@@ -15,7 +15,7 @@ Skills contain complete, distilled API and architectural knowledge. The main sou
 |---|---|
 | `.claude/skills/pdf-engine.md` | TPdfDocument, TPdfDocumentVcl, TPdfCanvas — full API, enums, encryption, FPImage |
 | `.claude/skills/report-engine.md` | TGDIPages — all methods, tables, command recording, global helpers |
-| `.claude/skills/platform-backends.md` | IPdfPlatformFont/SystemFonts/DC, optional IPdfTextShaper/IPdfFontSubsetter — interfaces, backends, data types |
+| `.claude/skills/platform-backends.md` | IFontProvider/Enumerator/DC, optional IFontShaper/IFontSubsetter (mormot.lib.core) — interfaces, backends, data types |
 | `.claude/skills/call-graph.md` | Execution paths: registration → rendering → serialization (font lifecycle 4a–4d, image, bookmarks) |
 | `.claude/skills/fonts.md` | Font handling deep reference: dual-instance model, CMAP loading, text rendering chains, RTL/Arabic |
 
@@ -47,7 +47,7 @@ All files under `src/` require justification and user approval before reading.
 | `src/core/mormot.ui.report.pas` | Report engine (`TGDIPages`) | Production |
 | `src/core/mormot.ui.reportpreview.pas` | Preview window and printing for `TGDIPages` (LCL) | Production |
 | `src/core/mormot.ui.pdfcanvas.pas` | TCanvas bridge (`TPdfDocumentVcl`) | Production |
-| `src/core/mormot.pdf.types.pas` | Platform interfaces & types | Production |
+| `src/core/mormot.pdf.types.pas` | PDF types; former font type names as aliases of mormot.lib.core | Production |
 | `src/platform/windows/mormot.pdf.gdi.pas` | GDI backend | Production |
 | `src/platform/unix/mormot.pdf.freetype.pas` | FreeType2 backend | Production |
 | `src/platform/unix/mormot.pdf.harfbuzz.pas` | HarfBuzz shaper (RTL/complex scripts) | Production |
@@ -63,7 +63,7 @@ src/
     mormot.ui.report.pas        TGDIPages — layout engine, no forms or printer
     mormot.ui.reportpreview.pas ShowReportPreview, PrintReport (LCL)
     mormot.ui.pdfcanvas.pas     TPdfDocumentVcl, TPdfVclCanvas
-    mormot.pdf.types.pas        IPdfPlatformFont/SystemFonts/DC, types
+    mormot.pdf.types.pas        PDF types, aliases of the mormot.lib.core font types
     mormot.pdf.fpimage.pas      Bitmap embedding (FPImage)
     mormot.ui.core.pas          UI helper functions   } the trunk's units of mORMot2 src/ui (only the include path differs),
     mormot.ui.gdiplus.pas       GDI+ support (Windows) } which is not on the search path
@@ -97,7 +97,7 @@ tests/
   test_pdf_crossplatform.pas   platform backend, text shaper, TTC extraction
   test_pdf_smoke.pas           PDF basics, tagged output, struct tree, tagged Unicode, the shaping switch (through TPdfCanvas; one bridge test)
   test_report_crossplatform.pas report engine, tables, tagged export
-  test_pdf_subset.pas          font subsetting: IPdfFontSubsetter and TPdfDocument
+  test_pdf_subset.pas          font subsetting: IFontSubsetter and TPdfDocument
   test_pdf_pdfa.pas            PDF/A-3: associated files, XMP schemas, PdfMetadataFacturX, level U
   test_pdf_golden.pas          golden files: generated PDFs against this machine's baseline (layers 1-2)
   test_report_golden.pas       the same for TGDIPages (layer 3)
@@ -115,7 +115,7 @@ CHANGELOG.md          Released versions; a release's entry is written from ROADM
 .claude/skills/
   pdf-engine.md       TPdfDocument, TPdfDocumentVcl, TPdfCanvas — full API, enums, encryption, FPImage
   report-engine.md    TGDIPages — all methods, tables, command recording, global helpers
-  platform-backends.md IPdfPlatformFont/SystemFonts/DC, IPdfTextShaper/IPdfFontSubsetter — interfaces, backends, registration, the shaping switch
+  platform-backends.md IFontProvider/Enumerator/DC, IFontShaper/IFontSubsetter — interfaces, backends, registration, the shaping switch
   call-graph.md       Complete call graph: font lifecycle (4a–4d), rendering, image, bookmarks
   fonts.md            Font handling deep reference: dual-instance model, CMAP loading, text rendering chains, RTL/Arabic
 ```
@@ -131,8 +131,8 @@ TPdfDocumentVcl / TPdfVclCanvas       <- TCanvas bridge
     | automatic coordinate conversion
 TPdfCanvas / TPdfDocument (mormot.ui.pdf) <- Low-level PDF
     | via interfaces
-IPdfPlatformFont / IPdfSystemFonts / IPdfPlatformDC
-    |                + optional: IPdfTextShaper, IPdfFontSubsetter
+IFontProvider / IFontEnumerator / IFontDC
+    |                + optional: IFontShaper, IFontSubsetter
 GDI (Windows)  /  FreeType2 (Linux/macOS)
                   + HarfBuzz shaping and hb-subset when the libraries load
 ```
@@ -356,7 +356,7 @@ itself is in each demo's `uReport.pas`; the form only passes its options.
 
 - **mORMot Refactoring** (R-28, in progress): before any step of it, read
   `docs/REFACTORING.md` — its rules apply on top of this file
-- **Font subsetting**: default (`EmbeddedWholeTtf = False`) on all platforms, two implementations, both keeping the original glyph IDs and therefore safe for CJK, shaped Arabic and tagged output. **Linux/macOS** (R-12): `IPdfFontSubsetter` from `mormot.pdf.hbsubset` (`libharfbuzz-subset`); 97–99.5% smaller PDFs. **Windows** (R-15): `CreateFontPackage` with a glyph keep list (`TTFCFP_FLAGS_GLYPHLIST`). The whole face is embedded instead for PDF/A-1 (no `/CIDSet`), for symbol fonts on POSIX (R-15b) and when `libharfbuzz-subset` is missing. See `.claude/skills/fonts.md` §3, §9
+- **Font subsetting**: default (`EmbeddedWholeTtf = False`) on all platforms, two implementations, both keeping the original glyph IDs and therefore safe for CJK, shaped Arabic and tagged output. **Linux/macOS** (R-12): `IFontSubsetter` (`mormot.lib.core`) implemented by `mormot.pdf.hbsubset` (`libharfbuzz-subset`); 97–99.5% smaller PDFs. **Windows** (R-15): `CreateFontPackage` with a glyph keep list (`TTFCFP_FLAGS_GLYPHLIST`). The whole face is embedded instead for PDF/A-1 (no `/CIDSet`), for symbol fonts on POSIX (R-15b) and when `libharfbuzz-subset` is missing. See `.claude/skills/fonts.md` §3, §9
 - **CFF faces are subset too** (R-15c, done): a CFF-flavoured face goes to `/FontFile3` with `/Subtype /OpenType` as a `CIDFontType0`; `glyf` goes to `/FontFile2`. `PdfFontFileKey()` picks the key. Embedding CFF in `/FontFile2` is a spec violation (ISO 32000-1 9.9) — do not reintroduce it by assuming one key fits both
 - **RTL / Arabic text**: one switch, `UseUniscribe` — HarfBuzz delivers correct ligatures on Linux/macOS, Windows uses Uniscribe; `RightToLeftText` is the direction only — see `.claude/skills/fonts.md` §10
 - **Testing RTL**: Linux fonts (Noto Naskh Arabic) resolve shaped glyphs through the CMAP, so they never exercise the shaper's own advance path. Validate RTL work against a font without Arabic presentation forms — see `.claude/skills/fonts.md` §10
@@ -414,7 +414,7 @@ Optional on Linux/macOS: HarfBuzz for shaping (`UseUniscribe`), and HarfBuzz 2.9
 with its subset library for font subsetting (without it, the whole face is
 embedded — so on Ubuntu 22.04 and RHEL 9, which ship 2.7.4). Both are loaded
 at run time; nothing to link. Versions per distribution:
-`.claude/skills/platform-backends.md` (IPdfFontSubsetter)
+`.claude/skills/platform-backends.md` (IFontSubsetter)
 ```bash
 sudo apt install libharfbuzz0b libharfbuzz-subset0   # Debian 12+/Ubuntu 24.04+ for subsetting
 sudo dnf install harfbuzz                            # Fedora/RHEL

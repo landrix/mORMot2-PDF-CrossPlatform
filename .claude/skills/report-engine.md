@@ -213,7 +213,7 @@ Layout is measured with the font engine that will later place the glyphs, not wi
 
 | Quantity | Source |
 |---|---|
-| Text width | `TPdfFontMeasurer.TextWidth` — base-14 AFM tables when `ExportPdfStandardFonts` is set and the font is Helvetica/Times/Courier, otherwise `IPdfPlatformFont.GetCharABCWidths` on a 1000-per-em DC |
+| Text width | `TPdfFontMeasurer.TextWidth` — base-14 AFM tables when `ExportPdfStandardFonts` is set and the font is Helvetica/Times/Courier, otherwise `IFontProvider.GetCharAbcWidths` on a 1000-per-em DC |
 | Line height | `FontSize * LineHeightFactor`, in PDF points |
 | Fallback | `fMeasureBitmap.Canvas` — only when no platform backend is registered |
 
