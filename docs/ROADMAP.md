@@ -85,6 +85,12 @@ v0.10.0 (2026-09-30).
   one instead (`ExtractSfntFromTtc`, `LoadFreeType`, `HbSubsetFlags` keep
   their names); the `src/platform/unix` search path is no longer needed.
   The PDF output is unchanged
+- **Windows backend moved to mORMot2 (R-28, refactoring Phase 1):**
+  `mormot.pdf.gdi` is gone; its GDI services are in `mormot.lib.uniscribe`
+  of mORMot2, beside the Uniscribe and FontSub bindings (`TGdiFontProvider`,
+  `TGdiFontEnumerator`, `TGdiFontDC`). The `src/platform/windows` search path
+  is no longer needed, and `src/platform` is gone. The PDF output is
+  unchanged
 - **Coming with R-20** (announce when done): the preview and the GUI demos
   on Delphi
 

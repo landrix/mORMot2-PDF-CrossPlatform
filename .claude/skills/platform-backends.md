@@ -3,7 +3,7 @@
 Contracts: `src/lib/mormot.lib.core.pas` of mORMot2 (during the refactoring
 the branch `pdf-font-layer` of `landrix/mORMot2`, see `docs/REFACTORING.md`)
 Former names, as aliases: `src/core/mormot.pdf.types.pas`
-Windows backend: `src/platform/windows/mormot.pdf.gdi.pas`
+Windows backend: mORMot2 `src/lib/mormot.lib.uniscribe.pas` (the GDI services)
 Unix/macOS backends: mORMot2 `src/lib/mormot.lib.freetype.pas` and
 `mormot.lib.harfbuzz.pas` (shaper and subsetter), in the same branch
 
@@ -106,12 +106,12 @@ that shape, anything else draws unshaped.
 Each backend registers its implementations in the `initialization` section:
 
 ```pascal
-// In mormot.pdf.gdi.pas (Windows):
+// In mormot.lib.uniscribe.pas (Windows):
 initialization
   RegisterFontPlatform(
-    TPdfGdiFontProvider.Create,
-    TPdfGdiSystemFonts.Create,
-    TPdfGdiDCProvider.Create);
+    TGdiFontProvider.Create,
+    TGdiFontEnumerator.Create,
+    TGdiFontDC.Create);
 
 // In mormot.lib.freetype.pas (Unix/macOS), when LoadFreeType succeeds:
 initialization
@@ -136,7 +136,8 @@ if not FontPlatformRegistered then
 ```
 
 **Who pulls the units in — `mormot.ui.pdf`, never the application.** Its
-interface `uses` takes `mormot.pdf.gdi` on Windows and `mormot.lib.freetype`
+interface `uses` takes `mormot.lib.uniscribe` on Windows (always, also with
+`NO_USE_UNISCRIBE`: it holds the GDI services) and `mormot.lib.freetype`
 and `mormot.lib.harfbuzz` elsewhere. `mormot.lib.harfbuzz` loads
 `libharfbuzz` for the shaper and `libharfbuzz-subset` (with its own handle on
 `libharfbuzz`) for the subsetter, each through `TSynLibrary`, and registers
@@ -249,7 +250,7 @@ individually, which is what the other callers of the triple need. See U-1.
 
 ---
 
-## Windows Backend (mormot.pdf.gdi.pas)
+## Windows Backend (mormot.lib.uniscribe)
 
 GDI API mapping:
 
@@ -398,7 +399,7 @@ end;
 Every unit starts with `{$I mormot.defines.inc}` after `interface` (by name, no relative path).
 
 - **Enum size does not reach the C libraries.** `mormot.defines.inc` sets `{$MINENUMSIZE 1}` and `{$PACKSET 1}`, but the bindings in `mormot.lib.freetype` and `mormot.lib.harfbuzz` declare every C enum as `integer` and hold no set. Keep it that way in new bindings.
-- **The `{$ifdef FPC}` branches that remain are real differences.** The seven in `mormot.ui.pdf` all come from the original (`reference/`): LCL against VCL units, the compatibility types, and four Windows API calls FPC declares differently — `EnumPrinters` (pointers), `GdiComment` (`var`), `EnumEnhMetaFile` (`RECT`), `CreateFontIndirectW` on a `const` parameter (FPC's `var` overload cannot take it). No mORMot2 function wraps them. `mormot.pdf.gdi` needs no branch: a local `var` fits both. The branches in `mormot.ui.core` and `mormot.ui.gdiplus` come with the mORMot2 originals. The one around all of `mormot.ui.report` is gone since R-20.
+- **The `{$ifdef FPC}` branches that remain are real differences.** The seven in `mormot.ui.pdf` all come from the original (`reference/`): LCL against VCL units, the compatibility types, and four Windows API calls FPC declares differently — `EnumPrinters` (pointers), `GdiComment` (`var`), `EnumEnhMetaFile` (`RECT`), `CreateFontIndirectW` on a `const` parameter (FPC's `var` overload cannot take it). No mORMot2 function wraps them. The GDI services in `mormot.lib.uniscribe` need no branch: a local `var` fits both. The branches in `mormot.ui.core` and `mormot.ui.gdiplus` come with the mORMot2 originals. The one around all of `mormot.ui.report` is gone since R-20.
 - **LCL against VCL units** (R-20): `mormot.ui.pdfcanvas` and `mormot.ui.report` take `LCLIntf`/`LCLType` under FPC and `Windows` under Delphi — `Windows` *before* `Graphics`, or its record `TBitmap` hides the class (dozens of errors on every `TBitmap.Create`).
 - **`PDF_CANVASVIRTUAL`** (`mormot.ui.pdfcanvas`, defined under FPC): the LCL's `TCanvas` drawing methods are virtual, Delphi 7's are static. The bridge declares `TextOut`, `TextExtent`, `TextWidth`, `TextHeight`, `Rectangle`, `Ellipse`, `RoundRect`, `Draw` with `override` or `reintroduce` by this switch, and has `DoMoveTo`/`DoLineTo` (LCL) or reintroduced `MoveTo`/`LineTo` (Delphi). `DoLineTo` checks `psClear` itself: `TFPCustomCanvas.LineTo` skips it then, our Delphi `LineTo` does not.
 - **Delphi on Linux/Android** (R-27): the POSIX backends load their libraries through `TSynLibrary` of `mormot.core.os` (before Phase 1: `LibraryOpen`/`LibraryResolve`) — FPC's `dynlibs` does not exist there, and `TLibHandle` comes from `System` under FPC, from `mormot.core.os` under Delphi. `mormot.ui.pdf` turns `USE_GRAPHICS_UNIT` off for Delphi on `OSPOSIX` (no VCL): the `TBitmap`/`TGraphic` image API is left out, `GetSysColor` and `MM_TEXT` get local fallbacks. Android: `/system/fonts` is scanned, Roboto is the last fallback face; the app has to ship an NDK-built `libfreetype.so` (a glibc build does not load), and a program without a configured `TSynLog` family crashed in `TSynLog.FillInfo` on the first raised exception — configure it as `TSynTests.RunAsConsole` does.
@@ -531,11 +532,70 @@ branch (`docs/REFACTORING.md`, Phase 1, "Where the code lives").
   `PdfFontSubsetter`; the Android form calls `LoadFreeType`. A global
   turned into a function would break them
 
+**The Windows paths, read on 2026-10-07** (for the Uniscribe shaper and the
+FontSub subsetter in `mormot.lib.uniscribe`; read in `mormot.ui.pdf`:
+`AddUnicodeHexTextUniScribe`, `AddGlyphs`, `AddUnicodeHexText`,
+`AddUnicodeHexTextNoUniScribe`, `SubsetWithFontPackage`, `AddWinAnsiGlyphs`,
+`GetTtcIndex`, `PrepareFontSubsets`):
+- Per item, `ScriptShape` first runs without a DC; on `E_PENDING` or
+  `USP_E_SCRIPT_NOT_IN_FONT` again with `GetDCWithFont` (the font selected
+  into the document DC). The `SCRIPT_CACHE` (`psc`) is local to the call and
+  never freed with `ScriptFreeCache`
+- The simple path of an item gets a `#0`-terminated copy of its text
+  (`AddUnicodeHexTextNoUniScribe` reads to `#0`), with `NextLine` false:
+  `MoveToNextLine` runs once, before the first item, when the run is shaped
+- `AddGlyphs` switches to the Unicode font as soon as `ScriptShape` returned
+  any glyph, even when the filter then drops all of them; with no glyph at
+  all it does nothing. It writes at most one `<...> Tj` per item - none when
+  the filter dropped every glyph - with no positioning, and
+  marks glyphs with `GetAndMarkGlyphAsUsed` (no width from the shaper)
+- `RightToLeftText` sets `uBidiLevel := 1` before `ScriptItemize`;
+  `ScriptApplyDigitSubstitution` runs first
+- `SubsetWithFontPackage` reads the whole `.ttc` through the DC
+  (`TTCF_TABLE`) and finds the face index with `GetTtcIndex` - a list of
+  family names (`batang`, `cambria math`, `ms gothic`, localized CJK names...)
+  matched against `fTrueTypeFonts[...]`, the enumerated family name; the
+  font handle alone does not give it. **The list is wrong on Windows 11**
+  (measured 2026-10-07, Windows on ARM, 424 families, 30 in a `.ttc`):
+  matching the face's table directory against the offsets of the TTC header
+  gives another index for 14 of them - `MS UI Gothic` is face 1, not 2,
+  `MS PGothic` face 2, not 1 (`msgothic.ttc` changed its order), and `Yu
+  Gothic UI`, `Microsoft YaHei UI`, `Microsoft JhengHei UI`, `Nirmala Text`,
+  `MingLiU_MSCS-ExtB` are not listed and fall back to 0 although they are
+  not face 0. For those, `CreateFontPackage` subsets the wrong face of the
+  collection. `Microsoft YaHei` (the CJK font of the demos and tests) and
+  `Cambria` get the same index both ways. Decided: the FontSub subsetter
+  finds the index from the bytes
+- The Windows keep list is glyphs only: `AddToSubsetRequest` adds the glyphs
+  of the used WinAnsi characters through `GetGlyphIndicesW` (unmapped ones
+  dropped), under `USE_UNISCRIBE`; `CreateFontPackage` never sees
+  `Request.Unicodes`, which also hold the code points of Identity-H text
+
+**The Windows bypass, checked on 2026-10-07** (search for the GDI font calls
+in `mormot.ui.pdf`, hit lines with their POSIX branch read): still there.
+Under `OSWINDOWS` the engine calls GDI itself where POSIX calls the
+`mormot.lib.core` services - `GetTtfData` (`windows.GetFontData`),
+`TPdfFontTrueType.Create` (`CreateFontIndirectW`, `GetTextMetrics`,
+`GetOutlineTextMetrics`, `GetCharABCWidthsA`) and `Destroy`
+(`DeleteObject`), `TPdfDocument.Create`/`Destroy`/`GetDCWithFont`
+(`CreateCompatibleDC`, `GetDeviceCaps`, `SelectObject`), and the whole-face
+embedding, which reads the `.ttc` and calls `GetTtcIndex` (on POSIX too).
+`fM`/`fOTM` are the Windows records there (`otms...` fields). A shaped glyph
+missing from the cmap gets its width from `GetCharABCWidthsI` by glyph index
+(`GetAndMarkGlyphAsUsed`, step 3) - `IFontProvider` has no such method. The
+printer (`GetDeviceCaps` for page size) and EMF (`TPdfEnum`) calls are
+Windows-only features and stay. Planned as step W3, after the Uniscribe
+shaper and the FontSub subsetter (W2); `GetTtcIndex` can only go with W3.
+
 **Phase 1 steps done:** `mormot.lib.core` (89d652a77), `mormot.lib.freetype`
 and `mormot.lib.harfbuzz` moved and renamed (80e78bb4d, compared against the
 old units on Linux: 206 families, 19850 checks, identical), loaded through
 `TSynLibrary` (5a1fb60fc). In this repository the engine, the backends and
 the tests use the `mormot.lib.core` names (2026-10-04, rename only,
 PR #13), and the old POSIX backends are replaced by the library units
-(2026-10-07, move only). Next: the Windows part - the GDI provider, the
-Uniscribe shaper and the FontSub subsetter into `mormot.lib.uniscribe`.
+(2026-10-07, move only). The Windows part: W1, the GDI services moved
+into `mormot.lib.uniscribe` (2dce8feb6, `mormot.pdf.gdi` gone, move only);
+next W2, the Uniscribe shaper and the FontSub subsetter there (TTC index from
+the bytes, `Request.Unicodes` resolved by the subsetter, `NeedsShaping` into
+the HarfBuzz shaper, one caller in `mormot.ui.pdf`), then W3, the engine's
+direct GDI calls behind `FontProvider`.

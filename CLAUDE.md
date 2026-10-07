@@ -48,7 +48,7 @@ All files under `src/` require justification and user approval before reading.
 | `src/core/mormot.ui.reportpreview.pas` | Preview window and printing for `TGDIPages` (LCL) | Production |
 | `src/core/mormot.ui.pdfcanvas.pas` | TCanvas bridge (`TPdfDocumentVcl`) | Production |
 | `src/core/mormot.pdf.types.pas` | PDF types; former font type names as aliases of mormot.lib.core | Production |
-| `src/platform/windows/mormot.pdf.gdi.pas` | GDI backend | Production |
+| mORMot2 `src/lib/mormot.lib.uniscribe.pas` | GDI backend (Windows), beside the Uniscribe and FontSub bindings | Production |
 | mORMot2 `src/lib/mormot.lib.freetype.pas` | FreeType2 backend (POSIX) | Production |
 | mORMot2 `src/lib/mormot.lib.harfbuzz.pas` | HarfBuzz shaper (RTL/complex scripts) and hb-subset subsetter (R-12) | Production |
 | `src/core/mormot.pdf.fpimage.pas` | FPImage bitmap adapter | Production |
@@ -66,10 +66,9 @@ src/
     mormot.pdf.fpimage.pas      Bitmap embedding (FPImage)
     mormot.ui.core.pas          UI helper functions   } the trunk's units of mORMot2 src/ui (only the include path differs),
     mormot.ui.gdiplus.pas       GDI+ support (Windows) } which is not on the search path
-  platform/
-    windows/mormot.pdf.gdi.pas  GDI backend (Windows)
-  (the POSIX backends are mORMot2 units: src/lib/mormot.lib.freetype.pas and
-   mormot.lib.harfbuzz.pas - shaper and subsetter, each library optional)
+  (the backends are mORMot2 units in src/lib: mormot.lib.uniscribe on Windows
+   (GDI), mormot.lib.freetype and mormot.lib.harfbuzz - shaper and subsetter,
+   each library optional - on POSIX)
 examples/
   pdf_demo/           Demo 1 — TPdfDocumentVcl, TCanvas API, Tagged PDF (console)
   report_demo/        Demo 2 — TGDIPages, GUI preview, tagged PDF
@@ -214,7 +213,7 @@ both declare `psA4`, and `TRect` differs from the LCL's, so the uses order
 decides which one a name means. Details: `.claude/skills/report-engine.md`
 
 The platform units need no `uses` in a program: `mormot.ui.pdf` brings
-`mormot.pdf.gdi`, or `mormot.lib.freetype` and `mormot.lib.harfbuzz`; a
+`mormot.lib.uniscribe`, or `mormot.lib.freetype` and `mormot.lib.harfbuzz`; a
 missing HarfBuzz library only leaves shaping or subsetting off, a missing
 `libfreetype` makes `TPdfDocument.Create` raise.
 **Shaping is one switch**, `UseUniscribe` — Uniscribe on Windows, HarfBuzz on

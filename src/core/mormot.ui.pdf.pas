@@ -91,10 +91,7 @@ uses
   {$ifdef OSWINDOWS}
   windows,
   winspool,
-  {$ifdef USE_UNISCRIBE}
-  mormot.lib.uniscribe,
-  {$endif USE_UNISCRIBE}
-  mormot.pdf.gdi,        // registers GDI backend via RegisterFontPlatform()
+  mormot.lib.uniscribe,  // registers the GDI services via RegisterFontPlatform()
   {$else}
   mormot.lib.freetype,   // registers the FreeType2 services via RegisterFontPlatform()
   mormot.lib.harfbuzz,   // FontShaper / FontSubsetter when libharfbuzz(-subset) loads
@@ -3995,8 +3992,8 @@ begin
 end;
 {$endif OSWINDOWS}
 
-// EnumFontsProcW and EnumFontFamiliesExW moved to mormot.pdf.gdi
-// (GDI backend registered via RegisterFontPlatform)
+// EnumFontsProcW and EnumFontFamiliesExW moved to mormot.lib.uniscribe
+// (GDI services registered via RegisterFontPlatform)
 
 {$ifdef OSWINDOWS}
 function LCIDToCodePage(ALcid: LCID): integer;

@@ -184,7 +184,8 @@ checked against that record:
    `5a1fb60fc` (2026-10-04, `mormot.lib.freetype` and `mormot.lib.harfbuzz`
    added, unused here until the old POSIX backends are replaced; in
    `mormot.lib.core` the out parameter of `IFontSubsetter.Subset` renamed
-   `Output` and two comments corrected).
+   `Output` and two comments corrected), then `2dce8feb6` (2026-10-07, the
+   GDI services in `mormot.lib.uniscribe`, replacing `mormot.pdf.gdi`).
    **Checked:** against `d60cc6e80`, today's `main`,
    `test_runner` 259/259 on Windows (FPC Win64, Delphi 7, Delphi 2010),
    298/298 on Linux, 317/317 on macOS (fpcupdeluxe, FPC 3.2.3). Against
