@@ -182,10 +182,20 @@ checked against that record:
    the new `mormot.lib.*` units (see Phase 1, "Where the code lives"):
    `89d652a77` (2026-10-04, `mormot.lib.core` added, no other change), then
    `5a1fb60fc` (2026-10-04, `mormot.lib.freetype` and `mormot.lib.harfbuzz`
-   added, unused here until the old POSIX backends are replaced).
-   **Checked:** today's `main`,
+   added, unused here until the old POSIX backends are replaced; in
+   `mormot.lib.core` the out parameter of `IFontSubsetter.Subset` renamed
+   `Output` and two comments corrected).
+   **Checked:** against `d60cc6e80`, today's `main`,
    `test_runner` 259/259 on Windows (FPC Win64, Delphi 7, Delphi 2010),
-   298/298 on Linux, 317/317 on macOS (fpcupdeluxe, FPC 3.2.3).
+   298/298 on Linux, 317/317 on macOS (fpcupdeluxe, FPC 3.2.3). Against
+   `89d652a77` (PR #12): 296/296 on Windows aarch64 (FPC 3.3.1), 347/347 on
+   Linux aarch64 (WSL, FPC 3.2.2), golden files unchanged. Against
+   `5a1fb60fc` (PR #13): 296/296 on Windows x64 (FPC 3.2.2), Windows x86
+   (Delphi 7, Delphi 2010), Windows aarch64 (FPC 3.3.1) and with Delphi 13
+   Win32/Win64, 335/335 on Debian 13 aarch64 and 354/354 on macOS aarch64
+   (FPC 3.2.3), 347/347 on Linux aarch64 (WSL, FPC 3.2.2); golden files
+   unchanged, the 45 demo PDFs identical to `2026-10-04_pr9` but for the
+   date in two footers.
    `mormot_demo` (SQLite from `static/`) builds and exports on all three
    Windows compilers, the PDFs identical after normalization. FPC warns of
    a duplicate `mormot.lib.uniscribe` (the package's and our copy) — gone
@@ -270,7 +280,9 @@ files, `pdfcheck`, the demos and the CI, and builds against a pinned commit
 of that branch (Phase 0 step 3); it gets PRs only where it has to follow -
 the pin, the PDF units switching to the new interfaces. The branch starts
 from the pinned trunk commit and is synchronized with the trunk per
-baseline; the end of Phase 1 is one PR to `synopse/mORMot2`.
+baseline - by merging the trunk in, never by rebasing or force-pushing, so
+that every commit pinned here (CI, baselines) stays reachable; the end of
+Phase 1 is one PR to `synopse/mORMot2`.
 
 - `Pdf` dropped from names that are not PDF-specific; the PDF types
   (`TPdfFileFormat`, `TPdfStructRole`, the font name constants) stay on the
