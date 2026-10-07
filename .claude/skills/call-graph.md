@@ -399,7 +399,7 @@ AddUnicodeHexText (pdf.pas) — UseUniscribe gates both platforms' shaper:
         FontShaper.Shape(PW, Len, WinAnsiTtf.fHGDI, RTL,
           Runs)                                 ← libharfbuzz.so.0 / harfbuzz.dylib
           (exactly one fskShaped run, or unshaped: Glyphs/Advances/Offsets of Runs[0])
-          hb_ft_font_create(ctx^.Face)          ← FT_Face from PPdfFTContext
+          hb_ft_font_create(ctx^.Face)          ← FT_Face from PFreeTypeFont
           hb_buffer_set_direction(RTL/LTR)
           hb_buffer_guess_segment_properties
           hb_shape → Glyphs[] + Advances[] + Offsets[]  ← design-unit (NO_SCALE)
@@ -528,7 +528,7 @@ AddUnicodeHexTextNoUniScribe (U+4E2D):
 
 Table tags from `GetTtfData` are little-endian DWORDs (`PCardinal(name)^`).
 FreeType's `FT_Load_Sfnt_Table` expects big-endian (`FT_MAKE_TAG` convention).
-`TPdfFreeTypeFontProvider.GetFontData` applies `SwapEndian(ATableTag)` before the call.
+`TFreeTypeFontProvider.GetFontData` applies `bswap32(TableTag)` before the call.
 `SwapEndian(0)` = 0 — the tag=0 "return whole font file" convention is preserved.
 
 ```
@@ -537,7 +537,7 @@ GetTtfData (pdf.pas:3604) — Linux/macOS path
 │  tag := PCardinal(aTableName)^    ← LE: 'cmap' → $70616D63
 │
 │  FontProvider.GetFontData(aDC, tag, 0, nil, 0)
-│    → TPdfFreeTypeFontProvider.GetFontData (freetype.pas:658)
+│    → TFreeTypeFontProvider.GetFontData (mormot.lib.freetype)
 │       SwapEndian($70616D63) = $636D6170   ← FT_MAKE_TAG('c','m','a','p')
 │       FT_Load_Sfnt_Table(face, $636D6170, ...)  → returns CMAP bytes
 │    → returns byte count

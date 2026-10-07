@@ -4,9 +4,8 @@ Contracts: `src/lib/mormot.lib.core.pas` of mORMot2 (during the refactoring
 the branch `pdf-font-layer` of `landrix/mORMot2`, see `docs/REFACTORING.md`)
 Former names, as aliases: `src/core/mormot.pdf.types.pas`
 Windows backend: `src/platform/windows/mormot.pdf.gdi.pas`
-Unix/macOS backends: `src/platform/unix/mormot.pdf.freetype.pas`,
-`mormot.pdf.harfbuzz.pas`, `mormot.pdf.hbsubset.pas` (their successors
-`mormot.lib.freetype` and `mormot.lib.harfbuzz` are in the branch already)
+Unix/macOS backends: mORMot2 `src/lib/mormot.lib.freetype.pas` and
+`mormot.lib.harfbuzz.pas` (shaper and subsetter), in the same branch
 
 ---
 
@@ -114,12 +113,13 @@ initialization
     TPdfGdiSystemFonts.Create,
     TPdfGdiDCProvider.Create);
 
-// In mormot.pdf.freetype.pas (Unix/macOS):
+// In mormot.lib.freetype.pas (Unix/macOS), when LoadFreeType succeeds:
 initialization
   RegisterFontPlatform(
-    TPdfFreeTypeFontProvider.Create,
-    TPdfFreeTypeSystemFonts.Create,
-    TPdfFreeTypeDCProvider.Create);
+    TFreeTypeFontProvider.Create,
+    TFreeTypeFontEnumerator.Create,
+    TFreeTypeFontDC.Create);
+// its finalization releases them again, before the library is unloaded
 ```
 
 `RegisterFontPlatform` of `mormot.lib.core` sets the globals `FontProvider`,
@@ -136,14 +136,16 @@ if not FontPlatformRegistered then
 ```
 
 **Who pulls the units in — `mormot.ui.pdf`, never the application.** Its
-interface `uses` takes `mormot.pdf.gdi` on Windows and `mormot.pdf.freetype`,
-`mormot.pdf.harfbuzz` and `mormot.pdf.hbsubset` elsewhere. The two HarfBuzz
-units load their library at run time and register only when it resolves, so
-a missing library leaves shaping or subsetting off — no build dependency.
-`hbsubset` opens the same `libharfbuzz` anyway, so the shaper costs nothing.
-A program that names a platform unit itself (the tests use
-`mormot.pdf.freetype` for `ExtractSfntFromTtc`) does no harm; no program
-needs to. Before 2026-09-29 `mormot.pdf.harfbuzz` had to be added by the
+interface `uses` takes `mormot.pdf.gdi` on Windows and `mormot.lib.freetype`
+and `mormot.lib.harfbuzz` elsewhere. `mormot.lib.harfbuzz` loads
+`libharfbuzz` for the shaper and `libharfbuzz-subset` (with its own handle on
+`libharfbuzz`) for the subsetter, each through `TSynLibrary`, and registers
+each one only when its library resolves, so a missing library leaves shaping
+or subsetting off — no build dependency. A program that names a platform unit
+itself (the tests use `mormot.lib.freetype` for `ExtractSfntFromTtc`) does no
+harm; no program needs to. Until 2026-10-07 the backends were
+`mormot.pdf.freetype`, `mormot.pdf.harfbuzz` and `mormot.pdf.hbsubset` in
+`src/platform/unix` (R-28 Phase 1). Before 2026-09-29 `mormot.pdf.harfbuzz` had to be added by the
 application, `layer1_demo` listed the backends, and `rtl_demo` wrongly
 required FreeType before HarfBuzz.
 
@@ -270,7 +272,7 @@ No additional runtime dependency — GDI is part of Windows.
 
 ---
 
-## Unix/macOS Backend (mormot.pdf.freetype.pas)
+## Unix/macOS Backend (mormot.lib.freetype)
 
 FreeType2 API mapping:
 
@@ -303,11 +305,11 @@ macOS:
 
 If a font is not found: fallback to DejaVu Sans (Linux) or Helvetica (macOS).
 
-**Runtime library:** `libfreetype.so.6` (Linux) / `libfreetype.6.dylib` (macOS) — loaded dynamically via `dlopen`. If not present: exception on first font access.
+**Runtime library:** `libfreetype.so.6` (Linux) / `libfreetype.6.dylib` (macOS) — loaded at run time through `TSynLibrary` (`LoadFreeType`, Homebrew paths tried on macOS). If not present, nothing is registered and `TPdfDocument.Create` raises.
 
 ---
 
-## Optional: IFontSubsetter (mormot.pdf.hbsubset, Linux/macOS) — R-12
+## Optional: IFontSubsetter (mormot.lib.harfbuzz, Linux/macOS) — R-12
 
 ```pascal
 TFontSubsetRequest = record
@@ -327,7 +329,7 @@ end;
 var FontSubsetter: IFontSubsetter;  // mormot.lib.core; nil = no subsetter
 ```
 
-- `mormot.ui.pdf` uses `mormot.pdf.hbsubset` on POSIX itself, like the FreeType
+- `mormot.ui.pdf` uses `mormot.lib.harfbuzz` on POSIX itself, like the FreeType
   backend: no project-side `uses` needed. Its `initialization` calls
   `LoadHarfBuzzSubset` and registers only when every symbol resolved, so
   `FontSubsetter <> nil` means "usable"
@@ -395,11 +397,11 @@ end;
 
 Every unit starts with `{$I mormot.defines.inc}` after `interface` (by name, no relative path).
 
-- **Enum size does not reach the C libraries.** `mormot.defines.inc` sets `{$MINENUMSIZE 1}` and `{$PACKSET 1}`, but the bindings in `mormot.pdf.freetype`, `mormot.pdf.harfbuzz` and `mormot.pdf.hbsubset` declare every C enum as `integer` and hold no set. Keep it that way in new bindings.
+- **Enum size does not reach the C libraries.** `mormot.defines.inc` sets `{$MINENUMSIZE 1}` and `{$PACKSET 1}`, but the bindings in `mormot.lib.freetype` and `mormot.lib.harfbuzz` declare every C enum as `integer` and hold no set. Keep it that way in new bindings.
 - **The `{$ifdef FPC}` branches that remain are real differences.** The seven in `mormot.ui.pdf` all come from the original (`reference/`): LCL against VCL units, the compatibility types, and four Windows API calls FPC declares differently — `EnumPrinters` (pointers), `GdiComment` (`var`), `EnumEnhMetaFile` (`RECT`), `CreateFontIndirectW` on a `const` parameter (FPC's `var` overload cannot take it). No mORMot2 function wraps them. `mormot.pdf.gdi` needs no branch: a local `var` fits both. The branches in `mormot.ui.core` and `mormot.ui.gdiplus` come with the mORMot2 originals. The one around all of `mormot.ui.report` is gone since R-20.
 - **LCL against VCL units** (R-20): `mormot.ui.pdfcanvas` and `mormot.ui.report` take `LCLIntf`/`LCLType` under FPC and `Windows` under Delphi — `Windows` *before* `Graphics`, or its record `TBitmap` hides the class (dozens of errors on every `TBitmap.Create`).
 - **`PDF_CANVASVIRTUAL`** (`mormot.ui.pdfcanvas`, defined under FPC): the LCL's `TCanvas` drawing methods are virtual, Delphi 7's are static. The bridge declares `TextOut`, `TextExtent`, `TextWidth`, `TextHeight`, `Rectangle`, `Ellipse`, `RoundRect`, `Draw` with `override` or `reintroduce` by this switch, and has `DoMoveTo`/`DoLineTo` (LCL) or reintroduced `MoveTo`/`LineTo` (Delphi). `DoLineTo` checks `psClear` itself: `TFPCustomCanvas.LineTo` skips it then, our Delphi `LineTo` does not.
-- **Delphi on Linux/Android** (R-27): the POSIX backends load their libraries with `LibraryOpen`/`LibraryResolve`/`LibraryClose` from `mormot.core.os` — FPC's `dynlibs` does not exist there, and `TLibHandle` comes from `System` under FPC, from `mormot.core.os` under Delphi. `mormot.ui.pdf` turns `USE_GRAPHICS_UNIT` off for Delphi on `OSPOSIX` (no VCL): the `TBitmap`/`TGraphic` image API is left out, `GetSysColor` and `MM_TEXT` get local fallbacks. Android: `/system/fonts` is scanned, Roboto is the last fallback face; the app has to ship an NDK-built `libfreetype.so` (a glibc build does not load), and a program without a configured `TSynLog` family crashed in `TSynLog.FillInfo` on the first raised exception — configure it as `TSynTests.RunAsConsole` does.
+- **Delphi on Linux/Android** (R-27): the POSIX backends load their libraries through `TSynLibrary` of `mormot.core.os` (before Phase 1: `LibraryOpen`/`LibraryResolve`) — FPC's `dynlibs` does not exist there, and `TLibHandle` comes from `System` under FPC, from `mormot.core.os` under Delphi. `mormot.ui.pdf` turns `USE_GRAPHICS_UNIT` off for Delphi on `OSPOSIX` (no VCL): the `TBitmap`/`TGraphic` image API is left out, `GetSysColor` and `MM_TEXT` get local fallbacks. Android: `/system/fonts` is scanned, Roboto is the last fallback face; the app has to ship an NDK-built `libfreetype.so` (a glibc build does not load), and a program without a configured `TSynLog` family crashed in `TSynLog.FillInfo` on the first raised exception — configure it as `TSynTests.RunAsConsole` does.
 - **Delphi 7 syntax** met in R-20: every declaration of an overloaded method needs `overload` (FPC accepts it on one); no `Default(T)` — `mormot.ui.report` has `NewCommand` (`Finalize` + `FillChar`); no typed constants with dynamic-array fields — build a `TTableLayout` in a function, zeroed first like a constant's omitted fields.
 
 ---
@@ -532,5 +534,7 @@ branch (`docs/REFACTORING.md`, Phase 1, "Where the code lives").
 and `mormot.lib.harfbuzz` moved and renamed (80e78bb4d, compared against the
 old units on Linux: 206 families, 19850 checks, identical), loaded through
 `TSynLibrary` (5a1fb60fc). In this repository the engine, the backends and
-the tests use the `mormot.lib.core` names (2026-10-04, rename only); next
-the old POSIX backends are replaced by the library units (move only).
+the tests use the `mormot.lib.core` names (2026-10-04, rename only,
+PR #13), and the old POSIX backends are replaced by the library units
+(2026-10-07, move only). Next: the Windows part - the GDI provider, the
+Uniscribe shaper and the FontSub subsetter into `mormot.lib.uniscribe`.

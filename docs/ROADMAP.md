@@ -77,6 +77,14 @@ v0.10.0 (2026-09-30).
   whose signatures changed (`IFontShaper.Shape` returns `TFontShapedRuns`,
   `IFontSubsetter.Subset` takes the font handle). The PDF output is
   unchanged
+- **POSIX backends moved to mORMot2 (R-28, refactoring Phase 1):**
+  `mormot.pdf.freetype`, `mormot.pdf.harfbuzz` and `mormot.pdf.hbsubset` are
+  gone; `mormot.lib.freetype` and `mormot.lib.harfbuzz` of mORMot2 replace
+  them (`src/lib`, during the refactoring the `pdf-font-layer` branch of
+  `landrix/mORMot2`). A program that names one of the old units uses the new
+  one instead (`ExtractSfntFromTtc`, `LoadFreeType`, `HbSubsetFlags` keep
+  their names); the `src/platform/unix` search path is no longer needed.
+  The PDF output is unchanged
 - **Coming with R-20** (announce when done): the preview and the GUI demos
   on Delphi
 
@@ -124,7 +132,7 @@ prefix) from a whole face well enough.
 **macOS.** Target **aarch64-darwin**. Linking prints a wall of `ld: warning:
 object file ... built for newer macOS version (11.0) than being linked
 (10.15)` — noise from the prebuilt mORMot2 units, not an error. HarfBuzz from
-Homebrew (`/opt/homebrew/lib`) is on one of the paths `mormot.pdf.hbsubset`
+Homebrew (`/opt/homebrew/lib`) is on one of the paths `mormot.lib.harfbuzz`
 probes, so no linker flag is needed; `hb-info` ships with it and is the
 quickest way to tell a CFF face from a `glyf` one. Where the poppler tools are
 missing, output is checked by file size and by reading the font dictionaries
@@ -638,7 +646,7 @@ stopgap (it too lacks `/Widths`) is to be checked with it.
 ### R-15b — Symbolic Fonts Are Not Subset on POSIX — unprioritised
 
 **Effort:** 0.5 day | **Files:** `src/core/mormot.ui.pdf.pas`,
-`src/platform/unix/mormot.pdf.freetype.pas`
+`mormot.lib.freetype` (mORMot2)
 
 The one remaining difference between the platforms that is **not** a property of
 the platform. `PrepareFontSubsets` skips a symbolic font when
@@ -676,10 +684,10 @@ text blocks (B-2) and is the model to follow.
 
 ### R-11 — TTC Face Index — unprioritised
 
-**Effort:** 1 day | **Files:** `src/platform/unix/mormot.pdf.freetype.pas`
-(`mormot.lib.freetype` once the POSIX backends are replaced), `mormot.lib.core`
+**Effort:** 1 day | **Files:** `mormot.lib.freetype`, `mormot.lib.core`
+(mORMot2)
 
-Only face index 0 of a `.ttc` is reachable, because `TPdfFontMap` carries no
+Only face index 0 of a `.ttc` is reachable, because `TFontFileMap` carries no
 face index. Add one so the remaining faces can be selected by name. The
 FreeType backend already extracts a single face as a standalone sfnt
 (`ExtractSfntFromTtc`), so the embedding side needs no change.

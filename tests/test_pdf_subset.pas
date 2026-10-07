@@ -19,7 +19,7 @@ uses
   mormot.lib.core,
   mormot.pdf.types,
   {$ifndef OSWINDOWS}
-  mormot.pdf.hbsubset,
+  mormot.lib.harfbuzz,
   {$endif OSWINDOWS}
   mormot.ui.pdf;
 

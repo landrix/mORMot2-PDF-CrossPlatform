@@ -49,9 +49,8 @@ All files under `src/` require justification and user approval before reading.
 | `src/core/mormot.ui.pdfcanvas.pas` | TCanvas bridge (`TPdfDocumentVcl`) | Production |
 | `src/core/mormot.pdf.types.pas` | PDF types; former font type names as aliases of mormot.lib.core | Production |
 | `src/platform/windows/mormot.pdf.gdi.pas` | GDI backend | Production |
-| `src/platform/unix/mormot.pdf.freetype.pas` | FreeType2 backend | Production |
-| `src/platform/unix/mormot.pdf.harfbuzz.pas` | HarfBuzz shaper (RTL/complex scripts) | Production |
-| `src/platform/unix/mormot.pdf.hbsubset.pas` | hb-subset font subsetter (R-12) | Production |
+| mORMot2 `src/lib/mormot.lib.freetype.pas` | FreeType2 backend (POSIX) | Production |
+| mORMot2 `src/lib/mormot.lib.harfbuzz.pas` | HarfBuzz shaper (RTL/complex scripts) and hb-subset subsetter (R-12) | Production |
 | `src/core/mormot.pdf.fpimage.pas` | FPImage bitmap adapter | Production |
 
 ## File Structure
@@ -69,9 +68,8 @@ src/
     mormot.ui.gdiplus.pas       GDI+ support (Windows) } which is not on the search path
   platform/
     windows/mormot.pdf.gdi.pas  GDI backend (Windows)
-    unix/mormot.pdf.freetype.pas FreeType2 backend (Linux/macOS)
-    unix/mormot.pdf.harfbuzz.pas HarfBuzz text shaper (Linux/macOS; used by mormot.ui.pdf, library optional)
-    unix/mormot.pdf.hbsubset.pas hb-subset font subsetter (Linux/macOS; used by mormot.ui.pdf, library optional)
+  (the POSIX backends are mORMot2 units: src/lib/mormot.lib.freetype.pas and
+   mormot.lib.harfbuzz.pas - shaper and subsetter, each library optional)
 examples/
   pdf_demo/           Demo 1 — TPdfDocumentVcl, TCanvas API, Tagged PDF (console)
   report_demo/        Demo 2 — TGDIPages, GUI preview, tagged PDF
@@ -216,8 +214,9 @@ both declare `psA4`, and `TRect` differs from the LCL's, so the uses order
 decides which one a name means. Details: `.claude/skills/report-engine.md`
 
 The platform units need no `uses` in a program: `mormot.ui.pdf` brings
-`mormot.pdf.gdi`, or `mormot.pdf.freetype`, `mormot.pdf.harfbuzz` and
-`mormot.pdf.hbsubset`; a missing library only leaves its feature off.
+`mormot.pdf.gdi`, or `mormot.lib.freetype` and `mormot.lib.harfbuzz`; a
+missing HarfBuzz library only leaves shaping or subsetting off, a missing
+`libfreetype` makes `TPdfDocument.Create` raise.
 **Shaping is one switch**, `UseUniscribe` — Uniscribe on Windows, HarfBuzz on
 Linux/macOS, only for runs of a script that needs it (or `RightToLeftText`
 runs). `RightToLeftText` is the direction only. Never set either behind a
@@ -356,11 +355,11 @@ itself is in each demo's `uReport.pas`; the form only passes its options.
 
 - **mORMot Refactoring** (R-28, in progress): before any step of it, read
   `docs/REFACTORING.md` — its rules apply on top of this file
-- **Font subsetting**: default (`EmbeddedWholeTtf = False`) on all platforms, two implementations, both keeping the original glyph IDs and therefore safe for CJK, shaped Arabic and tagged output. **Linux/macOS** (R-12): `IFontSubsetter` (`mormot.lib.core`) implemented by `mormot.pdf.hbsubset` (`libharfbuzz-subset`); 97–99.5% smaller PDFs. **Windows** (R-15): `CreateFontPackage` with a glyph keep list (`TTFCFP_FLAGS_GLYPHLIST`). The whole face is embedded instead for PDF/A-1 (no `/CIDSet`), for symbol fonts on POSIX (R-15b) and when `libharfbuzz-subset` is missing. See `.claude/skills/fonts.md` §3, §9
+- **Font subsetting**: default (`EmbeddedWholeTtf = False`) on all platforms, two implementations, both keeping the original glyph IDs and therefore safe for CJK, shaped Arabic and tagged output. **Linux/macOS** (R-12): `IFontSubsetter` (`mormot.lib.core`) implemented by `mormot.lib.harfbuzz` (`libharfbuzz-subset`); 97–99.5% smaller PDFs. **Windows** (R-15): `CreateFontPackage` with a glyph keep list (`TTFCFP_FLAGS_GLYPHLIST`). The whole face is embedded instead for PDF/A-1 (no `/CIDSet`), for symbol fonts on POSIX (R-15b) and when `libharfbuzz-subset` is missing. See `.claude/skills/fonts.md` §3, §9
 - **CFF faces are subset too** (R-15c, done): a CFF-flavoured face goes to `/FontFile3` with `/Subtype /OpenType` as a `CIDFontType0`; `glyf` goes to `/FontFile2`. `PdfFontFileKey()` picks the key. Embedding CFF in `/FontFile2` is a spec violation (ISO 32000-1 9.9) — do not reintroduce it by assuming one key fits both
 - **RTL / Arabic text**: one switch, `UseUniscribe` — HarfBuzz delivers correct ligatures on Linux/macOS, Windows uses Uniscribe; `RightToLeftText` is the direction only — see `.claude/skills/fonts.md` §10
 - **Testing RTL**: Linux fonts (Noto Naskh Arabic) resolve shaped glyphs through the CMAP, so they never exercise the shaper's own advance path. Validate RTL work against a font without Arabic presentation forms — see `.claude/skills/fonts.md` §10
-- **TTC collections**: only face index 0 is reachable; `TPdfFontMap` has no face index, so the other faces of a `.ttc` cannot be selected by name
+- **TTC collections**: only face index 0 is reachable; `TFontFileMap` (`mormot.lib.freetype`) has no face index, so the other faces of a `.ttc` cannot be selected by name
 - **EMF/MetaFile**: Windows-only (`TPdfDocumentGdi`), not portable
 - **GDI+/gradient fills**: Windows-only via EMF
 - **Table pagination**: no row break within a cell (roadmap R-10)

@@ -1,7 +1,7 @@
 # Font Handling — Deep Reference
 
 Sources: `src/core/mormot.ui.pdf.pas`, `src/core/mormot.pdf.types.pas`,
-`src/platform/windows/mormot.pdf.gdi.pas`, `src/platform/unix/mormot.pdf.freetype.pas`
+`src/platform/windows/mormot.pdf.gdi.pas`, mORMot2 `src/lib/mormot.lib.freetype.pas`
 
 **Skill boundaries:**
 - User-facing font mode selection → brief overview here; see also `.claude/skills/pdf-engine.md` §"Font Strategy"
@@ -65,7 +65,7 @@ untagged output.
 | `EmbeddedWholeTtf` | Behaviour |
 |---|---|
 | `true` | Complete TTF bytes embedded. Safe for all scripts including RTL/Arabic. For a `.ttc`, the loaded face alone is extracted as a standalone sfnt — a raw `ttcf` container is not a valid `/FontFile2`. |
-| `false` (default), Linux/macOS | Subset via `IFontSubsetter` (`mormot.pdf.hbsubset`, `libharfbuzz-subset`, R-12). Glyph IDs retained, so content streams, `/W` and `/ToUnicode` stay valid. Safe for Latin, CJK, shaped RTL and tagged output. |
+| `false` (default), Linux/macOS | Subset via `IFontSubsetter` (`mormot.lib.harfbuzz`, `libharfbuzz-subset`, R-12). Glyph IDs retained, so content streams, `/W` and `/ToUnicode` stay valid. Safe for Latin, CJK, shaped RTL and tagged output. |
 | `false` (default), Windows | Subset via `CreateFontPackage` with a glyph keep list (`TTFCFP_FLAGS_GLYPHLIST`, R-15). Glyph IDs retained, so it is safe for the same cases as hb-subset — Latin, CJK, shaped Arabic (Uniscribe), tagged output. |
 
 The whole face is embedded instead — silently, as before R-12 — when no
@@ -100,7 +100,7 @@ Identity-H. A log line, not a rule: the file passes `ua1`, and it renders the
 same characters as the Linux file (checked 2026-09-29). Do not convert the
 face to CID-keyed CFF to silence it.
 
-**Every `.ttc` face hinges on `TPdfFTContext.SfntChecked`.** `GetFontData(0)`
+**Every `.ttc` face hinges on `TFreeTypeFont.SfntChecked`.** `GetFontData(0)`
 extracts the loaded face once and caches it in `Sfnt`; with `SfntChecked` set
 and `Sfnt` empty it hands out FreeType's whole collection instead. The face then
 reads as neither CFF nor a single font, hb-subset fails, and the raw `ttcf`
@@ -536,7 +536,7 @@ U+06xx code points mean Step 2, PUA U+E0xx values mean Step 3.
 ### HarfBuzz scaling — do NOT use FT_LOAD_NO_SCALE
 
 `hb_ft_font_create` copies its scale out of `ft_face^.size^.metrics`, so the
-FT_Face **must be sized first** — `PdfFTSetEmSize1000()` in the FreeType backend
+FT_Face **must be sized first** — `FreeTypeSetEmSize1000()` in the FreeType backend
 does this (1000 units per em at 72 dpi). `CreateFont` deliberately does not size
 the face, because every other entry point uses `FT_LOAD_NO_SCALE` or reads
 design-unit fields.
@@ -687,7 +687,7 @@ Table tags are formed in `GetTtfData` (`pdf.pas:3610`) as `PCardinal(aTableName)
 a 4-char ASCII name read as a little-endian DWORD on LE machines.
 
 FreeType's `FT_Load_Sfnt_Table` uses the `FT_MAKE_TAG` big-endian convention.
-`TPdfFreeTypeFontProvider.GetFontData` applies `SwapEndian(ATableTag)` before calling
+`TFreeTypeFontProvider.GetFontData` applies `bswap32(TableTag)` before calling
 `FT_Load_Sfnt_Table`. `SwapEndian(0)` = 0, preserving the tag=0 convention
 ("return entire font file") used by the whole-font embedding path.
 
