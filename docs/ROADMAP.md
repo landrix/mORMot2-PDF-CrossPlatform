@@ -62,6 +62,21 @@ v0.10.0 (2026-09-30).
   (issue #4, Ubuntu 24.04). The README now says which distributions ship a
   HarfBuzz older than 2.9 and do not subset at all: Debian 11, Ubuntu 22.04,
   RHEL 8/9
+- **Font interfaces renamed (R-28, refactoring Phase 1):** the platform
+  interfaces and their records moved from `mormot.pdf.types` to
+  `mormot.lib.core` of mORMot2 and lost the `Pdf` prefix -
+  `IFontProvider`, `IFontEnumerator`, `IFontDC`, `TFontRequest`,
+  `TFontMetrics`... `mormot.pdf.types` keeps the former record and
+  interface names as aliases. Removed without an alias, so code that
+  registers or calls a backend of its own no longer compiles:
+  `PdfPlatformFont`, `PdfSystemFonts`, `PdfPlatformDCProvider`,
+  `PdfTextShaper`, `PdfFontSubsetter`, `RegisterPdfPlatform`,
+  `PdfPlatformRegistered` (now `FontProvider`, `FontEnumerator`, `FontDC`,
+  `FontShaper`, `FontSubsetter`, `RegisterFontPlatform`,
+  `FontPlatformRegistered`), and `IPdfTextShaper` and `IPdfFontSubsetter`,
+  whose signatures changed (`IFontShaper.Shape` returns `TFontShapedRuns`,
+  `IFontSubsetter.Subset` takes the font handle). The PDF output is
+  unchanged
 - **Coming with R-20** (announce when done): the preview and the GUI demos
   on Delphi
 

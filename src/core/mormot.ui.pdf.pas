@@ -5867,6 +5867,7 @@ begin
   result := false;
   if (FontShaper = nil) or (WinAnsiTtf = nil) then
     exit;
+  Runs := nil; // a managed out parameter: silences FPC on POSIX
   // HarfBuzz shapes the whole run at once: one shaped part, or none
   if not FontShaper.Shape(PW, PWLen, WinAnsiTtf.fHGDI,
        Canvas.RightToLeftText, Runs) or
@@ -5876,7 +5877,11 @@ begin
   Glyphs   := Runs[0].Glyphs;
   Advances := Runs[0].Advances;
   Offsets  := Runs[0].Offsets;
-  if length(Glyphs) = 0 then
+  // the loops below index all three per glyph; the contract allows empty
+  // Advances/Offsets, which this path cannot draw - it falls back unshaped
+  if (length(Glyphs) = 0) or
+     (length(Advances) <> length(Glyphs)) or
+     (length(Offsets) <> length(Glyphs)) then
     exit;
   if WinAnsiTtf.UnicodeFont = nil then
     WinAnsiTtf.CreateAssociatedUnicodeFont;
