@@ -90,14 +90,23 @@ IFontShaper = interface
 end;
 ```
 
-The result is a list of parts in visual order (`TFontShapedRun`): `Kind`
-(`fskShaped` - glyphs hold the result; `fskPlain` - draw this part unshaped;
-`fskSkip` - draw nothing for it), `TextStart`/`TextLen` in UTF-16 code units
-of the whole text, then `Glyphs` and the parallel `Advances`, `Offsets`
-(1/1000 em) and `Clusters`. The itemized shape is for Uniscribe (Phase 1
-Notes below); HarfBuzz returns one `fskShaped` part over the whole text and
-keeps every glyph, and `TPdfWrite.AddUnicodeHexTextHarfBuzz` takes exactly
-that shape, anything else draws unshaped.
+The result is a list of parts in visual order (`TFontShapedRun`) which covers
+every code unit of the text once, a part left out included: `Kind` - how to
+draw it (`fskShaped` - glyphs hold the result; `fskPlain` - unshaped;
+`fskSkip` - nothing), `Outcome` - why (`fsoDone`; `fsoNotNeeded`; `fsoFailed`,
+e.g. Uniscribe's dropped item is `fskSkip` + `fsoFailed`), `TextStart`/`TextLen`
+in UTF-16 code units of the whole text, then `Glyphs` and the parallel
+`Advances`, `Offsets` (to the right), `YOffsets` (upwards; 1/1000 em, empty =
+none; offsets never move the pen) and `Clusters`. The itemized shape is for
+Uniscribe (Phase 1 Notes below); HarfBuzz returns one `fskShaped` + `fsoDone`
+part over the whole text and keeps every glyph, and
+`TPdfWrite.AddUnicodeHexTextHarfBuzz` checks only one run of `Kind`
+`fskShaped` with glyphs and `Advances`/`Offsets` of the same length -
+anything else draws unshaped; it ignores `Outcome`, `TextStart`/`TextLen` and
+`YOffsets`. **`YOffsets` are not drawn yet:** `TJ` moves horizontally only;
+placing marks vertically needs a text rise (`Ts`) per glyph, and Uniscribe
+`ScriptPlace` first - a change of its own (added to the contract 2026-10-08 so
+that it is complete before it goes into the trunk).
 
 ---
 
@@ -558,6 +567,15 @@ FontSub subsetter in `mormot.lib.uniscribe`; read in `mormot.ui.pdf`:
   that rule for every run
 - `RightToLeftText` sets `uBidiLevel := 1` before `ScriptItemize`;
   `ScriptApplyDigitSubstitution` runs first
+- `ScriptItemize` gets `PWLen + 1` code units (the `#0` after the text) and
+  the loop skips item `count - 1` as "the sentinel". The terminal boundary of
+  the API is `items[count]`; item `count - 1` is the item holding that `#0`,
+  which may hold real text too: input `U+0628 U+0000` gives the boundaries
+  `[0,1,3]` (Codex, 2026-10-08, native `ScriptItemize`), and the real `U+0000`
+  is lost. The W2 shaper itemizes exactly `Len` units and takes every item,
+  and sets `Outcome` on every run it returns (`fsoFailed` for the simple path
+  after an error and for a dropped item, `fsoDone` otherwise); a
+  zero-length item covers nothing and gives no run
 - `SubsetWithFontPackage` reads the whole `.ttc` through the DC
   (`TTCF_TABLE`) and finds the face index with `GetTtcIndex` - a list of
   family names (`batang`, `cambria math`, `ms gothic`, localized CJK names...)
