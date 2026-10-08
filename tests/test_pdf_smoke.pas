@@ -52,6 +52,7 @@ type
     procedure TestTaggedUnicode;
     procedure TestShapingSwitch;
     procedure TestShapedAfterFallback;
+    procedure TestShapedRunOutcomeUnset;
     procedure TestZeroRealIsWritten;
   end;
 
@@ -1215,6 +1216,77 @@ begin
   Check(IsShaped(s), 'the Arabic item is shaped');
   CheckEqual(CountOf('> Tj'#10'<', s), 0,
     'the shaped item switches back to the main font after the fallback');
+end;
+
+type
+  // a shaper giving one shaped run of glyph $0024 with the outcome asked for
+  TFixedRunShaper = class(TInterfacedObject, IFontShaper)
+  public
+    Outcome: TFontShapeOutcome;
+    function Shape(Text: PWideChar; Len: integer; Font: TFontHandle;
+      RightToLeft: boolean; out Runs: TFontShapedRuns): boolean;
+  end;
+
+function TFixedRunShaper.Shape(Text: PWideChar; Len: integer; Font: TFontHandle;
+  RightToLeft: boolean; out Runs: TFontShapedRuns): boolean;
+begin
+  SetLength(Runs, 1);
+  Runs[0].Kind := fskShaped;
+  Runs[0].Outcome := Outcome;
+  Runs[0].TextStart := 0;
+  Runs[0].TextLen := Len;
+  SetLength(Runs[0].Glyphs, 1);
+  Runs[0].Glyphs[0] := $24;
+  SetLength(Runs[0].Advances, 1);
+  Runs[0].Advances[0] := 500;
+  SetLength(Runs[0].Offsets, 1);
+  result := true;
+end;
+
+procedure TPdfSmokeTests.TestShapedRunOutcomeUnset;
+{$ifndef OSWINDOWS}
+var
+  saved: IFontShaper;
+  fixed: TFixedRunShaper;
+  plain: RawByteString;
+
+  // the text object of the page: the one line ShapedPdf() draws
+  function TextObject(const aPdf: RawByteString): RawByteString;
+  var
+    b: integer;
+  begin
+    b := Pos(RawByteString('BT'#10), aPdf);
+    result := Copy(aPdf, b, PosEx('ET'#10, aPdf, b) - b);
+  end;
+
+  function Drawn(aOutcome: TFontShapeOutcome): RawByteString;
+  begin
+    fixed.Outcome := aOutcome;
+    result := TextObject(ShapedPdf(ARABIC_FONT, ARABIC_TEXT, true, false));
+  end;
+{$endif OSWINDOWS}
+
+begin
+  { fsoUnknown is the zero value of TFontShapeOutcome: a run whose shaper
+    never set it is drawn unshaped, whatever its Kind says }
+  {$ifdef OSWINDOWS}
+  Check(true, 'SKIP: the Windows path does not go through FontShaper yet (W2)');
+  {$else}
+  saved := FontShaper;
+  fixed := TFixedRunShaper.Create;
+  FontShaper := fixed;
+  try
+    plain := TextObject(ShapedPdf(ARABIC_FONT, ARABIC_TEXT, false, false));
+    Check(plain <> '', 'the unshaped line is drawn');
+    // shaped: the run's one glyph, in Tj or TJ
+    Check(Pos(RawByteString('<0024>'), Drawn(fsoDone)) > 0,
+      'a run with fsoDone is drawn as shaped');
+    Check(Drawn(fsoUnknown) = plain,
+      'a run left at fsoUnknown is drawn as without shaping');
+  finally
+    FontShaper := saved;
+  end;
+  {$endif OSWINDOWS}
 end;
 
 procedure TPdfSmokeTests.TestZeroRealIsWritten;

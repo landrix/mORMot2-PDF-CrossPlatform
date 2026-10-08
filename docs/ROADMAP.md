@@ -107,7 +107,10 @@ v0.10.0 (2026-09-30).
   `TFontShapedRun` carries `YOffsets` (vertical glyph offsets, positive
   upwards) and `Outcome` (`fsoDone`, `fsoNotNeeded`, `fsoFailed`) beside
   `Kind`; `mormot.lib.harfbuzz` fills both. A shaper of your own sets them;
-  the PDF output is unchanged - the engine does not draw vertical offsets yet
+  the PDF output is unchanged - the engine does not draw vertical offsets yet.
+  The zero values are the safe ones: `TFontShapeKind` starts with `fskPlain`,
+  `TFontShapeOutcome` with `fsoUnknown`, which the engine draws unshaped - a
+  shaper of your own sets both fields on every run
 - **Coming with R-20** (announce when done): the preview and the GUI demos
   on Delphi
 
@@ -637,6 +640,31 @@ instead of being shown on a failure.
 **The fix still open:** take `n <= 0` as the end in `RedirectOutput`, in the
 mORMot2 fork and as a PR to Synopse; then drop the `{$ifdef OSPOSIX}` in
 `tests/pdfcheck.lpr`.
+
+### `/ToUnicode` Codespace Bounds — unprioritised
+
+**Files:** `src/core/mormot.ui.pdf.pas` (`PrepareForSaving`)
+
+The codespace range of a Type0 font's `/ToUnicode` CMap is written as the
+glyphs of the first and last entry in key order, not the smallest and largest
+glyph, so it need not enclose every glyph the CMap maps (ISO 32000-1 9.10.3).
+Found in the Codex review of #20 (2026-10-08); older than that change: with
+Segoe UI's shaped glyphs 240, 241 and 4336 the range is `<0000> <00F1>` and
+`<10F0>` lies outside. **Fix:** the range from the emitted glyphs (or
+`<0000> <FFFF>`), with a test that every mapping lies inside it. Details:
+`fonts.md` §9.
+
+### Shaped Text: Real `/ToUnicode` and Vertical Offsets — after R-28 Phase 1
+
+Two gaps of shaped text, each a change of its own:
+- **Text extraction:** a shaped glyph without a code point of its own maps to
+  a PUA value (`$E000` + glyph mod 4096) in `/ToUnicode`, so copy/paste and
+  screen readers get no Arabic for it (PDF/UA relevant). Needs the source
+  text per glyph from the shaper's `Clusters`, and `/ActualText` where one
+  glyph stands for different text in different places (`fonts.md` §8)
+- **Vertical offsets:** `TFontShapedRun.YOffsets` (since `0da9d7adc`) are not
+  drawn; `TJ` moves horizontally only. Needs a text rise (`Ts`) per glyph,
+  and on Windows Uniscribe `ScriptPlace` first (`platform-backends.md`)
 
 ### The Unused WinAnsi Peer Beside a CJK or Arabic Font — unprioritised
 
