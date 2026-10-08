@@ -189,7 +189,10 @@ checked against that record:
    `0da9d7adc` (2026-10-08, `TFontShapedRun.YOffsets` and `Outcome`, filled
    by `mormot.lib.harfbuzz`, not used by the engine yet), then `54f47c547`
    (2026-10-08, the zero values of `TFontShapeKind` and `TFontShapeOutcome`
-   are the safe ones: `fskPlain`, and the new `fsoUnknown`).
+   are the safe ones: `fskPlain`, and the new `fsoUnknown`), then `2f8bf3d76`
+   (2026-10-08, step W2: the Uniscribe shaper and the FontSub subsetter in
+   `mormot.lib.uniscribe`, `NeedsShaping` in the HarfBuzz shaper,
+   `IFontSubsetter.SupportsSymbolic`).
    **Checked:** against `d60cc6e80`, today's `main`,
    `test_runner` 259/259 on Windows (FPC Win64, Delphi 7, Delphi 2010),
    298/298 on Linux, 317/317 on macOS (fpcupdeluxe, FPC 3.2.3). Against
@@ -304,11 +307,14 @@ Phase 1 is one PR to `synopse/mORMot2`.
 - `Pdf` dropped from names that are not PDF-specific; the PDF types
   (`TPdfFileFormat`, `TPdfStructRole`, the font name constants) stay on the
   PDF side (gist §17)
-- **Windows shaping and subsetting behind the interfaces:** Uniscribe and
-  `CreateFontPackage` are called from `mormot.ui.pdf` today; they become the
-  shaper and subsetter in `mormot.lib.uniscribe` (not in the gist). The two
-  paths differ in shape, not only in library - see
-  `.claude/skills/platform-backends.md`, "Phase 1 Notes"
+- **Windows shaping and subsetting behind the interfaces** (done in step W2,
+  2026-10-08): Uniscribe and `CreateFontPackage` were called from
+  `mormot.ui.pdf`; they are the shaper and the subsetter of
+  `mormot.lib.uniscribe` now (not in the gist), and the engine has one path
+  for both platforms. The two paths differed in shape, not only in library -
+  see `.claude/skills/platform-backends.md`, "Phase 1 Notes". Left for W3:
+  the engine's remaining direct GDI calls (font creation, metrics, the
+  document DC, the whole-face embedding with `GetTtcIndex`)
 - `libharfbuzz` and `libharfbuzz-subset` stay separately loaded
 - The device-context interface moves unchanged, marked transitional
 

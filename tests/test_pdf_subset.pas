@@ -1,7 +1,9 @@
 /// Font subsetting unit tests (ROADMAP R-12)
-// - tests IFontSubsetter in isolation, on raw sfnt bytes
-// - POSIX only: Windows subsets through CreateFontPackage, not this interface
-// - every test skips when libharfbuzz-subset is not installed
+// - tests IFontSubsetter in isolation, on raw sfnt bytes and the font handle
+// they were read from: hb-subset on Linux/macOS, FontSub (CreateFontPackage)
+// on Windows
+// - every test skips when no subsetter is registered (libharfbuzz-subset
+// missing, or NO_USE_UNISCRIBE)
 unit test_pdf_subset;
 
 interface
@@ -18,7 +20,9 @@ uses
   mormot.core.test,
   mormot.lib.core,
   mormot.pdf.types,
-  {$ifndef OSWINDOWS}
+  {$ifdef OSWINDOWS}
+  mormot.lib.uniscribe, // TtcFaceIndex
+  {$else}
   mormot.lib.harfbuzz,
   {$endif OSWINDOWS}
   mormot.ui.pdf;
@@ -29,13 +33,18 @@ type
   protected
     fFace: RawByteString;
     fFaceName: RawUtf8;
+    // the font fFace was read from: FontSub resolves code points through it
+    fFont: TFontHandle;
     // load the whole face of a common glyf-based font through the platform
     // backend; false (and a SKIP check) when no subsetter or no font exists
     function PrepareFace: boolean;
     // the same for a CFF-flavoured ('OTTO') face, which not every system has
-    function LoadCffFace(out aFace: RawByteString): boolean;
+    // - the caller deletes aFont
+    function LoadCffFace(out aFace: RawByteString; out aFont: TFontHandle): boolean;
     function SubsetOf(const Unicodes, Glyphs: array of integer;
       out Sub: RawByteString): boolean;
+  public
+    destructor Destroy; override;
   published
     procedure TestSubsetterRegistered;
     procedure TestSubsetRetainsGids;
@@ -44,6 +53,9 @@ type
     procedure TestSubsetIsSmaller;
     procedure TestSubsetAcceptsCff;
     procedure TestSubsetRejectsGarbage;
+    {$ifdef OSWINDOWS}
+    procedure TestTtcFaceIndex;
+    {$endif OSWINDOWS}
   end;
 
   /// font subsetting through TPdfDocument, on the saved PDF
@@ -314,14 +326,15 @@ begin
           fFace := '';
       end;
       FontProvider.SelectFont(dc, prev);
-      FontProvider.DeleteFont(font);
       if (fFace <> '') and
          (copy(fFace, 1, 4) = #0#1#0#0) and
          (SfntCmapLookup(fFace, ord('A')) <> 0) then
       begin
         fFaceName := FONTS[f];
+        fFont := font; // kept for the subsetter, deleted in Destroy
         break;
       end;
+      FontProvider.DeleteFont(font);
       fFace := '';
     end;
   finally
@@ -332,7 +345,15 @@ begin
     Check(true, 'SKIP: no glyf-based test font found on this system');
 end;
 
-function TPdfSubsetTests.LoadCffFace(out aFace: RawByteString): boolean;
+destructor TPdfSubsetTests.Destroy;
+begin
+  if fFont <> nil then
+    FontProvider.DeleteFont(fFont);
+  inherited Destroy;
+end;
+
+function TPdfSubsetTests.LoadCffFace(out aFace: RawByteString;
+  out aFont: TFontHandle): boolean;
 const
   // CFF system faces: macOS ships its CJK families as OpenType/CFF
   CFF_FONTS: array[0..2] of RawUtf8 = (
@@ -345,6 +366,7 @@ var
   f: PtrInt;
 begin
   aFace := '';
+  aFont := nil;
   dc := FontDC.CreateDC;
   try
     for f := 0 to high(CFF_FONTS) do
@@ -365,9 +387,12 @@ begin
           aFace := '';
       end;
       FontProvider.SelectFont(dc, prev);
-      FontProvider.DeleteFont(font);
       if copy(aFace, 1, 4) = 'OTTO' then
+      begin
+        aFont := font;
         break;
+      end;
+      FontProvider.DeleteFont(font);
       aFace := '';
     end;
   finally
@@ -390,13 +415,14 @@ begin
   SetLength(req.Glyphs, length(Glyphs));
   for i := 0 to high(Glyphs) do
     req.Glyphs[i] := Glyphs[i];
-  result := FontSubsetter.Subset(fFace, req, nil, Sub);
+  result := FontSubsetter.Subset(fFace, req, fFont, Sub);
 end;
 
 procedure TPdfSubsetTests.TestSubsetterRegistered;
 begin
   {$ifdef OSWINDOWS}
-  Check(FontSubsetter = nil, 'Windows subsets via CreateFontPackage');
+  // mormot.lib.uniscribe registers FontSub, unless NO_USE_UNISCRIBE
+  Check(FontSubsetter <> nil, 'FontSub not registered on Windows');
   {$else}
   if LoadHarfBuzzSubset then
     Check(FontSubsetter <> nil, 'libharfbuzz-subset loaded but not registered')
@@ -467,29 +493,49 @@ procedure TPdfSubsetTests.TestSubsetAcceptsCff;
 var
   face, sub: RawByteString;
   req: TFontSubsetRequest;
+  font: TFontHandle;
 begin
   if FontSubsetter = nil then
   begin
     Check(true, 'SKIP: no IFontSubsetter registered');
     exit;
   end;
-  // a malformed OTTO header is still refused, like any other garbage
+  // a malformed OTTO header is still refused, like any other garbage - with
+  // the handle of a real font, so that FontSub gets as far as the bytes
   ClearRequest(req);
-  Check(not FontSubsetter.Subset('OTTO' + StringOfChar(#0, 60), req, nil, sub),
+  SetLength(req.Unicodes, 1);
+  req.Unicodes[0] := ord('A');
+  if PrepareFace then
+    font := fFont
+  else
+    font := nil;
+  Check(not FontSubsetter.Subset('OTTO' + StringOfChar(#0, 60), req, font, sub),
     'a truncated CFF face must not be subset');
   CheckEqual(sub, '', 'no output expected');
   // a real CFF face is subset like any other: it goes to /FontFile3 with
   // /Subtype /OpenType, which the engine picks through PdfFontFileKey()
-  if not LoadCffFace(face) then
+  if not LoadCffFace(face, font) then
     exit;
-  ClearRequest(req);
-  SetLength(req.Glyphs, 2);
-  req.Glyphs[0] := 1;
-  req.Glyphs[1] := 2;
-  Check(FontSubsetter.Subset(face, req, nil, sub), 'a CFF face must be subset');
-  Check(sub <> '', 'subset output expected');
-  CheckEqual(copy(sub, 1, 4), 'OTTO', 'a CFF subset stays CFF');
-  Check(length(sub) < length(face) div 2, 'the subset must be much smaller');
+  try
+    ClearRequest(req);
+    SetLength(req.Glyphs, 2);
+    req.Glyphs[0] := 1;
+    req.Glyphs[1] := 2;
+    {$ifdef OSWINDOWS}
+    // CreateFontPackage takes TrueType outlines only (it returns 1035 for a
+    // CFF face): the engine embeds such a face whole
+    Check(not FontSubsetter.Subset(face, req, font, sub),
+      'FontSub refuses a CFF face');
+    CheckEqual(sub, '', 'no output expected');
+    {$else}
+    Check(FontSubsetter.Subset(face, req, font, sub), 'a CFF face must be subset');
+    Check(sub <> '', 'subset output expected');
+    CheckEqual(copy(sub, 1, 4), 'OTTO', 'a CFF subset stays CFF');
+    Check(length(sub) < length(face) div 2, 'the subset must be much smaller');
+    {$endif OSWINDOWS}
+  finally
+    FontProvider.DeleteFont(font);
+  end;
 end;
 
 procedure TPdfSubsetTests.TestSubsetRejectsGarbage;
@@ -497,6 +543,7 @@ var
   sub, junk: RawByteString;
   req: TFontSubsetRequest;
   i: PtrInt;
+  font: TFontHandle;
 begin
   if FontSubsetter = nil then
   begin
@@ -510,12 +557,89 @@ begin
   ClearRequest(req);
   SetLength(req.Unicodes, 1);
   req.Unicodes[0] := ord('A');
+  // the handle of a real font, so that FontSub gets as far as the bytes
+  if PrepareFace then
+    font := fFont
+  else
+    font := nil;
   // must not crash; whatever comes back, it must not claim to hold glyph A
-  if FontSubsetter.Subset(junk, req, nil, sub) then
+  if FontSubsetter.Subset(junk, req, font, sub) then
     Check(SfntGlyphLength(sub, 1) <= 0, 'garbage produced a glyph')
   else
     CheckEqual(sub, '', 'failure must not return data');
+  {$ifdef OSWINDOWS}
+  // FontSub resolves the code points through the font: it needs the handle
+  if font <> nil then
+    Check(not FontSubsetter.Subset(fFace, req, nil, sub),
+      'FontSub without a font handle');
+  {$endif OSWINDOWS}
 end;
+
+{$ifdef OSWINDOWS}
+
+// big-endian bytes of a 32-bit and a 16-bit value
+function BE32Bytes(v: cardinal): RawByteString;
+begin
+  result := AnsiChar(v shr 24) + AnsiChar((v shr 16) and 255) +
+            AnsiChar((v shr 8) and 255) + AnsiChar(v and 255);
+end;
+
+function BE16Bytes(v: cardinal): RawByteString;
+begin
+  result := AnsiChar((v shr 8) and 255) + AnsiChar(v and 255);
+end;
+
+// a table directory of one table, told apart by its offset
+function OneTableDir(TableOffset: cardinal): RawByteString;
+begin
+  result := BE32Bytes($00010000) + BE16Bytes(1) + BE16Bytes(16) +
+            BE16Bytes(0) + BE16Bytes(0) + 'glyf' + BE32Bytes(0) +
+            BE32Bytes(TableOffset) + BE32Bytes(4);
+end;
+
+// a .ttc collection of the directories, in this order
+function Collection(const Dirs: array of RawByteString): RawByteString;
+var
+  i, ofs: integer;
+  body: RawByteString;
+begin
+  result := 'ttcf' + BE32Bytes($00010000) + BE32Bytes(length(Dirs));
+  ofs := 12 + 4 * length(Dirs);
+  body := '';
+  for i := 0 to high(Dirs) do
+  begin
+    result := result + BE32Bytes(ofs + length(body));
+    body := body + Dirs[i];
+  end;
+  result := result + body;
+end;
+
+procedure TPdfSubsetTests.TestTtcFaceIndex;
+var
+  a, b, c: RawByteString;
+begin
+  { the FontSub subsetter finds the face of a .ttc by its table directory in
+    the collection header: the family-name list it replaces (GetTtcIndex) is
+    wrong for 14 of 30 collections of Windows 11 (MS UI Gothic is face 1,
+    not 2) }
+  a := OneTableDir(100);
+  b := OneTableDir(200);
+  c := OneTableDir(300);
+  CheckEqual(TtcFaceIndex(Collection([a, b, c]), b + 'tail'), 1, 'second face');
+  CheckEqual(TtcFaceIndex(Collection([a, b, c]), a), 0, 'first face');
+  CheckEqual(TtcFaceIndex(Collection([a, b, c]), c), 2, 'last face');
+  CheckEqual(TtcFaceIndex(Collection([a, b, b]), b), -1,
+    'two faces alike: no reliable index');
+  CheckEqual(TtcFaceIndex(Collection([a, c]), b), -1, 'face not in it');
+  CheckEqual(TtcFaceIndex(OneTableDir(100), a), -1, 'not a collection');
+  CheckEqual(TtcFaceIndex(copy(Collection([a, b]), 1, 30), b), -1,
+    'truncated collection');
+  // a face count whose offset table would overflow 32 bits
+  CheckEqual(TtcFaceIndex('ttcf' + BE32Bytes($00010000) + BE32Bytes($40000001) +
+    BE32Bytes(16) + a, a), -1, 'oversized face count');
+end;
+
+{$endif OSWINDOWS}
 
 
 { TPdfSubsetEngineTests }
@@ -674,13 +798,9 @@ begin
   finally
     FontSubsetter := saved;
   end;
-  {$ifdef OSWINDOWS}
-  Check(true, 'Windows subsets through CreateFontPackage, not through this');
-  {$else}
   Check(FirstFontFile(sub) = FirstFontFile(whole),
     'without a subsetter the whole face is embedded, as before R-12');
   CheckEqual(FirstSubsetTag(sub), '', 'and no subset tag is written');
-  {$endif OSWINDOWS}
 end;
 
 procedure TPdfSubsetEngineTests.TestTaggedSubsetKeepsToUnicode;

@@ -13,15 +13,14 @@ Unix/macOS backends: mORMot2 `src/lib/mormot.lib.freetype.pas` and
 
 On Linux/macOS all platform-specific operations run through these three interfaces.
 
-**Windows bypasses them in `TPdfDocument`.** Under `{$ifdef OSWINDOWS}` the core
-calls GDI directly: `CreateCompatibleDC`/`GetDeviceCaps` in the constructor,
-`CreateFontIndirectW`, `GetTextMetrics`, `GetOutlineTextMetrics`,
+**Windows still bypasses them in `TPdfDocument`.** Under `{$ifdef OSWINDOWS}`
+the core calls GDI directly: `CreateCompatibleDC`/`GetDeviceCaps` in the
+constructor, `CreateFontIndirectW`, `GetTextMetrics`, `GetOutlineTextMetrics`,
 `GetCharABCWidthsA`, `SelectObject` (`GetDCWithFont`), `windows.GetFontData`
-for the tables and the embedded face, plus `CreateFontPackage` and Uniscribe
-(`USE_UNISCRIBE`). The GDI backend's interfaces are used on Windows only by
-`TPdfFontMeasurer`, i.e. the `TGDIPages` layout. A replacement backend (e.g. a
-test stub) therefore reaches the PDF output on POSIX only; moving this path
-behind `IFontProvider` is part of the refactoring (R-28).
+for the tables and the embedded face. The GDI backend's interfaces are used on
+Windows only by `TPdfFontMeasurer`, i.e. the `TGDIPages` layout. Shaping and
+subsetting go through `FontShaper` and `FontSubsetter` on every platform
+since W2 (2026-10-08); the rest is step W3 of R-28 Phase 1.
 
 ### IFontProvider — Font Operations
 
@@ -79,12 +78,12 @@ IFontDC = interface
 end;
 ```
 
-### IFontShaper — Text Shaping (optional, HarfBuzz on Linux/macOS)
+### IFontShaper — Text Shaping (optional: Uniscribe on Windows, HarfBuzz on Linux/macOS)
 
 ```pascal
 IFontShaper = interface
-  // false: draw the whole text unshaped. RightToLeft forces the direction,
-  // false lets the script decide
+  // false: draw the whole text unshaped, e.g. no part needs shaping.
+  // RightToLeft forces the direction, false lets the script decide
   function Shape(Text: PWideChar; Len: integer; Font: TFontHandle;
     RightToLeft: boolean; out Runs: TFontShapedRuns): boolean;
 end;
@@ -102,13 +101,36 @@ reads as `fskPlain` + `fsoUnknown`, which a caller draws unshaped whatever its
 Then `TextStart`/`TextLen`
 in UTF-16 code units of the whole text, then `Glyphs` and the parallel
 `Advances`, `Offsets` (to the right), `YOffsets` (upwards; 1/1000 em, empty =
-none; offsets never move the pen) and `Clusters`. The itemized shape is for
-Uniscribe (Phase 1 Notes below); HarfBuzz returns one `fskShaped` + `fsoDone`
-part over the whole text and keeps every glyph, and
-`TPdfWrite.AddUnicodeHexTextHarfBuzz` checks only one run of `Kind`
-`fskShaped` and `Outcome` `fsoDone` with glyphs and `Advances`/`Offsets` of
-the same length - anything else draws unshaped; it ignores
-`TextStart`/`TextLen` and `YOffsets`. **`YOffsets` are not drawn yet:** `TJ` moves horizontally only;
+none; offsets never move the pen) and `Clusters`.
+
+The two shapers:
+- **`TUniscribeShaper`** (`mormot.lib.uniscribe`): itemizes exactly `Len`
+  code units (`ScriptItemize`), returns false when no item is complex or
+  right-to-left, and gives one run per item in visual order (`ScriptLayout`);
+  an empty item gives none. `ScriptShape` runs without a DC first, then with
+  its own DC holding the font on `E_PENDING`/`USP_E_SCRIPT_NOT_IN_FONT`.
+  Failures: `E_OUTOFMEMORY` or a failed retry -> `fskPlain` + `fsoFailed`,
+  any other error -> `fskSkip` + `fsoFailed`; no glyph at all -> `fskSkip` +
+  `fsoDone`. Zero-width glyphs which are no diacritic are left out (a run may
+  end up with no glyph: the caller still switches to the Unicode font). No
+  `Advances`/`Offsets`: the font's apply. Its `SCRIPT_CACHE` is freed per call
+- **`THarfBuzzShaper`** (`mormot.lib.harfbuzz`): returns false unless
+  `RightToLeft` or `NeedsShaping` (a character of Hebrew, Arabic to Myanmar
+  U+0590-109F, Khmer/Mongolian, U+A800-ABFF, presentation forms - what
+  Uniscribe marks complex); otherwise one `fskShaped` + `fsoDone` run over the
+  whole text with every glyph, `Advances`, `Offsets`, `YOffsets`, `Clusters`
+
+**The one caller**, `TPdfWrite.AddUnicodeHexTextShaped` (since W2): checks
+every run before writing anything - `TextStart`/`TextLen` inside the text,
+at least one code unit each, covering it exactly; a shaped run's `Advances`
+(if any) and `Offsets` (if any, and only with `Advances`: this writer
+positions with them) as long as its glyphs - else the whole text takes the
+simple path. Then
+`MoveToNextLine` once, and per run: `fskPlain` or `fsoUnknown` -> the simple
+path on a `#0`-terminated copy of its text; `fskShaped` -> `AddShapedRun` in
+the Unicode font of the font the text was shaped with (a `Tj` with the font's
+advances, or the `TJ` positioning when the run has `Advances`); `fskSkip` ->
+nothing. **`YOffsets` are not drawn yet:** `TJ` moves horizontally only;
 placing marks vertically needs a text rise (`Ts`) per glyph, and Uniscribe
 `ScriptPlace` first - a change of its own (added to the contract 2026-10-08 so
 that it is complete before it goes into the trunk).
@@ -120,12 +142,16 @@ that it is complete before it goes into the trunk).
 Each backend registers its implementations in the `initialization` section:
 
 ```pascal
-// In mormot.lib.uniscribe.pas (Windows):
-initialization
+// In mormot.lib.uniscribe.pas (Windows), RegisterUniscribe:
   RegisterFontPlatform(
     TGdiFontProvider.Create,
     TGdiFontEnumerator.Create,
     TGdiFontDC.Create);
+  {$ifndef NO_USE_UNISCRIBE}
+  FontShaper := TUniscribeShaper;                 // always
+  FontSubsetter := TFontSubSubsetter;             // if HasCreateFontPackage
+  {$endif NO_USE_UNISCRIBE}
+// its finalization releases its own shaper and subsetter, then FontSub.dll
 
 // In mormot.lib.freetype.pas (Unix/macOS), when LoadFreeType succeeds:
 initialization
@@ -137,8 +163,8 @@ initialization
 ```
 
 `RegisterFontPlatform` of `mormot.lib.core` sets the globals `FontProvider`,
-`FontEnumerator`, `FontDC`; the HarfBuzz units assign `FontShaper` and
-`FontSubsetter` themselves. The core calls them directly. `mormot.pdf.types`
+`FontEnumerator`, `FontDC`; `mormot.lib.uniscribe` and `mormot.lib.harfbuzz`
+assign `FontShaper` and `FontSubsetter` themselves. The core calls them directly. `mormot.pdf.types`
 keeps the former type names as aliases (`TPdfLogFont`, `IPdfPlatformFont`...)
 for code outside this repository; the globals, `IPdfTextShaper` and
 `IPdfFontSubsetter` have none (renamed 2026-10-04, R-28 Phase 1).
@@ -150,8 +176,10 @@ if not FontPlatformRegistered then
 ```
 
 **Who pulls the units in — `mormot.ui.pdf`, never the application.** Its
-interface `uses` takes `mormot.lib.uniscribe` on Windows (always, also with
-`NO_USE_UNISCRIBE`: it holds the GDI services) and `mormot.lib.freetype`
+interface `uses` takes `mormot.lib.uniscribe` on Windows (always: it holds
+the GDI services; `NO_USE_UNISCRIBE`, set for the whole project, leaves its
+shaper and subsetter unregistered, so no shaping and the whole faces
+embedded, as before W2) and `mormot.lib.freetype`
 and `mormot.lib.harfbuzz` elsewhere. `mormot.lib.harfbuzz` loads
 `libharfbuzz` for the shaper and `libharfbuzz-subset` (with its own handle on
 `libharfbuzz`) for the subsetter, each through `TSynLibrary`, and registers
@@ -165,13 +193,12 @@ application, `layer1_demo` listed the backends, and `rtl_demo` wrongly
 required FreeType before HarfBuzz.
 
 **One shaping switch, `UseUniscribe`, on every platform**
-(`TPdfWrite.AddUnicodeHexText`):
+(`TPdfWrite.AddUnicodeHexText` -> `AddUnicodeHexTextShaped` -> `FontShaper`):
 - Windows: Uniscribe itemizes the run and shapes only complex items; the
   rest takes the simple font
 - Linux/macOS: HarfBuzz shapes a run when `RightToLeftText` is set or
-  `NeedsShaping` finds a character of a script that needs it (Hebrew, Arabic
-  to Myanmar U+0590–109F, Khmer/Mongolian, U+A800–ABFF, presentation forms);
-  Latin text keeps the simple font, as with Uniscribe
+  `NeedsShaping` (in the shaper since W2) finds a character of a script that
+  needs it; Latin text keeps the simple font, as with Uniscribe
 - `RightToLeftText` is the direction only. HarfBuzz gets RTL forced when it
   is set; otherwise `hb_buffer_guess_segment_properties` takes the direction
   from the script (a forced LTR shaped Arabic in the wrong order). Glyphs come
@@ -324,7 +351,7 @@ If a font is not found: fallback to DejaVu Sans (Linux) or Helvetica (macOS).
 
 ---
 
-## Optional: IFontSubsetter (mormot.lib.harfbuzz, Linux/macOS) — R-12
+## Optional: IFontSubsetter (hb-subset on Linux/macOS — R-12, FontSub on Windows — R-15)
 
 ```pascal
 TFontSubsetRequest = record
@@ -336,9 +363,12 @@ IFontSubsetter = interface
   // false: face cannot be subset (invalid, library error) -> caller embeds
   // Face unchanged; glyph IDs of Output equal those of Face. Font is the
   // handle Face was read from - hb-subset ignores it (the engine hands it a
-  // face already extracted from a .ttc), FontSub will need it for the .ttc
+  // face already extracted from a .ttc), FontSub needs it
   function Subset(const Face: RawByteString; const Request: TFontSubsetRequest;
     Font: TFontHandle; out Output: RawByteString): boolean;
+  // true if a symbol font (glyphs through a (3,0) cmap at U+F0xx) is kept;
+  // false (hb-subset): PrepareFontSubsets embeds such a font whole
+  function SupportsSymbolic: boolean;
 end;
 
 var FontSubsetter: IFontSubsetter;  // mormot.lib.core; nil = no subsetter
@@ -381,7 +411,20 @@ var FontSubsetter: IFontSubsetter;  // mormot.lib.core; nil = no subsetter
   83.8 / 14.7 / 29.1 KB — all three variants render pixel-identically, so the
   smallest is the default. A PDF viewer never shapes text, and the glyph set
   of the request already holds every shaped glyph that was drawn
-- Windows registers none and keeps `CreateFontPackage`
+- **Windows (since W2): `TFontSubSubsetter`** in `mormot.lib.uniscribe`,
+  registered when `HasCreateFontPackage` (FontSub.dll) resolves.
+  `CreateFontPackage` with a glyph keep list (`TTFCFP_FLAGS_GLYPHLIST`,
+  `TTFMFP_SUBSET`: glyph IDs kept): `Request.Glyphs` plus `Request.Unicodes`
+  resolved through the cmap of `Font` with `GetGlyphIndicesW`
+  (`GGI_MARK_NONEXISTING_GLYPHS`; unmapped ones and code points outside the
+  BMP dropped). A face of a `.ttc`: the whole collection (`'ttcf'`) is
+  subset, at the index `TtcFaceIndex` finds by the face's table directory in
+  the collection header; no single match -> false, the face is embedded whole.
+  `ReduceTtf` keeps the ten tables a PDF needs. `SupportsSymbolic` = true:
+  GDI maps the WinAnsi bytes of a symbol font. Without `Font` it returns
+  false, and for a CFF face too (`CreateFontPackage` takes TrueType outlines
+  only, error 1035 - Codex, 2026-10-08): such a face is embedded whole on
+  Windows. Registering it loads FontSub.dll at program start
 - How the engine builds the request and shares the result: `fonts.md` §3
 
 ---
@@ -617,6 +660,24 @@ printer (`GetDeviceCaps` for page size) and EMF (`TPdfEnum`) calls are
 Windows-only features and stay. Planned as step W3, after the Uniscribe
 shaper and the FontSub subsetter (W2); `GetTtcIndex` can only go with W3.
 
+**W2 done (2026-10-08):** `TUniscribeShaper` and `TFontSubSubsetter` in
+`mormot.lib.uniscribe`, `NeedsShaping` in the HarfBuzz shaper,
+`SupportsSymbolic` in the contract; in `mormot.ui.pdf` one caller
+(`AddUnicodeHexTextShaped`/`AddShapedRun`), `PrepareFontSubsets` through
+`FontSubsetter` only - `AddUnicodeHexTextUniScribe`,
+`AddUnicodeHexTextHarfBuzz`, `SubsetWithFontPackage`, `AddWinAnsiGlyphs`,
+`ReduceTTF` are gone. The notes above ("not behind `IPdfTextShaper`" / "not
+behind `IPdfFontSubsetter`", "The Windows paths") describe the code before
+W2. Intended differences, all outside the golden files: the TTC index of the
+Windows subset comes from the bytes (right for the 14 collections the name
+list got wrong); Uniscribe itemizes exactly the text, without the `#0` item
+that could swallow real text (Codex probed 15,000 strings with Arabic or
+Hebrew: the same items and order; digit-only strings showed other levels or
+boundaries - not checked further); its `SCRIPT_CACHE` is freed; `ShowText(...,
+NextLine = true)` of shaped text on POSIX writes `T*` before the font switch
+(as Uniscribe did); FontSub resolves every code point of the request, not
+only the WinAnsi ones (the same glyphs, as the cmap gives them).
+
 **Phase 1 steps done:** `mormot.lib.core` (89d652a77), `mormot.lib.freetype`
 and `mormot.lib.harfbuzz` moved and renamed (80e78bb4d, compared against the
 old units on Linux: 206 families, 19850 checks, identical), loaded through
@@ -625,7 +686,6 @@ the tests use the `mormot.lib.core` names (2026-10-04, rename only,
 PR #13), and the old POSIX backends are replaced by the library units
 (2026-10-07, move only). The Windows part: W1, the GDI services moved
 into `mormot.lib.uniscribe` (2dce8feb6, `mormot.pdf.gdi` gone, move only);
-next W2, the Uniscribe shaper and the FontSub subsetter there (TTC index from
-the bytes, `Request.Unicodes` resolved by the subsetter, `NeedsShaping` into
-the HarfBuzz shaper, one caller in `mormot.ui.pdf`), then W3, the engine's
-direct GDI calls behind `FontProvider`.
+W2, the Uniscribe shaper and the FontSub subsetter there (2f8bf3d76, see "W2
+done" above); next W3, the engine's direct GDI calls behind `FontProvider`
+(`GetTtcIndex` of the whole-face embedding goes with it).

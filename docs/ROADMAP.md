@@ -111,6 +111,24 @@ v0.10.0 (2026-09-30).
   The zero values are the safe ones: `TFontShapeKind` starts with `fskPlain`,
   `TFontShapeOutcome` with `fsoUnknown`, which the engine draws unshaped - a
   shaper of your own sets both fields on every run
+- **Windows shaping and subsetting through the font interfaces (R-28,
+  refactoring Phase 1):** `mormot.lib.uniscribe` registers a Uniscribe
+  `FontShaper` and a FontSub `FontSubsetter`, and the engine shapes and
+  subsets through them on every platform - one code path instead of two.
+  The PDF output is unchanged, but for these cases:
+  - **Fixed:** a face of a `.ttc` collection other than face 0 is subset
+    from the right face - the index used to come from a list of family
+    names, wrong on Windows 11 for 14 of 30 collections (e.g. `MS UI
+    Gothic`, `Yu Gothic UI`, `Microsoft YaHei UI`); a collection without a
+    clear match now embeds the face whole
+  - **Fixed:** Uniscribe no longer drops real text that shared its last item
+    with the terminating `#0`, and frees its glyph cache after each call
+  - `ShowText(..., NextLine = true)` with shaped text on Linux/macOS writes
+    the line feed (`T*`) before the font switch instead of after it - the
+    same page
+  - code that reads `FontShaper = nil` or `FontSubsetter = nil` as "on
+    Windows" no longer can; `NO_USE_UNISCRIBE`, set for the whole project,
+    still turns both off
 - **Coming with R-20** (announce when done): the preview and the GUI demos
   on Delphi
 
