@@ -298,21 +298,25 @@ TPdfWrite.AddUnicodeHexText (pdf.pas:5549):
   if not shaped:
     AddUnicodeHexTextNoUniScribe(...)            // Latin fallback
 
-AddUnicodeHexTextUniScribe (pdf.pas:5295):
+AddUnicodeHexTextUniScribe:
   ScriptItemize(PW, Len) → items[]              // split into script runs
   for each item in visual (bidi-reordered) order:
     ScriptShape(DC, W, L, …, OutGlyphs, glyphsCount)  // OpenType GSUB shaping
-    → AddGlyphs(OutGlyphs, glyphsCount, Canvas, VisAttr)
+    → AddGlyphsOf(WinAnsiTtf, OutGlyphs, glyphsCount, Canvas, VisAttr)
 
-AddGlyphs (pdf.pas:5573):
-  SetPdfFont(ttf.UnicodeFont, FontSize)          // always use CID font for shaped text
-  for each shapedGlyph in OutGlyphs:
-    glyph := ttf.WinAnsiFont.GetAndMarkGlyphAsUsed(shapedGlyph)  // §8
+AddGlyphsOf(Ttf, ...):            // AddGlyphs = the same with the current page font
+  if glyphsCount = 0: nothing
+  SetPdfFont(Ttf.UnicodeFont, FontSize)          // CID font, even if the filter drops all
+  for each shapedGlyph not zero-width-and-no-diacritic:
+    glyph := Ttf.WinAnsiFont.GetAndMarkGlyphAsUsed(shapedGlyph)  // §8
     AddHex4(glyph)     // accumulate '<XXXX XXXX …>'
-  Add('> Tj')
+  Add('> Tj') if any glyph was kept
 ```
 
-**Important:** `AddGlyphs` switches to `UnicodeFont` (CID font) unconditionally for all shaped output, including runs where `UseUniscribe=false` would have used the WinAnsi font.
+**Important:** a shaped item always goes to the Unicode (CID) font of the
+font it was shaped with - never to the font left active by the item before
+it, which may be the fallback font (fixed 2026-10-08). Details per outcome:
+`.claude/skills/platform-backends.md`, "The Windows paths".
 
 ---
 

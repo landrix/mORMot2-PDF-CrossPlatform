@@ -383,7 +383,8 @@ AddUnicodeHexText (pdf.pas) — UseUniscribe gates both platforms' shaper:
         if VisualToLogical[j] < count - 1 then     ← skip sentinel (logical index count-1)
           Append(VisualToLogical[j])
             ScriptShape(DC, W, L, …, OutGlyphs[]) ← OpenType GSUB shaping
-            → AddGlyphs(OutGlyphs, count, Canvas)
+            → AddGlyphsOf(WinAnsiTtf, OutGlyphs, count, Canvas)
+              ← the font it was shaped with, not the current page font
     {$endif}
 
     {$ifndef OSWINDOWS}  — the same UseUniscribe switch
@@ -418,10 +419,11 @@ AddUnicodeHexText (pdf.pas) — UseUniscribe gates both platforms' shaper:
   if not shaped:
     → AddUnicodeHexTextNoUniScribe(…)           ← Latin fallback
 
-AddGlyphs(OutGlyphs, count, Canvas) (pdf.pas:5573):
-  SetPdfFont(ttf.UnicodeFont, FontSize)          ← always CID for shaped text
-  for each shapedGlyph:
-    glyph := ttf.WinAnsiFont.GetAndMarkGlyphAsUsed(shapedGlyph)
+AddGlyphsOf(Ttf, OutGlyphs, count, Canvas):     ← AddGlyphs: Ttf = page font
+  if count = 0: nothing
+  SetPdfFont(Ttf.UnicodeFont, FontSize)          ← CID, even if the filter drops all
+  for each shapedGlyph not zero-width-and-no-diacritic (Uniscribe VisAttr):
+    glyph := Ttf.WinAnsiFont.GetAndMarkGlyphAsUsed(shapedGlyph)
     │  Step 1: already in fUsedWide[] → return immediately
     │  Step 2: reverse CMAP scan in UnicodeFont.fUsedWide[]
     │           found → WinAnsiFont.FindOrAddUsedWideChar → register in WinAnsi tracking
@@ -434,7 +436,7 @@ AddGlyphs(OutGlyphs, count, Canvas) (pdf.pas:5573):
     │           → glyph registered in /W array; no overlap from /DW fallback
     │           {POSIX}: step 3 absent; glyph not registered → /DW overlap
     AddHex4(glyph)
-  Add('> Tj')
+  Add('> Tj') if any glyph was kept
 ```
 
 ### 4d — Font Serialization at Save (`pdf.pas:6568`)
