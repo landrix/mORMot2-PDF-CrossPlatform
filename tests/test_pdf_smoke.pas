@@ -124,7 +124,7 @@ begin
     lines.Text := string(s);
     for i := 0 to lines.Count - 1 do
     begin
-      line := RawByteString(Trim(lines[i]));
+      line := RawByteString(SysUtils.Trim(lines[i]));
       sp := length(line);
       while (sp > 0) and (line[sp] <> ' ') do
         dec(sp);
@@ -1223,6 +1223,8 @@ type
   TFixedRunShaper = class(TInterfacedObject, IFontShaper)
   public
     Outcome: TFontShapeOutcome;
+    // leaves Kind at its zero value, fskPlain
+    KindUnset: boolean;
     // adds a second, plain run of no code unit - which the contract excludes
     EmptyRun: boolean;
     function Shape(Text: PWideChar; Len: integer; Font: TFontHandle;
@@ -1233,7 +1235,8 @@ function TFixedRunShaper.Shape(Text: PWideChar; Len: integer; Font: TFontHandle;
   RightToLeft: boolean; out Runs: TFontShapedRuns): boolean;
 begin
   SetLength(Runs, 1);
-  Runs[0].Kind := fskShaped;
+  if not KindUnset then
+    Runs[0].Kind := fskShaped;
   Runs[0].Outcome := Outcome;
   Runs[0].TextStart := 0;
   Runs[0].TextLen := Len;
@@ -1275,8 +1278,9 @@ var
   end;
 
 begin
-  { fsoUnknown is the zero value of TFontShapeOutcome: a run whose shaper
-    never set it is drawn unshaped, whatever its Kind says }
+  { fsoUnknown is the zero value of TFontShapeOutcome, fskPlain that of
+    TFontShapeKind: a run whose shaper never set either is drawn unshaped,
+    whatever the other says }
   saved := FontShaper;
   fixed := TFixedRunShaper.Create;
   FontShaper := fixed;
@@ -1288,6 +1292,11 @@ begin
       'a run with fsoDone is drawn as shaped');
     Check(Drawn(fsoUnknown) = plain,
       'a run left at fsoUnknown is drawn as without shaping');
+    // and the same for Kind: fskPlain wins over fsoDone
+    fixed.KindUnset := true;
+    Check(Drawn(fsoDone) = plain,
+      'a run left at fskPlain is drawn as without shaping');
+    fixed.KindUnset := false;
     // a run of no code unit breaks the contract: the whole text goes the
     // simple path (it used to write a #0 through a nil buffer)
     fixed.EmptyRun := true;

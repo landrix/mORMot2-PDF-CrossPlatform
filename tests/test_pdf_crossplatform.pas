@@ -14,6 +14,7 @@ uses
   mormot.core.base,
   mormot.core.unicode,
   mormot.core.os,
+  mormot.core.text,
   mormot.core.test,
   mormot.lib.core,
   mormot.pdf.types,
@@ -367,7 +368,7 @@ begin
     for f := 0 to high(ARABIC_FONTS) do
     begin
       FillChar(lf, SizeOf(lf), 0);
-      lf.FaceName := ARABIC_FONTS[f];
+      lf.FaceName := Utf8ToSynUnicode(ARABIC_FONTS[f]);
       lf.Height := -1000;
       lf.Weight := 400;
       font := FontProvider.CreateFont(lf);
@@ -531,7 +532,7 @@ begin
     for f := 0 to high(ARABIC_FONTS) do
     begin
       FillChar(lf, SizeOf(lf), 0);
-      lf.FaceName := ARABIC_FONTS[f];
+      lf.FaceName := Utf8ToSynUnicode(ARABIC_FONTS[f]);
       lf.Height := -1000;
       lf.Weight := 400;
       font := FontProvider.CreateFont(lf);
@@ -607,13 +608,13 @@ begin
       exit;
     end;
     FillChar(lf, SizeOf(lf), 0);
-    lf.FaceName := MARK_FONTS[f];
+    lf.FaceName := Utf8ToSynUnicode(MARK_FONTS[f]);
     lf.Height := -1000;
     lf.Weight := 400;
     font := FontProvider.CreateFont(lf);
     if font = nil then
     begin
-      Check(true, 'SKIP: ' + MARK_FONTS[f] + ' could not be created');
+      Check(true, 'SKIP: ' + Utf8ToString(MARK_FONTS[f]) + ' could not be created');
       exit;
     end;
     prev := FontProvider.SelectFont(dc, font);
@@ -812,7 +813,7 @@ var
   doc: TPdfDocument;
   ms: TMemoryStream;
   i: integer;
-  fonts: array[0..2] of string;
+  fonts: array[0..2] of RawUtf8;
 begin
   doc := TPdfDocument.Create;
   try
@@ -824,7 +825,7 @@ begin
     begin
       doc.AddPage;
       doc.Canvas.SetFont(fonts[i], 12, []);
-      doc.Canvas.TextOut(40, 700, PdfString('Page ' + IntToStr(i + 1) + ': ' + fonts[i]));
+      doc.Canvas.TextOut(40, 700, PdfString(FormatUtf8('Page %: %', [i + 1, fonts[i]])));
     end;
     ms := TMemoryStream.Create;
     try

@@ -441,7 +441,7 @@ begin
     exit;
   ga := SfntCmapLookup(fFace, ord('A'));
   gb := SfntCmapLookup(fFace, ord('B'));
-  Check((ga > 0) and (gb > 0) and (ga <> gb), fFaceName + ': no A/B glyphs');
+  Check((ga > 0) and (gb > 0) and (ga <> gb), Utf8ToString(fFaceName) + ': no A/B glyphs');
   Check(SubsetOf([ord('A')], [], sub), 'Subset failed');
   // retain-gids keeps every ID up to the highest one kept: glyphs after it are
   // cut off, so numGlyphs shrinks but never below the retained IDs
@@ -486,7 +486,7 @@ begin
     exit;
   Check(SubsetOf([ord('H'), ord('e'), ord('l'), ord('o'), ord(' '),
     ord('W'), ord('r'), ord('d'), ord('!')], [], sub), 'Subset failed');
-  Check(length(sub) * 10 < length(fFace), FormatUtf8('% subset is % of % bytes',
+  Check(length(sub) * 10 < length(fFace), FormatString('% subset is % of % bytes',
     [fFaceName, length(sub), length(fFace)]));
 end;
 
@@ -510,7 +510,7 @@ begin
     font := fFont
   else
     font := nil;
-  Check(not FontSubsetter.Subset('OTTO' + StringOfChar(#0, 60), req, font, sub),
+  Check(not FontSubsetter.Subset(RawByteString('OTTO' + StringOfChar(#0, 60)), req, font, sub),
     'a truncated CFF face must not be subset');
   CheckEqual(sub, '', 'no output expected');
   // a real CFF face is subset like any other: it goes to /FontFile3 with
@@ -576,8 +576,6 @@ begin
   {$endif OSWINDOWS}
 end;
 
-{$ifdef OSWINDOWS}
-
 // big-endian bytes of a 32-bit and a 16-bit value
 function BE32Bytes(v: cardinal): RawByteString;
 begin
@@ -589,6 +587,8 @@ function BE16Bytes(v: cardinal): RawByteString;
 begin
   result := AnsiChar((v shr 8) and 255) + AnsiChar(v and 255);
 end;
+
+{$ifdef OSWINDOWS}
 
 // a table directory of one table, told apart by its offset
 function OneTableDir(TableOffset: cardinal): RawByteString;
@@ -714,7 +714,7 @@ begin
   end;
   whole := BuildPdf(SansFont, 'Hello World', true, false, false);
   sub := BuildPdf(SansFont, 'Hello World', false, false, false);
-  Check(length(sub) * 4 < length(whole), FormatUtf8('subset PDF % bytes, whole %',
+  Check(length(sub) * 4 < length(whole), FormatString('subset PDF % bytes, whole %',
     [length(sub), length(whole)]));
   Check(copy(FirstFontFile(sub), 1, 4) = #0#1#0#0, 'embedded subset is an sfnt');
 end;
@@ -888,9 +888,9 @@ begin
       SetLength(table, size);
       if FontProvider.GetFontData(dc, gdiTag, 0, pointer(table), size) = size then
         // sfnt header, one table record at offset 28 (checksum left 0)
-        result := #0#1#0#0#0#1#0#16#0#0#0#0 + Tag + #0#0#0#0#0#0#0#28 +
-          AnsiChar(size shr 24) + AnsiChar(size shr 16) +
-          AnsiChar(size shr 8) + AnsiChar(size) + table;
+        result := BE32Bytes($00010000) + BE16Bytes(1) + BE16Bytes(16) +
+          BE32Bytes(0) + Tag + BE32Bytes(0) + BE32Bytes(28) +
+          BE32Bytes(size) + table;
     end;
     FontProvider.SelectFont(dc, prev);
     FontProvider.DeleteFont(font);
@@ -911,6 +911,7 @@ var
   dc: TFontDC;
   fonts: TRawUtf8DynArray;
   f, i, g, found: integer;
+  name: string;
   pdf, face, cmap, hhea: RawByteString;
   o, l, ho, hl: cardinal;
   same: boolean;
@@ -941,17 +942,18 @@ begin
     cmap := PlatformFontTable(TTC_FONTS[f], 'cmap');
     hhea := PlatformFontTable(TTC_FONTS[f], 'hhea');
     inc(found);
+    name := Utf8ToString(TTC_FONTS[f]);
     if (cmap = '') or
        (hhea = '') then
     begin
-      Check(false, TTC_FONTS[f] + ': cmap and hhea of the installed face');
+      Check(false, name + ': cmap and hhea of the installed face');
       continue;
     end;
-    pdf := BuildPdf(Utf8ToString(TTC_FONTS[f]), SAMPLE, false, false, false);
+    pdf := BuildPdf(name, SAMPLE, false, false, false);
     face := FirstFontFile(pdf);
-    Check(FirstSubsetTag(pdf) <> '', TTC_FONTS[f] + ' is subset');
+    Check(FirstSubsetTag(pdf) <> '', name + ' is subset');
     Check(copy(face, 1, 4) = #0#1#0#0,
-      TTC_FONTS[f] + ': one face, not a collection');
+      name + ': one face, not a collection');
     same := true;
     for i := 1 to length(SAMPLE) do
     begin
@@ -961,13 +963,13 @@ begin
               (g > 0) and
               (SfntCmapLookup(face, ord(SAMPLE[i])) = g);
     end;
-    Check(same, TTC_FONTS[f] + ': the subset maps the text as the face does');
+    Check(same, name + ': the subset maps the text as the face does');
     // hhea up to numberOfHMetrics, which a subset may lower
     Check(SfntFindTable(face, 'hhea', o, l) and
           SfntFindTable(hhea, 'hhea', ho, hl) and
           (l >= 34) and (hl >= 34) and
           (copy(face, o + 1, 34) = copy(hhea, ho + 1, 34)),
-      TTC_FONTS[f] + ': the subset has the hhea of the face');
+      name + ': the subset has the hhea of the face');
   end;
   if found = 0 then
     Check(true, 'SKIP: none of the .ttc faces installed');
@@ -1036,6 +1038,7 @@ begin
       maxg := 0;
       g := 0;
       h := 0;
+      uni := nil;
       for f := 0 to high(BIG_FONTS) do
       begin
         fnt := TPdfFontTrueTypeAccess(PDF.Canvas.SetFont(BIG_FONTS[f], 12, [],
