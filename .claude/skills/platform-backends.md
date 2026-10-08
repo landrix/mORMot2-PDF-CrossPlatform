@@ -92,18 +92,23 @@ end;
 
 The result is a list of parts in visual order (`TFontShapedRun`) which covers
 every code unit of the text once, a part left out included: `Kind` - how to
-draw it (`fskShaped` - glyphs hold the result; `fskPlain` - unshaped;
-`fskSkip` - nothing), `Outcome` - why (`fsoDone`; `fsoNotNeeded`; `fsoFailed`,
-e.g. Uniscribe's dropped item is `fskSkip` + `fsoFailed`), `TextStart`/`TextLen`
+draw it (`fskPlain` - unshaped; `fskShaped` - glyphs hold the result;
+`fskSkip` - nothing), `Outcome` - why (`fsoUnknown`; `fsoDone`;
+`fsoNotNeeded`; `fsoFailed`, e.g. Uniscribe's dropped item is `fskSkip` +
+`fsoFailed`). The zero values are the safe ones (Martin's review of #21,
+2026-10-08): a shaper sets both fields on every run, and a run left zeroed
+reads as `fskPlain` + `fsoUnknown`, which a caller draws unshaped whatever its
+`Kind` (as HarfBuzz's `HB_DIRECTION_INVALID` = 0, proto3's `UNSPECIFIED`).
+Then `TextStart`/`TextLen`
 in UTF-16 code units of the whole text, then `Glyphs` and the parallel
 `Advances`, `Offsets` (to the right), `YOffsets` (upwards; 1/1000 em, empty =
 none; offsets never move the pen) and `Clusters`. The itemized shape is for
 Uniscribe (Phase 1 Notes below); HarfBuzz returns one `fskShaped` + `fsoDone`
 part over the whole text and keeps every glyph, and
 `TPdfWrite.AddUnicodeHexTextHarfBuzz` checks only one run of `Kind`
-`fskShaped` with glyphs and `Advances`/`Offsets` of the same length -
-anything else draws unshaped; it ignores `Outcome`, `TextStart`/`TextLen` and
-`YOffsets`. **`YOffsets` are not drawn yet:** `TJ` moves horizontally only;
+`fskShaped` and `Outcome` `fsoDone` with glyphs and `Advances`/`Offsets` of
+the same length - anything else draws unshaped; it ignores
+`TextStart`/`TextLen` and `YOffsets`. **`YOffsets` are not drawn yet:** `TJ` moves horizontally only;
 placing marks vertically needs a text rise (`Ts`) per glyph, and Uniscribe
 `ScriptPlace` first - a change of its own (added to the contract 2026-10-08 so
 that it is complete before it goes into the trunk).

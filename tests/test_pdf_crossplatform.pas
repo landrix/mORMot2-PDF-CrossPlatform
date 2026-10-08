@@ -570,15 +570,16 @@ const
   // a sukun above - marks the font's GPOS places vertically
   BISMI: array[0..5] of WideChar = (
     #$0628, #$0650, #$0633, #$0652, #$0645, #$0650);
-  // known to place these marks with a vertical GPOS offset
-  MARK_FONT = 'Noto Naskh Arabic';
+  // known to place these marks with a vertical GPOS offset (Linux, macOS)
+  MARK_FONTS: array[0..1] of RawUtf8 = (
+    'Noto Naskh Arabic', 'Geeza Pro');
 var
   dc: TFontDC;
   lf: TFontRequest;
   font, prev: TFontHandle;
   runs: TFontShapedRuns;
   fonts: TRawUtf8DynArray;
-  i, moved: integer;
+  i, f, moved: integer;
 begin
   { the contract carries vertical offsets as HarfBuzz gives them, so that it
     is complete before it goes into the trunk; the PDF writer does not draw
@@ -590,43 +591,50 @@ begin
   end;
   dc := FontDC.CreateDC;
   try
-    // CreateFont substitutes a missing face: check that this one exists
+    // CreateFont substitutes a missing face: take one which is installed
     fonts := nil;
     FontEnumerator.EnumTrueTypeFonts(dc, fonts);
-    if FindRawUtf8(fonts, MARK_FONT) < 0 then
+    f := 0;
+    while (f <= high(MARK_FONTS)) and
+          (FindRawUtf8(fonts, MARK_FONTS[f]) < 0) do
+      inc(f);
+    if f > high(MARK_FONTS) then
     begin
-      Check(true, 'SKIP: ' + MARK_FONT + ' not installed');
+      Check(true, 'SKIP: neither Noto Naskh Arabic nor Geeza Pro installed');
       exit;
     end;
     FillChar(lf, SizeOf(lf), 0);
-    lf.FaceName := MARK_FONT;
+    lf.FaceName := MARK_FONTS[f];
     lf.Height := -1000;
     lf.Weight := 400;
     font := FontProvider.CreateFont(lf);
     if font = nil then
     begin
-      Check(true, 'SKIP: ' + MARK_FONT + ' could not be created');
+      Check(true, 'SKIP: ' + MARK_FONTS[f] + ' could not be created');
       exit;
     end;
     prev := FontProvider.SelectFont(dc, font);
-    runs := nil;
-    Check(FontShaper.Shape(@BISMI[0], length(BISMI), font, true, runs) and
-      (length(runs) = 1), 'one run');
-    if length(runs) = 1 then
-      with runs[0] do
-      begin
-        Check((Kind = fskShaped) and (Outcome = fsoDone), 'shaped, done');
-        CheckEqual(TextLen, length(BISMI), 'the run covers the whole text');
-        CheckEqual(length(YOffsets), length(Glyphs), 'one y offset per glyph');
-        moved := 0;
-        for i := 0 to high(YOffsets) do
-          if YOffsets[i] <> 0 then
-            inc(moved);
-        Check(moved > 0, 'a mark is placed vertically');
-      end;
-    if prev <> nil then
-      FontProvider.SelectFont(dc, prev);
-    FontProvider.DeleteFont(font);
+    try
+      runs := nil;
+      Check(FontShaper.Shape(@BISMI[0], length(BISMI), font, true, runs) and
+        (length(runs) = 1), 'one run');
+      if length(runs) = 1 then
+        with runs[0] do
+        begin
+          Check((Kind = fskShaped) and (Outcome = fsoDone), 'shaped, done');
+          CheckEqual(TextLen, length(BISMI), 'the run covers the whole text');
+          CheckEqual(length(YOffsets), length(Glyphs), 'one y offset per glyph');
+          moved := 0;
+          for i := 0 to high(YOffsets) do
+            if YOffsets[i] <> 0 then
+              inc(moved);
+          Check(moved > 0, 'a mark is placed vertically');
+        end;
+    finally
+      if prev <> nil then
+        FontProvider.SelectFont(dc, prev);
+      FontProvider.DeleteFont(font);
+    end;
   finally
     FontDC.DeleteDC(dc);
   end;

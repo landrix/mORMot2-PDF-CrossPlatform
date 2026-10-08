@@ -5884,7 +5884,8 @@ begin
   if not FontShaper.Shape(PW, PWLen, WinAnsiTtf.fHGDI,
        Canvas.RightToLeftText, Runs) or
      (length(Runs) <> 1) or
-     (Runs[0].Kind <> fskShaped) then
+     (Runs[0].Kind <> fskShaped) or
+     (Runs[0].Outcome <> fsoDone) then // fsoUnknown: the shaper left it unset
     exit;
   Glyphs   := Runs[0].Glyphs;
   Advances := Runs[0].Advances;

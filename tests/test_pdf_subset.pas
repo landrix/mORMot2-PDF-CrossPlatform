@@ -876,8 +876,12 @@ begin
     Stream.Free;
   end;
   // both glyphs reach /W and /ToUnicode
-  Check(Pos(RawByteString(IntToStr(g) + '['), s) > 0, '/W lists the first glyph');
-  Check(Pos(RawByteString(IntToStr(g + 4096) + '['), s) > 0,
+  // /W has no spaces: an entry is preceded by ']' or by the opening '['
+  Check((Pos(RawByteString(']' + IntToStr(g) + '['), s) > 0) or
+        (Pos(RawByteString('[' + IntToStr(g) + '['), s) > 0),
+    '/W lists the first glyph');
+  Check((Pos(RawByteString(']' + IntToStr(g + 4096) + '['), s) > 0) or
+        (Pos(RawByteString('[' + IntToStr(g + 4096) + '['), s) > 0),
     '/W lists the glyph 4096 further');
   Check(Pos(RawByteString('<' + IntToHex(g + 4096, 4) + '> <'), s) > 0,
     '/ToUnicode lists the glyph 4096 further');

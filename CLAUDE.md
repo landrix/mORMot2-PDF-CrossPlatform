@@ -81,7 +81,7 @@ examples/
   (each demo folder carries a short README.md; the source header of its .lpr
    (`layer1_demo`: .dpr) says the same thing in two sentences)
 tests/
-  test_runner.lpr              runs every suite below (green: 306 assertions on Windows with FPC, Delphi 7 and Delphi 2010; 367 on macOS, 348 on Linux — the rest are skips; the golden files add two per case with or without a baseline. Delphi 13, measured before the golden files: 259 on Windows, 171 on Linux64, 129 on Android64, layer 1 only)
+  test_runner.lpr              runs every suite below (green: 307 assertions on Windows with FPC and Delphi 13 - Delphi 7 and Delphi 2010 last measured at 306 (#21); 363 on macOS last measured (370 expected with Geeza Pro), 351 on Linux (363 with fonts-noto-cjk) — the rest are skips; the golden files add two per case with or without a baseline. Delphi 13, measured before the golden files: 259 on Windows, 171 on Linux64, 129 on Android64, layer 1 only)
   test_defines.inc             PDF_HASVCLCANVAS: the TCanvas bridge suites (all compilers since R-20)
   build_delphi7.bat            dcc32 build of one project (R-19)
   build_delphi2010.bat         the same with Delphi 2010, warnings on (R-25, Unicode Delphi)
@@ -372,7 +372,7 @@ itself is in each demo's `uReport.pas`; the form only passes its options.
 - **Links in tagged output**: no `Link` role, `OBJR` or `/StructParent` for annotations — `CreateHyperLink` in tagged output fails veraPDF `ua1` on four 7.18 rules (measured). `TGDIPages.DrawLink` draws link-styled text as a `Span` and drops the URL: conformant, not clickable (roadmap R-29, item 7)
 - **Delphi** (R-19, R-21, R-23, R-25, R-27 done; R-20 steps 1–6 done): layer 1,
   the TCanvas bridge and the `TGDIPages` core build on Delphi 7 and Delphi
-  2010 (Unicode Delphi), Win32; `test_runner` 306/306 on both. All six console
+  2010 (Unicode Delphi), Win32; `test_runner` 306/306 on both (last measured, #21). All six console
   demos and the `--export` of the two GUI demos build and give the same PDF as
   FPC (the GUI demos build their report in `uReport.pas`, without a form);
   PAC 2024 and veraPDF pass the files of both compilers. Open: the preview and

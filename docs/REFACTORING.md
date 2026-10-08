@@ -187,7 +187,9 @@ checked against that record:
    `Output` and two comments corrected), then `2dce8feb6` (2026-10-07, the
    GDI services in `mormot.lib.uniscribe`, replacing `mormot.pdf.gdi`), then
    `0da9d7adc` (2026-10-08, `TFontShapedRun.YOffsets` and `Outcome`, filled
-   by `mormot.lib.harfbuzz`, not used by the engine yet).
+   by `mormot.lib.harfbuzz`, not used by the engine yet), then `54f47c547`
+   (2026-10-08, the zero values of `TFontShapeKind` and `TFontShapeOutcome`
+   are the safe ones: `fskPlain`, and the new `fsoUnknown`).
    **Checked:** against `d60cc6e80`, today's `main`,
    `test_runner` 259/259 on Windows (FPC Win64, Delphi 7, Delphi 2010),
    298/298 on Linux, 317/317 on macOS (fpcupdeluxe, FPC 3.2.3). Against
@@ -205,7 +207,12 @@ checked against that record:
    aarch64 (FPC 3.2.3), 347/347 on Linux aarch64 (WSL, FPC 3.2.2), 296/296
    on Windows aarch64 (FPC 3.3.1); golden files unchanged, the 45 demo PDFs
    of `2026-10-07_pr15` identical to `2026-10-07_pr13` after normalization,
-   veraPDF 1.30.2 `ua1` 35/35 and `3u` 5/5.
+   veraPDF 1.30.2 `ua1` 35/35 and `3u` 5/5. Against `2dce8feb6` and
+   `0da9d7adc`, PRs #19 to #21 as one block (checked on #21): 306/306 on
+   Windows x64 (FPC 3.2.2) and Windows x86 (Delphi 7, Delphi 2010), 360/360
+   on Linux aarch64 (FPC 3.2.3, with fonts-noto-cjk; 348 without), 363/363
+   on macOS aarch64 (FPC 3.2.3); golden files unchanged, `pdfcheck` 9/9,
+   veraPDF `ua1` and `3u` pass.
    `mormot_demo` (SQLite from `static/`) builds and exports on all three
    Windows compilers, the PDFs identical after normalization. FPC warns of
    a duplicate `mormot.lib.uniscribe` (the package's and our copy) — gone
