@@ -2837,6 +2837,12 @@ type
     // - in Unicode Fonts for all available glyphs from TPdfTtf values
     fUsedWideChar: TSortedWordArray;
     fUsedWide: TUsedWide;
+    // glyphs used without a code point of their own (shaped glyphs out of the
+    // cmap), on the WinAnsi font: sorted indexes, and their widths in parallel
+    // - kept apart from fUsedWideChar[], where the synthetic keys they had
+    // collided with each other and with real characters
+    fShapedGlyph: TSortedWordArray;
+    fShapedWidth: TWordDynArray;
     {$ifdef OSWINDOWS}
     fHGDI: HGDIOBJ;
     {$else}
@@ -2890,6 +2896,10 @@ type
     function GetSubset: PPdfFontSubset;
     // low level add glyph (returns the real glyph index found, aGlyph if none)
     function GetAndMarkGlyphAsUsed(aGlyph: word): word;
+    // register a glyph without a code point, see fShapedGlyph
+    procedure AddShapedGlyph(aGlyph: word; aWidth: integer);
+    // the glyphs used by this WinAnsi font, as /W and /ToUnicode list them
+    procedure GetUsedGlyphs(out aKeys: TWordDynArray; out aUsed: TUsedWide);
     {$ifndef OSWINDOWS}
     // register a shaped glyph with a known advance width from HarfBuzz
     // - used by AddUnicodeHexTextHarfBuzz to implement Step 3 on POSIX:
@@ -6838,15 +6848,18 @@ var
   {$ifdef OSWINDOWS}
   abc: TABC;
   w: integer;
-  synChar: WideChar;
   {$endif OSWINDOWS}
 begin
   result := aGlyph; // fallback to raw glyph index if nothing explicit
   // 1. check if not already registered as used
   with WinAnsiFont do // WinAnsiFont.fUsedWide[] = glyphs used by ShowText
+  begin
     for i := 0 to fUsedWideChar.Count - 1 do
       if fUsedWide[i].Glyph = aGlyph then
         exit; // fast return already existing glyph index
+    if fShapedGlyph.IndexOf(aGlyph) >= 0 then
+      exit;
+  end;
   // 2. register this glyph, and return Ttf glyph
   // WinAnsiFont.FindOrAddUsedWideChar must be called explicitly: inside
   // "with UnicodeFont do", an unqualified call would resolve to
@@ -6867,17 +6880,14 @@ begin
   {$ifdef OSWINDOWS}
   // 3. GSUB-substituted glyph (Arabic contextual form, ligature, etc.):
   // not in CMAP after step 2 -> look up advance width by glyph index and
-  // register a synthetic PUA entry so /W has correct widths instead of /DW.
+  // register it so /W has correct widths instead of /DW.
   // Only reached when UseUniscribe=true and the font produced shaped glyphs.
   fDoc.GetDCWithFont(self);
   if GetCharABCWidthsI(fDoc.fDC, aGlyph, 1, nil, @abc) then
     w := abc.abcA + integer(abc.abcB) + abc.abcC
   else
     w := fDefaultWidth;
-  synChar := WideChar($E000 or (aGlyph and $0FFF));
-  idx := FindOrAddUsedWideChar(synChar);
-  fUsedWide[idx].Glyph := aGlyph;
-  fUsedWide[idx].Width := w;
+  AddShapedGlyph(aGlyph, w);
   {$endif OSWINDOWS}
 end;
 
@@ -6895,6 +6905,9 @@ begin
       result := fUsedWide[i].Width;
       exit;
     end;
+  i := fShapedGlyph.IndexOf(aGlyph);
+  if i >= 0 then
+    result := fShapedWidth[i];
 end;
 
 function TPdfFontTrueType.GlyphHmtxWidth(aGlyph: word): integer;
@@ -6943,12 +6956,13 @@ var
   i:       PtrInt;
   idx:     integer;
   w:       integer;
-  synChar: WideChar;
 begin
   // Step 1: already registered in WinAnsi tracking arrays - nothing to do
   for i := 0 to fUsedWideChar.Count - 1 do
     if fUsedWide[i].Glyph = aGlyph then
       exit;
+  if fShapedGlyph.IndexOf(aGlyph) >= 0 then
+    exit;
   // Step 2: reverse CMAP lookup (same logic as GetAndMarkGlyphAsUsed Step 2)
   if UnicodeFont <> nil then
     with UnicodeFont do
@@ -6958,7 +6972,7 @@ begin
           idx := WinAnsiFont.FindOrAddUsedWideChar(WideChar(fUsedWideChar.Values[i]));
           exit; // width from CMAP hmtx data
         end;
-  // Step 3: GSUB-only glyph not in CMAP - register a PUA slot for it.
+  // Step 3: GSUB-only glyph not in CMAP - register it by its index.
   // The width must come from the font's 'hmtx' table, NOT from the shaper:
   // HarfBuzz returns the *positioned* advance, which for a glyph carrying a
   // GPOS x_offset differs from the font's own advance. /W has to state what
@@ -6969,13 +6983,10 @@ begin
   // says 407, HarfBuzz says 317 with x_offset -91.
   // Fall back to the shaper's value only if the tables cannot be read, which
   // is still far better than /DW.
-  synChar := WideChar($E000 or (aGlyph and $0FFF));
-  idx := FindOrAddUsedWideChar(synChar);
-  fUsedWide[idx].Glyph := aGlyph;
   w := GlyphHmtxWidth(aGlyph);
   if w <= 0 then
     w := aWidth;
-  fUsedWide[idx].Width := w;
+  AddShapedGlyph(aGlyph, w);
 end;
 {$endif OSWINDOWS}
 
@@ -7139,7 +7150,69 @@ end;
 
 function TPdfFontTrueType.GetWideCharUsed: boolean;
 begin
-  result := (fUsedWideChar.Count > 0);
+  result := (fUsedWideChar.Count > 0) or
+            (fShapedGlyph.Count > 0);
+end;
+
+procedure TPdfFontTrueType.AddShapedGlyph(aGlyph: word; aWidth: integer);
+var
+  i, n: PtrInt;
+begin
+  with WinAnsiFont do
+  begin
+    i := fShapedGlyph.Add(aGlyph);
+    if i < 0 then
+      exit; // already registered
+    n := fShapedGlyph.Count;
+    if length(fShapedWidth) < n then
+      SetLength(fShapedWidth, n + 64);
+    if i < n - 1 then
+      MoveFast(fShapedWidth[i], fShapedWidth[i + 1], (n - 1 - i) * SizeOf(word));
+    fShapedWidth[i] := aWidth;
+  end;
+end;
+
+procedure TPdfFontTrueType.GetUsedGlyphs(out aKeys: TWordDynArray;
+  out aUsed: TUsedWide);
+var
+  order: TIntegerDynArray;
+  i, j, k, n, s: PtrInt;
+  key: word;
+begin
+  // a glyph without a code point is listed under $E000 + its index mod 4096,
+  // the /ToUnicode value of before: sort them by that key, then by index, and
+  // merge them with the characters - the order the single list used to have
+  s := fShapedGlyph.Count;
+  SetLength(order, s);
+  for i := 0 to s - 1 do
+    order[i] := (fShapedGlyph.Values[i] and $0FFF) shl 16 + fShapedGlyph.Values[i];
+  QuickSortInteger(order);
+  n := fUsedWideChar.Count + s;
+  SetLength(aKeys, n);
+  SetLength(aUsed, n);
+  i := 0;
+  j := 0;
+  key := 0;
+  for k := 0 to n - 1 do
+  begin
+    if j < s then
+      key := $E000 or (order[j] shr 16);
+    if (i < fUsedWideChar.Count) and
+       ((j >= s) or
+        (fUsedWideChar.Values[i] <= key)) then
+    begin
+      aKeys[k] := fUsedWideChar.Values[i];
+      aUsed[k] := fUsedWide[i];
+      inc(i);
+    end
+    else
+    begin
+      aKeys[k] := key;
+      aUsed[k].Glyph := order[j] and $ffff;
+      aUsed[k].Width := fShapedWidth[fShapedGlyph.IndexOf(aUsed[k].Glyph)];
+      inc(j);
+    end;
+  end;
 end;
 
 function TPdfFontTrueType.GetWideCharWidth(aWideChar: WideChar): integer;
@@ -7383,11 +7456,14 @@ begin
   end;
   SetLength(aRequest.Unicodes, n);
   // Identity-H text addresses glyphs directly, including shaped ones which
-  // only have a PUA slot in fUsedWideChar[]: keep the glyph IDs
+  // have no code point: keep the glyph IDs
   n := length(aRequest.Glyphs);
-  SetLength(aRequest.Glyphs, n + fUsedWideChar.Count);
+  SetLength(aRequest.Glyphs, n + fUsedWideChar.Count + fShapedGlyph.Count);
   for i := 0 to fUsedWideChar.Count - 1 do
     aRequest.Glyphs[n + i] := fUsedWide[i].Glyph;
+  inc(n, fUsedWideChar.Count);
+  for i := 0 to fShapedGlyph.Count - 1 do
+    aRequest.Glyphs[n + i] := fShapedGlyph.Values[i];
   {$ifdef USE_UNISCRIBE}
   // CreateFontPackage keeps by glyph index only - it has no second list for
   // code points, so the WinAnsi characters have to be resolved here as well
@@ -7487,6 +7563,8 @@ var
   tableTag: LongWord;
   sub: PPdfFontSubset;
   ttcNumFonts: LongWord;
+  keys: TWordDynArray;
+  used: TUsedWide;
 begin
   str := TMemoryStream.Create;
   WR := TPdfWrite.Create(fDoc, str);
@@ -7525,20 +7603,21 @@ begin
       info.AddItemText('Ordering', 'Identity');
       info.AddItemText('Registry', 'Adobe');
       font.AddItem('CIDSystemInfo', info);
-      n := WinAnsiFont.fUsedWideChar.Count;
+      WinAnsiFont.GetUsedGlyphs(keys, used);
+      n := length(keys);
       if n > 0 then
       begin
-        fFirstChar := WinAnsiFont.fUsedWide[0].Glyph;
-        fLastChar := WinAnsiFont.fUsedWide[n - 1].Glyph;
+        fFirstChar := used[0].Glyph;
+        fLastChar := used[n - 1].Glyph;
       end;
       font.AddItem('DW', WinAnsiFont.fDefaultWidth);
       if (fDoc.fPdfA <> pdfaNone) or
          not WinAnsiFont.fFixedWidth then
       begin
         WR.Add('['); // fixed width will use /DW value
-        // WinAnsiFont.fUsedWide[] contains glyphs used by ShowText
+        // used[] holds the glyphs used by ShowText
         for i := 0 to n - 1 do
-          with WinAnsiFont.fUsedWide[i] do
+          with used[i] do
             if Used <> 0 then
               WR.Add(Glyph).Add('[').Add(Width).Add(']');
         font.AddItem('W', TPdfRawText.Create(WR.Add(']').ToPdfString));
@@ -7567,15 +7646,15 @@ begin
           L := n;
         count := L; // calculate real count of items in this beginbfchar
         for i := ndx to ndx + L - 1 do
-          if WinAnsiFont.fUsedWide[i].Used = 0 then
+          if used[i].Used = 0 then
             dec(count);
         tounicode.Writer.Add(count).
                          Add(' beginbfchar'#10);
         for i := ndx to ndx + L - 1 do
-          with WinAnsiFont.fUsedWide[i] do
+          with used[i] do
             if Used <> 0 then
               tounicode.Writer.Add('<').AddHex4(Glyph).Add('> <').
-                AddHex4(WinAnsiFont.fUsedWideChar.Values[i]).Add('>'#10);
+                AddHex4(keys[i]).Add('>'#10);
         dec(n, L);
         inc(ndx, L);
         tounicode.Writer.Add('endbfchar'#10);

@@ -96,6 +96,13 @@ v0.10.0 (2026-09-30).
   part in the fallback font with the glyph numbers of the main font - wrong
   characters on the page, and in the fallback font's subset and widths. The
   shaped part is now drawn in the font it was shaped with
+- **Fixed (shaped text, all platforms):** two shaped glyphs without a
+  character of their own whose numbers differ by a multiple of 4096 (fonts
+  with more glyphs than that), or such a glyph and a character of the
+  Private Use Area, overwrote each other: one of them lost its width, its
+  `/ToUnicode` entry and its place in the font subset. On Linux/macOS the
+  subset no longer gets their stand-in code points either, which may change
+  the embedded subset of such documents
 - **Coming with R-20** (announce when done): the preview and the GUI demos
   on Delphi
 

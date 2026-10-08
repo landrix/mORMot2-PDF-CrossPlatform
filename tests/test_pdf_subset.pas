@@ -66,6 +66,7 @@ type
     procedure TestTaggedSubsetKeepsToUnicode;
     procedure TestPdfA1StillWholeFace;
     procedure TestPdfA3Subsets;
+    procedure TestShapedGlyphKeys;
   end;
 
 const
@@ -732,6 +733,154 @@ begin
   Check(FirstSubsetTag(pdfa3) <> '', 'PDF/A-3 output is subset');
   Check(length(FirstFontFile(pdfa3)) * 10 < length(FirstFontFile(whole)),
     'and much smaller');
+end;
+
+type
+  // reaches the glyph bookkeeping of a font
+  TPdfFontTrueTypeAccess = class(TPdfFontTrueType);
+
+procedure TPdfSubsetEngineTests.TestShapedGlyphKeys;
+const
+  // faces with more than 4096 glyphs, enough of them out of the cmap (CJK
+  // faces map almost all of theirs: Microsoft YaHei has no such pair)
+  BIG_FONTS: array[0..8] of RawUtf8 = (
+    'Segoe UI', 'Yu Gothic', 'Arial', 'DejaVu Sans', 'Noto Sans',
+    'Noto Sans CJK JP', 'Hiragino Sans', 'Hiragino Sans GB',
+    'Arial Unicode MS');
+var
+  PDF: TPdfDocument;
+  Stream: TMemoryStream;
+  fnt, uni: TPdfFontTrueTypeAccess;
+  mapped: array of boolean;
+  f, g, h, i, k, gid, maxg: integer;
+  req: TFontSubsetRequest;
+  s: RawByteString;
+
+  procedure Mark(aGlyph: integer);
+  begin
+    {$ifdef OSWINDOWS}
+    fnt.GetAndMarkGlyphAsUsed(aGlyph);
+    {$else}
+    fnt.GetAndMarkGlyphAsUsedWithWidth(aGlyph, 500);
+    {$endif OSWINDOWS}
+  end;
+
+  function Unmapped(aGlyph: integer): boolean;
+  begin
+    result := (aGlyph > 0) and
+              (aGlyph <= maxg) and
+              not mapped[aGlyph];
+  end;
+
+  function Has(const Values: TIntegerDynArray; Value: integer): boolean;
+  var
+    j: PtrInt;
+  begin
+    result := true;
+    for j := 0 to high(Values) do
+      if Values[j] = Value then
+        exit;
+    result := false;
+  end;
+
+begin
+  { a glyph without a code point (a shaped one, out of the cmap) was stored
+    under the key $E000 + its index mod 4096, among the characters: two such
+    glyphs 4096 apart, or such a glyph and a real character of that key,
+    overwrote each other in /W, /ToUnicode and the subset keep list }
+  Stream := TMemoryStream.Create;
+  try
+    PDF := TPdfDocument.Create(false, 0, pdfaNone);
+    try
+      PDF.CompressionMethod := cmNone;
+      PDF.EmbeddedTTF := true;
+      PDF.AddPage;
+      maxg := 0;
+      g := 0;
+      h := 0;
+      for f := 0 to high(BIG_FONTS) do
+      begin
+        fnt := TPdfFontTrueTypeAccess(PDF.Canvas.SetFont(BIG_FONTS[f], 12, [],
+          PDF_DEFAULT_CHARSET));
+        if not fnt.InheritsFrom(TPdfFontTrueType) then
+          continue;
+        fnt := TPdfFontTrueTypeAccess(fnt.WinAnsiFont);
+        if fnt.UnicodeFont = nil then
+          fnt.CreateAssociatedUnicodeFont;
+        uni := TPdfFontTrueTypeAccess(fnt.UnicodeFont);
+        // the glyphs the cmap reaches
+        maxg := 0;
+        for i := 0 to uni.fUsedWideChar.Count - 1 do
+          if uni.fUsedWide[i].Glyph > maxg then
+            maxg := uni.fUsedWide[i].Glyph;
+        mapped := nil;
+        SetLength(mapped, maxg + 1);
+        for i := 0 to uni.fUsedWideChar.Count - 1 do
+          mapped[uni.fUsedWide[i].Glyph] := true;
+        // g and g + 4096 out of the cmap, h with other low bits
+        g := 1;
+        while (g + 4096 <= maxg) and
+              not (Unmapped(g) and Unmapped(g + 4096)) do
+          inc(g);
+        h := g + 1;
+        while (h <= maxg) and
+              not (Unmapped(h) and
+                   ((h and $0FFF) <> (g and $0FFF))) do
+          inc(h);
+        if (g + 4096 <= maxg) and
+           (h <= maxg) then
+          break;
+      end;
+      if (g + 4096 > maxg) or
+         (h > maxg) then
+      begin
+        Check(true, 'SKIP: no font with two glyphs 4096 apart out of the cmap');
+        exit;
+      end;
+      PDF.Canvas.SetPdfFont(uni, 12); // the font goes into the page
+      // a real character under the key of g first, then the two glyphs
+      k := $E000 or (g and $0FFF);
+      i := fnt.FindOrAddUsedWideChar(WideChar(k));
+      gid := fnt.fUsedWide[i].Glyph;
+      Mark(g);
+      Mark(g + 4096);
+      Mark(h);
+      CheckEqual(fnt.fUsedWide[fnt.fUsedWideChar.IndexOf(k)].Glyph, gid,
+        'a real character keeps its glyph after a shaped one of its key');
+      // the subset request: every glyph, and no key standing for one
+      req.Unicodes := nil;
+      req.Glyphs := nil;
+      fnt.AddToSubsetRequest(req);
+      Check(Has(req.Glyphs, g) and Has(req.Glyphs, g + 4096) and Has(req.Glyphs, h),
+        'all shaped glyphs are kept by the subset');
+      Check(not Has(req.Unicodes, $E000 or (h and $0FFF)),
+        'a shaped glyph adds no code point to the request');
+      // and the other order: the shaped glyph h first, then a real character
+      k := $E000 or (h and $0FFF);
+      i := uni.fUsedWideChar.IndexOf(k);
+      if i >= 0 then
+        gid := uni.fUsedWide[i].Glyph
+      else
+        gid := 0;
+      i := fnt.FindOrAddUsedWideChar(WideChar(k));
+      CheckEqual(fnt.fUsedWide[i].Glyph, gid,
+        'a real character after a shaped one of its key gets its own glyph');
+      PDF.SaveToStream(Stream);
+    finally
+      PDF.Free;
+    end;
+    SetLength(s, Stream.Size);
+    Stream.Position := 0;
+    Stream.Read(pointer(s)^, Stream.Size);
+  finally
+    Stream.Free;
+  end;
+  // both glyphs reach /W and /ToUnicode
+  Check(Pos(RawByteString(IntToStr(g) + '['), s) > 0, '/W lists the first glyph');
+  Check(Pos(RawByteString(IntToStr(g + 4096) + '['), s) > 0,
+    '/W lists the glyph 4096 further');
+  Check(Pos(RawByteString('<' + IntToHex(g + 4096, 4) + '> <'), s) > 0,
+    '/ToUnicode lists the glyph 4096 further');
 end;
 
 end.

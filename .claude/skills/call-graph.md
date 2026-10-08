@@ -411,7 +411,7 @@ AddUnicodeHexText (pdf.pas) — UseUniscribe gates both platforms' shaper:
             Step 2: Reverse-CMAP → FindOrAddUsedWideChar → exit
               ← hmtx-Breite aus TPdfTtf.Create korrekt: (int64(hmtx) * 1000) div UPM
                 (P3-C fix; vorher shr-Formel → 1.953× zu groß für UPM=1000)
-            Step 3 (POSIX): PUA-Slot mit HarfBuzz-Breite (nur wenn nicht in CMAP)
+            Step 3 (POSIX): AddShapedGlyph mit hmtx-Breite (nur wenn nicht in CMAP)
           AddHex4(Glyph)
         wenn Offsets ≠ 0: TJ-Array-Operator (P3-B); sonst: Add('> Tj')
     {$endif}
@@ -430,9 +430,7 @@ AddGlyphsOf(Ttf, OutGlyphs, count, Canvas):     ← AddGlyphs: Ttf = page font
     │           not found → fall through to Step 3
     │  Step 3: {$ifdef OSWINDOWS} GSUB glyph (Arabic form, ligature)
     │           GetCharABCWidthsI(DC, glyph, 1, nil, @abc) → advance width
-    │           synChar := WideChar($E000 or (glyph and $0FFF))  ← PUA slot
-    │           FindOrAddUsedWideChar(synChar) → insert entry
-    │           fUsedWide[idx].Glyph := glyph; .Width := w  ← correct width
+    │           AddShapedGlyph(glyph, w) → WinAnsiFont.fShapedGlyph (by glyph ID)
     │           → glyph registered in /W array; no overlap from /DW fallback
     │           {POSIX}: step 3 absent; glyph not registered → /DW overlap
     AddHex4(glyph)
@@ -451,7 +449,8 @@ TPdfDocument.SaveToStream / SaveToFile → SaveToStreamDirectEnd
       group by face bytes (crc32c + compare) in fFontSubsets[]
         ← Regular + Bold of one .ttc face land in the same entry
       AddToSubsetRequest: Unicodes += fWinAnsiUsed (via WinAnsi table) +
-                          fUsedWideChar; Glyphs += fUsedWide[].Glyph
+                          fUsedWideChar; Glyphs += fUsedWide[].Glyph +
+                          fShapedGlyph (glyphs without a code point)
       fSubsetIndex := entry + 1
     per entry: FontSubsetter.Subset(Face, Request, Font.fHGDI) → Subset bytes
                Tag := 'ABCDEF+' from crc32c(Subset)   (deterministic)
@@ -461,13 +460,15 @@ TPdfDocument.SaveToStream / SaveToFile → SaveToStreamDirectEnd
 
     Unicode font branch (builds CID dictionary):
       /DW = WinAnsiFont.fDefaultWidth         (space char advance width)
-      /W array from WinAnsiFont.fUsedWide[]:
+      WinAnsiFont.GetUsedGlyphs(keys, used): fUsedWide[] and fShapedGlyph
+        merged in key order (a shaped glyph under $E000 + gid mod 4096)
+      /W array from used[]:
         if fFixedWidth: omit /W (use /DW for all)
         else: [Glyph, [Width]] for each registered entry
-      fFirstChar/fLastChar = min/max .Glyph in fUsedWide[]
+      fFirstChar/fLastChar = .Glyph of the FIRST/LAST entry in key order -
+        not min/max: the codespace may miss glyphs (open, see fonts.md 9)
       ToUnicode codespace = <fFirstChar> <fLastChar>
-        edge case: fUsedWideChar.Count=0 → codespace <0000><0000>
-                   (unless fGlyphMin/fGlyphMax set by GetAndMarkGlyphAsUsed step 3)
+        no entry at all → codespace <0000><0000>
 
     WinAnsi font branch (builds /Widths, embeds font file):
       /FirstChar, /LastChar, /Widths from fWinAnsiUsed + ABC widths
