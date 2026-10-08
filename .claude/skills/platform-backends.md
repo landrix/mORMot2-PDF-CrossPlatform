@@ -458,8 +458,8 @@ It differs from the HarfBuzz path in shape, not only in library:
     fails too, the simple path as above
   - any other error: the item is **dropped** - nothing is written for it
   An unchanged-output refactor has to keep all four outcomes
-- the result goes to `AddGlyphs(glyphs, count, Canvas, TScriptVisAttr[])`:
-  glyph IDs plus visual attributes, widths from the font
+- the result goes to `AddGlyphsOf(WinAnsiTtf, glyphs, count, Canvas,
+  TScriptVisAttr[])`: glyph IDs plus visual attributes, widths from the font
 - HarfBuzz (`AddUnicodeHexTextHarfBuzz`, POSIX) shapes the whole run in one
   call (`NeedsShaping` decides first). `/W` keeps the font's own `hmtx`
   width; where the shaper's advance or offset differs, a `TJ` adjusts the
@@ -549,6 +549,13 @@ FontSub subsetter in `mormot.lib.uniscribe`; read in `mormot.ui.pdf`:
   all it does nothing. It writes at most one `<...> Tj` per item - none when
   the filter dropped every glyph - with no positioning, and
   marks glyphs with `GetAndMarkGlyphAsUsed` (no width from the shaper)
+- It used the font active on the page. After an item drawn unshaped whose
+  characters came from the fallback font, that was the fallback font: the
+  next shaped item wrote the main font's glyph IDs there and marked them in
+  the fallback font (found 2026-10-08, Devanagari then Arabic in Tahoma).
+  Fixed before W2: the Uniscribe path calls `AddGlyphsOf` with the font it
+  shaped with; `TestShapedAfterFallback` covers it. The W2 writer keeps
+  that rule for every run
 - `RightToLeftText` sets `uBidiLevel := 1` before `ScriptItemize`;
   `ScriptApplyDigitSubstitution` runs first
 - `SubsetWithFontPackage` reads the whole `.ttc` through the DC

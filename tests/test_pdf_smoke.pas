@@ -51,6 +51,7 @@ type
     procedure TestTaggedTableRowGroups;
     procedure TestTaggedUnicode;
     procedure TestShapingSwitch;
+    procedure TestShapedAfterFallback;
     procedure TestZeroRealIsWritten;
   end;
 
@@ -1171,6 +1172,49 @@ begin
   GetPdfFonts(true, sans, serif, mono);
   CheckEqual(CountOf('/Type0', ShapedPdf(StringToUtf8(sans), 'Hello, World', true, false)), 0,
     'Latin text with UseUniscribe stays in the simple font');
+end;
+
+procedure TPdfSmokeTests.TestShapedAfterFallback;
+const
+  /// देव then عربي: Devanagari, which the main font lacks, then Arabic
+  MIXED_TEXT = {$ifdef HASCODEPAGE}
+    #$0926#$0947#$0935#$0639#$0631#$0628#$064A {$else}
+    #$E0#$A4#$A6#$E0#$A5#$87#$E0#$A4#$B5#$D8#$B9#$D8#$B1#$D8#$A8#$D9#$8A {$endif};
+var
+  PDF: TPdfDocument;
+  Stream: TMemoryStream;
+  s: RawByteString;
+begin
+  { Uniscribe draws an item it cannot shape in the main font unshaped, and its
+    characters then come from the fallback font; the shaped item after it drew
+    the main font's glyph IDs in the fallback font, which was still active }
+  Stream := TMemoryStream.Create;
+  try
+    PDF := TPdfDocument.Create(false, 0, pdfaNone);
+    try
+      PDF.CompressionMethod := cmNone;
+      PDF.EmbeddedTTF := true;
+      PDF.FontFallBackName := 'Nirmala UI';
+      PDF.AddPage;
+      PDF.UseUniscribe := true;
+      PDF.Canvas.SetFont(ARABIC_FONT, 24, [], PDF_DEFAULT_CHARSET);
+      DrawUtf8Text(PDF, 40, 650, MIXED_TEXT);
+      PDF.SaveToStream(Stream);
+    finally
+      PDF.Free;
+    end;
+    s := StreamToRaw(Stream);
+  finally
+    Stream.Free;
+  end;
+  if Pos(RawByteString('NirmalaUI'), s) = 0 then
+  begin
+    Check(true, 'SKIP: no Nirmala UI fallback font, or no fallback taken');
+    exit;
+  end;
+  Check(IsShaped(s), 'the Arabic item is shaped');
+  CheckEqual(CountOf('> Tj'#10'<', s), 0,
+    'the shaped item switches back to the main font after the fallback');
 end;
 
 procedure TPdfSmokeTests.TestZeroRealIsWritten;

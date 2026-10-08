@@ -91,6 +91,11 @@ v0.10.0 (2026-09-30).
   `TGdiFontEnumerator`, `TGdiFontDC`). The `src/platform/windows` search path
   is no longer needed, and `src/platform` is gone. The PDF output is
   unchanged
+- **Fixed (Windows, `UseUniscribe`):** a run mixing a script the font lacks
+  with one it shapes, e.g. Devanagari then Arabic in Tahoma, drew the shaped
+  part in the fallback font with the glyph numbers of the main font - wrong
+  characters on the page, and in the fallback font's subset and widths. The
+  shaped part is now drawn in the font it was shaped with
 - **Coming with R-20** (announce when done): the preview and the GUI demos
   on Delphi
 

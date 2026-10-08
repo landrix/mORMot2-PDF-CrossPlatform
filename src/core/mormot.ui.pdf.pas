@@ -744,6 +744,10 @@ type
     function AddUnicodeHexTextHarfBuzz(PW: PWideChar; PWLen: integer;
       WinAnsiTtf: TPdfFontTrueType; NextLine: boolean; Canvas: TPdfCanvas): boolean;
     {$endif OSWINDOWS}
+    /// internal method writing glyph indexes of Ttf in its Unicode font
+    // - AddGlyphs() with the font of the glyphs given, not the current one
+    procedure AddGlyphsOf(Ttf: TPdfFontTrueType; Glyphs: PWord;
+      GlyphsCount: integer; Canvas: TPdfCanvas; AVisAttrsPtr: pointer);
     /// internal method NOT using the Windows Uniscribe API
     procedure AddUnicodeHexTextNoUniScribe(PW: PWideChar; Ttf: TPdfFontTrueType;
       NextLine: boolean; Canvas: TPdfCanvas);
@@ -5767,9 +5771,11 @@ var
     else
       exit;
     end;
-    // add glyphs to the PDF content
+    // add glyphs to the PDF content, in the font they were shaped with: an
+    // item drawn unshaped before may have left the fallback font active
     // (NextLine has already been handled: not needed here)
-    AddGlyphs(pointer(OutGlyphs), glyphsCount, Canvas, pointer(glyphs));
+    AddGlyphsOf(WinAnsiTtf, pointer(OutGlyphs), glyphsCount, Canvas,
+      pointer(glyphs));
   end;
 
 begin
@@ -6119,8 +6125,19 @@ end;
 
 function TPdfWrite.AddGlyphs(Glyphs: PWord; GlyphsCount: integer;
   Canvas: TPdfCanvas; AVisAttrsPtr: pointer): TPdfWrite;
+begin
+  if (Glyphs <> nil) and
+     (GlyphsCount > 0) then
+    with Canvas.fPage do
+      if fFont.FTrueTypeFontsIndex <> 0 then // we need a ttf font
+        AddGlyphsOf(TPdfFontTrueType(fFont), Glyphs, GlyphsCount, Canvas,
+          AVisAttrsPtr);
+  result := self;
+end;
+
+procedure TPdfWrite.AddGlyphsOf(Ttf: TPdfFontTrueType; Glyphs: PWord;
+  GlyphsCount: integer; Canvas: TPdfCanvas; AVisAttrsPtr: pointer);
 var
-  ttf: TPdfFontTrueType;
   first: boolean;
   glyph: integer;
   {$ifdef USE_UNISCRIBE}
@@ -6130,13 +6147,8 @@ begin
   if (Glyphs <> nil) and
      (GlyphsCount > 0) then
   begin
-    with Canvas.fPage do
-      if fFont.FTrueTypeFontsIndex = 0 then
-        ttf := nil
-      else // mark we don't have an Unicode font, i.e. a ttf
-        ttf := TPdfFontTrueType(fFont);
     if ttf <> nil then
-    begin // we need a ttf font
+    begin
       if (Canvas.fPage.Font <> ttf.UnicodeFont) and
          (ttf.UnicodeFont = nil) then
         ttf.CreateAssociatedUnicodeFont;
@@ -6173,7 +6185,6 @@ begin
         Add('> Tj'#10);
     end;
   end;
-  result := self;
 end;
 
 function TPdfWrite.AddWithSpace(Value: integer): TPdfWrite;
