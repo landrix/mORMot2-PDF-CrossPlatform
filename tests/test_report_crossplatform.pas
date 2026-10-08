@@ -16,6 +16,7 @@ uses
   SysUtils,
   Graphics,
   mormot.core.base,
+  mormot.core.text,
   mormot.core.test,
   pdf_inspect,       // InflatePdf
   mormot.ui.report;  // re-exports what the ExportPdf* options take
@@ -414,7 +415,7 @@ begin
     Report.BeginTable(Layout);
     Report.DrawTableHeader(['Item', 'Value']);
     for i := 1 to 150 do
-      Report.DrawTableRow(['Row ' + IntToStr(i), IntToStr(i * 10)]);
+      Report.DrawTableRow(['Row ' + Int32ToUtf8(i), Int32ToUtf8(i * 10)]);
     Report.EndTable;
     Report.EndDoc;
     Check(Report.PageCount > 1, 'the table paginates');
@@ -537,7 +538,7 @@ begin
     Report.BeginTable(Layout);
     Report.DrawTableHeader(['Item', 'Value']);
     for i := 1 to 3 do
-      Report.DrawTableRow(['Row ' + IntToStr(i), IntToStr(i * 10)]);
+      Report.DrawTableRow(['Row ' + Int32ToUtf8(i), Int32ToUtf8(i * 10)]);
     { the Footer* fields are unset, so the footer takes the header's look }
     Report.DrawTableFooter(['Total', '60']);
     Report.EndTable;
@@ -643,7 +644,7 @@ begin
     Report.BeginTable(Layout);
     Report.DrawTableHeader(['Item', 'Value']);
     for i := 1 to 150 do
-      Report.DrawTableRow(['Row ' + IntToStr(i), IntToStr(i * 10)]);
+      Report.DrawTableRow(['Row ' + Int32ToUtf8(i), Int32ToUtf8(i * 10)]);
     Report.DrawTableFooter(['Total', '113250']);
     Report.EndTable;
     Report.EndDoc;

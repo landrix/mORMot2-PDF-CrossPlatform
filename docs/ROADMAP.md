@@ -105,7 +105,8 @@ v0.10.0 (2026-09-30).
   the embedded subset of such documents
 - **Shaping contract completed (R-28, `mormot.lib.core`):** a
   `TFontShapedRun` carries `YOffsets` (vertical glyph offsets, positive
-  upwards) and `Outcome` (`fsoDone`, `fsoNotNeeded`, `fsoFailed`) beside
+  upwards) and `Outcome` (`fsoUnknown`, `fsoDone`, `fsoNotNeeded`,
+  `fsoFailed`) beside
   `Kind`; `mormot.lib.harfbuzz` fills both. A shaper of your own sets them;
   the PDF output is unchanged - the engine does not draw vertical offsets yet.
   The zero values are the safe ones: `TFontShapeKind` starts with `fskPlain`,
