@@ -32,6 +32,7 @@ type
     procedure TestFontMetrics;
     procedure TestWinAnsiHighRangeWidths;
     procedure TestTextShaperAdvances;
+    procedure TestTextShaperYOffsets;
     {$ifndef OSWINDOWS}
     procedure TestShapedGlyphWidthFromHmtx;
     {$endif OSWINDOWS}
@@ -555,6 +556,74 @@ begin
       // and it must be a plausible 1000/em width, not a raw or mis-scaled value
       Check(advances[i] < 4000, 'shaped advance must be in 1000/em units');
     end;
+    if prev <> nil then
+      FontProvider.SelectFont(dc, prev);
+    FontProvider.DeleteFont(font);
+  finally
+    FontDC.DeleteDC(dc);
+  end;
+end;
+
+procedure TPdfCrossPlatTests.TestTextShaperYOffsets;
+const
+  // 'bismi' = U+0628 U+0650 U+0633 U+0652 U+0645 U+0650: two kasras below,
+  // a sukun above - marks the font's GPOS places vertically
+  BISMI: array[0..5] of WideChar = (
+    #$0628, #$0650, #$0633, #$0652, #$0645, #$0650);
+  // known to place these marks with a vertical GPOS offset
+  MARK_FONT = 'Noto Naskh Arabic';
+var
+  dc: TFontDC;
+  lf: TFontRequest;
+  font, prev: TFontHandle;
+  runs: TFontShapedRuns;
+  fonts: TRawUtf8DynArray;
+  i, moved: integer;
+begin
+  { the contract carries vertical offsets as HarfBuzz gives them, so that it
+    is complete before it goes into the trunk; the PDF writer does not draw
+    them yet }
+  if FontShaper = nil then
+  begin
+    Check(true, 'SKIP: no IFontShaper registered (libharfbuzz absent)');
+    exit;
+  end;
+  dc := FontDC.CreateDC;
+  try
+    // CreateFont substitutes a missing face: check that this one exists
+    fonts := nil;
+    FontEnumerator.EnumTrueTypeFonts(dc, fonts);
+    if FindRawUtf8(fonts, MARK_FONT) < 0 then
+    begin
+      Check(true, 'SKIP: ' + MARK_FONT + ' not installed');
+      exit;
+    end;
+    FillChar(lf, SizeOf(lf), 0);
+    lf.FaceName := MARK_FONT;
+    lf.Height := -1000;
+    lf.Weight := 400;
+    font := FontProvider.CreateFont(lf);
+    if font = nil then
+    begin
+      Check(true, 'SKIP: ' + MARK_FONT + ' could not be created');
+      exit;
+    end;
+    prev := FontProvider.SelectFont(dc, font);
+    runs := nil;
+    Check(FontShaper.Shape(@BISMI[0], length(BISMI), font, true, runs) and
+      (length(runs) = 1), 'one run');
+    if length(runs) = 1 then
+      with runs[0] do
+      begin
+        Check((Kind = fskShaped) and (Outcome = fsoDone), 'shaped, done');
+        CheckEqual(TextLen, length(BISMI), 'the run covers the whole text');
+        CheckEqual(length(YOffsets), length(Glyphs), 'one y offset per glyph');
+        moved := 0;
+        for i := 0 to high(YOffsets) do
+          if YOffsets[i] <> 0 then
+            inc(moved);
+        Check(moved > 0, 'a mark is placed vertically');
+      end;
     if prev <> nil then
       FontProvider.SelectFont(dc, prev);
     FontProvider.DeleteFont(font);

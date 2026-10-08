@@ -103,6 +103,11 @@ v0.10.0 (2026-09-30).
   `/ToUnicode` entry and its place in the font subset. On Linux/macOS the
   subset no longer gets their stand-in code points either, which may change
   the embedded subset of such documents
+- **Shaping contract completed (R-28, `mormot.lib.core`):** a
+  `TFontShapedRun` carries `YOffsets` (vertical glyph offsets, positive
+  upwards) and `Outcome` (`fsoDone`, `fsoNotNeeded`, `fsoFailed`) beside
+  `Kind`; `mormot.lib.harfbuzz` fills both. A shaper of your own sets them;
+  the PDF output is unchanged - the engine does not draw vertical offsets yet
 - **Coming with R-20** (announce when done): the preview and the GUI demos
   on Delphi
 
