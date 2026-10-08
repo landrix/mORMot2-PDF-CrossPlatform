@@ -121,8 +121,10 @@ pair shares one face by construction; Regular and Bold of a `.ttc` face can too)
   plus `fUsedWideChar`. **Required:** a simple TrueType font with
   `/WinAnsiEncoding` reaches its glyphs through the `(3,1)` cmap, and hb-subset
   rebuilds the cmap only for these code points
-- `Glyphs` — every `fUsedWide[].Glyph`, including the PUA slots of shaped glyphs
-  (§8 Step 3). The Identity-H instance addresses glyphs by ID
+- `Glyphs` — every `fUsedWide[].Glyph`, and every glyph without a code point
+  (`fShapedGlyph`, §8 Step 3). The Identity-H instance addresses glyphs by ID.
+  `Unicodes` holds real code points only since 2026-10-08 (before, the
+  synthetic `$E000` keys of shaped glyphs were in it too)
 
 Flags: `RETAIN_GIDS` (mandatory), `NOTDEF_OUTLINE` (a missing glyph stays a
 visible box), `NO_HINTING`; `GSUB/GPOS/GDEF` are dropped
@@ -400,12 +402,9 @@ Step 3: GSUB-substituted glyph — not in CMAP at all (rare ligature, etc.)
           GetDCWithFont(self)                              select font into DC
           GetCharABCWidthsI(fDoc.fDC, aGlyph, 1, nil, @abc)  ← by glyph index
           w := abc.abcA + integer(abc.abcB) + abc.abcC    ← advance in 1000/em units
-          synChar := WideChar($E000 or (aGlyph and $0FFF)) ← PUA synthetic Unicode slot
-          idx := FindOrAddUsedWideChar(synChar)
-          fUsedWide[idx].Glyph := aGlyph                  ← override glyph
-          fUsedWide[idx].Width := w                        ← set correct advance width
+          AddShapedGlyph(aGlyph, w)                        ← WinAnsiFont.fShapedGlyph
   → glyph now registered in /W array; no more overlap from /DW fallback
-  {POSIX}: step 3 not implemented; glyphs still use /DW (overlap remains)
+  {POSIX}: GetAndMarkGlyphAsUsedWithWidth does the same (see §10)
 ```
 
 **Arabic Presentation Forms in CMAP:** Fonts like Tahoma map U+FE70–U+FEFF (Arabic
@@ -427,22 +426,29 @@ after `PrepareFontSubsets` (§3). Runs for **both** WinAnsi and Unicode instance
 ```
 /DW  = WinAnsiFont.fDefaultWidth               (space char width, e.g. 167 for Tahoma)
 
+WinAnsiFont.GetUsedGlyphs(keys, used)   characters (fUsedWide[]) and glyphs
+                                        without a code point (fShapedGlyph),
+                                        merged in key order (§8)
 /W array construction:
   if WinAnsiFont.fFixedWidth:
     omit /W entirely (all glyphs use /DW)
   else:
-    for i in 0..WinAnsiFont.fUsedWideChar.Count-1:
-      emit [WinAnsiFont.fUsedWide[i].Glyph, [WinAnsiFont.fUsedWide[i].Width]]
+    for each entry of used[] with Used <> 0:
+      emit [Glyph, [Width]]
 
-fFirstChar / fLastChar = min/max .Glyph in WinAnsiFont.fUsedWide[]
+fFirstChar / fLastChar = .Glyph of the first / last entry in KEY order
 ToUnicode CMap codespace = <fFirstChar> <fLastChar>
 
-if WinAnsiFont.fUsedWideChar.Count = 0:
-  /W = []
-  codespace = <0000> <0000>
-  (but: if fGlyphMin/fGlyphMax set by GetAndMarkGlyphAsUsed Step 3,
-         use those as codespace — partial mitigation for shaped Arabic)
+no entry at all: /W = [], codespace = <0000> <0000>
 ```
+
+**Open (found 2026-10-08, older than the glyph list):** the codespace bounds
+are the glyphs of the first and last entry by key, not the smallest and
+largest glyph, so they need not enclose every glyph of the CMap - with Segoe
+UI's shaped glyphs 240, 241 and 4336 the codespace is `<0000> <00F1>` and
+glyph `<10F0>` lies outside (ISO 32000-1 9.10.3). Fix separately: bounds from
+the emitted glyphs, or `<0000> <FFFF>`, with a test that every mapping lies
+inside
 
 ### WinAnsi font branch (`pdf.pas:6671`): builds /Widths array, embeds font file
 
@@ -504,7 +510,7 @@ compile if it is ever gated again; `TestShapingSwitch` checks the output.
 - Uniscribe shapes Arabic contextual forms via `ScriptShape` → GSUB glyph IDs
 - `GetAndMarkGlyphAsUsed` registers shaped glyph IDs via reverse CMAP scan (Step 2)
 - Fonts like Tahoma: shaped glyphs found in Arabic Presentation Forms (U+FE70–U+FEFF)
-- For fonts without Presentation-Form coverage: Step 3 (`GetCharABCWidthsI` + PUA slot) handles remaining GSUB-only glyphs (Windows only)
+- For fonts without Presentation-Form coverage: Step 3 (`GetCharABCWidthsI` + `fShapedGlyph`) handles remaining GSUB-only glyphs (Windows only)
 
 ### Step 3 on Linux/macOS — HarfBuzz path (P2-A, APPLIED)
 
@@ -521,7 +527,7 @@ On Linux/macOS the equivalent is `GetAndMarkGlyphAsUsedWithWidth(aGlyph, aWidth)
   pen still moves by the shaper's advance. Writing `aWidth` into `/W` made both
   wrong at once and cancelled out on screen — invisible in a viewer, a PDF/UA
   failure (U-2).
-- Same PUA slot logic as Step 3: `synChar := WideChar($E000 or (aGlyph and $0FFF))`
+- Same registration as Step 3: `AddShapedGlyph` into `fShapedGlyph`
 - Result: GSUB-only shaped glyphs get correct `/W` entries; no `/DW` overlap
 
 **Whether Step 3 is reached at all depends on the font's CMAP**, and this is the
@@ -729,17 +735,32 @@ FPC type: use `TABC` (not `ABC`) in `var` blocks — `TABC = ABC` is the FPC ali
 `fUsedWide[].Width` (from `hmtx` via `TPdfTtf.Create`) is also 1000-per-em.
 → No unit conversion needed; values are directly comparable.
 
-### Synthetic PUA entry approach
+### Glyphs without a code point (`fShapedGlyph`)
 
-GSUB-substituted glyph IDs are not in the font CMAP. To give them a slot in the parallel arrays `fUsedWideChar`/`fUsedWide`, a synthetic Unicode code point in the Private Use Area is used:
+GSUB-substituted glyph IDs are not in the font CMAP. They are kept on the
+WinAnsi font in their own sorted list, `fShapedGlyph` (glyph IDs) with
+`fShapedWidth` in parallel, beside `fUsedWideChar`/`fUsedWide` (characters).
+`GetUsedGlyphs` merges both for `/W` and `/ToUnicode`, listing a shaped glyph
+under the value it had before:
 
 ```
-synChar = WideChar($E000 or (aGlyph and $0FFF))   → U+E000..U+EFFF range
+$E000 or (aGlyph and $0FFF)   → U+E000..U+EFFF, sorted by that value, then by glyph
 ```
 
-`FindOrAddUsedWideChar(synChar)` adds the PUA code point to `fUsedWideChar` (not in CMAP → i=0 default). After the call, `fUsedWide[idx].Glyph` and `.Width` are overridden with the correct values.
+**Until 2026-10-08 that value was the glyph's key in `fUsedWideChar`.** Two
+shaped glyphs 4096 apart, or a shaped glyph and a real character of that value,
+then shared one slot: the later one overwrote glyph and width of the earlier,
+which vanished from `/W`, `/ToUnicode` and the subset keep list, and the
+synthetic keys went to hb-subset as code points (`TestShapedGlyphKeys`). The
+merge keeps the old order, so `/W`, `/ToUnicode` and the codespace bounds are
+unchanged without such a collision. The subset may still change on POSIX:
+hb-subset no longer gets the synthetic keys as code points.
 
-**Side effect:** The `ToUnicode` CMap in the PDF maps these shaped glyphs to PUA code points instead of their base Arabic characters. Text extraction / copy-paste is thus incorrect for shaped Arabic, but rendering is correct.
+**Still open:** `/ToUnicode` maps these shaped glyphs to the PUA values instead
+of their source text. Text extraction / copy-paste is thus incorrect for shaped
+Arabic, but rendering is correct. The fix needs the source text per glyph
+(shaper clusters) and `/ActualText` where one glyph stands for different text
+- a PR of its own
 
 ### Safety scope
 
