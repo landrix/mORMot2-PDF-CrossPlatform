@@ -47,7 +47,8 @@ type
 
 implementation
 
-// HarfBuzz returns its result as one shaped run: give its arrays to the checks
+// a text of one script comes back as one shaped run, from HarfBuzz as from
+// Uniscribe: give its arrays to the checks
 function ShapeSingleRun(Text: PWideChar; Len: integer; Font: TFontHandle;
   out Glyphs: TWordDynArray; out Advances, Offsets,
   Clusters: TIntegerDynArray): boolean;
@@ -546,7 +547,9 @@ begin
     Check(ShapeSingleRun(@MARHABA[0], length(MARHABA), font,
         glyphs, advances, offsets, clusters), 'Shape must succeed');
     Check(length(glyphs) > 0, 'Shape must return glyphs');
-    Check(length(advances) = length(glyphs), 'one advance per glyph');
+    // Uniscribe gives no advances: those of the font apply
+    Check((advances = nil) or
+          (length(advances) = length(glyphs)), 'one advance per glyph');
     for i := 0 to high(advances) do
     begin
       // a zero advance stacks every glyph on the same spot: this is exactly the

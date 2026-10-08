@@ -361,68 +361,53 @@ AddUnicodeHexTextNoUniScribe (pdf.pas:5484):
 ### 4c — Text Rendering — Uniscribe / HarfBuzz Path (RTL, Complex Scripts)
 
 ```
-AddUnicodeHexText (pdf.pas) — UseUniscribe gates both platforms' shaper:
+AddUnicodeHexText (pdf.pas) — UseUniscribe gates the one shaper (since W2):
 
-    {$ifdef USE_UNISCRIBE}  (Windows)
-    if UseUniscribe and ttf present:
-    shaped := AddUnicodeHexTextUniScribe(PW, Len, ttf.WinAnsiFont, NL, Canvas)
-      ScriptItemize(PW, Len, AScriptState) → items[]
-        if Canvas.RightToLeftText: AScriptState.uBidiLevel := 1   (pdf.pas:5387)
-      ScriptLayout(count, bidiLevels[], VisualToLogical[], nil)
-        ← bidi-reorders items: sentinel (logical index count-1) may appear at
-          ANY visual position depending on paragraph direction
-        ← RTL paragraph (uBidiLevel=1): all items same level → sentinel flips to
-          visual position 0: VisualToLogical = [count-1, 0, 1, …]
-        ← LTR paragraph (uBidiLevel=0): sentinel stays at visual position count-1
+  shaped := UseUniscribe and ttf present and
+            AddUnicodeHexTextShaped(PW, Len, ttf.WinAnsiFont, NL, Canvas)
+    FontShaper.Shape(PW, Len, WinAnsiTtf.fHGDI, RightToLeftText, Runs)
+      Windows - TUniscribeShaper (mormot.lib.uniscribe):
+        ScriptItemize(PW, Len, state) → items[0..count-1], items[count] = end
+          RightToLeftText: state.uBidiLevel := 1
+        no item fComplex or fRtl → false (Latin: the simple path)
+        ScriptLayout(count, levels, VisualToLogical) → visual order
+        per item (empty ones skipped): ScriptShape(0, psc, ...)
+          0                         → fskShaped/fsoDone, zero-width non-
+                                      diacritic glyphs left out; no glyph at
+                                      all → fskSkip/fsoDone
+          E_OUTOFMEMORY             → fskPlain/fsoFailed
+          E_PENDING, NOT_IN_FONT    → again with its own DC holding the font:
+                                      0 → as above, else fskPlain/fsoFailed
+          any other error           → fskSkip/fsoFailed
+        ScriptFreeCache(psc); true
+      Linux/macOS - THarfBuzzShaper (mormot.lib.harfbuzz):
+        not RightToLeftText and not NeedsShaping(PW, Len) → false
+        hb_ft_font_create(ctx^.Face), RTL forced or guessed, hb_shape
+        → one run fskShaped/fsoDone: Glyphs, Advances, Offsets (x),
+          YOffsets (y, not drawn yet), Clusters - 1/1000 em
+    false, or runs not covering the text / arrays misaligned → not shaped
+    MoveToNextLine once if NL
+    per run: fskPlain or fsoUnknown → AddUnicodeHexTextNoUniScribe(copy + #0)
+             fskShaped              → AddShapedRun(Run, WinAnsiTtf)
+             fskSkip                → nothing
 
-      result := true                               ← set BEFORE the Append loop
-                                                   (even if no glyphs are written,
-                                                    NoUniScribe fallback is skipped)
-
-      for j := 0 to count - 1 do
-        if VisualToLogical[j] < count - 1 then     ← skip sentinel (logical index count-1)
-          Append(VisualToLogical[j])
-            ScriptShape(DC, W, L, …, OutGlyphs[]) ← OpenType GSUB shaping
-            → AddGlyphsOf(WinAnsiTtf, OutGlyphs, count, Canvas)
-              ← the font it was shaped with, not the current page font
-    {$endif}
-
-    {$ifndef OSWINDOWS}  — the same UseUniscribe switch
-    if not shaped and UseUniscribe and FontShaper <> nil   (Linux/macOS HarfBuzz)
-       and ttf present
-       and (Canvas.RightToLeftText or NeedsShaping(PW, Len)):
-      ← NeedsShaping: a char of a complex script (U+0590–109F, …); Latin
-        runs stay in the simple font, as Uniscribe leaves them
-      ← AIsRTL = RightToLeftText; false → HarfBuzz guesses the direction
-      shaped := AddUnicodeHexTextHarfBuzz(PW, Len, ttf.WinAnsiFont, NL, Canvas)
-        if WinAnsiTtf.UnicodeFont = nil: CreateAssociatedUnicodeFont
-        Canvas.SetPdfFont(WinAnsiTtf.UnicodeFont, size)   ← switches to CID font
-        FontShaper.Shape(PW, Len, WinAnsiTtf.fHGDI, RTL,
-          Runs)                                 ← libharfbuzz.so.0 / harfbuzz.dylib
-          (exactly one fskShaped run, or unshaped: Glyphs/Advances/Offsets of Runs[0])
-          hb_ft_font_create(ctx^.Face)          ← FT_Face from PFreeTypeFont
-          hb_buffer_set_direction(RTL/LTR)
-          hb_buffer_guess_segment_properties
-          hb_shape → Glyphs[] + Advances[] + Offsets[]  ← design-unit (NO_SCALE)
-          AOffsets returned: positions[i].x_offset * 1000 div upm  (P3-B, implemented)
-        for each Glyph[i]:
-          WinAnsiTtf.GetAndMarkGlyphAsUsedWithWidth(Glyph, Advance_1000)
-            Step 1: bereits registriert → exit (Breite bleibt unverändert)
-            Step 2: Reverse-CMAP → FindOrAddUsedWideChar → exit
-              ← hmtx-Breite aus TPdfTtf.Create korrekt: (int64(hmtx) * 1000) div UPM
-                (P3-C fix; vorher shr-Formel → 1.953× zu groß für UPM=1000)
-            Step 3 (POSIX): AddShapedGlyph mit hmtx-Breite (nur wenn nicht in CMAP)
-          AddHex4(Glyph)
-        wenn Offsets ≠ 0: TJ-Array-Operator (P3-B); sonst: Add('> Tj')
-    {$endif}
+AddShapedRun(Run, WinAnsiTtf):          ← the font it was shaped with
+  CreateAssociatedUnicodeFont if needed; SetPdfFont(UnicodeFont, size)
+  no glyph → done (the font switch only)
+  no Advances (Uniscribe): '<' GetAndMarkGlyphAsUsed(g)… '> Tj'   [below]
+  Advances (HarfBuzz): for each glyph
+      WinAnsiTtf.GetAndMarkGlyphAsUsedWithWidth(Glyph, Advance_1000)
+        Step 1: already registered (fUsedWide or fShapedGlyph) → exit
+        Step 2: reverse CMAP → FindOrAddUsedWideChar → exit
+          ← hmtx width from TPdfTtf.Create: (int64(hmtx) * 1000) div UPM
+        Step 3: AddShapedGlyph with the hmtx width (not in CMAP)
+    one Tj, or a TJ where an offset or the hmtx width differs (P3-B, U-2)
 
   if not shaped:
     → AddUnicodeHexTextNoUniScribe(…)           ← Latin fallback
 
-AddGlyphsOf(Ttf, OutGlyphs, count, Canvas):     ← AddGlyphs: Ttf = page font
-  if count = 0: nothing
-  SetPdfFont(Ttf.UnicodeFont, FontSize)          ← CID, even if the filter drops all
-  for each shapedGlyph not zero-width-and-no-diacritic (Uniscribe VisAttr):
+GetAndMarkGlyphAsUsed(glyph) - from AddShapedRun (no Advances) and from the
+public AddGlyphs (→ AddGlyphsOf with the page font, VisAttr filter if given):
     glyph := Ttf.WinAnsiFont.GetAndMarkGlyphAsUsed(shapedGlyph)
     │  Step 1: already in fUsedWide[] → return immediately
     │  Step 2: reverse CMAP scan in UnicodeFont.fUsedWide[]
@@ -442,9 +427,10 @@ AddGlyphsOf(Ttf, OutGlyphs, count, Canvas):     ← AddGlyphs: Ttf = page font
 ```
 TPdfDocument.SaveToStream / SaveToFile → SaveToStreamDirectEnd
   TPdfDocument.PrepareFontSubsets                 (R-12, runs first)
-    exit unless FontSubsetter <> nil (POSIX + libharfbuzz-subset)
+    exit unless FontSubsetter <> nil (hb-subset on POSIX, FontSub on Windows)
                 and not EmbeddedWholeTtf and PdfA not in [pdfa1A, pdfa1B]
-    for every WinAnsi TPdfFontTrueType that IsEmbedded and not IsSymbolic:
+    for every WinAnsi TPdfFontTrueType that IsEmbedded, and not IsSymbolic
+    unless FontSubsetter.SupportsSymbolic (FontSub: yes, hb-subset: no):
       GetFaceData → whole face (FontProvider.GetFontData, tag 0)
       group by face bytes (crc32c + compare) in fFontSubsets[]
         ← Regular + Bold of one .ttc face land in the same entry
@@ -453,6 +439,8 @@ TPdfDocument.SaveToStream / SaveToFile → SaveToStreamDirectEnd
                           fShapedGlyph (glyphs without a code point)
       fSubsetIndex := entry + 1
     per entry: FontSubsetter.Subset(Face, Request, Font.fHGDI) → Subset bytes
+               (FontSub: Unicodes via GetGlyphIndicesW, .ttc index from the
+                bytes - TtcFaceIndex; platform-backends.md, IFontSubsetter)
                Tag := 'ABCDEF+' from crc32c(Subset)   (deterministic)
                failure (CFF, error) → Subset = '' → whole face
   for every font in fFontList:
@@ -477,15 +465,11 @@ TPdfDocument.SaveToStream / SaveToFile → SaveToStreamDirectEnd
         GetFontData(DC, 0, 0, nil, 0)         → query total byte count
         GetFontData(DC, 0, 0, Buf, Size)      → read full TTF bytes
 
-        GetSubset <> nil (POSIX, prepared above):
+        GetSubset <> nil (prepared above, every platform since W2):
           ttf := Subset bytes; prefix /FontName and /BaseFont with Tag
           (the Unicode instance copies the prefixed name to its CIDFont and
            Type0 /BaseFont - WinAnsi instances are prepared first)
-
-        else EmbeddedWholeTtf = false — WINDOWS ONLY ({$ifdef USE_UNISCRIBE}):
-          input: code points from fWinAnsiUsed + fUsedWideChar
-          CreateFontPackage(input) → subset TTF (else: whole face)
-          if input empty (GSUB-only Arabic): degenerate subset → boxes in output
+        else: the whole face (a .ttc face: GetTtcIndex, until W3)
 
         GetOrCreateFontFile2(ttf) → one /FontFile2 per distinct byte string
   fFontSubsets := nil

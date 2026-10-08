@@ -48,7 +48,7 @@ All files under `src/` require justification and user approval before reading.
 | `src/core/mormot.ui.reportpreview.pas` | Preview window and printing for `TGDIPages` (LCL) | Production |
 | `src/core/mormot.ui.pdfcanvas.pas` | TCanvas bridge (`TPdfDocumentVcl`) | Production |
 | `src/core/mormot.pdf.types.pas` | PDF types; former font type names as aliases of mormot.lib.core | Production |
-| mORMot2 `src/lib/mormot.lib.uniscribe.pas` | GDI backend (Windows), beside the Uniscribe and FontSub bindings | Production |
+| mORMot2 `src/lib/mormot.lib.uniscribe.pas` | GDI backend (Windows), Uniscribe shaper and FontSub subsetter, beside their bindings | Production |
 | mORMot2 `src/lib/mormot.lib.freetype.pas` | FreeType2 backend (POSIX) | Production |
 | mORMot2 `src/lib/mormot.lib.harfbuzz.pas` | HarfBuzz shaper (RTL/complex scripts) and hb-subset subsetter (R-12) | Production |
 | `src/core/mormot.pdf.fpimage.pas` | FPImage bitmap adapter | Production |
@@ -81,7 +81,7 @@ examples/
   (each demo folder carries a short README.md; the source header of its .lpr
    (`layer1_demo`: .dpr) says the same thing in two sentences)
 tests/
-  test_runner.lpr              runs every suite below (green: 307 assertions on Windows with FPC and Delphi 13 - Delphi 7 and Delphi 2010 last measured at 306 (#21); 363 on macOS last measured (370 expected with Geeza Pro), 351 on Linux (363 with fonts-noto-cjk) — the rest are skips; the golden files add two per case with or without a baseline. Delphi 13, measured before the golden files: 259 on Windows, 171 on Linux64, 129 on Android64, layer 1 only)
+  test_runner.lpr              runs every suite below (green: 343 assertions on Windows with FPC, Delphi 13 and Delphi 7 - Delphi 2010 expected the same, last measured at 306 (#21); 363 on macOS last measured (371 expected with Geeza Pro), 352 on Linux (364 with fonts-noto-cjk) — the rest are skips; the golden files add two per case with or without a baseline. Delphi 13, measured before the golden files: 259 on Windows, 171 on Linux64, 129 on Android64, layer 1 only)
   test_defines.inc             PDF_HASVCLCANVAS: the TCanvas bridge suites (all compilers since R-20)
   build_delphi7.bat            dcc32 build of one project (R-19)
   build_delphi2010.bat         the same with Delphi 2010, warnings on (R-25, Unicode Delphi)
@@ -131,7 +131,8 @@ TPdfCanvas / TPdfDocument (mormot.ui.pdf) <- Low-level PDF
 IFontProvider / IFontEnumerator / IFontDC
     |                + optional: IFontShaper, IFontSubsetter
 GDI (Windows)  /  FreeType2 (Linux/macOS)
-                  + HarfBuzz shaping and hb-subset when the libraries load
++ Uniscribe shaping   + HarfBuzz shaping and hb-subset when the libraries load
+  and FontSub subsetting
 ```
 
 For all execution paths through this architecture: `.claude/skills/call-graph.md`
@@ -354,7 +355,7 @@ itself is in each demo's `uReport.pas`; the form only passes its options.
 
 - **mORMot Refactoring** (R-28, in progress): before any step of it, read
   `docs/REFACTORING.md` — its rules apply on top of this file
-- **Font subsetting**: default (`EmbeddedWholeTtf = False`) on all platforms, two implementations, both keeping the original glyph IDs and therefore safe for CJK, shaped Arabic and tagged output. **Linux/macOS** (R-12): `IFontSubsetter` (`mormot.lib.core`) implemented by `mormot.lib.harfbuzz` (`libharfbuzz-subset`); 97–99.5% smaller PDFs. **Windows** (R-15): `CreateFontPackage` with a glyph keep list (`TTFCFP_FLAGS_GLYPHLIST`). The whole face is embedded instead for PDF/A-1 (no `/CIDSet`), for symbol fonts on POSIX (R-15b) and when `libharfbuzz-subset` is missing. See `.claude/skills/fonts.md` §3, §9
+- **Font subsetting**: default (`EmbeddedWholeTtf = False`) on all platforms, two implementations, both keeping the original glyph IDs and therefore safe for CJK, shaped Arabic and tagged output. **Linux/macOS** (R-12): `IFontSubsetter` (`mormot.lib.core`) implemented by `mormot.lib.harfbuzz` (`libharfbuzz-subset`); 97–99.5% smaller PDFs. **Windows** (R-15): `IFontSubsetter` implemented by `mormot.lib.uniscribe` (`CreateFontPackage` with a glyph keep list, `TTFCFP_FLAGS_GLYPHLIST`; the face of a `.ttc` found from the bytes) - one path through `FontSubsetter` on every platform since R-28 Phase 1 W2. The whole face is embedded instead for PDF/A-1 (no `/CIDSet`), for symbol fonts on POSIX (R-15b) and when `libharfbuzz-subset` is missing. See `.claude/skills/fonts.md` §3, §9
 - **CFF faces are subset too** (R-15c, done): a CFF-flavoured face goes to `/FontFile3` with `/Subtype /OpenType` as a `CIDFontType0`; `glyf` goes to `/FontFile2`. `PdfFontFileKey()` picks the key. Embedding CFF in `/FontFile2` is a spec violation (ISO 32000-1 9.9) — do not reintroduce it by assuming one key fits both
 - **RTL / Arabic text**: one switch, `UseUniscribe` — HarfBuzz delivers correct ligatures on Linux/macOS, Windows uses Uniscribe; `RightToLeftText` is the direction only — see `.claude/skills/fonts.md` §10
 - **Testing RTL**: Linux fonts (Noto Naskh Arabic) resolve shaped glyphs through the CMAP, so they never exercise the shaper's own advance path. Validate RTL work against a font without Arabic presentation forms — see `.claude/skills/fonts.md` §10
@@ -372,7 +373,7 @@ itself is in each demo's `uReport.pas`; the form only passes its options.
 - **Links in tagged output**: no `Link` role, `OBJR` or `/StructParent` for annotations — `CreateHyperLink` in tagged output fails veraPDF `ua1` on four 7.18 rules (measured). `TGDIPages.DrawLink` draws link-styled text as a `Span` and drops the URL: conformant, not clickable (roadmap R-29, item 7)
 - **Delphi** (R-19, R-21, R-23, R-25, R-27 done; R-20 steps 1–6 done): layer 1,
   the TCanvas bridge and the `TGDIPages` core build on Delphi 7 and Delphi
-  2010 (Unicode Delphi), Win32; `test_runner` 306/306 on both (last measured, #21). All six console
+  2010 (Unicode Delphi), Win32; `test_runner` 343/343 on Delphi 7 (Delphi 2010 last measured at 306/306, #21). All six console
   demos and the `--export` of the two GUI demos build and give the same PDF as
   FPC (the GUI demos build their report in `uReport.pas`, without a form);
   PAC 2024 and veraPDF pass the files of both compilers. Open: the preview and

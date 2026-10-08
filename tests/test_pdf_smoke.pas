@@ -1223,6 +1223,8 @@ type
   TFixedRunShaper = class(TInterfacedObject, IFontShaper)
   public
     Outcome: TFontShapeOutcome;
+    // adds a second, plain run of no code unit - which the contract excludes
+    EmptyRun: boolean;
     function Shape(Text: PWideChar; Len: integer; Font: TFontHandle;
       RightToLeft: boolean; out Runs: TFontShapedRuns): boolean;
   end;
@@ -1240,11 +1242,18 @@ begin
   SetLength(Runs[0].Advances, 1);
   Runs[0].Advances[0] := 500;
   SetLength(Runs[0].Offsets, 1);
+  if EmptyRun then
+  begin
+    SetLength(Runs, 2);
+    Runs[1].Kind := fskPlain;
+    Runs[1].Outcome := fsoDone;
+    Runs[1].TextStart := Len;
+    Runs[1].TextLen := 0;
+  end;
   result := true;
 end;
 
 procedure TPdfSmokeTests.TestShapedRunOutcomeUnset;
-{$ifndef OSWINDOWS}
 var
   saved: IFontShaper;
   fixed: TFixedRunShaper;
@@ -1264,14 +1273,10 @@ var
     fixed.Outcome := aOutcome;
     result := TextObject(ShapedPdf(ARABIC_FONT, ARABIC_TEXT, true, false));
   end;
-{$endif OSWINDOWS}
 
 begin
   { fsoUnknown is the zero value of TFontShapeOutcome: a run whose shaper
     never set it is drawn unshaped, whatever its Kind says }
-  {$ifdef OSWINDOWS}
-  Check(true, 'SKIP: the Windows path does not go through FontShaper yet (W2)');
-  {$else}
   saved := FontShaper;
   fixed := TFixedRunShaper.Create;
   FontShaper := fixed;
@@ -1283,10 +1288,13 @@ begin
       'a run with fsoDone is drawn as shaped');
     Check(Drawn(fsoUnknown) = plain,
       'a run left at fsoUnknown is drawn as without shaping');
+    // a run of no code unit breaks the contract: the whole text goes the
+    // simple path (it used to write a #0 through a nil buffer)
+    fixed.EmptyRun := true;
+    Check(Drawn(fsoDone) = plain, 'an empty run leaves the text unshaped');
   finally
     FontShaper := saved;
   end;
-  {$endif OSWINDOWS}
 end;
 
 procedure TPdfSmokeTests.TestZeroRealIsWritten;

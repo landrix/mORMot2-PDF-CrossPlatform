@@ -139,11 +139,17 @@ the WinAnsi, CIDFont and Type0 objects get the same `ABCDEF+` tag, derived from
 
 ### Windows subset input (`CreateFontPackage`)
 
-A glyph keep list (`TTFCFP_FLAGS_GLYPHLIST`) rather than code points, so the
-glyph IDs stay where they are. The WinAnsi characters are resolved to glyph
-indices through the face itself (`AddWinAnsiGlyphs`, R-15a), which works
+The same request as on POSIX, through `FontSubsetter` since W2
+(`TFontSubSubsetter`, `mormot.lib.uniscribe`; `platform-backends.md`). A glyph
+keep list (`TTFCFP_FLAGS_GLYPHLIST`) rather than code points, so the glyph IDs
+stay where they are: the subsetter resolves `Request.Unicodes` to glyph
+indices through the font itself (`GetGlyphIndicesW`; before W2 the engine did
+it for the WinAnsi characters, `AddWinAnsiGlyphs`, R-15a), which works
 whatever cmap the lookup goes through — symbol fonts included, unlike POSIX
-(R-15b). The whole face is embedded for PDF/A-1, as on POSIX.
+(R-15b; `SupportsSymbolic`). A face of a `.ttc` is subset from the whole
+collection at the index found from the bytes (`TtcFaceIndex`; before W2 the
+family-name list `GetTtcIndex`, wrong for 14 of 30 collections). The whole
+face is embedded for PDF/A-1, as on POSIX.
 
 The 32-bit `fontsub.dll` writes `language` = `0x0008CA34` into the format 12
 (3/10) `cmap` subtable of a subset, the 64-bit one 0 (spec: 0). Source face and
@@ -287,38 +293,43 @@ AddUnicodeHexTextNoUniScribe (pdf.pas:5484):
 
 ---
 
-## 7. Text Rendering Chain — Uniscribe / HarfBuzz (RTL, Complex Scripts) (`pdf.pas:5295–5570`)
+## 7. Text Rendering Chain — Uniscribe / HarfBuzz (RTL, Complex Scripts)
+
+One path on every platform since W2 (2026-10-08); the shaper is `FontShaper`
+(`TUniscribeShaper` on Windows, `THarfBuzzShaper` on Linux/macOS):
 
 ```
-TPdfWrite.AddUnicodeHexText (pdf.pas:5549):
-  if UseUniscribe and ttf <> nil:
-    {$ifdef USE_UNISCRIBE}                       // Windows only
-    shaped := AddUnicodeHexTextUniScribe(PW, Len, ttf.WinAnsiFont, NextLine, Canvas)
-    {$endif}
-    if not shaped and FontShaper <> nil:      // Linux/macOS HarfBuzz
-      shaped := AddUnicodeHexTextHarfBuzz(...)
+TPdfWrite.AddUnicodeHexText:
+  shaped := UseUniscribe and ttf <> nil and
+            AddUnicodeHexTextShaped(PW, Len, ttf.WinAnsiFont, NextLine, Canvas)
   if not shaped:
-    AddUnicodeHexTextNoUniScribe(...)            // Latin fallback
+    AddUnicodeHexTextNoUniScribe(...)            // Latin text, or no shaper
 
-AddUnicodeHexTextUniScribe:
-  ScriptItemize(PW, Len) → items[]              // split into script runs
-  for each item in visual (bidi-reordered) order:
-    ScriptShape(DC, W, L, …, OutGlyphs, glyphsCount)  // OpenType GSUB shaping
-    → AddGlyphsOf(WinAnsiTtf, OutGlyphs, glyphsCount, Canvas, VisAttr)
+AddUnicodeHexTextShaped:
+  FontShaper.Shape(PW, Len, WinAnsiTtf.fHGDI, RightToLeftText, Runs)
+    false → not shaped                           // e.g. no complex/RTL item
+  every run checked first: inside the text, covering it, arrays aligned
+    else → not shaped
+  MoveToNextLine once if NextLine
+  per run (visual order):
+    fskPlain or fsoUnknown → AddUnicodeHexTextNoUniScribe(#0-terminated copy)
+    fskShaped              → AddShapedRun(Run, WinAnsiTtf)
+    fskSkip                → nothing
 
-AddGlyphsOf(Ttf, ...):            // AddGlyphs = the same with the current page font
-  if glyphsCount = 0: nothing
-  SetPdfFont(Ttf.UnicodeFont, FontSize)          // CID font, even if the filter drops all
-  for each shapedGlyph not zero-width-and-no-diacritic:
-    glyph := Ttf.WinAnsiFont.GetAndMarkGlyphAsUsed(shapedGlyph)  // §8
-    AddHex4(glyph)     // accumulate '<XXXX XXXX …>'
-  Add('> Tj') if any glyph was kept
+AddShapedRun(Run, WinAnsiTtf):
+  SetPdfFont(WinAnsiTtf.UnicodeFont, FontSize)   // CID font, even with no glyph
+  no glyph → done (Uniscribe: every glyph was zero-width)
+  no Advances (Uniscribe): '<' + WinAnsiTtf.GetAndMarkGlyphAsUsed(g)... + '> Tj'  // §8
+  Advances (HarfBuzz): GetAndMarkGlyphAsUsedWithWidth per glyph, then one Tj,
+    or a TJ where an offset or the hmtx width differs (§10, U-2)
 ```
 
-**Important:** a shaped item always goes to the Unicode (CID) font of the
-font it was shaped with - never to the font left active by the item before
-it, which may be the fallback font (fixed 2026-10-08). Details per outcome:
-`.claude/skills/platform-backends.md`, "The Windows paths".
+**Important:** a shaped run always goes to the Unicode (CID) font of the font
+it was shaped with - never to the font left active by the run before it,
+which may be the fallback font (fixed 2026-10-08, `TestShapedAfterFallback`).
+The zero-width filter of Uniscribe is in the shaper; the public `AddGlyphs`
+keeps its own for callers passing `TScriptVisAttr`s. Details per outcome:
+`platform-backends.md`, IFontShaper.
 
 ---
 
@@ -469,12 +480,9 @@ Font embedding decision:
   if EmbeddedWholeTtf = false (the default):
     Linux/macOS: the subset prepared by PrepareFontSubsets replaces the bytes
       (see §3 "POSIX subset input"); the name gets its ABCDEF+ tag
-    Windows - the branch sits inside {$ifdef USE_UNISCRIBE}:
-      input: Unicode code points from fWinAnsiUsed + fUsedWideChar
-      CreateFontPackage(input) → subset TTF bytes (FontSub.dll, resolved via
-        HasCreateFontPackage; falls back to the whole face if absent)
-      if fUsedWideChar.Count = 0 and fGlyphMin/fGlyphMax = 0:
-        0 code points passed → degenerate/unusable subset → boxes in output
+    Windows: the same, the subset made by FontSub (TFontSubSubsetter,
+      CreateFontPackage) in PrepareFontSubsets since W2; FontSub.dll absent
+      or NO_USE_UNISCRIBE → no FontSubsetter → the whole face
 ```
 
 ---
@@ -516,7 +524,8 @@ compile if it is ever gated again; `TestShapingSwitch` checks the output.
 
 `GetAndMarkGlyphAsUsed` Step 3 uses `GetCharABCWidthsI` (GDI API, Windows only).
 On Linux/macOS the equivalent is `GetAndMarkGlyphAsUsedWithWidth(aGlyph, aWidth)`:
-- Called from `AddUnicodeHexTextHarfBuzz` instead of `GetAndMarkGlyphAsUsed`
+- Called from `AddShapedRun` for a run with `Advances` (HarfBuzz) instead of
+  `GetAndMarkGlyphAsUsed`
 - the width written to `/W` comes from `GlyphHmtxWidth()`, i.e. the font's own
   `hmtx` advance. `aWidth` — the HarfBuzz `x_advance` — is only a fallback for
   when the tables cannot be read.
@@ -598,34 +607,23 @@ Fix (P3-C, applied): `(int64(hmtx_advance) * 1000) div UnitsPerEm` in `TPdfTtf.C
 - `IFontShaper.Shape` returns the offset per glyph in `Runs[0].Offsets`
   (`TFontShapedRun`, `mormot.lib.core`)
 - the HarfBuzz shaper fills `Offsets[i] = From26Dot6(positions[i].x_offset)`
-- `AddUnicodeHexTextHarfBuzz` writes a `TJ` when an offset is not 0
+- `AddShapedRun` writes a `TJ` when an offset is not 0
 
 With Noto Naskh Arabic every `x_offset` is 0, so `hasOffsets` stays false and
 the `Tj` path is taken; fonts with GPOS positioning take the `TJ` path.
 
 ---
 
-## 10b. RTL Paragraph — `VisualToLogical` Loop in `AddUnicodeHexTextUniScribe`
+## 10b. RTL Paragraph — `VisualToLogical` Loop in `TUniscribeShaper.Shape`
 
-`RightToLeftText := true` sets `AScriptState.uBidiLevel := 1` before `ScriptItemize`.
+`RightToLeftText := true` sets `uBidiLevel := 1` before `ScriptItemize`.
 
-`ScriptLayout` with uniform RTL level places the sentinel (logical index `count-1`) at
-visual position 0: `VisualToLogical = [count-1, 0, 1, …]`.
-
-Current loop (`pdf.pas:~5420`):
-```pascal
-for j := 0 to count - 1 do
-  if VisualToLogical[j] < count - 1 then   // sentinel always has logical index count-1
-    Append(VisualToLogical[j]);
-```
-
-The guard skips the sentinel by logical index regardless of its visual position.
-
-| Scenario | VisualToLogical | Loop result |
-|---|---|---|
-| LTR, uBidiLevel=0, count=2 | [0, 1] | Append(0); skip sentinel |
-| RTL, uBidiLevel=1, count=2 | [1, 0] | skip sentinel; Append(0) |
-| Mixed, count=3 | [1, 0, 2] | Append(1); Append(0); skip sentinel |
+Since W2 the shaper itemizes exactly the text (`Len` code units) and takes
+every item `ScriptLayout` orders: `for j := 0 to count - 1 do i :=
+VisualToLogical[j]`. Before W2 the engine itemized `Len + 1` units (the `#0`
+after the text) and skipped item `count - 1` as "the sentinel", which the RTL
+level placed at visual position 0 - but that item may hold real text before
+the `#0` (`platform-backends.md`, "The Windows paths").
 
 ---
 
@@ -766,10 +764,10 @@ Arabic, but rendering is correct. The fix needs the source text per glyph
 
 `GetAndMarkGlyphAsUsed` Step 3 is only reached when:
 - `{$ifdef OSWINDOWS}` — Windows only
-- Called from `AddGlyphs` — only reached when Uniscribe is active
-- `AddGlyphs` is only called from `AddUnicodeHexTextUniScribe`
-- Which is gated by: `complex=true or R2L=true` (ScriptItemize flag check)
+- Called from `AddShapedRun` for a run without `Advances` (Uniscribe), or from
+  the public `AddGlyphs`
+- Uniscribe gives runs only when an item is complex or right-to-left
 
-Latin text: `complex=false`, `R2L=false` → never reaches `AddGlyphs` → Step 3 unreachable.
-CJK: `UseUniscribe=false` → `AddUnicodeHexTextUniScribe` not called → Step 3 unreachable.
+Latin text: the shaper returns false → the simple path → Step 3 unreachable.
+CJK: `UseUniscribe=false` → no shaper call → Step 3 unreachable.
 Existing demos and tests: unaffected.
