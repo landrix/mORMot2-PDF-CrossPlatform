@@ -148,8 +148,14 @@ it for the WinAnsi characters, `AddWinAnsiGlyphs`, R-15a), which works
 whatever cmap the lookup goes through — symbol fonts included, unlike POSIX
 (R-15b; `SupportsSymbolic`). A face of a `.ttc` is subset from the whole
 collection at the index found from the bytes (`TtcFaceIndex`; before W2 the
-family-name list `GetTtcIndex`, wrong for 14 of 30 collections). The whole
-face is embedded for PDF/A-1, as on POSIX.
+family-name list `GetTtcIndex`, wrong for 14 of 30 collections).
+`TestSubsetTtcFace` checks four such faces and two of index 0 on the saved
+PDF. The subset has no `name` table left (`ReduceTtf`), and the faces of
+these collections share `glyf` and `hmtx`: the test tells them apart by `cmap`
+(`MS UI Gothic` maps 'H' to glyph 18634, `MS PGothic` to 16116) and `hhea`
+(the UI faces of YaHei, JhengHei, Yu Gothic), read through `FontProvider`
+from the face the platform selects. The whole face is embedded for PDF/A-1,
+as on POSIX.
 
 The 32-bit `fontsub.dll` writes `language` = `0x0008CA34` into the format 12
 (3/10) `cmap` subtable of a subset, the 64-bit one 0 (spec: 0). Source face and

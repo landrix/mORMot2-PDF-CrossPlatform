@@ -79,6 +79,7 @@ type
     procedure TestPdfA1StillWholeFace;
     procedure TestPdfA3Subsets;
     procedure TestShapedGlyphKeys;
+    procedure TestSubsetTtcFace;
   end;
 
 const
@@ -853,6 +854,123 @@ begin
   Check(FirstSubsetTag(pdfa3) <> '', 'PDF/A-3 output is subset');
   Check(length(FirstFontFile(pdfa3)) * 10 < length(FirstFontFile(whole)),
     'and much smaller');
+end;
+
+{ one table of the face the platform selects for a family, regular weight,
+  wrapped in an sfnt of its own so that the readers above take it }
+function PlatformFontTable(const aFont: RawUtf8; const Tag: RawUtf8): RawByteString;
+var
+  dc: TFontDC;
+  req: TFontRequest;
+  font, prev: TFontHandle;
+  gdiTag, size: cardinal;
+  table: RawByteString;
+begin
+  result := '';
+  FillChar(req, SizeOf(req), 0);
+  req.FaceName := Utf8ToSynUnicode(aFont);
+  req.Height := -1000;
+  req.Weight := 400;
+  req.CharSet := PDF_DEFAULT_CHARSET;
+  // the tag as GDI reads it: the four characters little-endian
+  gdiTag := ord(Tag[1]) or (ord(Tag[2]) shl 8) or
+            (ord(Tag[3]) shl 16) or (cardinal(ord(Tag[4])) shl 24);
+  dc := FontDC.CreateDC;
+  try
+    font := FontProvider.CreateFont(req);
+    if font = nil then
+      exit;
+    prev := FontProvider.SelectFont(dc, font);
+    size := FontProvider.GetFontData(dc, gdiTag, 0, nil, 0);
+    if (size <> FontProvider.FontDataError) and
+       (size > 0) then
+    begin
+      SetLength(table, size);
+      if FontProvider.GetFontData(dc, gdiTag, 0, pointer(table), size) = size then
+        // sfnt header, one table record at offset 28 (checksum left 0)
+        result := #0#1#0#0#0#1#0#16#0#0#0#0 + Tag + #0#0#0#0#0#0#0#28 +
+          AnsiChar(size shr 24) + AnsiChar(size shr 16) +
+          AnsiChar(size shr 8) + AnsiChar(size) + table;
+    end;
+    FontProvider.SelectFont(dc, prev);
+    FontProvider.DeleteFont(font);
+  finally
+    FontDC.DeleteDC(dc);
+  end;
+end;
+
+procedure TPdfSubsetEngineTests.TestSubsetTtcFace;
+const
+  // faces of a .ttc collection: the first four are not face 0 of their
+  // file, and GetTtcIndex's name list knew none of them right
+  TTC_FONTS: array[0..5] of RawUtf8 = (
+    'MS UI Gothic', 'Yu Gothic UI', 'Microsoft YaHei UI',
+    'Microsoft JhengHei UI', 'MS Gothic', 'Microsoft YaHei');
+  SAMPLE = 'Hello';
+var
+  dc: TFontDC;
+  fonts: TRawUtf8DynArray;
+  f, i, g, found: integer;
+  pdf, face, cmap, hhea: RawByteString;
+  o, l, ho, hl: cardinal;
+  same: boolean;
+begin
+  { FontSub subsets a face of a .ttc from the whole collection, at the index
+    TtcFaceIndex finds from the bytes: before W2 the index came from a list
+    of family names, and MS UI Gothic was subset from MS PGothic
+    - the subset has no name table left (ReduceTtf): the faces of a
+    collection share their glyphs, and differ in cmap (MS UI Gothic maps
+    'H' to another glyph than MS PGothic) or hhea (the UI faces) }
+  if not PdfCanSubsetRetainingGids then
+  begin
+    Check(true, 'SKIP: no subsetter keeping glyph IDs');
+    exit;
+  end;
+  dc := FontDC.CreateDC;
+  try
+    fonts := nil;
+    FontEnumerator.EnumTrueTypeFonts(dc, fonts);
+  finally
+    FontDC.DeleteDC(dc);
+  end;
+  found := 0;
+  for f := 0 to high(TTC_FONTS) do
+  begin
+    if FindRawUtf8(fonts, TTC_FONTS[f]) < 0 then
+      continue;
+    cmap := PlatformFontTable(TTC_FONTS[f], 'cmap');
+    hhea := PlatformFontTable(TTC_FONTS[f], 'hhea');
+    inc(found);
+    if (cmap = '') or
+       (hhea = '') then
+    begin
+      Check(false, TTC_FONTS[f] + ': cmap and hhea of the installed face');
+      continue;
+    end;
+    pdf := BuildPdf(Utf8ToString(TTC_FONTS[f]), SAMPLE, false, false, false);
+    face := FirstFontFile(pdf);
+    Check(FirstSubsetTag(pdf) <> '', TTC_FONTS[f] + ' is subset');
+    Check(copy(face, 1, 4) = #0#1#0#0,
+      TTC_FONTS[f] + ': one face, not a collection');
+    same := true;
+    for i := 1 to length(SAMPLE) do
+    begin
+      // 0 is also what an unreadable cmap gives: never a match
+      g := SfntCmapLookup(cmap, ord(SAMPLE[i]));
+      same := same and
+              (g > 0) and
+              (SfntCmapLookup(face, ord(SAMPLE[i])) = g);
+    end;
+    Check(same, TTC_FONTS[f] + ': the subset maps the text as the face does');
+    // hhea up to numberOfHMetrics, which a subset may lower
+    Check(SfntFindTable(face, 'hhea', o, l) and
+          SfntFindTable(hhea, 'hhea', ho, hl) and
+          (l >= 34) and (hl >= 34) and
+          (copy(face, o + 1, 34) = copy(hhea, ho + 1, 34)),
+      TTC_FONTS[f] + ': the subset has the hhea of the face');
+  end;
+  if found = 0 then
+    Check(true, 'SKIP: none of the .ttc faces installed');
 end;
 
 type
