@@ -52,6 +52,7 @@ type
     procedure TestSubsetAcceptsCff;
     procedure TestSubsetRejectsGarbage;
     procedure TestTtcFaceIndex;
+    procedure TestTtcExtractBounds;
   end;
 
   /// font subsetting through TPdfDocument, on the saved PDF
@@ -84,6 +85,8 @@ type
     procedure TestSubsetTtcFace;
     procedure TestWholeTtcFace;
     procedure TestSubsetSymbolFont;
+    procedure TestFaceNotFoundRaises;
+    procedure TestTaggedAlwaysEmbeds;
     procedure TestGlyphAdvanceByIndex;
     {$ifdef OSWINDOWS}
     procedure TestLogFontWidth;
@@ -187,27 +190,39 @@ end;
 
 function SfntCmapLookup(const Face: RawByteString; CodePoint: cardinal): integer;
 var
-  cofs, clen, n, i, sub, segX2, s, e, delta, range, p: cardinal;
+  cofs, clen, n, i, sub, uni, sym, segX2, s, e, delta, range, p: cardinal;
 begin
   result := 0;
   if not SfntFindTable(Face, 'cmap', cofs, clen) then
     exit;
   n := BE16(Face, cofs + 2);
   sub := 0;
+  uni := 0;
+  sym := 0;
   for i := 0 to n - 1 do
-    if BE16(Face, cofs + 4 + i * 8) = 3 then
-      case BE16(Face, cofs + 6 + i * 8) of
-        1:
-          begin
-            sub := cofs + BE32(Face, cofs + 8 + i * 8);
-            break;
-          end;
-        0:
-          // a symbol font: its codes are U+F0xx
-          sub := cofs + BE32(Face, cofs + 8 + i * 8);
-      end;
-  if (sub = 0) or
-     (BE16(Face, sub) <> 4) then
+  begin
+    p := cofs + BE32(Face, cofs + 8 + i * 8);
+    if BE16(Face, p) <> 4 then
+      continue;
+    case BE16(Face, cofs + 4 + i * 8) of
+      0:
+        // the Unicode platform, the only one Helvetica.ttc of macOS has
+        uni := p;
+      3:
+        case BE16(Face, cofs + 6 + i * 8) of
+          1:
+            sub := p;
+          0:
+            // a symbol font: its codes are U+F0xx
+            sym := p;
+        end;
+    end;
+  end;
+  if sub = 0 then
+    sub := uni;
+  if sub = 0 then
+    sub := sym;
+  if sub = 0 then
     exit;
   segX2 := BE16(Face, sub + 6);
   for i := 0 to segX2 shr 1 - 1 do
@@ -251,11 +266,33 @@ function FirstFontFile(const Pdf: RawByteString): RawByteString;
 var
   p, q, len: PtrInt;
 begin
+  { the glyf flavour has /Length1, a CFF face (/FontFile3) /Subtype
+    /OpenType instead: then its /Length, read from the stream dictionary }
   result := '';
   p := Pos(RawByteString('/Length1 '), Pdf);
-  if p = 0 then
-    exit;
-  inc(p, 9);
+  if p > 0 then
+    inc(p, 9)
+  else
+  begin
+    p := Pos(RawByteString('/OpenType'), Pdf);
+    if p = 0 then
+      exit;
+    q := PosEx(RawByteString(#10'stream'#10), Pdf, p);
+    while (p > 1) and
+          not ((Pdf[p] = '<') and (Pdf[p - 1] = '<')) do
+      dec(p);
+    repeat
+      p := PosEx(RawByteString('/Length'), Pdf, p + 1);
+    until (p = 0) or
+          (p > q) or
+          (Pdf[p + 7] in [' ', '0'..'9']);
+    if (p = 0) or
+       (p > q) then
+      exit;
+    inc(p, 7);
+    while Pdf[p] = ' ' do
+      inc(p);
+  end;
   len := 0;
   while Pdf[p] in ['0'..'9'] do
   begin
@@ -613,9 +650,9 @@ var
   a, b, c: RawByteString;
 begin
   { FontSub and GetFaceFile find the face of a .ttc by its table directory
-    in the collection header (mormot.lib.core): the family-name list it replaces (GetTtcIndex) is
-    wrong for 14 of 30 collections of Windows 11 (MS UI Gothic is face 1,
-    not 2) }
+    in the collection header (mormot.lib.core): the family-name list it
+    replaces (GetTtcIndex) is wrong for 14 of 30 collections of Windows 11
+    (MS UI Gothic is face 1, not 2) }
   a := OneTableDir(100);
   b := OneTableDir(200);
   c := OneTableDir(300);
@@ -631,6 +668,44 @@ begin
   // a face count whose offset table would overflow 32 bits
   CheckEqual(TtcFaceIndex('ttcf' + BE32Bytes($00010000) + BE32Bytes($40000001) +
     BE32Bytes(16) + a, a), -1, 'oversized face count');
+end;
+
+// one table directory entry
+function TableEntry(const Tag: RawByteString; Offset, Len: cardinal): RawByteString;
+begin
+  result := Tag + BE32Bytes(0) + BE32Bytes(Offset) + BE32Bytes(Len);
+end;
+
+// the header of a face of NumTables tables
+function FaceHeader(NumTables: cardinal): RawByteString;
+begin
+  result := BE32Bytes($00010000) + BE16Bytes(NumTables) + BE16Bytes(16) +
+            BE16Bytes(0) + BE16Bytes(0);
+end;
+
+procedure TPdfSubsetTests.TestTtcExtractBounds;
+var
+  sfnt: RawByteString;
+begin
+  { malformed collections: ExtractSfntFromTtc checks each bound as
+    "value > size - offset", so no sum wraps where PtrUInt has 32 bits -
+    the first four cases read outside the data on Win32 otherwise }
+  Check(ExtractSfntFromTtc('ttcf' + BE32Bytes($00010000) +
+    BE32Bytes($40000001) + BE32Bytes(16) + OneTableDir(16), 0) = '',
+    'oversized face count');
+  Check(ExtractSfntFromTtc('ttcf' + BE32Bytes($00010000) + BE32Bytes(1) +
+    BE32Bytes($FFFFFFF8) + OneTableDir(16), 0) = '', 'face offset near 4 GB');
+  Check(ExtractSfntFromTtc(Collection([FaceHeader(1) +
+    TableEntry('glyf', $FFFFFFF0, $20)]), 0) = '', 'table offset near 4 GB');
+  Check(ExtractSfntFromTtc(Collection([FaceHeader(1) +
+    TableEntry('glyf', 16, $FFFFFFF8)]), 0) = '', 'table length near 4 GB');
+  // a 'head' too short for checkSumAdjustment (offset 8) is copied unchanged,
+  // never patched in the table after it: face at 16, data at 16 + 44
+  sfnt := ExtractSfntFromTtc(Collection([FaceHeader(2) +
+    TableEntry('head', 60, 4) + TableEntry('glyf', 64, 8)]) +
+    'HEADglyfdata', 0);
+  CheckEqual(length(sfnt), 44 + 4 + 8, 'short head: extracted');
+  Check(copy(sfnt, 45, 12) = 'HEADglyfdata', 'short head: tables unchanged');
 end;
 
 
@@ -885,10 +960,13 @@ procedure TPdfSubsetEngineTests.CheckTtcFaces(aWholeTtf: boolean;
   aPdfA: TPdfALevel; aSubset: boolean; const aWhat: string);
 const
   // faces of a .ttc collection: the first four are not face 0 of their file
-  // on Windows, and the family-name list used before knew none of them right
-  TTC_FONTS: array[0..5] of RawUtf8 = (
+  // on Windows, and the family-name list used before knew none of them
+  // right; the last three are face 0 of their file on Linux and macOS, the
+  // one face FreeType reaches there - two of them CFF
+  TTC_FONTS: array[0..8] of RawUtf8 = (
     'MS UI Gothic', 'Yu Gothic UI', 'Microsoft YaHei UI',
-    'Microsoft JhengHei UI', 'MS Gothic', 'Microsoft YaHei');
+    'Microsoft JhengHei UI', 'MS Gothic', 'Microsoft YaHei',
+    'Noto Sans CJK JP', 'Hiragino Sans GB', 'Helvetica');
   SAMPLE = 'Hello';
 var
   fonts: TRawUtf8DynArray;
@@ -919,7 +997,8 @@ begin
       aPdfA);
     face := FirstFontFile(pdf);
     Check((FirstSubsetTag(pdf) <> '') = aSubset, name + ': subset or whole');
-    Check(copy(face, 1, 4) = #0#1#0#0, name + ': one face, not a collection');
+    Check((copy(face, 1, 4) = #0#1#0#0) or
+          (copy(face, 1, 4) = 'OTTO'), name + ': one face, not a collection');
     same := true;
     for i := 1 to length(SAMPLE) do
     begin
@@ -1280,6 +1359,194 @@ begin
     '/W lists the glyph 4096 further');
   Check(Pos(RawByteString('<' + IntToHex(g + 4096, 4) + '> <'), s) > 0,
     '/ToUnicode lists the glyph 4096 further');
+end;
+
+type
+  /// a face of the platform provider whose face file is never found
+  TFaceFileFailFace = class(TInterfacedObject, IFontFace)
+  protected
+    fInner: IFontFace;
+  public
+    constructor Create(const aInner: IFontFace);
+    function Handle: TFontHandle;
+    function GetTextMetrics(out Metrics: TFontMetrics): boolean;
+    function GetOutlineMetrics(out Metrics: TFontOutlineMetrics): boolean;
+    function GetCharAbcWidths(FirstChar, LastChar: cardinal;
+      out Widths: TFontCharAbcArray): boolean;
+    function GetGlyphAdvance(Glyph: cardinal; out Advance: integer): boolean;
+    function GetFontData(TableTag, Offset: cardinal; Buffer: pointer;
+      BufferSize: cardinal): cardinal;
+    function GetFaceFile(out Face: RawByteString): boolean;
+  end;
+
+  /// the platform provider, but no face is ever found for embedding
+  TFaceFileFailProvider = class(TInterfacedObject, IFontProvider)
+  protected
+    fInner: IFontProvider;
+  public
+    constructor Create(const aInner: IFontProvider);
+    function CreateFace(const Request: TFontRequest): IFontFace;
+  end;
+
+constructor TFaceFileFailFace.Create(const aInner: IFontFace);
+begin
+  inherited Create;
+  fInner := aInner;
+end;
+
+function TFaceFileFailFace.Handle: TFontHandle;
+begin
+  result := fInner.Handle;
+end;
+
+function TFaceFileFailFace.GetTextMetrics(out Metrics: TFontMetrics): boolean;
+begin
+  result := fInner.GetTextMetrics(Metrics);
+end;
+
+function TFaceFileFailFace.GetOutlineMetrics(
+  out Metrics: TFontOutlineMetrics): boolean;
+begin
+  result := fInner.GetOutlineMetrics(Metrics);
+end;
+
+function TFaceFileFailFace.GetCharAbcWidths(FirstChar, LastChar: cardinal;
+  out Widths: TFontCharAbcArray): boolean;
+begin
+  result := fInner.GetCharAbcWidths(FirstChar, LastChar, Widths);
+end;
+
+function TFaceFileFailFace.GetGlyphAdvance(Glyph: cardinal;
+  out Advance: integer): boolean;
+begin
+  result := fInner.GetGlyphAdvance(Glyph, Advance);
+end;
+
+function TFaceFileFailFace.GetFontData(TableTag, Offset: cardinal;
+  Buffer: pointer; BufferSize: cardinal): cardinal;
+begin
+  result := fInner.GetFontData(TableTag, Offset, Buffer, BufferSize);
+end;
+
+function TFaceFileFailFace.GetFaceFile(out Face: RawByteString): boolean;
+begin
+  Face := '';
+  result := false;
+end;
+
+constructor TFaceFileFailProvider.Create(const aInner: IFontProvider);
+begin
+  inherited Create;
+  fInner := aInner;
+end;
+
+function TFaceFileFailProvider.CreateFace(const Request: TFontRequest): IFontFace;
+begin
+  result := fInner.CreateFace(Request);
+  if result <> nil then
+    result := TFaceFileFailFace.Create(result);
+end;
+
+procedure TPdfSubsetEngineTests.TestFaceNotFoundRaises;
+var
+  saved: IFontProvider;
+  PDF: TPdfDocument;
+  Stream: TMemoryStream;
+  raised: boolean;
+begin
+  { a face asked to be embedded whole that cannot be found fails the save:
+    it was written without a font file before, which PDF/A and PDF/UA
+    forbid - and without a word }
+  saved := FontProvider;
+  FontProvider := TFaceFileFailProvider.Create(saved);
+  try
+    raised := false;
+    try
+      BuildPdf(SansFont, 'Hello', true, false, false);
+    except
+      on EPdfInvalidOperation do
+        raised := true;
+    end;
+    Check(raised, 'embedding asked for, face not found: the save fails');
+    // a subset needs no face file: only a font without one fails
+    if PdfCanSubsetRetainingGids then
+    begin
+      raised := false;
+      try
+        Check(FirstSubsetTag(BuildPdf(SansFont, 'Hello', false, false,
+          false)) <> '', 'subset embedded');
+      except
+        on EPdfInvalidOperation do
+          raised := true;
+      end;
+      Check(not raised, 'a subset needs no face file');
+    end;
+    // a font not embedded needs no face
+    raised := false;
+    Stream := TMemoryStream.Create;
+    try
+      PDF := TPdfDocument.Create(false, 0, pdfaNone);
+      try
+        PDF.EmbeddedTTF := false;
+        PDF.AddPage;
+        PDF.Canvas.SetFont(StringToUtf8(SansFont), 12, []);
+        DrawUtf8Text(PDF, 15, 800, 'Hello');
+        try
+          PDF.SaveToStream(Stream);
+        except
+          on EPdfInvalidOperation do
+            raised := true;
+        end;
+      finally
+        PDF.Free;
+      end;
+    finally
+      Stream.Free;
+    end;
+    Check(not raised, 'no embedding, no face needed');
+  finally
+    FontProvider := saved;
+  end;
+end;
+
+procedure TPdfSubsetEngineTests.TestTaggedAlwaysEmbeds;
+
+  function TaggedPdf(Ignore: boolean): RawByteString;
+  var
+    PDF: TPdfDocument;
+    Stream: TMemoryStream;
+  begin
+    Stream := TMemoryStream.Create;
+    try
+      PDF := TPdfDocument.Create(false, 0, pdfaNone);
+      try
+        PDF.CompressionMethod := cmNone;
+        PDF.Tagged := true;
+        if Ignore then
+          PDF.EmbeddedTtfIgnore.Add(StringToUtf8(SansFont))
+        else
+          PDF.EmbeddedTTF := false;
+        PDF.AddPage;
+        PDF.Canvas.BeginStructContent(psrP);
+        PDF.Canvas.SetFont(StringToUtf8(SansFont), 12, []);
+        DrawUtf8Text(PDF, 15, 800, 'Hello');
+        PDF.Canvas.EndStructContent;
+        PDF.SaveToStream(Stream);
+      finally
+        PDF.Free;
+      end;
+      SetLength(result, Stream.Size);
+      Stream.Position := 0;
+      Stream.Read(pointer(result)^, Stream.Size);
+    finally
+      Stream.Free;
+    end;
+  end;
+
+begin
+  // PDF/UA needs the font file, whatever is set after Tagged
+  Check(FirstFontFile(TaggedPdf(false)) <> '', 'EmbeddedTTF off after Tagged');
+  Check(FirstFontFile(TaggedPdf(true)) <> '', 'EmbeddedTtfIgnore after Tagged');
 end;
 
 end.

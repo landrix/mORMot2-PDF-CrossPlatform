@@ -6991,7 +6991,10 @@ end;
 
 function TPdfFontTrueType.IsEmbedded: boolean;
 begin
+  // PDF/UA (Tagged) needs every font embedded, as PDF/A does: EmbeddedTtf
+  // or EmbeddedTtfIgnore set after Tagged must not undo it
   result := (fDoc.PdfA <> pdfaNone) or
+            fDoc.fTagged or
             (fDoc.EmbeddedTtf and
              ((fDoc.fEmbeddedTtfIgnore = nil) or
               (fDoc.fEmbeddedTtfIgnore.IndexOf(
@@ -7251,23 +7254,26 @@ begin
             TPdfName(fFontDescriptor.ValueByName('FontName')).Value;
         end
         // the whole face - extracted from its .ttc: a collection is no font
-        // program; one the face is not found in is not embedded
+        // program
         else if not fFace.GetFaceFile(ttf) then
           ttf := '';
-        if ttf <> '' then
-        begin
-          // subsetting (if any) is done: the bytes are final, so identical
-          // data can now share a single stream object
-          // /FontDescriptor is common to WinAnsi and Unicode fonts
-          // the key follows the outline flavour: CFF faces belong in
-          // /FontFile3, and poppler warns about a mismatch otherwise
-          fFontDescriptor.AddItem(
-            PdfFontFileKey(ttf), fDoc.GetOrCreateFontFile2(ttf));
-          if PdfIsCffFace(ttf) then
-            // 9.6.2.1: a simple font with CFF outlines is a /Type1, not a
-            // /TrueType - the constructor could not know the flavour yet
-            TPdfName(Data.ValueByName('Subtype')).Value := 'Type1';
-        end;
+        // embedding was asked for (PDF/A and PDF/UA need it): a face that
+        // cannot be found fails the save, never leaves the font unembedded
+        if ttf = '' then
+          raise EPdfInvalidOperation.CreateUtf8(
+            'TPdfFontTrueType: the face of % cannot be embedded',
+            [fDoc.fTrueTypeFonts[fTrueTypeFontsIndex - 1]]);
+        // subsetting (if any) is done: the bytes are final, so identical
+        // data can now share a single stream object
+        // /FontDescriptor is common to WinAnsi and Unicode fonts
+        // the key follows the outline flavour: CFF faces belong in
+        // /FontFile3, and poppler warns about a mismatch otherwise
+        fFontDescriptor.AddItem(
+          PdfFontFileKey(ttf), fDoc.GetOrCreateFontFile2(ttf));
+        if PdfIsCffFace(ttf) then
+          // 9.6.2.1: a simple font with CFF outlines is a /Type1, not a
+          // /TrueType - the constructor could not know the flavour yet
+          TPdfName(Data.ValueByName('Subtype')).Value := 'Type1';
       end;
       // PDF/A and PDF/UA (i.e. Tagged) require a ToUnicode CMap for all fonts,
       // including WinAnsi - without it pdffonts reports uni=no and text
