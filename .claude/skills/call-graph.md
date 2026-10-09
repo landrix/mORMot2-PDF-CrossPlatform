@@ -17,7 +17,7 @@ This document traces all major call paths through the framework, from applicatio
 ├─────────────────────────────┴───────────────────────────────────┤
 │              TPdfCanvas  /  TPdfDocument                        │
 ├─────────────────────────────────────────────────────────────────┤
-│  IFontProvider     │  IFontEnumerator  │  IFontDC               │
+│  IFontProvider → IFontFace          │  IFontEnumerator           │
 ├────────────────────┴───────────────────┴────────────────────────┤
 │  IFontShaper  (HarfBuzz — Unix/macOS; nil on Windows)           │
 ├────────────────────┬───────────────────┬────────────────────────┤
@@ -46,13 +46,11 @@ Application
   │
   TPdfCanvas.SetFont(Name, Size, Style)
   │  TPdfDocument.GetRegisteredTrueTypeFont(LogFont)
-  │  │  if not cached: FontDC.CreateDC
-  │  │                 FontProvider.CreateFont(TFontRequest)
-  │  │                 FontProvider.SelectFont(DC, Handle)
-  │  │                 FontProvider.GetTextMetrics(DC)
-  │  │                 FontProvider.GetOutlineMetrics(DC)
-  │  │                 FontProvider.GetCharAbcWidths(DC, 0, 255)
-  │  │                 FontProvider.GetFontData(DC, 'head'/…)  ← TTF bytes
+  │  │  if not cached: face := FontProvider.CreateFace(TFontRequest)
+  │  │                 face.GetTextMetrics
+  │  │                 face.GetOutlineMetrics
+  │  │                 face.GetCharAbcWidths(32, 255)
+  │  │                 face.GetFontData('head'/…)  ← TTF bytes
   │  └─ returns TPdfFontTrueType (or TPdfFontStandard for Type1)
   │
   TPdfCanvas.TextOut(X, Y, Text)
@@ -316,15 +314,14 @@ TPdfDocument.GetRegisteredTrueTypeFont(LogFont)
 │
 │  TPdfDocument.GetTrueTypeFontIndex('Calibri')
 │  │  if not in fTrueTypeFonts list:
-│  │    DC := FontDC.CreateDC
-│  │    FontEnumerator.EnumTrueTypeFonts(DC, List)   ← system font scan
+│  │    FontEnumerator.EnumTrueTypeFonts(List)   ← system font scan
 │  │    searches List for 'Calibri'; stores in fTrueTypeFonts
 │  │
 │  creates TPdfFontTrueType (WinAnsi instance, fUnicode=false)   (pdf.pas:6252)
-│  │  FontProvider.CreateFont(lf: TFontRequest) ← CharSet from above
-│  │    (every platform since W3; GDI: CreateFontIndirectW in the provider)
-│  │  GetDCWithFont → select the font into fDoc.fDC
-│  │  GetTextMetrics / GetOutlineMetrics / GetCharAbcWidths
+│  │  fFace := FontProvider.CreateFace(lf: TFontRequest) ← CharSet from above
+│  │    (every platform since W3, no device context since Phase 1b; the
+│  │     TLogFontW constructor: GdiCreateFace(LOGFONT); none -> TPdfNoFace)
+│  │  fFace.GetTextMetrics / GetOutlineMetrics / GetCharAbcWidths
 │  stores in fRegisteredFonts; fFontList
 │
 │  Note: UnicodeFont (fUnicode=true) is created lazily by CreateAssociatedUnicodeFont
@@ -366,7 +363,7 @@ AddUnicodeHexText (pdf.pas) — UseUniscribe gates the one shaper (since W2):
 
   shaped := UseUniscribe and ttf present and
             AddUnicodeHexTextShaped(PW, Len, ttf.WinAnsiFont, NL, Canvas)
-    FontShaper.Shape(PW, Len, WinAnsiTtf.fHGDI, RightToLeftText, Runs)
+    FontShaper.Shape(PW, Len, WinAnsiTtf.fFace.Handle, RightToLeftText, Runs)
       Windows - TUniscribeShaper (mormot.lib.uniscribe):
         ScriptItemize(PW, Len, state) → items[0..count-1], items[count] = end
           RightToLeftText: state.uBidiLevel := 1
@@ -441,7 +438,7 @@ TPdfDocument.SaveToStream / SaveToFile → SaveToStreamDirectEnd
                           fUsedWideChar; Glyphs += fUsedWide[].Glyph +
                           fShapedGlyph (glyphs without a code point)
       fSubsetIndex := entry + 1
-    per entry: FontSubsetter.Subset(Face, Request, Font.fHGDI) → Subset bytes
+    per entry: FontSubsetter.Subset(Face, Request, Font.fFace.Handle) → Subset bytes
                (FontSub: Unicodes via GetGlyphIndicesW, .ttc index from the
                 bytes - TtcFaceIndex; platform-backends.md, IFontSubsetter)
                Tag := 'ABCDEF+' from crc32c(Subset)   (deterministic)
@@ -469,7 +466,7 @@ TPdfDocument.SaveToStream / SaveToFile → SaveToStreamDirectEnd
           ttf := Subset bytes; prefix /FontName and /BaseFont with Tag
           (the Unicode instance copies the prefixed name to its CIDFont and
            Type0 /BaseFont - WinAnsi instances are prepared first)
-        else: FontProvider.GetFaceFile(GetDCWithFont(self), ttf) - the
+        else: fFace.GetFaceFile(ttf) - the
           whole face, a .ttc face extracted; false → nothing embedded
 
         GetOrCreateFontFile2(ttf) → one /FontFile2 per distinct byte string
@@ -516,7 +513,7 @@ AddUnicodeHexTextNoUniScribe (U+4E2D):
 
 Table tags from `GetTtfData` are little-endian DWORDs (`PCardinal(name)^`).
 FreeType's `FT_Load_Sfnt_Table` expects big-endian (`FT_MAKE_TAG` convention).
-`TFreeTypeFontProvider.GetFontData` applies `bswap32(TableTag)` before the call.
+`TFreeTypeFontFace.GetFontData` applies `bswap32(TableTag)` before the call.
 `bswap32(0)` = 0 — the tag=0 "return whole font file" convention is preserved.
 
 ```
@@ -524,18 +521,18 @@ GetTtfData (pdf.pas:3604) — Linux/macOS path
 │
 │  tag := PCardinal(aTableName)^    ← LE: 'cmap' → $70616D63
 │
-│  FontProvider.GetFontData(aDC, tag, 0, nil, 0)
-│    → TFreeTypeFontProvider.GetFontData (mormot.lib.freetype)
+│  aFace.GetFontData(tag, 0, nil, 0)
+│    → TFreeTypeFontFace.GetFontData (mormot.lib.freetype)
 │       bswap32($70616D63) = $636D6170   ← FT_MAKE_TAG('c','m','a','p')
 │       FT_Load_Sfnt_Table(face, $636D6170, ...)  → returns CMAP bytes
 │    → returns byte count
 │
 │  SetLength(Ref, L shr 1 + 1)
-│  GetFontData(aDC, tag, 0, Ref, L)  → CMAP data read
+│  aFace.GetFontData(tag, 0, Ref, L) → CMAP data read
 │  SwapBuffer(result, L shr 1)       → byte-swap big-endian TTF → LE
 │  → returns pointer to CMAP data
 │
-P := GetTtfData(dc, 'cmap', fcmap)     ← valid CMAP
+P := GetTtfData(aUnicodeTtf.fFace, 'cmap', fcmap)  ← valid CMAP
 TPdfTtf.Create → full CMAP loaded → CJK/Arabic glyph IDs resolved correctly
 ```
 

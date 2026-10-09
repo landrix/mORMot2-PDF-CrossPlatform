@@ -1,4 +1,4 @@
-# Platform Backends — IFontProvider / IFontEnumerator / IFontDC (+ optional IFontShaper / IFontSubsetter)
+# Platform Backends — IFontFace / IFontProvider / IFontEnumerator (+ optional IFontShaper / IFontSubsetter)
 
 Contracts: `src/lib/mormot.lib.core.pas` of mORMot2 (during the refactoring
 the branch `pdf-font-layer` of `landrix/mORMot2`, see `docs/REFACTORING.md`)
@@ -9,107 +9,128 @@ Unix/macOS backends: mORMot2 `src/lib/mormot.lib.freetype.pas` and
 
 ---
 
-## Three Interfaces
+## The Font Interfaces
 
-On Linux/macOS all platform-specific operations run through these three interfaces.
+Every platform goes through them: since W3 (2026-10-09) for the engine's
+font calls, since Phase 1b (2026-10-09) without a device context.
+`TPdfFontTrueType` asks `FontProvider.CreateFace` for an `IFontFace` and reads
+metrics, widths, tables, the embedded face and glyph advances by index from
+it; the WinAnsi and the Unicode instance share that one face (reference
+counted - no destructor deletes a font any more). `TPdfFaceMetrics`
+(`TPdfFontMeasurer`) holds a face as well. Shaping and subsetting go through
+`FontShaper` and `FontSubsetter` (W2) with the face's native `Handle`.
 
-**Every platform goes through them since W3 (2026-10-09).** `TPdfDocument`
-creates its DC with `FontDC`, `TPdfFontTrueType` its font with
-`FontProvider.CreateFont` and reads metrics, widths, tables, the embedded face
-and glyph advances by index through `FontProvider`; shaping and subsetting
-went through `FontShaper` and `FontSubsetter` already in W2. What stays
-Windows-only in `mormot.ui.pdf`: the `TLogFontW` overloads
-(`TPdfCanvas.SetFont(HDC, TLogFontW)`, `TPdfFontTrueType.Create(..., TLogFontW,
-...)`, `GetRegisteredTrueTypeFont(TLogFontW)`) as thin adapters onto
-`TFontRequest`. `SetFont(HDC, ...)` reduces the LOGFONT to name, style and
-charset, as it always did; the constructor creates its HFONT from the whole
-LOGFONT with `CreateFontIndirectW` (the one GDI font call left in the engine:
-`lfWidth` or the precisions change widths and selection, which `TFontRequest`
-does not carry - decided with Sven, 2026-10-09, three alternatives; cairo's
-LOGFONT constructor ignores `lfWidth`, a candidate for Phase 5;
-`TestLogFontWidth`); `AddGlyphs` with `TScriptVisAttr`; the printer, EMF and GDI+
-code, which casts the document DC back to a `HDC`; the code page helpers
-(`LCIDToCodePage`, `CharNextA`), which are no font matter.
+What stays Windows-only in `mormot.ui.pdf`:
+- the `TLogFontW` overloads (`TPdfCanvas.SetFont(HDC, TLogFontW)`,
+  `TPdfFontTrueType.Create(..., TLogFontW, ...)`,
+  `GetRegisteredTrueTypeFont(TLogFontW)`). `SetFont(HDC, ...)` reduces the
+  LOGFONT to name, style and charset and never used its DC; the constructor
+  takes its face from `GdiCreateFace(TLogFontW)` of `mormot.lib.uniscribe`,
+  from the whole LOGFONT (`lfWidth` or the precisions change widths and
+  selection, which `TFontRequest` does not carry - decided with Sven,
+  2026-10-09; cairo's LOGFONT constructor ignores `lfWidth`, a candidate for
+  Phase 5; `TestLogFontWidth`)
+- `ScreenLogPixels`: `GdiScreenLogPixels` (`GetDeviceCaps(LOGPIXELSY)` of a
+  compatible DC) on Windows, 96 on POSIX - no font service; Phase 3 moves it
+  to the canvas adapter. It follows the process's DPI awareness: a program
+  whose `.res` carries the Lazarus DPI-aware manifest gets the real DPI (144
+  at 150 % scaling), and `TGDIPages` lays its pages out with it - compare
+  demo PDFs only between builds with the same `.res`
+- the EMF code (`USE_METAFILE`): `TPdfDocument.EmfDC`, a compatible DC made
+  when first needed, for `TMetaFileCanvas`, `EnumEnhMetaFile`, `TPdfEnum`'s
+  own fonts and `GetTextExtentPoint32W`, which selects the face's HFONT for
+  that one measure
+- `AddGlyphs` with `TScriptVisAttr`; the printer and GDI+ code; the code page
+  helpers (`LCIDToCodePage`, `CharNextA`), which are no font matter
+
 Before W3, under `{$ifdef OSWINDOWS}` the core called GDI directly:
 `CreateCompatibleDC`/`GetDeviceCaps` in the constructor,
 `CreateFontIndirectW` (with output precision 0, where the GDI provider asks
 for `OUT_TT_ONLY_PRECIS` - no difference in the golden files, as every font
 the engine creates is an enumerated TrueType family),
 `GetTextMetrics`, `GetOutlineTextMetrics`, `GetCharABCWidthsA`,
-`GetCharABCWidthsI`, `SelectObject` (`GetDCWithFont`), `windows.GetFontData`.
+`GetCharABCWidthsI`, `SelectObject`, `windows.GetFontData`. Until Phase 1b
+the document kept one DC and selected each font into it (`GetDCWithFont`):
+`TPdfTtf.Create` read its four tables relying on the font its caller had
+selected.
 
-### IFontProvider — Font Operations
+### IFontFace — One Face, Its Own State
 
 ```pascal
-IFontProvider = interface
-  // Create a font object from a logical font descriptor; nil on failure
-  function  CreateFont(const Request: TFontRequest): TFontHandle;
-  // Release a previously created font
-  procedure DeleteFont(Font: TFontHandle);
-  // Select font into DC; returns the previously selected font handle
-  // (transitional, as TFontDC)
-  function  SelectFont(DC: TFontDC; Font: TFontHandle): TFontHandle;
-  // Retrieve basic text metrics for the currently selected font
-  function  GetTextMetrics(DC: TFontDC; out Metrics: TFontMetrics): boolean;
-  // Retrieve extended outline metrics (ascent, descent, em-square, etc.)
-  function  GetOutlineMetrics(DC: TFontDC;
-                              out Metrics: TFontOutlineMetrics): boolean;
+IFontFace = interface
+  // The native handle for IFontShaper and IFontSubsetter: a HFONT on
+  // Windows, a PFreeTypeFont with FreeType - valid while the face lives
+  function  Handle: TFontHandle;
+  function  GetTextMetrics(out Metrics: TFontMetrics): boolean;
+  // ascent, descent, em-square, font box...
+  function  GetOutlineMetrics(out Metrics: TFontOutlineMetrics): boolean;
+  // ABC advance widths for FirstChar..LastChar - WinAnsi (cp1252) BYTE
+  // values, not Unicode code points: the engine calls (32, 255) and indexes
+  // the result by WinAnsi byte. Bytes 128..159 are printable punctuation in
+  // WinAnsi but unassigned C1 controls in Unicode, so a backend doing a
+  // Unicode lookup must translate first (see U-1)
+  function  GetCharAbcWidths(FirstChar, LastChar: cardinal;
+                             out Widths: TFontCharAbcArray): boolean;
   // The advance of one glyph by glyph index, in the units of GetCharAbcWidths
   // (GDI: GetCharABCWidthsI; FreeType: FT_Load_Glyph, design units scaled
-  // once) - for a shaped glyph no character maps to (since 2026-10-09, W3)
-  function  GetGlyphAdvance(DC: TFontDC; Glyph: cardinal;
-                            out Advance: integer): boolean;
-  // Retrieve ABC advance widths for characters FirstChar..LastChar.
-  // FirstChar/LastChar are WinAnsi (cp1252) BYTE values, not Unicode code
-  // points - the engine calls (32, 255) and indexes the result by WinAnsi
-  // byte. Bytes 128..159 are printable punctuation in WinAnsi but unassigned
-  // C1 controls in Unicode, so a backend doing a Unicode lookup must
-  // translate first (see U-1).
-  function  GetCharAbcWidths(DC: TFontDC; FirstChar, LastChar: cardinal;
-                             out Widths: TFontCharAbcArray): boolean;
-  // Read raw TrueType/OpenType table bytes (tag = 4-byte table name, e.g. 'cmap',
-  // 0 = the whole font); returns bytes read, or FontDataError on failure
-  function  GetFontData(DC: TFontDC; TableTag, Offset: cardinal;
+  // once) - for a shaped glyph no character maps to (W3)
+  function  GetGlyphAdvance(Glyph: cardinal; out Advance: integer): boolean;
+  // Raw TrueType/OpenType table bytes (tag = 4-byte table name read as a
+  // little-endian cardinal, e.g. 'cmap'; 0 = the whole font); returns bytes
+  // read, or FONT_DATA_ERROR ($FFFFFFFF, a constant of mormot.lib.core)
+  function  GetFontData(TableTag, Offset: cardinal;
                         Buffer: pointer; BufferSize: cardinal): cardinal;
-  // Sentinel value returned by GetFontData on error ($FFFFFFFF on all platforms)
-  function  FontDataError: cardinal;
-  // The selected face as one standalone font file: a face of a .ttc is
-  // extracted (GDI: TtcFaceIndex + ExtractSfntFromTtc; FreeType: the loaded
-  // face); false if it cannot be found or extracted (since 2026-10-09)
-  function  GetFaceFile(DC: TFontDC; out Face: RawByteString): boolean;
+  // The face as one standalone font file: a face of a .ttc is extracted
+  // (GDI: TtcFaceIndex + ExtractSfntFromTtc; FreeType: the loaded face);
+  // false if it cannot be found or extracted
+  function  GetFaceFile(out Face: RawByteString): boolean;
 end;
 ```
 
-`GetFontData(DC, 0, ...)` stays raw: on Windows it returns the face's table
+Metrics and widths are those of a 1000 units per em face: the engine asks
+for `Height = -1000`; GDI scales to the requested height, the FreeType face
+always to 1000 units. A face belongs to the thread that uses it: the GDI
+face's DC is made by the thread which first measures it and is valid while
+that thread lives, and all FreeType faces share one `FT_Library`, whose
+`FT_New_Face`/`FT_Done_Face` are not serialized (as before Phase 1b). The
+FreeType unit unloads the library only once the last face is released. The GDI face
+(`TGdiFontFace`) owns its HFONT and a compatible DC made when first needed,
+with the font selected into it for the face's lifetime; its destructor
+restores the DC's old font, then deletes DC and font. The FreeType face
+(`TFreeTypeFontFace`) owns its `PFreeTypeFont` record - `mormot.lib.harfbuzz`
+reads the `FT_Face` from `Handle`.
+
+`GetFontData(0, ...)` stays raw: on Windows it returns the face's table
 directory with offsets into the collection, which `TtcFaceIndex` and the
 FontSub subsetter need - only `GetFaceFile` promises a font file. The two
 `.ttc` helpers, `ExtractSfntFromTtc` and `TtcFaceIndex`, live in
-`mormot.lib.core` since 2026-10-09, shared by both backends; `IFontProvider`
-and `IFontSubsetter` got new GUIDs then (methods added since the old ones).
+`mormot.lib.core` (2026-10-09), shared by both backends.
+
+A font the backend cannot resolve (FreeType: not even DejaVu Sans or Roboto
+found) gives no face; the engine then uses `TPdfNoFace`, whose queries all
+fail - the metrics stay zero, as with the nil font of the FreeType backend
+before Phase 1b.
+
+### IFontProvider — Faces
 
 ```pascal
+IFontProvider = interface
+  // The face the system resolves Request to; nil on failure
+  function CreateFace(const Request: TFontRequest): IFontFace;
+end;
 ```
+
+`IFontProvider`, `IFontEnumerator` and `IFontFace` got new GUIDs with Phase
+1b; `IFontSubsetter` and `IFontShaper` kept theirs (same signatures, the
+`Font` parameter is now `IFontFace.Handle`).
 
 ### IFontEnumerator — Font Enumeration
 
 ```pascal
 IFontEnumerator = interface
   // Fill List with UTF-8 encoded font family names available on the system
-  procedure EnumTrueTypeFonts(DC: TFontDC; var List: TRawUtf8DynArray);
-end;
-```
-
-### IFontDC — Device Context (transitional, removed in Phase 1b)
-
-```pascal
-IFontDC = interface
-  // Create a compatible device context for font measurements
-  // Windows: CreateCompatibleDC(0); Unix/macOS: returns non-nil dummy pointer
-  function  CreateDC: TFontDC;
-  // Release a device context created by CreateDC
-  procedure DeleteDC(DC: TFontDC);
-  // Return screen DPI (Y axis); Unix/macOS always returns 96
-  function  GetScreenLogPixels(DC: TFontDC): integer;
+  // (GDI: EnumFontFamiliesExW on a compatible DC of its own)
+  procedure EnumTrueTypeFonts(var List: TRawUtf8DynArray);
 end;
 ```
 
@@ -180,8 +201,7 @@ Each backend registers its implementations in the `initialization` section:
 // In mormot.lib.uniscribe.pas (Windows), RegisterUniscribe:
   RegisterFontPlatform(
     TGdiFontProvider.Create,
-    TGdiFontEnumerator.Create,
-    TGdiFontDC.Create);
+    TGdiFontEnumerator.Create);
   {$ifndef NO_USE_UNISCRIBE}
   FontShaper := TUniscribeShaper;                 // always
   FontSubsetter := TFontSubSubsetter;             // if HasCreateFontPackage
@@ -192,17 +212,18 @@ Each backend registers its implementations in the `initialization` section:
 initialization
   RegisterFontPlatform(
     TFreeTypeFontProvider.Create,
-    TFreeTypeFontEnumerator.Create,
-    TFreeTypeFontDC.Create);
+    TFreeTypeFontEnumerator.Create);
 // its finalization releases them again, before the library is unloaded
 ```
 
-`RegisterFontPlatform` of `mormot.lib.core` sets the globals `FontProvider`,
-`FontEnumerator`, `FontDC`; `mormot.lib.uniscribe` and `mormot.lib.harfbuzz`
+`RegisterFontPlatform` of `mormot.lib.core` sets the globals `FontProvider`
+and `FontEnumerator` (the `FontDC` global and the DC parameter went with
+Phase 1b); `mormot.lib.uniscribe` and `mormot.lib.harfbuzz`
 assign `FontShaper` and `FontSubsetter` themselves. The core calls them directly. `mormot.pdf.types`
 keeps the former type names as aliases (`TPdfLogFont`, `IPdfPlatformFont`...)
 for code outside this repository; the globals, `IPdfTextShaper` and
-`IPdfFontSubsetter` have none (renamed 2026-10-04, R-28 Phase 1).
+`IPdfFontSubsetter` have none (renamed 2026-10-04, R-28 Phase 1), and
+`TPdfPlatformDC`/`IPdfPlatformDC` are gone with the device context.
 
 ```pascal
 // Check whether a platform backend has been registered:
@@ -261,11 +282,10 @@ TFontRequest = record
 end;
 ```
 
-### TFontHandle / TFontDC
+### TFontHandle
 
 ```pascal
-TFontHandle = type pointer;  // opaque font handle (HFONT, PFreeTypeFont)
-TFontDC     = type pointer;  // opaque device context - transitional
+TFontHandle = type pointer;  // IFontFace.Handle: HFONT, PFreeTypeFont
 ```
 
 ### TFontMetrics
@@ -332,18 +352,17 @@ GDI API mapping:
 
 | Interface method | Windows API |
 |---|---|
-| `CreateFont` | `CreateFontIndirectW` |
-| `DeleteFont` | `DeleteObject` |
-| `SelectFont` | `SelectObject` |
+| `CreateFace` | `CreateFontIndirectW` (the face: `TGdiFontFace`; from a whole LOGFONT: `GdiCreateFace`) |
+| face destructor | `SelectObject` back, `DeleteDC`, `DeleteObject` |
+| (face DC) | `CreateCompatibleDC(0)` + `SelectObject`, when first needed |
 | `GetTextMetrics` | `GetTextMetricsW` |
 | `GetOutlineMetrics` | `GetOutlineTextMetricsW` |
 | `GetCharAbcWidths` | `GetCharABCWidthsA` (ANSI — maps the byte through the DC codepage, so bytes 128..159 resolve to their WinAnsi characters; code points above 255 are not reachable through this call) |
 | `GetFontData` | `GetFontData` |
-| `FontDataError` | returns `GDI_ERROR` ($FFFFFFFF) |
-| `EnumTrueTypeFonts` | `EnumFontFamiliesExW` with TRUETYPE_FONTTYPE |
-| `CreateDC` | `CreateCompatibleDC(0)` |
-| `DeleteDC` | `DeleteDC` |
-| `GetScreenLogPixels` | `GetDeviceCaps(DC, LOGPIXELSY)` |
+| `GetGlyphAdvance` | `GetCharABCWidthsI` |
+| `GetFaceFile` | `GetFontData` (`'ttcf'`, the table directory) + `TtcFaceIndex` + `ExtractSfntFromTtc` |
+| `EnumTrueTypeFonts` | `EnumFontFamiliesExW` with TRUETYPE_FONTTYPE, on a DC of its own |
+| `GdiScreenLogPixels` (no interface) | `GetDeviceCaps(CreateCompatibleDC(0), LOGPIXELSY)` |
 
 No additional runtime dependency — GDI is part of Windows.
 
@@ -355,18 +374,15 @@ FreeType2 API mapping:
 
 | Interface method | FreeType2 API |
 |---|---|
-| `CreateFont` | `FT_New_Face` + `FT_Set_Char_Size` |
-| `DeleteFont` | `FT_Done_Face` |
-| `SelectFont` | internal context switch |
+| `CreateFace` | `FT_New_Face` (face 0 of the file; the face: `TFreeTypeFontFace`) |
+| face destructor | `FT_Done_Face` |
 | `GetTextMetrics` | `FT_FaceRec.ascender/descender/height` |
 | `GetOutlineMetrics` | `FT_FaceRec.bbox` + scaled values |
 | `GetCharAbcWidths` | `WinAnsiConvert.AnsiToWide[]`, then `FT_Load_Char` + `horiAdvance` |
 | `GetFontData` | `FT_Load_Sfnt_Table` |
-| `FontDataError` | returns $FFFFFFFF |
+| `GetGlyphAdvance` | `FT_Load_Glyph` (`FT_LOAD_NO_SCALE`) + `horiAdvance` |
+| `GetFaceFile` | `GetFontData(0)`: the loaded face, extracted from a `.ttc` (`ExtractSfntFromTtc`) |
 | `EnumTrueTypeFonts` | filesystem scan + `FT_New_Face` |
-| `CreateDC` | dummy non-nil pointer (no real DC needed) |
-| `DeleteDC` | no-op |
-| `GetScreenLogPixels` | constant 96 |
 
 **Font search paths:**
 
@@ -480,9 +496,9 @@ finally
 end;
 ```
 
-- `SetFont` repeats `TPdfCanvas.SetFont`'s resolution order: the base-14 AFM tables (`STANDARDFONTS`) when `aStandardFonts` is set and the name is Helvetica/Times/Courier or an alias, otherwise `FontProvider.CreateFont` on a `Height = -1000` logfont plus `GetCharAbcWidths(32, 255)` — i.e. 1000-per-em units, like every other width in the engine.
+- `SetFont` repeats `TPdfCanvas.SetFont`'s resolution order: the base-14 AFM tables (`STANDARDFONTS`) when `aStandardFonts` is set and the name is Helvetica/Times/Courier or an alias, otherwise `FontProvider.CreateFace` on a `Height = -1000` request plus `GetCharAbcWidths(32, 255)` — i.e. 1000-per-em units, like every other width in the engine.
 - Returns `false` when nothing resolves (no backend registered); the caller then falls back to its own measurement.
-- Faces are cached per (name, bold, italic, standard-flag) on the measurer instance; `TPdfFaceMetrics` owns the platform font handle and its DC until the measurer is freed.
+- Faces are cached per (name, bold, italic, standard-flag) on the measurer instance; `TPdfFaceMetrics` holds its `IFontFace` until the measurer is freed.
 - Code points above WinAnsi use `DefaultWidth` — the GDI backend's `GetCharAbcWidths` is the ANSI call, so per-code-point Unicode widths are not available through this path.
 
 ---
@@ -502,12 +518,12 @@ Every unit starts with `{$I mormot.defines.inc}` after `interface` (by name, no 
 
 ## Adding a New Platform
 
-1. Create new unit `mormot.pdf.<platform>.pas`
+1. Create a new unit `mormot.lib.<library>.pas` in mORMot2 `src/lib`
 2. Implement three classes:
-   - `TPdf<Platform>FontProvider(TInterfacedObject, IFontProvider)`
-   - `TPdf<Platform>SystemFonts(TInterfacedObject, IFontEnumerator)`
-   - `TPdf<Platform>DCProvider(TInterfacedObject, IFontDC)`
-3. Register in `initialization` via `RegisterFontPlatform(...)`
+   - `T<Library>FontFace(TInterfacedObject, IFontFace)`
+   - `T<Library>FontProvider(TInterfacedObject, IFontProvider)`
+   - `T<Library>FontEnumerator(TInterfacedObject, IFontEnumerator)`
+3. Register in `initialization` via `RegisterFontPlatform(Provider, Enumerator)`
 4. Add conditional `uses` in the application project
 
 No changes to `mormot.ui.pdf.pas` required.

@@ -82,10 +82,10 @@ type
   // former names of the font types and interfaces of mormot.lib.core, kept
   // while the refactoring runs (R-28): the shaper and the subsetter changed
   // their signatures and have no alias, the globals are FontProvider,
-  // FontEnumerator, FontDC, FontShaper, FontSubsetter and
-  // FontPlatformRegistered of mormot.lib.core
+  // FontEnumerator, FontShaper, FontSubsetter and FontPlatformRegistered of
+  // mormot.lib.core; the device context (TPdfPlatformDC, IPdfPlatformDC) is
+  // gone with Phase 1b, IFontFace replaces it
   TPdfPlatformFontHandle = TFontHandle;
-  TPdfPlatformDC = TFontDC;
   TPdfTextMetrics = TFontMetrics;
   TPdfOutlineMetrics = TFontOutlineMetrics;
   TPdfCharABC = TFontCharAbc;
@@ -94,7 +94,6 @@ type
   TPdfFontSubsetRequest = TFontSubsetRequest;
   IPdfPlatformFont = IFontProvider;
   IPdfSystemFonts = IFontEnumerator;
-  IPdfPlatformDC = IFontDC;
 
 implementation
 

@@ -1,5 +1,5 @@
 /// Cross-platform PDF engine unit tests
-// - tests IFontProvider, IFontEnumerator, IFontDC contracts
+// - tests IFontFace, IFontProvider, IFontEnumerator contracts
 // - tests TPdfDocument basic PDF generation on all platforms
 // - migrated to TSynTestCase framework for mORMot2 compatibility
 unit test_pdf_crossplatform;
@@ -28,7 +28,7 @@ type
   TPdfCrossPlatTests = class(TSynTestCase)
   published
     procedure TestPlatformRegistration;
-    procedure TestDCProvider;
+    procedure TestScreenLogPixels;
     procedure TestFontEnumeration;
     procedure TestFontMetrics;
     procedure TestWinAnsiHighRangeWidths;
@@ -42,6 +42,7 @@ type
     procedure TestTtcFaceExtraction;
     {$endif OSWINDOWS}
     procedure TestFontData;
+    procedure TestFacesKeepTheirState;
     procedure TestPdfDocumentCreate;
     procedure TestPdfMultiPage;
   end;
@@ -72,97 +73,81 @@ begin
   Check(FontPlatformRegistered, 'RegisterFontPlatform must be called in initialization');
   Check(FontProvider <> nil, 'FontProvider is nil');
   Check(FontEnumerator  <> nil, 'FontEnumerator is nil');
-  Check(FontDC <> nil, 'FontDC is nil');
 end;
 
-procedure TPdfCrossPlatTests.TestDCProvider;
+procedure TPdfCrossPlatTests.TestScreenLogPixels;
 var
-  dc: TFontDC;
-  dpi: integer;
+  PDF: TPdfDocument;
 begin
-  dc := FontDC.CreateDC;
-  Check(dc <> nil, 'CreateDC returned nil');
-  dpi := FontDC.GetScreenLogPixels(dc);
-  Check(dpi > 0, 'GetScreenLogPixels must be > 0');
-  Check(dpi <= 600, 'GetScreenLogPixels must be <= 600 (sanity)');
-  FontDC.DeleteDC(dc);
+  // GDI's LOGPIXELSY on Windows (96 unless the process is DPI-aware), 96 on
+  // POSIX: no font service any more, since Phase 1b
+  PDF := TPdfDocument.Create;
+  try
+    Check(PDF.ScreenLogPixels > 0, 'ScreenLogPixels must be > 0');
+    Check(PDF.ScreenLogPixels <= 600, 'ScreenLogPixels must be <= 600 (sanity)');
+    {$ifndef OSWINDOWS}
+    CheckEqual(PDF.ScreenLogPixels, 96, 'POSIX: 96');
+    {$endif OSWINDOWS}
+  finally
+    PDF.Free;
+  end;
 end;
 
 procedure TPdfCrossPlatTests.TestFontEnumeration;
 var
-  dc: TFontDC;
   list: TRawUtf8DynArray;
 begin
-  dc := FontDC.CreateDC;
-  try
-    FontEnumerator.EnumTrueTypeFonts(dc, list);
-    Check(Length(list) > 0, 'EnumTrueTypeFonts must return at least one font');
-  finally
-    FontDC.DeleteDC(dc);
-  end;
+  FontEnumerator.EnumTrueTypeFonts(list);
+  Check(Length(list) > 0, 'EnumTrueTypeFonts must return at least one font');
 end;
 
 procedure TPdfCrossPlatTests.TestFontMetrics;
 var
-  dc: TFontDC;
   lf: TFontRequest;
-  font: TFontHandle;
-  prev: TFontHandle;
+  face: IFontFace;
   tm: TFontMetrics;
   otm: TFontOutlineMetrics;
   abc: TFontCharAbcArray;
 begin
-  dc := FontDC.CreateDC;
-  try
-    FillChar(lf, SizeOf(lf), 0);
-    lf.FaceName := 'Arial';
-    lf.Height := -1000;
-    lf.Weight := 400; // FW_NORMAL
-    font := FontProvider.CreateFont(lf);
-    if font = nil then
-    begin
-      // Arial not available - try DejaVu Sans (Linux) or system default
-      lf.FaceName := 'DejaVu Sans';
-      font := FontProvider.CreateFont(lf);
-    end;
-    if font = nil then
-    begin
-      Check(true, 'SKIP: no test font found on this system');
-      exit;
-    end;
-    prev := FontProvider.SelectFont(dc, font);
-    // Text metrics
-    Check(FontProvider.GetTextMetrics(dc, tm), 'GetTextMetrics must succeed');
-    Check(tm.tmAscent > 0, 'tmAscent must be > 0');
-    Check(tm.tmDescent > 0, 'tmDescent must be > 0');
-    Check(tm.tmHeight >= tm.tmAscent + tm.tmDescent - 10,
-      'tmHeight should be >= ascent + descent (approx)');
-    // Outline metrics
-    Check(FontProvider.GetOutlineMetrics(dc, otm), 'GetOutlineMetrics must succeed');
-    Check(otm.otmAscent > 0, 'otmAscent must be > 0');
-    // ABC widths for ' '..'z'
-    Check(FontProvider.GetCharAbcWidths(dc, 32, 90, abc), 'GetCharAbcWidths must succeed');
-    Check(Length(abc) = 59, 'ABC widths: expected 59 entries (32..90)');
-    // Space width should be > 0 for a normal font: the advance is the sum of
-    // the three ABC members - abcB alone is the ink width, which is legitimately
-    // 0 for a space since the glyph is blank
-    Check(abc[0].abcA + integer(abc[0].abcB) + abc[0].abcC > 0,
-      'Space advance width must be > 0');
-    // Restore previous font
-    if prev <> nil then
-      FontProvider.SelectFont(dc, prev);
-    FontProvider.DeleteFont(font);
-  finally
-    FontDC.DeleteDC(dc);
+  FillChar(lf, SizeOf(lf), 0);
+  lf.FaceName := 'Arial';
+  lf.Height := -1000;
+  lf.Weight := 400; // FW_NORMAL
+  face := FontProvider.CreateFace(lf);
+  if face = nil then
+  begin
+    // Arial not available - try DejaVu Sans (Linux) or system default
+    lf.FaceName := 'DejaVu Sans';
+    face := FontProvider.CreateFace(lf);
   end;
+  if face = nil then
+  begin
+    Check(true, 'SKIP: no test font found on this system');
+    exit;
+  end;
+  // Text metrics
+  Check(face.GetTextMetrics(tm), 'GetTextMetrics must succeed');
+  Check(tm.tmAscent > 0, 'tmAscent must be > 0');
+  Check(tm.tmDescent > 0, 'tmDescent must be > 0');
+  Check(tm.tmHeight >= tm.tmAscent + tm.tmDescent - 10,
+    'tmHeight should be >= ascent + descent (approx)');
+  // Outline metrics
+  Check(face.GetOutlineMetrics(otm), 'GetOutlineMetrics must succeed');
+  Check(otm.otmAscent > 0, 'otmAscent must be > 0');
+  // ABC widths for ' '..'z'
+  Check(face.GetCharAbcWidths(32, 90, abc), 'GetCharAbcWidths must succeed');
+  Check(Length(abc) = 59, 'ABC widths: expected 59 entries (32..90)');
+  // Space width should be > 0 for a normal font: the advance is the sum of
+  // the three ABC members - abcB alone is the ink width, which is legitimately
+  // 0 for a space since the glyph is blank
+  Check(abc[0].abcA + integer(abc[0].abcB) + abc[0].abcC > 0,
+    'Space advance width must be > 0');
 end;
 
 procedure TPdfCrossPlatTests.TestWinAnsiHighRangeWidths;
 var
-  dc: TFontDC;
   lf: TFontRequest;
-  font: TFontHandle;
-  prev: TFontHandle;
+  face: IFontFace;
   abc: TFontCharAbcArray;
   notdef, bullet, emdash, letter: integer;
 
@@ -179,66 +164,57 @@ begin
   // U+2014 - so a backend that hands the byte to a Unicode lookup unchanged
   // lands on an unassigned C1 control, misses the CMAP and returns .notdef.
   // That wrote a wrong /Widths entry and broke ISO 14289-1 7.21.5 on POSIX.
-  dc := FontDC.CreateDC;
-  try
-    FillChar(lf, SizeOf(lf), 0);
-    lf.FaceName := 'Arial';
-    lf.Height := -1000;
-    lf.Weight := 400; // FW_NORMAL
-    font := FontProvider.CreateFont(lf);
-    if font = nil then
-    begin
-      lf.FaceName := 'DejaVu Sans';
-      font := FontProvider.CreateFont(lf);
-    end;
-    if font = nil then
-    begin
-      Check(true, 'SKIP: no test font found on this system');
-      exit;
-    end;
-    prev := FontProvider.SelectFont(dc, font);
-    Check(FontProvider.GetCharAbcWidths(dc, 32, 255, abc),
-      'GetCharAbcWidths must succeed');
-    Check(Length(abc) = 224, 'ABC widths: expected 224 entries (32..255)');
-    bullet := Advance($95);
-    emdash := Advance($97);
-    letter := Advance(ord('M'));
-    Check(bullet > 0, 'bullet #$95 must have a positive advance');
-    Check(emdash > 0, 'em dash #$97 must have a positive advance');
-    // the bullet is narrow in any text face, the em dash wide - but not
-    // always wider than M: Roboto, the Android sans, draws it at 1599 of
-    // 2048 units against 1788 for M. Two .notdef boxes cannot order this way
-    Check(emdash > bullet, 'em dash must be wider than the bullet');
-    Check(bullet < letter, 'bullet must be narrower than M');
-    // .notdef is what the defect returned, so the two must not silently be it.
-    // Code #$81 is unassigned in WinAnsi and maps to no glyph, so its advance
-    // is the .notdef advance on any backend.
-    //
-    // Comparing bullet <> .notdef directly would be wrong: nothing stops a
-    // font from giving .notdef the same advance as a real glyph, and the face
-    // the Linux CI picks does exactly that - it failed this check while the
-    // lookup was perfectly correct. Compare the two *unmapped* codes with each
-    // other instead: #$81 and #$8D are both unassigned in WinAnsi and map to
-    // C1 controls no CMAP carries, so they must agree; and the bullet and em
-    // dash must not both collapse onto that value. Both hold whatever widths
-    // the face happens to use.
-    // Note that assertion #5 above already catches the original defect on any
-    // font without assuming anything: with the bug, bullet and em dash both
-    // returned the .notdef advance, and one number cannot be wider than itself.
-    notdef := Advance($81);
-    if notdef > 0 then
-    begin
-      Check(Advance($8D) = notdef,
-        'two unassigned WinAnsi codes must share the .notdef advance');
-      Check((bullet <> notdef) or
-            (emdash <> notdef),
-        'bullet and em dash must not both fall back to .notdef');
-    end;
-    if prev <> nil then
-      FontProvider.SelectFont(dc, prev);
-    FontProvider.DeleteFont(font);
-  finally
-    FontDC.DeleteDC(dc);
+  FillChar(lf, SizeOf(lf), 0);
+  lf.FaceName := 'Arial';
+  lf.Height := -1000;
+  lf.Weight := 400; // FW_NORMAL
+  face := FontProvider.CreateFace(lf);
+  if face = nil then
+  begin
+    lf.FaceName := 'DejaVu Sans';
+    face := FontProvider.CreateFace(lf);
+  end;
+  if face = nil then
+  begin
+    Check(true, 'SKIP: no test font found on this system');
+    exit;
+  end;
+  Check(face.GetCharAbcWidths(32, 255, abc),
+    'GetCharAbcWidths must succeed');
+  Check(Length(abc) = 224, 'ABC widths: expected 224 entries (32..255)');
+  bullet := Advance($95);
+  emdash := Advance($97);
+  letter := Advance(ord('M'));
+  Check(bullet > 0, 'bullet #$95 must have a positive advance');
+  Check(emdash > 0, 'em dash #$97 must have a positive advance');
+  // the bullet is narrow in any text face, the em dash wide - but not
+  // always wider than M: Roboto, the Android sans, draws it at 1599 of
+  // 2048 units against 1788 for M. Two .notdef boxes cannot order this way
+  Check(emdash > bullet, 'em dash must be wider than the bullet');
+  Check(bullet < letter, 'bullet must be narrower than M');
+  // .notdef is what the defect returned, so the two must not silently be it.
+  // Code #$81 is unassigned in WinAnsi and maps to no glyph, so its advance
+  // is the .notdef advance on any backend.
+  //
+  // Comparing bullet <> .notdef directly would be wrong: nothing stops a
+  // font from giving .notdef the same advance as a real glyph, and the face
+  // the Linux CI picks does exactly that - it failed this check while the
+  // lookup was perfectly correct. Compare the two *unmapped* codes with each
+  // other instead: #$81 and #$8D are both unassigned in WinAnsi and map to
+  // C1 controls no CMAP carries, so they must agree; and the bullet and em
+  // dash must not both collapse onto that value. Both hold whatever widths
+  // the face happens to use.
+  // Note that assertion #5 above already catches the original defect on any
+  // font without assuming anything: with the bug, bullet and em dash both
+  // returned the .notdef advance, and one number cannot be wider than itself.
+  notdef := Advance($81);
+  if notdef > 0 then
+  begin
+    Check(Advance($8D) = notdef,
+      'two unassigned WinAnsi codes must share the .notdef advance');
+    Check((bullet <> notdef) or
+          (emdash <> notdef),
+      'bullet and em dash must not both fall back to .notdef');
   end;
 end;
 
@@ -252,9 +228,8 @@ const
   ARABIC_FONTS: array[0..3] of RawUtf8 = (
     'Geeza Pro', 'Noto Naskh Arabic', 'Tahoma', 'DejaVu Sans');
 var
-  dc: TFontDC;
   lf: TFontRequest;
-  font, prev: TFontHandle;
+  face: IFontFace;
   glyphs: TWordDynArray;
   advances, offsets, clusters: TIntegerDynArray;
   tbl: TWordDynArray;
@@ -340,13 +315,13 @@ var
     n: cardinal;
   begin
     result := false;
-    n := FontProvider.GetFontData(dc, PCardinal(pointer(aTag))^, 0, nil, 0);
-    if (n = FontProvider.FontDataError) or
+    n := face.GetFontData(PCardinal(pointer(aTag))^, 0, nil, 0);
+    if (n = FONT_DATA_ERROR) or
        (n < 4) then
       exit;
     SetLength(aWords, n shr 1);
-    result := FontProvider.GetFontData(dc, PCardinal(pointer(aTag))^, 0,
-      pointer(aWords), n) <> FontProvider.FontDataError;
+    result := face.GetFontData(PCardinal(pointer(aTag))^, 0,
+      pointer(aWords), n) <> FONT_DATA_ERROR;
   end;
 
 begin
@@ -362,122 +337,110 @@ begin
     Check(true, 'SKIP: no IFontShaper registered (libharfbuzz absent)');
     exit;
   end;
-  dc := FontDC.CreateDC;
+  face := nil;
+  for f := 0 to high(ARABIC_FONTS) do
+  begin
+    FillChar(lf, SizeOf(lf), 0);
+    lf.FaceName := Utf8ToSynUnicode(ARABIC_FONTS[f]);
+    lf.Height := -1000;
+    lf.Weight := 400;
+    face := FontProvider.CreateFace(lf);
+    if face <> nil then
+      break;
+  end;
+  if face = nil then
+  begin
+    Check(true, 'SKIP: no Arabic-capable font found on this system');
+    exit;
+  end;
+  Check(ShapeSingleRun(@MARHABA[0], length(MARHABA), face.Handle,
+    glyphs, advances, offsets, clusters), 'Shape must succeed');
+  shifted := 0;
+  for i := 0 to high(glyphs) do
+    if offsets[i] <> 0 then
+      inc(shifted);
+  if shifted = 0 then
+  begin
+    // this face shapes the word without cursive attachment and so cannot
+    // exercise the defect - Noto Naskh Arabic behaves this way, which is
+    // why U-2 was invisible on Linux
+    Check(true, 'SKIP: font applies no GPOS x_offset to this word');
+    exit;
+  end;
+  // read the face's own metrics: 'head' for unitsPerEm (offset 18 bytes),
+  // 'hhea' for numOfLongHorMetrics (offset 34), 'hmtx' for the advances
+  if not ReadTable('head', tbl) then
+  begin
+    Check(true, 'SKIP: cannot read the head table');
+    exit;
+  end;
+  upm := Swap16(tbl[9]);
+  Check(upm > 0, 'unitsPerEm must be > 0');
+  if not ReadTable('hhea', tbl) then
+  begin
+    Check(true, 'SKIP: cannot read the hhea table');
+    exit;
+  end;
+  nlhm := Swap16(tbl[17]);
+  Check(nlhm > 0, 'numOfLongHorMetrics must be > 0');
+  if not ReadTable('hmtx', tbl) then
+  begin
+    Check(true, 'SKIP: cannot read the hmtx table');
+    exit;
+  end;
+  hmtxWords := length(tbl);
+  // build a PDF with this very text, and read back what /W states for the
+  // shifted glyphs. That is the assertion that bites: the engine used to
+  // write advances[i] there, and it has to write the hmtx advance.
+  doc := TPdfDocument.Create;
   try
-    font := nil;
-    for f := 0 to high(ARABIC_FONTS) do
-    begin
-      FillChar(lf, SizeOf(lf), 0);
-      lf.FaceName := Utf8ToSynUnicode(ARABIC_FONTS[f]);
-      lf.Height := -1000;
-      lf.Weight := 400;
-      font := FontProvider.CreateFont(lf);
-      if font <> nil then
-        break;
-    end;
-    if font = nil then
-    begin
-      Check(true, 'SKIP: no Arabic-capable font found on this system');
-      exit;
-    end;
-    prev := FontProvider.SelectFont(dc, font);
+    doc.EmbeddedTTF := true;
+    doc.AddPage;
+    doc.Canvas.SetFont(ARABIC_FONTS[f], 24, []);
+    doc.Canvas.RightToLeftText := true;
+    doc.Canvas.TextOutW(40, 700, @MARHABA[0]);
+    ms := TMemoryStream.Create;
     try
-      Check(ShapeSingleRun(@MARHABA[0], length(MARHABA), font,
-        glyphs, advances, offsets, clusters), 'Shape must succeed');
-      shifted := 0;
-      for i := 0 to high(glyphs) do
-        if offsets[i] <> 0 then
-          inc(shifted);
-      if shifted = 0 then
-      begin
-        // this face shapes the word without cursive attachment and so cannot
-        // exercise the defect - Noto Naskh Arabic behaves this way, which is
-        // why U-2 was invisible on Linux
-        Check(true, 'SKIP: font applies no GPOS x_offset to this word');
-        exit;
-      end;
-      // read the face's own metrics: 'head' for unitsPerEm (offset 18 bytes),
-      // 'hhea' for numOfLongHorMetrics (offset 34), 'hmtx' for the advances
-      if not ReadTable('head', tbl) then
-      begin
-        Check(true, 'SKIP: cannot read the head table');
-        exit;
-      end;
-      upm := Swap16(tbl[9]);
-      Check(upm > 0, 'unitsPerEm must be > 0');
-      if not ReadTable('hhea', tbl) then
-      begin
-        Check(true, 'SKIP: cannot read the hhea table');
-        exit;
-      end;
-      nlhm := Swap16(tbl[17]);
-      Check(nlhm > 0, 'numOfLongHorMetrics must be > 0');
-      if not ReadTable('hmtx', tbl) then
-      begin
-        Check(true, 'SKIP: cannot read the hmtx table');
-        exit;
-      end;
-      hmtxWords := length(tbl);
-      // build a PDF with this very text, and read back what /W states for the
-      // shifted glyphs. That is the assertion that bites: the engine used to
-      // write advances[i] there, and it has to write the hmtx advance.
-      doc := TPdfDocument.Create;
-      try
-        doc.EmbeddedTTF := true;
-        doc.AddPage;
-        doc.Canvas.SetFont(ARABIC_FONTS[f], 24, []);
-        doc.Canvas.RightToLeftText := true;
-        doc.Canvas.TextOutW(40, 700, @MARHABA[0]);
-        ms := TMemoryStream.Create;
-        try
-          doc.SaveToStream(ms);
-          SetLength(pdf, ms.Size);
-          ms.Position := 0;
-          ms.Read(pointer(pdf)^, ms.Size);
-        finally
-          ms.Free;
-        end;
-      finally
-        doc.Free;
-      end;
-      Check(length(pdf) > 100, 'the test PDF must have been written');
-      for i := 0 to high(glyphs) do
-        if offsets[i] <> 0 then
-        begin
-          g := glyphs[i];
-          if g >= nlhm then
-            g := nlhm - 1;
-          if g * 2 >= hmtxWords then
-            continue;
-          hmtxAdv := (int64(Swap16(tbl[g * 2])) * 1000) div upm;
-          Check(hmtxAdv > 0, 'hmtx advance must be > 0');
-          // the two really are different for a cursively attached glyph, which
-          // is the precondition that makes the rest of this test meaningful
-          Check(hmtxAdv <> advances[i],
-            'a cursively shifted glyph must not have shaper advance = hmtx advance');
-          Check(Abs((hmtxAdv - advances[i]) - Abs(offsets[i])) <= 2,
-            'the advance difference must match the GPOS offset');
-          // and this is the regression itself: /W must state the hmtx value.
-          // WFor(g) finds "<glyph>[<width>]" in the /W array of the CID font.
-          wEntry := WFor(pdf, glyphs[i]);
-          if wEntry < 0 then
-            Check(true, 'SKIP: /W entry not found (deflated object stream)')
-          else
-          begin
-            Check(Abs(wEntry - hmtxAdv) <= 1,
-              'the /W entry must be the hmtx advance');
-            Check(Abs(wEntry - advances[i]) > 2,
-              'the /W entry must not be the shaper advance');
-          end;
-        end;
+      doc.SaveToStream(ms);
+      SetLength(pdf, ms.Size);
+      ms.Position := 0;
+      ms.Read(pointer(pdf)^, ms.Size);
     finally
-      if prev <> nil then
-        FontProvider.SelectFont(dc, prev);
-      FontProvider.DeleteFont(font);
+      ms.Free;
     end;
   finally
-    FontDC.DeleteDC(dc);
+    doc.Free;
   end;
+  Check(length(pdf) > 100, 'the test PDF must have been written');
+  for i := 0 to high(glyphs) do
+    if offsets[i] <> 0 then
+    begin
+      g := glyphs[i];
+      if g >= nlhm then
+        g := nlhm - 1;
+      if g * 2 >= hmtxWords then
+        continue;
+      hmtxAdv := (int64(Swap16(tbl[g * 2])) * 1000) div upm;
+      Check(hmtxAdv > 0, 'hmtx advance must be > 0');
+      // the two really are different for a cursively attached glyph, which
+      // is the precondition that makes the rest of this test meaningful
+      Check(hmtxAdv <> advances[i],
+        'a cursively shifted glyph must not have shaper advance = hmtx advance');
+      Check(Abs((hmtxAdv - advances[i]) - Abs(offsets[i])) <= 2,
+        'the advance difference must match the GPOS offset');
+      // and this is the regression itself: /W must state the hmtx value.
+      // WFor(g) finds "<glyph>[<width>]" in the /W array of the CID font.
+      wEntry := WFor(pdf, glyphs[i]);
+      if wEntry < 0 then
+        Check(true, 'SKIP: /W entry not found (deflated object stream)')
+      else
+      begin
+        Check(Abs(wEntry - hmtxAdv) <= 1,
+          'the /W entry must be the hmtx advance');
+        Check(Abs(wEntry - advances[i]) > 2,
+          'the /W entry must not be the shaper advance');
+      end;
+    end;
 end;
 {$endif OSWINDOWS}
 
@@ -514,9 +477,8 @@ const
   ARABIC_FONTS: array[0..3] of RawUtf8 = (
     'Noto Naskh Arabic', 'Geeza Pro', 'Tahoma', 'DejaVu Sans');
 var
-  dc: TFontDC;
   lf: TFontRequest;
-  font, prev: TFontHandle;
+  face: IFontFace;
   glyphs: TWordDynArray;
   advances, offsets, clusters: TIntegerDynArray;
   i, f: integer;
@@ -526,45 +488,36 @@ begin
     Check(true, 'SKIP: no IFontShaper registered (libharfbuzz absent)');
     exit;
   end;
-  dc := FontDC.CreateDC;
-  try
-    font := nil;
-    for f := 0 to high(ARABIC_FONTS) do
-    begin
-      FillChar(lf, SizeOf(lf), 0);
-      lf.FaceName := Utf8ToSynUnicode(ARABIC_FONTS[f]);
-      lf.Height := -1000;
-      lf.Weight := 400;
-      font := FontProvider.CreateFont(lf);
-      if font <> nil then
-        break;
-    end;
-    if font = nil then
-    begin
-      Check(true, 'SKIP: no Arabic-capable font found on this system');
-      exit;
-    end;
-    prev := FontProvider.SelectFont(dc, font);
-    Check(ShapeSingleRun(@MARHABA[0], length(MARHABA), font,
-        glyphs, advances, offsets, clusters), 'Shape must succeed');
-    Check(length(glyphs) > 0, 'Shape must return glyphs');
-    // Uniscribe gives no advances: those of the font apply
-    Check((advances = nil) or
-          (length(advances) = length(glyphs)), 'one advance per glyph');
-    for i := 0 to high(advances) do
-    begin
-      // a zero advance stacks every glyph on the same spot: this is exactly the
-      // regression that made rtl_demo unreadable when the shaped glyphs were
-      // missing from the font CMAP and their width came from the shaper
-      Check(advances[i] > 0, 'shaped advance must be > 0');
-      // and it must be a plausible 1000/em width, not a raw or mis-scaled value
-      Check(advances[i] < 4000, 'shaped advance must be in 1000/em units');
-    end;
-    if prev <> nil then
-      FontProvider.SelectFont(dc, prev);
-    FontProvider.DeleteFont(font);
-  finally
-    FontDC.DeleteDC(dc);
+  face := nil;
+  for f := 0 to high(ARABIC_FONTS) do
+  begin
+    FillChar(lf, SizeOf(lf), 0);
+    lf.FaceName := Utf8ToSynUnicode(ARABIC_FONTS[f]);
+    lf.Height := -1000;
+    lf.Weight := 400;
+    face := FontProvider.CreateFace(lf);
+    if face <> nil then
+      break;
+  end;
+  if face = nil then
+  begin
+    Check(true, 'SKIP: no Arabic-capable font found on this system');
+    exit;
+  end;
+  Check(ShapeSingleRun(@MARHABA[0], length(MARHABA), face.Handle,
+      glyphs, advances, offsets, clusters), 'Shape must succeed');
+  Check(length(glyphs) > 0, 'Shape must return glyphs');
+  // Uniscribe gives no advances: those of the font apply
+  Check((advances = nil) or
+        (length(advances) = length(glyphs)), 'one advance per glyph');
+  for i := 0 to high(advances) do
+  begin
+    // a zero advance stacks every glyph on the same spot: this is exactly the
+    // regression that made rtl_demo unreadable when the shaped glyphs were
+    // missing from the font CMAP and their width came from the shaper
+    Check(advances[i] > 0, 'shaped advance must be > 0');
+    // and it must be a plausible 1000/em width, not a raw or mis-scaled value
+    Check(advances[i] < 4000, 'shaped advance must be in 1000/em units');
   end;
 end;
 
@@ -578,9 +531,8 @@ const
   MARK_FONTS: array[0..1] of RawUtf8 = (
     'Noto Naskh Arabic', 'Geeza Pro');
 var
-  dc: TFontDC;
   lf: TFontRequest;
-  font, prev: TFontHandle;
+  face: IFontFace;
   runs: TFontShapedRuns;
   fonts: TRawUtf8DynArray;
   i, f, moved: integer;
@@ -593,55 +545,43 @@ begin
     Check(true, 'SKIP: no IFontShaper registered (libharfbuzz absent)');
     exit;
   end;
-  dc := FontDC.CreateDC;
-  try
-    // CreateFont substitutes a missing face: take one which is installed
-    fonts := nil;
-    FontEnumerator.EnumTrueTypeFonts(dc, fonts);
-    f := 0;
-    while (f <= high(MARK_FONTS)) and
-          (FindRawUtf8(fonts, MARK_FONTS[f]) < 0) do
-      inc(f);
-    if f > high(MARK_FONTS) then
-    begin
-      Check(true, 'SKIP: neither Noto Naskh Arabic nor Geeza Pro installed');
-      exit;
-    end;
-    FillChar(lf, SizeOf(lf), 0);
-    lf.FaceName := Utf8ToSynUnicode(MARK_FONTS[f]);
-    lf.Height := -1000;
-    lf.Weight := 400;
-    font := FontProvider.CreateFont(lf);
-    if font = nil then
-    begin
-      Check(true, 'SKIP: ' + Utf8ToString(MARK_FONTS[f]) + ' could not be created');
-      exit;
-    end;
-    prev := FontProvider.SelectFont(dc, font);
-    try
-      runs := nil;
-      Check(FontShaper.Shape(@BISMI[0], length(BISMI), font, true, runs) and
-        (length(runs) = 1), 'one run');
-      if length(runs) = 1 then
-        with runs[0] do
-        begin
-          Check((Kind = fskShaped) and (Outcome = fsoDone), 'shaped, done');
-          CheckEqual(TextLen, length(BISMI), 'the run covers the whole text');
-          CheckEqual(length(YOffsets), length(Glyphs), 'one y offset per glyph');
-          moved := 0;
-          for i := 0 to high(YOffsets) do
-            if YOffsets[i] <> 0 then
-              inc(moved);
-          Check(moved > 0, 'a mark is placed vertically');
-        end;
-    finally
-      if prev <> nil then
-        FontProvider.SelectFont(dc, prev);
-      FontProvider.DeleteFont(font);
-    end;
-  finally
-    FontDC.DeleteDC(dc);
+  // CreateFont substitutes a missing face: take one which is installed
+  fonts := nil;
+  FontEnumerator.EnumTrueTypeFonts(fonts);
+  f := 0;
+  while (f <= high(MARK_FONTS)) and
+        (FindRawUtf8(fonts, MARK_FONTS[f]) < 0) do
+    inc(f);
+  if f > high(MARK_FONTS) then
+  begin
+    Check(true, 'SKIP: neither Noto Naskh Arabic nor Geeza Pro installed');
+    exit;
   end;
+  FillChar(lf, SizeOf(lf), 0);
+  lf.FaceName := Utf8ToSynUnicode(MARK_FONTS[f]);
+  lf.Height := -1000;
+  lf.Weight := 400;
+  face := FontProvider.CreateFace(lf);
+  if face = nil then
+  begin
+    Check(true, 'SKIP: ' + Utf8ToString(MARK_FONTS[f]) + ' could not be created');
+    exit;
+  end;
+  runs := nil;
+  Check(FontShaper.Shape(@BISMI[0], length(BISMI), face.Handle, true, runs) and
+    (length(runs) = 1), 'one run');
+  if length(runs) = 1 then
+    with runs[0] do
+    begin
+      Check((Kind = fskShaped) and (Outcome = fsoDone), 'shaped, done');
+      CheckEqual(TextLen, length(BISMI), 'the run covers the whole text');
+      CheckEqual(length(YOffsets), length(Glyphs), 'one y offset per glyph');
+      moved := 0;
+      for i := 0 to high(YOffsets) do
+        if YOffsets[i] <> 0 then
+          inc(moved);
+      Check(moved > 0, 'a mark is placed vertically');
+    end;
 end;
 
 {$ifndef OSWINDOWS}
@@ -731,51 +671,122 @@ end;
 
 procedure TPdfCrossPlatTests.TestFontData;
 var
-  dc: TFontDC;
   lf: TFontRequest;
-  font: TFontHandle;
-  prev: TFontHandle;
+  face: IFontFace;
   buf: array[0..3] of byte;
   len: cardinal;
   tag: cardinal;
 begin
-  dc := FontDC.CreateDC;
-  try
-    FillChar(lf, SizeOf(lf), 0);
-    lf.FaceName := 'Arial';
-    lf.Height := -1000;
-    lf.Weight := 400;
-    font := FontProvider.CreateFont(lf);
-    if font = nil then
-      lf.FaceName := 'DejaVu Sans';
-    font := FontProvider.CreateFont(lf);
-    if font = nil then
+  FillChar(lf, SizeOf(lf), 0);
+  lf.FaceName := 'Arial';
+  lf.Height := -1000;
+  lf.Weight := 400;
+  face := FontProvider.CreateFace(lf);
+  if face = nil then
+  begin
+    lf.FaceName := 'DejaVu Sans';
+    face := FontProvider.CreateFace(lf);
+  end;
+  if face = nil then
+  begin
+    Check(true, 'SKIP: no test font found');
+    exit;
+  end;
+  // Read the 'head' table - every TrueType font has it
+  // the tag is the four characters read as a little-endian cardinal, as
+  // Windows GetFontData takes it: 'head' = $64616568 (the test used the
+  // big-endian value before Phase 1b, failed and took it as a skip)
+  tag := Ord('h') or (Ord('e') shl 8) or
+         (Ord('a') shl 16) or (cardinal(Ord('d')) shl 24);
+  // First call: get size
+  len := face.GetFontData(tag, 0, nil, 0);
+  Check(len <> FONT_DATA_ERROR, 'GetFontData(head) must succeed');
+  Check(len >= 54, 'head table must be at least 54 bytes');
+  // Second call: read the first 4 bytes, the version 1.0
+  len := face.GetFontData(tag, 0, @buf[0], 4);
+  Check(len = 4, 'GetFontData(head,4 bytes) must return 4');
+  Check((buf[0] = 0) and (buf[1] = 1) and (buf[2] = 0) and (buf[3] = 0),
+    'head version 1.0');
+end;
+
+// the face of the first installed family of Names, or nil
+function FirstFace(const Names: array of RawUtf8): IFontFace;
+var
+  lf: TFontRequest;
+  fonts: TRawUtf8DynArray;
+  i: PtrInt;
+begin
+  result := nil;
+  fonts := nil;
+  FontEnumerator.EnumTrueTypeFonts(fonts);
+  for i := 0 to high(Names) do
+    if FindRawUtf8(fonts, Names[i]) >= 0 then
     begin
-      Check(true, 'SKIP: no test font found');
+      FillChar(lf, SizeOf(lf), 0);
+      lf.FaceName := Utf8ToSynUnicode(Names[i]);
+      lf.Height := -1000;
+      lf.Weight := 400;
+      result := FontProvider.CreateFace(lf);
       exit;
     end;
-    prev := FontProvider.SelectFont(dc, font);
-    // Read the 'head' table - every TrueType font has it
-    // tag is 4 bytes: 'h','e','a','d' in big-endian = $68656164
-    tag := (Ord('h') shl 24) or (Ord('e') shl 16) or
-           (Ord('a') shl  8) or  Ord('d');
-    // First call: get size
-    len := FontProvider.GetFontData(dc, tag, 0, nil, 0);
-    if len <> FontProvider.FontDataError then
-    begin
-      Check(len >= 4, 'head table must be at least 4 bytes');
-      // Second call: read first 4 bytes
-      len := FontProvider.GetFontData(dc, tag, 0, @buf[0], 4);
-      if len <> FontProvider.FontDataError then
-        Check(len = 4, 'GetFontData(head,4 bytes) must return 4');
-    end
-    else
-      Check(true, 'SKIP: GetFontData not available on this platform');
-    if prev <> nil then
-      FontProvider.SelectFont(dc, prev);
-    FontProvider.DeleteFont(font);
+end;
+
+procedure TPdfCrossPlatTests.TestFacesKeepTheirState;
+const
+  OMEGA: RawUtf8 = {$ifdef HASCODEPAGE} #$03A9 {$else} #$CE#$A9 {$endif};
+var
+  a, b: IFontFace;
+  wa1, wa2, wb: TFontCharAbcArray;
+  ha1, ha2, hb: cardinal;
+  i: PtrInt;
+  same: boolean;
+  pdf: TPdfDocument;
+  ms: TMemoryStream;
+  w: SynUnicode;
+begin
+  { Phase 1b: each face reads its own font - with one document DC, a read
+    got whatever font was selected last, and TPdfTtf.Create relied on its
+    caller having selected the right one }
+  a := FirstFace(['Arial', 'Liberation Sans', 'DejaVu Sans', 'Helvetica']);
+  b := FirstFace(['Courier New', 'Liberation Mono', 'DejaVu Sans Mono', 'Courier']);
+  if (a = nil) or
+     (b = nil) then
+  begin
+    Check(true, 'SKIP: no sans and mono pair installed');
+    exit;
+  end;
+  Check(a.GetCharAbcWidths(32, 126, wa1), 'widths of a');
+  ha1 := a.GetFontData(0, 0, nil, 0);
+  Check(b.GetCharAbcWidths(32, 126, wb), 'widths of b');
+  hb := b.GetFontData(0, 0, nil, 0);
+  Check(a.GetCharAbcWidths(32, 126, wa2), 'widths of a again');
+  ha2 := a.GetFontData(0, 0, nil, 0);
+  same := length(wa1) = length(wa2);
+  for i := 0 to high(wa1) do
+    same := same and
+            (wa1[i].abcA = wa2[i].abcA) and
+            (wa1[i].abcB = wa2[i].abcB) and
+            (wa1[i].abcC = wa2[i].abcC);
+  Check(same, 'a reads the same widths after b was read');
+  CheckEqual(ha1, ha2, 'and the same font file size');
+  Check(ha1 <> hb, 'b is another font file');
+  // 'i' and 'M' share their advance in a mono face only
+  Check(wa1[ord('i') - 32].abcB <> wa1[ord('M') - 32].abcB, 'a is proportional');
+  // a font with a Unicode instance shares the face with its WinAnsi
+  // instance: both go with the document, in any order, without a double free
+  pdf := TPdfDocument.Create;
+  ms := TMemoryStream.Create;
+  try
+    pdf.EmbeddedTTF := true;
+    pdf.AddPage;
+    pdf.Canvas.SetFont('Arial', 12, []);
+    w := Utf8ToSynUnicode('Hello ' + OMEGA);
+    pdf.Canvas.TextOutW(20, 800, pointer(w));
+    pdf.SaveToStream(ms);
+    Check(ms.Size > 1000, 'saved with both instances');
   finally
-    FontDC.DeleteDC(dc);
+    ms.Free;
+    pdf.Free;
   end;
 end;
 

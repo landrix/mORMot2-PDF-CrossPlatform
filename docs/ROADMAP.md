@@ -149,6 +149,18 @@ v0.10.0 (2026-09-30).
   and behave as before. On
   Linux/macOS, `TPdfCanvas.ShowGlyph` now gives a glyph no character maps
   to its width in `/W`, as Windows did
+- **No device context in the font layer (R-28, refactoring Phase 1b):**
+  `IFontProvider.CreateFace` returns an `IFontFace`, reference counted,
+  which reads metrics, widths, glyph advances, tables and the face file
+  itself - no selection into a DC. Gone without an alias: `IFontDC`,
+  `TFontDC`, the `FontDC` global, `IFontProvider.CreateFont`, `DeleteFont`,
+  `SelectFont` and `FontDataError` (now the constant `FONT_DATA_ERROR`), the
+  DC parameter of `RegisterFontPlatform` and `EnumTrueTypeFonts`, and
+  `TPdfPlatformDC`/`IPdfPlatformDC` of `mormot.pdf.types`. `IFontProvider`
+  and `IFontEnumerator` have new GUIDs; a shaper or subsetter of your own
+  gets `IFontFace.Handle` as before the handle. On Windows
+  `mormot.lib.uniscribe` adds `GdiCreateFace(TLogFontW)` and
+  `GdiScreenLogPixels`. The PDF output is unchanged
 - **Coming with R-20** (announce when done): the preview and the GUI demos
   on Delphi
 

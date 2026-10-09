@@ -200,7 +200,9 @@ checked against that record:
    `IFontProvider.GetFaceFile`, the face of a `.ttc` as one font file;
    `ExtractSfntFromTtc` and `TtcFaceIndex` in `mormot.lib.core`; new GUIDs
    for `IFontProvider` and `IFontSubsetter`), then `84012287b` (2026-10-09, step
-   W3: `IFontProvider.GetGlyphAdvance`).
+   W3: `IFontProvider.GetGlyphAdvance`), then `2f0e02243` (2026-10-09, the
+   bounds of `ExtractSfntFromTtc`), then `681bbe2a1` (2026-10-09, Phase 1b:
+   `IFontFace` replaces the device context).
    **Checked:** against `d60cc6e80`, today's `main`,
    `test_runner` 259/259 on Windows (FPC Win64, Delphi 7, Delphi 2010),
    298/298 on Linux, 317/317 on macOS (fpcupdeluxe, FPC 3.2.3). Against
@@ -370,6 +372,40 @@ Gist §19. Its own phase: the step most likely to change metrics.
 - `IFontDC`, `SelectFont`, `CreateDC`, the screen `LOGPIXELSY`
   replaced by a face object that owns its state
 - Output identical; every difference explained
+
+**Done** (2026-10-09; design decided with Sven, three alternatives each,
+discussed with Codex against Skia `SkTypeface`, DirectWrite
+`IDWriteFontFace`, FreeType `FT_Face`, HarfBuzz `hb_face`, cairo, PDFium and
+Qt `QRawFont`):
+
+- **`IFontFace`**, reference counted, from `IFontProvider.CreateFace`:
+  metrics, character widths, glyph advances, tables and the face file are
+  its methods, without a selection. The GDI face owns its HFONT and a
+  compatible DC made when first needed; the FreeType face its
+  `PFreeTypeFont`. The WinAnsi and the Unicode instance of a font share one
+  face. The shaper and the subsetter keep their signatures and get the
+  face's `Handle`. The `TLogFontW` constructor takes its face from
+  `GdiCreateFace` of `mormot.lib.uniscribe`, from the whole LOGFONT
+- `IFontDC`, `TFontDC`, the `FontDC` global, the DC parameter of
+  `RegisterFontPlatform` and of `IFontEnumerator.EnumTrueTypeFonts`,
+  `IFontProvider.CreateFont`/`DeleteFont`/`SelectFont`/`FontDataError`
+  (now the constant `FONT_DATA_ERROR`) and the aliases
+  `TPdfPlatformDC`/`IPdfPlatformDC` are gone - the contract was never
+  released. New GUIDs for `IFontProvider` and `IFontEnumerator`
+- **`ScreenLogPixels`:** `GdiScreenLogPixels` on Windows (the same
+  `GetDeviceCaps(LOGPIXELSY)` of a compatible DC), 96 on POSIX - outside
+  `mormot.lib.core`; Phase 3 moves it to the canvas adapter. It follows the
+  process's DPI awareness: compare demo PDFs only between builds with the
+  same `.res` (a Lazarus-made one carries the DPI-aware manifest; 144 at
+  150 % scaling where an empty one gives 96 - found while checking this step)
+- **EMF** (Windows): `TPdfDocument.EmfDC`, made when first needed; the text
+  measure selects the face's HFONT for that call only
+- `TPdfTtf.Create` read four tables relying on the font its caller had
+  selected: it reads the face now
+- A font no backend resolves gives `TPdfNoFace`, whose queries fail, as the
+  nil font of the FreeType backend did
+- Output identical: golden files on every platform, the Windows demo PDFs
+  (same `.res`) against `main`
 
 ### Phase 2 — Raw PDF Without VCL/LCL
 
