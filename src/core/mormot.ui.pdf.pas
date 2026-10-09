@@ -4007,82 +4007,6 @@ begin
 end;
 {$endif OSWINDOWS}
 
-// GetTtcIndex() is used by TPdfFontTrueType.PrepareForSaving()
-
-function FindSynUnicode(const values: array of SynUnicode;
-  const value: SynUnicode): PtrInt;
-begin
-  for result := 0 to high(values) do
-    if values[result] = value then
-      exit;
-  result := -1;
-end;
-
-// Looks up ttcIndex from list of font names in known ttc font collections.
-// For some locales, the lookup may fail
-// result must not be greater than FontCount-1
-function GetTtcIndex(const FontName: RawUtf8; var TtcIndex: word;
-  FontCount: LongWord): boolean;
-const
-  // lowercased Font names for Simpl/Trad Chinese, Japanese, Korean locales
-  BATANG_KO       = #48148#53461;
-  BATANGCHE_KO    = BATANG_KO + #52404;
-  GUNGSUH_KO      = #44417#49436;
-  GUNGSUHCHE_KO   = GUNGSUH_KO + #52404;
-  GULIM_KO        = #44404#47548;
-  GULIMCHE_KO     = GULIM_KO + #52404;
-  DOTUM_KO        = #46027#50880;
-  DOTUMCHE_KO     = DOTUM_KO + #52404;
-  MINGLIU_CH      = #32048#26126#39636;
-  PMINGLIU_CH     = #26032 + MINGLIU_CH;
-  MINGLIU_HK_CH   = MINGLIU_CH  + '_hkscs';
-  MINGLIU_XB_CH   = MINGLIU_CH  + '-extb';
-  PMINGLIU_XB_CH  = PMINGLIU_CH + '-extb';
-  MINGLIU_XBHK_CH = MINGLIU_CH  + '-extb_hkscs';
-  MSGOTHIC_JA     = #65357#65363#32#12468#12471#12483#12463;
-  MSPGOTHIC_JA    = #65357#65363#32#65328#12468#12471#12483#12463;
-  MSMINCHO_JA     = #65357#65363#32#26126#26397;
-  MSPMINCHO_JA    = #65357#65363#32#65328#26126#26397;
-  SIMSUN_CHS      = #23435#20307;
-  NSIMSUN_CHS     = #26032#23435#20307;
-var
-  lcfn: SynUnicode;
-begin
-  result := true;
-  if FindPropName(['batang', 'cambria', 'gulim', 'mingliu', 'mingliu-extb',
-    'ms gothic', 'ms mincho', 'simsun'], FontName) >= 0 then
-    TtcIndex := 0
-  else if FindPropName(['batangche', 'cambria math', 'gulimche', 'pmingliu',
-    'pmingliu-extb', 'ms pgothic', 'ms pmincho', 'nsimsun'], FontName) >= 0 then
-    TtcIndex := 1
-  else if FindPropName(['gungsuh', 'dotum', 'mingliu_hkscs',
-    'mingliu_hkscs-extb', 'ms ui gothic'], FontName) >= 0 then
-    TtcIndex := 2
-  else if FindPropName(['gungsuhche', 'dotumche'], FontName) >= 0 then
-    TtcIndex := 3
-  else
-  begin
-    lcfn := LowerCaseSynUnicode(Utf8ToSynUnicode(FontName));
-    if FindSynUnicode([BATANG_KO, GULIM_KO, MINGLIU_CH, MINGLIU_XB_CH,
-       MSGOTHIC_JA, MSMINCHO_JA, SIMSUN_CHS], lcfn) >= 0 then
-      TtcIndex := 0
-    else if FindSynUnicode([BATANGCHE_KO, GULIMCHE_KO, MINGLIU_HK_CH,
-       PMINGLIU_XB_CH, MSPGOTHIC_JA, MSPMINCHO_JA, NSIMSUN_CHS], lcfn) >= 0 then
-      TtcIndex := 1
-    else if FindSynUnicode([GUNGSUH_KO, DOTUM_KO, MINGLIU_HK_CH,
-       MINGLIU_XBHK_CH], lcfn) >= 0 then
-      TtcIndex := 2
-    else if FindSynUnicode([GUNGSUHCHE_KO, DOTUMCHE_KO], lcfn) >= 0 then
-      TtcIndex := 3
-    else
-      result := false;
-  end;
-  if result and
-    (TtcIndex > (FontCount - 1)) then
-    result := false;
-end;
-
-
 type
   tcaRes = (
     caMoveto,
@@ -6401,7 +6325,6 @@ const
   // encoding IDs of the Unicode platform (0) cmap subtables
   TTFCFP_UNICODE_BMP = 3;  // BMP only, i.e. the format 4 map we can parse
   TTFCFP_UNICODE_FULL = 4; // full repertoire, usually format 12
-  TTCF_TABLE = $66637474; // 'ttcf'
 
 function PdfCanSubsetRetainingGids: boolean;
 begin
@@ -7196,12 +7119,8 @@ var
   tounicode: TPdfStream;
   str: TStream;
   WR: TPdfWrite;
-  ttfSize: cardinal;
   ttf: PdfString;
-  ttcIndex: word; // for the .ttc detection below
-  tableTag: LongWord;
   sub: PPdfFontSubset;
-  ttcNumFonts: LongWord;
   keys: TWordDynArray;
   used: TUsedWide;
 begin
@@ -7343,92 +7262,35 @@ begin
       // embedd true Type font into the PDF file (allow subset of used glyph)
       if IsEmbedded then
       begin
-        fDoc.GetDCWithFont(self);
-        // is the font in a .ttc collection?
-        {$ifdef OSWINDOWS}
-        ttfSize := windows.GetFontData(fDoc.fDC, TTCF_TABLE, 0, nil, 0);
-        if ttfSize <> GDI_ERROR then
+        // subset prepared by FontSubsetter for all fonts sharing it
+        sub := GetSubset;
+        if sub <> nil then
         begin
-          // Yes, the font is in a .ttc collection
-          // find out how many fonts are included in the collection
-          if windows.GetFontData(
-               fDoc.fDC, TTCF_TABLE, 8, @ttcNumFonts, 4) <> GDI_ERROR then
-            ttcNumFonts := bswap32(ttcNumFonts)
-          else
-            ttcNumFonts := 1;
-          // we need to find out the index of the font within the ttc collection
-          // (this is not easy, so GetTtcIndex uses lookup on known ttc fonts)
-          if (ttcNumFonts < 2) or
-             not GetTtcIndex(fDoc.fTrueTypeFonts[fTrueTypeFontsIndex - 1],
-               ttcIndex, ttcNumFonts) then
-            ttcIndex := 0;
-          tableTag := TTCF_TABLE;
+          ttf := sub^.Subset;
+          // see 9.6.4 Font Subsets: begins with a tag followed by a +
+          with TPdfName(fFontDescriptor.ValueByName('FontName')) do
+            Value := sub^.Tag + Value;
+          TPdfName(Data.ValueByName('BaseFont')).Value :=
+            TPdfName(fFontDescriptor.ValueByName('FontName')).Value;
         end
-        else
+        // the whole face - extracted from its .ttc: a collection is no font
+        // program; one the face is not found in is not embedded
+        else if not FontProvider.GetFaceFile(
+                      TFontDC(fDoc.GetDCWithFont(self)), ttf) then
+          ttf := '';
+        if ttf <> '' then
         begin
-          ttfSize := windows.GetFontData(fDoc.fDC, 0, 0, nil, 0);
-          ttcIndex := 0;
-          tableTag := 0;
-        end;
-        if ttfSize <> GDI_ERROR then
-        begin
-          SetLength(ttf, ttfSize);
-          if windows.GetFontData(
-               fDoc.fDC, tableTag, 0, pointer(ttf), ttfSize) <> GDI_ERROR then
-          begin
-        {$else}
-        // POSIX: use platform font interface to retrieve font data
-        ttfSize := FontProvider.GetFontData(fDoc.fDC, TTCF_TABLE, 0, nil, 0);
-        if ttfSize <> FontProvider.FontDataError then
-        begin
-          // TTC collection
-          if FontProvider.GetFontData(
-               fDoc.fDC, TTCF_TABLE, 8, @ttcNumFonts, 4) <> FontProvider.FontDataError then
-            ttcNumFonts := bswap32(ttcNumFonts)
-          else
-            ttcNumFonts := 1;
-          if (ttcNumFonts < 2) or
-             not GetTtcIndex(fDoc.fTrueTypeFonts[fTrueTypeFontsIndex - 1],
-               ttcIndex, ttcNumFonts) then
-            ttcIndex := 0;
-          tableTag := TTCF_TABLE;
-        end
-        else
-        begin
-          ttfSize := FontProvider.GetFontData(fDoc.fDC, 0, 0, nil, 0);
-          ttcIndex := 0;
-          tableTag := 0;
-        end;
-        if ttfSize <> FontProvider.FontDataError then
-        begin
-          SetLength(ttf, ttfSize);
-          if FontProvider.GetFontData(
-               fDoc.fDC, tableTag, 0, pointer(ttf), ttfSize) <> FontProvider.FontDataError then
-          begin
-        {$endif OSWINDOWS}
-            // subset prepared by FontSubsetter for all fonts sharing it
-            sub := GetSubset;
-            if sub <> nil then
-            begin
-              ttf := sub^.Subset;
-              // see 9.6.4 Font Subsets: begins with a tag followed by a +
-              with TPdfName(fFontDescriptor.ValueByName('FontName')) do
-                Value := sub^.Tag + Value;
-              TPdfName(Data.ValueByName('BaseFont')).Value :=
-                TPdfName(fFontDescriptor.ValueByName('FontName')).Value;
-            end;
-            // subsetting (if any) is done: the bytes are final, so identical
-            // data can now share a single stream object
-            // /FontDescriptor is common to WinAnsi and Unicode fonts
-            // the key follows the outline flavour: CFF faces belong in
-            // /FontFile3, and poppler warns about a mismatch otherwise
-            fFontDescriptor.AddItem(
-              PdfFontFileKey(ttf), fDoc.GetOrCreateFontFile2(ttf));
-            if PdfIsCffFace(ttf) then
-              // 9.6.2.1: a simple font with CFF outlines is a /Type1, not a
-              // /TrueType - the constructor could not know the flavour yet
-              TPdfName(Data.ValueByName('Subtype')).Value := 'Type1';
-          end;
+          // subsetting (if any) is done: the bytes are final, so identical
+          // data can now share a single stream object
+          // /FontDescriptor is common to WinAnsi and Unicode fonts
+          // the key follows the outline flavour: CFF faces belong in
+          // /FontFile3, and poppler warns about a mismatch otherwise
+          fFontDescriptor.AddItem(
+            PdfFontFileKey(ttf), fDoc.GetOrCreateFontFile2(ttf));
+          if PdfIsCffFace(ttf) then
+            // 9.6.2.1: a simple font with CFF outlines is a /Type1, not a
+            // /TrueType - the constructor could not know the flavour yet
+            TPdfName(Data.ValueByName('Subtype')).Value := 'Type1';
         end;
       end;
       // PDF/A and PDF/UA (i.e. Tagged) require a ToUnicode CMap for all fonts,

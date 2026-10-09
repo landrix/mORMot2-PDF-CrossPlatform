@@ -462,14 +462,12 @@ TPdfDocument.SaveToStream / SaveToFile → SaveToStreamDirectEnd
       /FirstChar, /LastChar, /Widths from fWinAnsiUsed + ABC widths
 
       if IsEmbedded:
-        GetFontData(DC, 0, 0, nil, 0)         → query total byte count
-        GetFontData(DC, 0, 0, Buf, Size)      → read full TTF bytes
-
         GetSubset <> nil (prepared above, every platform since W2):
           ttf := Subset bytes; prefix /FontName and /BaseFont with Tag
           (the Unicode instance copies the prefixed name to its CIDFont and
            Type0 /BaseFont - WinAnsi instances are prepared first)
-        else: the whole face (a .ttc face: GetTtcIndex, until W3)
+        else: FontProvider.GetFaceFile(GetDCWithFont(self), ttf) - the
+          whole face, a .ttc face extracted; false → nothing embedded
 
         GetOrCreateFontFile2(ttf) → one /FontFile2 per distinct byte string
   fFontSubsets := nil

@@ -64,7 +64,7 @@ untagged output.
 
 | `EmbeddedWholeTtf` | Behaviour |
 |---|---|
-| `true` | Complete TTF bytes embedded. Safe for all scripts including RTL/Arabic. For a `.ttc`, the loaded face alone is extracted as a standalone sfnt — a raw `ttcf` container is not a valid `/FontFile2`. |
+| `true` | Complete TTF bytes embedded. Safe for all scripts including RTL/Arabic. For a `.ttc`, the face alone is extracted as a standalone sfnt (`FontProvider.GetFaceFile`) — a raw `ttcf` container is not a valid `/FontFile2`. On Windows only since 2026-10-09: before, the whole collection was embedded. |
 | `false` (default), Linux/macOS | Subset via `IFontSubsetter` (`mormot.lib.harfbuzz`, `libharfbuzz-subset`, R-12). Glyph IDs retained, so content streams, `/W` and `/ToUnicode` stay valid. Safe for Latin, CJK, shaped RTL and tagged output. |
 | `false` (default), Windows | Subset via `CreateFontPackage` with a glyph keep list (`TTFCFP_FLAGS_GLYPHLIST`, R-15). Glyph IDs retained, so it is safe for the same cases as hb-subset — Latin, CJK, shaped Arabic (Uniscribe), tagged output. |
 
@@ -150,7 +150,12 @@ whatever cmap the lookup goes through — symbol fonts included, unlike POSIX
 collection at the index found from the bytes (`TtcFaceIndex`; before W2 the
 family-name list `GetTtcIndex`, wrong for 14 of 30 collections).
 `TestSubsetTtcFace` checks four such faces and two of index 0 on the saved
-PDF. The subset has no `name` table left (`ReduceTtf`), and the faces of
+PDF, and `TestWholeTtcFace` the same faces embedded whole
+(`EmbeddedWholeTtf`, PDF/A-1, no subsetter); both run wherever one of the
+fonts is installed - on Windows, or on a Mac with the Office fonts (face 0
+only there: `TFontFileMap` reaches no other). `TestSubsetSymbolFont`
+subsets Wingdings (`SYMBOL_CHARSET`: only that makes a font symbolic) and
+checks `SupportsSymbolic`. The subset has no `name` table left (`ReduceTtf`), and the faces of
 these collections share `glyf` and `hmtx`: the test tells them apart by `cmap`
 (`MS UI Gothic` maps 'H' to glyph 18634, `MS PGothic` to 16116) and `hhea`
 (the UI faces of YaHei, JhengHei, Yu Gothic), read through `FontProvider`
@@ -473,12 +478,13 @@ inside
 /FirstChar, /LastChar, /Widths built from fWinAnsiUsed + WinAnsi ABC widths
 
 Font embedding decision:
-  if EmbeddedWholeTtf = true (set by Tagged on Windows):
-    FontProvider.GetFontData(DC, 0, 0, nil, 0)   → total byte count
-    FontProvider.GetFontData(DC, 0, 0, Buf, Size) → full TTF bytes → embed as /FontFile2
+  if EmbeddedWholeTtf = true, for PDF/A-1, or with no FontSubsetter (or a
+  symbol font and not SupportsSymbolic, or a failed subset):
+    FontProvider.GetFaceFile(DC, ttf)            → the face as one font file
     safe for all scripts; shaped GSUB glyph IDs are valid in the complete font
-    .ttc: the FreeType backend returns just the loaded face, rebuilt as an sfnt
-          (ExtractSfntFromTtc); Windows does the same via CreateFontPackage
+    .ttc: just the face, rebuilt as an sfnt (ExtractSfntFromTtc) - FreeType
+          the face it loaded, GDI the face TtcFaceIndex finds (since
+          2026-10-09; before, Windows embedded the whole collection)
     the stream is shared: TPdfDocument.GetOrCreateFontFile2() reuses one
     TPdfStream for byte-identical data, so Regular and Bold resolving to the
     same physical file embed it once, not twice

@@ -81,7 +81,7 @@ examples/
   (each demo folder carries a short README.md; the source header of its .lpr
    (`layer1_demo`: .dpr) says the same thing in two sentences)
 tests/
-  test_runner.lpr              runs every suite below (green: 368 assertions on Windows with FPC, Delphi 13 and Delphi 7, with the CJK faces of Windows 11 - Delphi 2010 expected the same, last measured at 307 (#22); 373 on macOS with Geeza Pro, 354 on Linux (366 with fonts-noto-cjk) — the rest are skips; the golden files add two per case with or without a baseline. Delphi 13, measured before the golden files: 259 on Windows, 171 on Linux64, 129 on Android64, layer 1 only)
+  test_runner.lpr              runs every suite below (green: 444 assertions on Windows with FPC, Delphi 13 and Delphi 7, with the CJK and symbol faces of Windows 11 - Delphi 2010 last measured at 368 (#25); 387 on macOS with Geeza Pro, 367 on Linux (379 with fonts-noto-cjk) — the rest are skips; the golden files add two per case with or without a baseline. Delphi 13, measured before the golden files: 259 on Windows, 171 on Linux64, 129 on Android64, layer 1 only)
   test_defines.inc             PDF_HASVCLCANVAS: the TCanvas bridge suites (all compilers since R-20)
   build_delphi7.bat            dcc32 build of one project (R-19)
   build_delphi2010.bat         the same with Delphi 2010, warnings on (R-25, Unicode Delphi)
@@ -363,7 +363,7 @@ itself is in each demo's `uReport.pas`; the form only passes its options.
 - **EMF/MetaFile**: Windows-only (`TPdfDocumentGdi`), not portable
 - **GDI+/gradient fills**: Windows-only via EMF
 - **Table pagination**: no row break within a cell (roadmap R-10)
-- **Symbol fonts on POSIX**: excluded from subsetting, the whole face is embedded (roadmap R-15b); neither side is covered by a demo or test
+- **Symbol fonts on POSIX**: excluded from subsetting, the whole face is embedded (roadmap R-15b); `TestSubsetSymbolFont` covers both sides where Wingdings, Webdings or Symbol is installed (Windows: subset by FontSub; macOS: Symbol embedded whole), no demo
 - **PDF/A** (R-17): A-3U + PDF/UA-1, A-3A (tagged) and A-3B verified on all three platforms with veraPDF, Mustang and PAC; A-1 and A-2 implemented, unverified. Pass the level to the constructor — the `PdfA` setter calls `NewDoc`. A levels need `Tagged := True`. With PDF/A + Tagged the engine describes `pdfuaid` in the XMP extension schemas, inside the caller's `<pdfaExtension:schemas><rdf:Bag>` if `PdfAMetadaExtension` has one — keep that single list
 - **E-invoices**: the engine writes the PDF/A-3 container (`CreateFileAttachmentFrom` + `PdfMetadataFacturX`; in `TGDIPages` `AddExportPdfAttachment` + `ExportPdfMetadataExtension`) and never generates or validates invoice XML. Scope is B2B (ZUGFeRD/Factur-X profile EN 16931); invoices to German authorities are pure XML and out of scope. Sample data only under the licence of this project (mORMot's MPL/GPL/LGPL)
 - **Charts**: out of scope — no chart engine, as no invoice XML. A chart is an
@@ -373,7 +373,7 @@ itself is in each demo's `uReport.pas`; the form only passes its options.
 - **Links in tagged output**: no `Link` role, `OBJR` or `/StructParent` for annotations — `CreateHyperLink` in tagged output fails veraPDF `ua1` on four 7.18 rules (measured). `TGDIPages.DrawLink` draws link-styled text as a `Span` and drops the URL: conformant, not clickable (roadmap R-29, item 7)
 - **Delphi** (R-19, R-21, R-23, R-25, R-27 done; R-20 steps 1–6 done): layer 1,
   the TCanvas bridge and the `TGDIPages` core build on Delphi 7 and Delphi
-  2010 (Unicode Delphi), Win32; `test_runner` 368/368 on Delphi 7 (Delphi 2010 last measured at 307/307, #22). All six console
+  2010 (Unicode Delphi), Win32; `test_runner` 444/444 on Delphi 7 (Delphi 2010 last measured at 368/368, #25). All six console
   demos and the `--export` of the two GUI demos build and give the same PDF as
   FPC (the GUI demos build their report in `uReport.pas`, without a form);
   PAC 2024 and veraPDF pass the files of both compilers. Open: the preview and

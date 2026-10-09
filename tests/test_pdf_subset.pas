@@ -21,7 +21,7 @@ uses
   mormot.lib.core,
   mormot.pdf.types,
   {$ifdef OSWINDOWS}
-  mormot.lib.uniscribe, // TtcFaceIndex
+  mormot.lib.uniscribe,
   {$else}
   mormot.lib.harfbuzz,
   {$endif OSWINDOWS}
@@ -53,9 +53,7 @@ type
     procedure TestSubsetIsSmaller;
     procedure TestSubsetAcceptsCff;
     procedure TestSubsetRejectsGarbage;
-    {$ifdef OSWINDOWS}
     procedure TestTtcFaceIndex;
-    {$endif OSWINDOWS}
   end;
 
   /// font subsetting through TPdfDocument, on the saved PDF
@@ -65,10 +63,16 @@ type
     // uncompressed PDF; aWhole = EmbeddedWholeTtf
     // - drawn through TPdfCanvas, not the TCanvas bridge, so that the suite
     // runs on Delphi too (R-19): what it checks is the output, not the bridge
+    // - aCharSet as TPdfCanvas.SetFont takes it: 1 = DEFAULT_CHARSET,
+    // 2 = SYMBOL_CHARSET
     function BuildPdf(const aFont: string; const aText: RawUtf8;
       aWhole, aTagged, aBold: boolean;
-      aPdfA: TPdfALevel = pdfaNone): RawByteString;
+      aPdfA: TPdfALevel = pdfaNone; aCharSet: integer = 1): RawByteString;
     function SansFont: string;
+    // check the font file of every installed .ttc face of a list against the
+    // face the platform selects: cmap and hhea
+    procedure CheckTtcFaces(aWholeTtf: boolean; aPdfA: TPdfALevel;
+      aSubset: boolean; const aWhat: string);
   published
     procedure TestSubsetEmbeddedIsSmaller;
     procedure TestSubsetSharedStreamAndTag;
@@ -80,6 +84,8 @@ type
     procedure TestPdfA3Subsets;
     procedure TestShapedGlyphKeys;
     procedure TestSubsetTtcFace;
+    procedure TestWholeTtcFace;
+    procedure TestSubsetSymbolFont;
   end;
 
 const
@@ -108,7 +114,8 @@ function SfntFindTable(const Face: RawByteString; const Tag: RawUtf8;
 function SfntNumGlyphs(const Face: RawByteString): integer;
 /// byte length of a glyph in the glyf table (0 = empty glyph), -1 on error
 function SfntGlyphLength(const Face: RawByteString; Glyph: integer): integer;
-/// glyph ID for a BMP code point from the (3,1) format 4 cmap, 0 if unmapped
+/// glyph ID for a BMP code point from the (3,1) format 4 cmap, or the (3,0)
+// one of a symbol font, 0 if unmapped
 function SfntCmapLookup(const Face: RawByteString; CodePoint: cardinal): integer;
 
 implementation
@@ -186,12 +193,17 @@ begin
   n := BE16(Face, cofs + 2);
   sub := 0;
   for i := 0 to n - 1 do
-    if (BE16(Face, cofs + 4 + i * 8) = 3) and
-       (BE16(Face, cofs + 6 + i * 8) = 1) then
-    begin
-      sub := cofs + BE32(Face, cofs + 8 + i * 8);
-      break;
-    end;
+    if BE16(Face, cofs + 4 + i * 8) = 3 then
+      case BE16(Face, cofs + 6 + i * 8) of
+        1:
+          begin
+            sub := cofs + BE32(Face, cofs + 8 + i * 8);
+            break;
+          end;
+        0:
+          // a symbol font: its codes are U+F0xx
+          sub := cofs + BE32(Face, cofs + 8 + i * 8);
+      end;
   if (sub = 0) or
      (BE16(Face, sub) <> 4) then
     exit;
@@ -588,8 +600,6 @@ begin
   result := AnsiChar((v shr 8) and 255) + AnsiChar(v and 255);
 end;
 
-{$ifdef OSWINDOWS}
-
 // a table directory of one table, told apart by its offset
 function OneTableDir(TableOffset: cardinal): RawByteString;
 begin
@@ -619,8 +629,8 @@ procedure TPdfSubsetTests.TestTtcFaceIndex;
 var
   a, b, c: RawByteString;
 begin
-  { the FontSub subsetter finds the face of a .ttc by its table directory in
-    the collection header: the family-name list it replaces (GetTtcIndex) is
+  { FontSub and GetFaceFile find the face of a .ttc by its table directory
+    in the collection header (mormot.lib.core): the family-name list it replaces (GetTtcIndex) is
     wrong for 14 of 30 collections of Windows 11 (MS UI Gothic is face 1,
     not 2) }
   a := OneTableDir(100);
@@ -639,8 +649,6 @@ begin
   CheckEqual(TtcFaceIndex('ttcf' + BE32Bytes($00010000) + BE32Bytes($40000001) +
     BE32Bytes(16) + a, a), -1, 'oversized face count');
 end;
-
-{$endif OSWINDOWS}
 
 
 { TPdfSubsetEngineTests }
@@ -662,7 +670,7 @@ end;
 
 function TPdfSubsetEngineTests.BuildPdf(const aFont: string;
   const aText: RawUtf8; aWhole, aTagged, aBold: boolean;
-  aPdfA: TPdfALevel): RawByteString;
+  aPdfA: TPdfALevel; aCharSet: integer): RawByteString;
 var
   PDF: TPdfDocument;
   Stream: TMemoryStream;
@@ -682,11 +690,11 @@ begin
       PDF.AddPage;
       if aTagged then
         PDF.Canvas.BeginStructContent(psrP);
-      PDF.Canvas.SetFont(StringToUtf8(aFont), 12, [], PDF_DEFAULT_CHARSET);
+      PDF.Canvas.SetFont(StringToUtf8(aFont), 12, [], aCharSet);
       DrawUtf8Text(PDF, 15, 800, aText);
       if aBold then
       begin
-        PDF.Canvas.SetFont(StringToUtf8(aFont), 12, [pfsBold], PDF_DEFAULT_CHARSET);
+        PDF.Canvas.SetFont(StringToUtf8(aFont), 12, [pfsBold], aCharSet);
         DrawUtf8Text(PDF, 15, 770, aText + '!');
       end;
       if aTagged then
@@ -899,10 +907,11 @@ begin
   end;
 end;
 
-procedure TPdfSubsetEngineTests.TestSubsetTtcFace;
+procedure TPdfSubsetEngineTests.CheckTtcFaces(aWholeTtf: boolean;
+  aPdfA: TPdfALevel; aSubset: boolean; const aWhat: string);
 const
-  // faces of a .ttc collection: the first four are not face 0 of their
-  // file, and GetTtcIndex's name list knew none of them right
+  // faces of a .ttc collection: the first four are not face 0 of their file
+  // on Windows, and the family-name list used before knew none of them right
   TTC_FONTS: array[0..5] of RawUtf8 = (
     'MS UI Gothic', 'Yu Gothic UI', 'Microsoft YaHei UI',
     'Microsoft JhengHei UI', 'MS Gothic', 'Microsoft YaHei');
@@ -916,17 +925,6 @@ var
   o, l, ho, hl: cardinal;
   same: boolean;
 begin
-  { FontSub subsets a face of a .ttc from the whole collection, at the index
-    TtcFaceIndex finds from the bytes: before W2 the index came from a list
-    of family names, and MS UI Gothic was subset from MS PGothic
-    - the subset has no name table left (ReduceTtf): the faces of a
-    collection share their glyphs, and differ in cmap (MS UI Gothic maps
-    'H' to another glyph than MS PGothic) or hhea (the UI faces) }
-  if not PdfCanSubsetRetainingGids then
-  begin
-    Check(true, 'SKIP: no subsetter keeping glyph IDs');
-    exit;
-  end;
   dc := FontDC.CreateDC;
   try
     fonts := nil;
@@ -942,18 +940,18 @@ begin
     cmap := PlatformFontTable(TTC_FONTS[f], 'cmap');
     hhea := PlatformFontTable(TTC_FONTS[f], 'hhea');
     inc(found);
-    name := Utf8ToString(TTC_FONTS[f]);
+    name := Utf8ToString(TTC_FONTS[f]) + ', ' + aWhat;
     if (cmap = '') or
        (hhea = '') then
     begin
       Check(false, name + ': cmap and hhea of the installed face');
       continue;
     end;
-    pdf := BuildPdf(name, SAMPLE, false, false, false);
+    pdf := BuildPdf(Utf8ToString(TTC_FONTS[f]), SAMPLE, aWholeTtf, false, false,
+      aPdfA);
     face := FirstFontFile(pdf);
-    Check(FirstSubsetTag(pdf) <> '', name + ' is subset');
-    Check(copy(face, 1, 4) = #0#1#0#0,
-      name + ': one face, not a collection');
+    Check((FirstSubsetTag(pdf) <> '') = aSubset, name + ': subset or whole');
+    Check(copy(face, 1, 4) = #0#1#0#0, name + ': one face, not a collection');
     same := true;
     for i := 1 to length(SAMPLE) do
     begin
@@ -963,16 +961,114 @@ begin
               (g > 0) and
               (SfntCmapLookup(face, ord(SAMPLE[i])) = g);
     end;
-    Check(same, name + ': the subset maps the text as the face does');
+    Check(same, name + ': the font file maps the text as the face does');
     // hhea up to numberOfHMetrics, which a subset may lower
     Check(SfntFindTable(face, 'hhea', o, l) and
           SfntFindTable(hhea, 'hhea', ho, hl) and
           (l >= 34) and (hl >= 34) and
           (copy(face, o + 1, 34) = copy(hhea, ho + 1, 34)),
-      name + ': the subset has the hhea of the face');
+      name + ': the font file has the hhea of the face');
   end;
   if found = 0 then
     Check(true, 'SKIP: none of the .ttc faces installed');
+end;
+
+procedure TPdfSubsetEngineTests.TestSubsetTtcFace;
+begin
+  { FontSub subsets a face of a .ttc from the whole collection, at the index
+    TtcFaceIndex finds from the bytes: before W2 the index came from a list
+    of family names, and MS UI Gothic was subset from MS PGothic
+    - the subset has no name table left (ReduceTtf): the faces of these
+    collections share their glyphs, and differ in cmap (MS UI Gothic maps
+    'H' to another glyph than MS PGothic) or hhea (the UI faces) }
+  if not PdfCanSubsetRetainingGids then
+  begin
+    Check(true, 'SKIP: no subsetter keeping glyph IDs');
+    exit;
+  end;
+  CheckTtcFaces(false, pdfaNone, true, 'subset');
+end;
+
+procedure TPdfSubsetEngineTests.TestWholeTtcFace;
+var
+  saved: IFontSubsetter;
+begin
+  { a face of a .ttc embedded whole is extracted from its collection
+    (FontProvider.GetFaceFile): Windows used to write the whole collection
+    to /FontFile2, which is no font program - with EmbeddedWholeTtf, for
+    PDF/A-1 and without a subsetter }
+  CheckTtcFaces(true, pdfaNone, false, 'EmbeddedWholeTtf');
+  CheckTtcFaces(false, pdfa1B, false, 'PDF/A-1b');
+  saved := FontSubsetter;
+  FontSubsetter := nil;
+  try
+    CheckTtcFaces(false, pdfaNone, false, 'no subsetter');
+  finally
+    FontSubsetter := saved;
+  end;
+end;
+
+procedure TPdfSubsetEngineTests.TestSubsetSymbolFont;
+const
+  SYMBOL_FONTS: array[0..2] of RawUtf8 = ('Wingdings', 'Webdings', 'Symbol');
+  SAMPLE = 'abc';
+var
+  dc: TFontDC;
+  fonts: TRawUtf8DynArray;
+  f, i, g: integer;
+  name: string;
+  whole, sub: RawByteString;
+  kept: boolean;
+begin
+  { a symbol font reaches its glyphs through a (3,0) cmap at U+F0xx: FontSub
+    resolves them through the font and subsets it (SupportsSymbolic), the
+    hb-subset path embeds it whole }
+  if FontSubsetter = nil then
+  begin
+    Check(true, 'SKIP: no IFontSubsetter registered');
+    exit;
+  end;
+  {$ifdef OSWINDOWS}
+  Check(FontSubsetter.SupportsSymbolic, 'FontSub keeps the glyphs of a symbol font');
+  {$else}
+  Check(not FontSubsetter.SupportsSymbolic, 'hb-subset leaves symbol fonts whole');
+  {$endif OSWINDOWS}
+  dc := FontDC.CreateDC;
+  try
+    fonts := nil;
+    FontEnumerator.EnumTrueTypeFonts(dc, fonts);
+  finally
+    FontDC.DeleteDC(dc);
+  end;
+  f := 0;
+  while (f <= high(SYMBOL_FONTS)) and
+        (FindRawUtf8(fonts, SYMBOL_FONTS[f]) < 0) do
+    inc(f);
+  if f > high(SYMBOL_FONTS) then
+  begin
+    Check(true, 'SKIP: no symbol font installed');
+    exit;
+  end;
+  name := Utf8ToString(SYMBOL_FONTS[f]);
+  // SYMBOL_CHARSET makes the font symbolic (/Flags)
+  whole := FirstFontFile(BuildPdf(name, SAMPLE, true, false, false, pdfaNone, 2));
+  sub := FirstFontFile(BuildPdf(name, SAMPLE, false, false, false, pdfaNone, 2));
+  Check(whole <> '', name + ': embedded');
+  if not FontSubsetter.SupportsSymbolic then
+  begin
+    Check(sub = whole, name + ': embedded whole without SupportsSymbolic');
+    exit;
+  end;
+  Check(length(sub) * 2 < length(whole), name + ': subset with SupportsSymbolic');
+  kept := true;
+  for i := 1 to length(SAMPLE) do
+  begin
+    g := SfntCmapLookup(whole, $F000 + ord(SAMPLE[i]));
+    kept := kept and
+            (g > 0) and
+            (SfntGlyphLength(sub, g) > 0);
+  end;
+  Check(kept, name + ': the glyphs of the text are kept');
 end;
 
 type
