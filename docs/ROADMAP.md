@@ -134,7 +134,7 @@ v0.10.0 (2026-09-30).
   `.ttc` (`MS Gothic`, `Microsoft YaHei`, `Cambria`...) embedded the whole
   collection - megabytes, and no valid font program for a PDF reader or
   validator. Now only its face is embedded, as on Linux/macOS; a face that
-  cannot be found in its collection is not embedded. A font backend of your
+  cannot be found in its collection fails the save (see below). A font backend of your
   own implements the new `IFontProvider.GetFaceFile`; `IFontProvider` and
   `IFontSubsetter` have new GUIDs
 - **One font path on every platform (R-28, refactoring Phase 1, step W3):**
@@ -161,6 +161,25 @@ v0.10.0 (2026-09-30).
   gets `IFontFace.Handle` as before the handle. On Windows
   `mormot.lib.uniscribe` adds `GdiCreateFace(TLogFontW)` and
   `GdiScreenLogPixels`. The PDF output is unchanged
+- **Fixed: a font asked to be embedded is never left out silently:** when
+  embedding is on (`EmbeddedTtf`, `Tagged`, PDF/A) and neither a subset nor
+  the whole face of a font can be read, saving raises `EPdfInvalidOperation`
+  naming the font. Before, the font was written without a font file - a
+  PDF/A or PDF/UA file that fails validation, without a word. And `Tagged`
+  embeds every font now even when `EmbeddedTtf` is switched off or the font
+  is put in `EmbeddedTtfIgnore` afterwards, as PDF/A always did
+- **Fixed (Win32): malformed `.ttc` collections:** `ExtractSfntFromTtc`
+  (`mormot.lib.core`) checked offsets and lengths with sums that could wrap
+  around on 32-bit, reading outside the collection; and it patched the
+  checksum of a `head` table shorter than 12 bytes past its end. Only
+  system fonts are read, so the risk was low
+- **Demos: the print date of `SOURCE_DATE_EPOCH`:** `report_demo` and
+  `mormot_demo` print the day of `SOURCE_DATE_EPOCH` (UTC, ISO 8601) when it
+  is set, as reproducible builds do, and today's date otherwise.
+  `pdfcheck run` sets it, so the demo PDFs of two days compare equal, and
+  `pdfcheck compare` (as the golden-file tests) names every differing, added
+  or removed object, paired by number and also inside object streams,
+  instead of only the first differing byte
 - **Coming with R-20** (announce when done): the preview and the GUI demos
   on Delphi
 

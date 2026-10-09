@@ -86,7 +86,10 @@ session (Windows: per compiler) does exactly this:
    into the output folder it shares with `mormot2`
 3. `test_runner`: the expected count, no failure. At a baseline also
    `test_runner --golden-record`; at a step, the plain run compares
-4. `pdfcheck run <compiler> <folder>` into the state's folder
+4. `pdfcheck run <compiler> <folder>` into the state's folder. It sets
+   `SOURCE_DATE_EPOCH` to 2026-01-01 unless it is set, and `report_demo` and
+   `mormot_demo` print that date: the folders of two days compare equal. A
+   folder made before (Phase 1b) differs from a newer one in that date only
 5. `tagged_unicode_<system>.pdf` from `test_runner`'s folder copied into it
 6. Reported: the count, the golden result, `pdfcheck`'s output
 
@@ -406,6 +409,25 @@ Qt `QRawFont`):
   nil font of the FreeType backend did
 - Output identical: golden files on every platform, the Windows demo PDFs
   (same `.res`) against `main`
+
+**Bug fixes** (one PR with the implementation PR, rule 2):
+
+- from Martin's review of #26: a font asked to be embedded whose face cannot
+  be read fails the save (`EPdfInvalidOperation`) instead of going out
+  without a font file - and `Tagged` forces embedding as PDF/A does; the
+  bounds of `ExtractSfntFromTtc` cannot wrap on 32-bit; the FreeType side of
+  `GetFaceFile` is tested on a `.ttc` (Noto Sans CJK JP on Linux, Hiragino
+  Sans GB and Helvetica on macOS); `report_demo` and `mormot_demo` print the
+  date of `SOURCE_DATE_EPOCH`, which `pdfcheck run` sets, and `pdfcheck
+  compare` names every differing, added or removed object - paired by
+  number, also inside object streams
+- **CFF** (after the face object, which detects the flavour): a CID-keyed
+  CFF face (all CJK CFF faces measured: Noto Sans CJK, Hiragino Sans GB) may
+  not be a simple `/Type1` font (ISO 32000-1 table 126), and the codes of a
+  `CIDFontType0` are CIDs, not glyph IDs - Hiragino Sans GB has 288 glyphs
+  whose CID differs. Decided: all text of a CFF face through the Type0 font,
+  the codes mapped through the CFF charset, the bare `CFF ` table embedded as
+  `/FontFile3 /Subtype /CIDFontType0C` (PDF 1.3, also PDF/A-1)
 
 ### Phase 2 — Raw PDF Without VCL/LCL
 

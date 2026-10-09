@@ -467,7 +467,9 @@ TPdfDocument.SaveToStream / SaveToFile → SaveToStreamDirectEnd
           (the Unicode instance copies the prefixed name to its CIDFont and
            Type0 /BaseFont - WinAnsi instances are prepared first)
         else: fFace.GetFaceFile(ttf) - the
-          whole face, a .ttc face extracted; false → nothing embedded
+          whole face, a .ttc face extracted
+        no bytes → raise EPdfInvalidOperation (since Phase 1b: before, the
+          font went out without a font file)
 
         GetOrCreateFontFile2(ttf) → one /FontFile2 per distinct byte string
   fFontSubsets := nil

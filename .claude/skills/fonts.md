@@ -483,6 +483,8 @@ Font embedding decision:
   if EmbeddedWholeTtf = true, for PDF/A-1, or with no FontSubsetter (or a
   symbol font and not SupportsSymbolic, or a failed subset):
     fFace.GetFaceFile(ttf)                       → the face as one font file
+    (no face → the save raises EPdfInvalidOperation; IsEmbedded is true for
+    PDF/A, for Tagged, or with EmbeddedTtf unless in EmbeddedTtfIgnore)
     safe for all scripts; shaped GSUB glyph IDs are valid in the complete font
     .ttc: just the face, rebuilt as an sfnt (ExtractSfntFromTtc) - FreeType
           the face it loaded, GDI the face TtcFaceIndex finds (since
