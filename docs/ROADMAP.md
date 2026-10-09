@@ -137,6 +137,18 @@ v0.10.0 (2026-09-30).
   cannot be found in its collection is not embedded. A font backend of your
   own implements the new `IFontProvider.GetFaceFile`; `IFontProvider` and
   `IFontSubsetter` have new GUIDs
+- **One font path on every platform (R-28, refactoring Phase 1, step W3):**
+  `TPdfDocument` and `TPdfFontTrueType` create, measure and read fonts
+  through the `mormot.lib.core` interfaces on Windows too - but for the
+  `TLogFontW` constructor, which still creates its font from the whole
+  LOGFONT; the PDF output is
+  unchanged. For code of your own: `IFontProvider` has a new
+  `GetGlyphAdvance` (glyph advance by glyph index); `TPdfFontTrueType` keeps
+  its request and metrics as `TFontRequest`, `TFontMetrics` and
+  `TFontOutlineMetrics` on Windows as well; the `TLogFontW` overloads stay
+  and behave as before. On
+  Linux/macOS, `TPdfCanvas.ShowGlyph` now gives a glyph no character maps
+  to its width in `/W`, as Windows did
 - **Coming with R-20** (announce when done): the preview and the GUI demos
   on Delphi
 

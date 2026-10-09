@@ -321,8 +321,9 @@ TPdfDocument.GetRegisteredTrueTypeFont(LogFont)
 │  │    searches List for 'Calibri'; stores in fTrueTypeFonts
 │  │
 │  creates TPdfFontTrueType (WinAnsi instance, fUnicode=false)   (pdf.pas:6252)
-│  │  CreateFontIndirectW(@lf)     ← HFONT with lfCharSet from above
-│  │  GetDCWithFont → select HFONT into fDoc.fDC
+│  │  FontProvider.CreateFont(lf: TFontRequest) ← CharSet from above
+│  │    (every platform since W3; GDI: CreateFontIndirectW in the provider)
+│  │  GetDCWithFont → select the font into fDoc.fDC
 │  │  GetTextMetrics / GetOutlineMetrics / GetCharAbcWidths
 │  stores in fRegisteredFonts; fFontList
 │
@@ -413,11 +414,13 @@ public AddGlyphs (→ AddGlyphsOf with the page font, VisAttr filter if given):
     │  Step 2: reverse CMAP scan in UnicodeFont.fUsedWide[]
     │           found → WinAnsiFont.FindOrAddUsedWideChar → register in WinAnsi tracking
     │           not found → fall through to Step 3
-    │  Step 3: {$ifdef OSWINDOWS} GSUB glyph (Arabic form, ligature)
-    │           GetCharABCWidthsI(DC, glyph, 1, nil, @abc) → advance width
+    │  Step 3: GSUB glyph (Arabic form, ligature) - every platform since W3
+    │           FontProvider.GetGlyphAdvance(DC, glyph) → advance width
+    │             (GDI GetCharABCWidthsI, FreeType FT_Load_Glyph);
+    │             failure → fDefaultWidth
     │           AddShapedGlyph(glyph, w) → WinAnsiFont.fShapedGlyph (by glyph ID)
     │           → glyph registered in /W array; no overlap from /DW fallback
-    │           {POSIX}: step 3 absent; glyph not registered → /DW overlap
+    │           (before W3 Windows only: on POSIX the glyph stayed out of /W)
     AddHex4(glyph)
   Add('> Tj') if any glyph was kept
 ```

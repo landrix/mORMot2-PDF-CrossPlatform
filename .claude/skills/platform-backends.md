@@ -13,14 +13,30 @@ Unix/macOS backends: mORMot2 `src/lib/mormot.lib.freetype.pas` and
 
 On Linux/macOS all platform-specific operations run through these three interfaces.
 
-**Windows still bypasses them in `TPdfDocument`.** Under `{$ifdef OSWINDOWS}`
-the core calls GDI directly: `CreateCompatibleDC`/`GetDeviceCaps` in the
-constructor, `CreateFontIndirectW`, `GetTextMetrics`, `GetOutlineTextMetrics`,
-`GetCharABCWidthsA`, `SelectObject` (`GetDCWithFont`), `windows.GetFontData`
-for the tables and the embedded face. The GDI backend's interfaces are used on
-Windows only by `TPdfFontMeasurer`, i.e. the `TGDIPages` layout. Shaping and
-subsetting go through `FontShaper` and `FontSubsetter` on every platform
-since W2 (2026-10-08); the rest is step W3 of R-28 Phase 1.
+**Every platform goes through them since W3 (2026-10-09).** `TPdfDocument`
+creates its DC with `FontDC`, `TPdfFontTrueType` its font with
+`FontProvider.CreateFont` and reads metrics, widths, tables, the embedded face
+and glyph advances by index through `FontProvider`; shaping and subsetting
+went through `FontShaper` and `FontSubsetter` already in W2. What stays
+Windows-only in `mormot.ui.pdf`: the `TLogFontW` overloads
+(`TPdfCanvas.SetFont(HDC, TLogFontW)`, `TPdfFontTrueType.Create(..., TLogFontW,
+...)`, `GetRegisteredTrueTypeFont(TLogFontW)`) as thin adapters onto
+`TFontRequest`. `SetFont(HDC, ...)` reduces the LOGFONT to name, style and
+charset, as it always did; the constructor creates its HFONT from the whole
+LOGFONT with `CreateFontIndirectW` (the one GDI font call left in the engine:
+`lfWidth` or the precisions change widths and selection, which `TFontRequest`
+does not carry - decided with Sven, 2026-10-09, three alternatives; cairo's
+LOGFONT constructor ignores `lfWidth`, a candidate for Phase 5;
+`TestLogFontWidth`); `AddGlyphs` with `TScriptVisAttr`; the printer, EMF and GDI+
+code, which casts the document DC back to a `HDC`; the code page helpers
+(`LCIDToCodePage`, `CharNextA`), which are no font matter.
+Before W3, under `{$ifdef OSWINDOWS}` the core called GDI directly:
+`CreateCompatibleDC`/`GetDeviceCaps` in the constructor,
+`CreateFontIndirectW` (with output precision 0, where the GDI provider asks
+for `OUT_TT_ONLY_PRECIS` - no difference in the golden files, as every font
+the engine creates is an enumerated TrueType family),
+`GetTextMetrics`, `GetOutlineTextMetrics`, `GetCharABCWidthsA`,
+`GetCharABCWidthsI`, `SelectObject` (`GetDCWithFont`), `windows.GetFontData`.
 
 ### IFontProvider — Font Operations
 
@@ -38,6 +54,11 @@ IFontProvider = interface
   // Retrieve extended outline metrics (ascent, descent, em-square, etc.)
   function  GetOutlineMetrics(DC: TFontDC;
                               out Metrics: TFontOutlineMetrics): boolean;
+  // The advance of one glyph by glyph index, in the units of GetCharAbcWidths
+  // (GDI: GetCharABCWidthsI; FreeType: FT_Load_Glyph, design units scaled
+  // once) - for a shaped glyph no character maps to (since 2026-10-09, W3)
+  function  GetGlyphAdvance(DC: TFontDC; Glyph: cardinal;
+                            out Advance: integer): boolean;
   // Retrieve ABC advance widths for characters FirstChar..LastChar.
   // FirstChar/LastChar are WinAnsi (cp1252) BYTE values, not Unicode code
   // points - the engine calls (32, 255) and indexes the result by WinAnsi
@@ -471,7 +492,7 @@ end;
 Every unit starts with `{$I mormot.defines.inc}` after `interface` (by name, no relative path).
 
 - **Enum size does not reach the C libraries.** `mormot.defines.inc` sets `{$MINENUMSIZE 1}` and `{$PACKSET 1}`, but the bindings in `mormot.lib.freetype` and `mormot.lib.harfbuzz` declare every C enum as `integer` and hold no set. Keep it that way in new bindings.
-- **The `{$ifdef FPC}` branches that remain are real differences.** The seven in `mormot.ui.pdf` all come from the original (`reference/`): LCL against VCL units, the compatibility types, and four Windows API calls FPC declares differently — `EnumPrinters` (pointers), `GdiComment` (`var`), `EnumEnhMetaFile` (`RECT`), `CreateFontIndirectW` on a `const` parameter (FPC's `var` overload cannot take it). No mORMot2 function wraps them. The GDI services in `mormot.lib.uniscribe` need no branch: a local `var` fits both. The branches in `mormot.ui.core` and `mormot.ui.gdiplus` come with the mORMot2 originals. The one around all of `mormot.ui.report` is gone since R-20.
+- **The `{$ifdef FPC}` branches that remain are real differences.** The six in `mormot.ui.pdf` all come from the original (`reference/`): LCL against VCL units, the compatibility types, and three Windows API calls FPC declares differently — `EnumPrinters` (pointers), `GdiComment` (`var`), `EnumEnhMetaFile` (`RECT`); the fourth, `CreateFontIndirectW` on a `const` parameter in the `TPdfFontTrueType` constructor, went with W3: the `TLogFontW` constructor passes a local copy, a `var` that fits both declarations. No mORMot2 function wraps them. The GDI services in `mormot.lib.uniscribe` need no branch: a local `var` fits both. The branches in `mormot.ui.core` and `mormot.ui.gdiplus` come with the mORMot2 originals. The one around all of `mormot.ui.report` is gone since R-20.
 - **LCL against VCL units** (R-20): `mormot.ui.pdfcanvas` and `mormot.ui.report` take `LCLIntf`/`LCLType` under FPC and `Windows` under Delphi — `Windows` *before* `Graphics`, or its record `TBitmap` hides the class (dozens of errors on every `TBitmap.Create`).
 - **`PDF_CANVASVIRTUAL`** (`mormot.ui.pdfcanvas`, defined under FPC): the LCL's `TCanvas` drawing methods are virtual, Delphi 7's are static. The bridge declares `TextOut`, `TextExtent`, `TextWidth`, `TextHeight`, `Rectangle`, `Ellipse`, `RoundRect`, `Draw` with `override` or `reintroduce` by this switch, and has `DoMoveTo`/`DoLineTo` (LCL) or reintroduced `MoveTo`/`LineTo` (Delphi). `DoLineTo` checks `psClear` itself: `TFPCustomCanvas.LineTo` skips it then, our Delphi `LineTo` does not.
 - **Delphi on Linux/Android** (R-27): the POSIX backends load their libraries through `TSynLibrary` of `mormot.core.os` (before Phase 1: `LibraryOpen`/`LibraryResolve`) — FPC's `dynlibs` does not exist there, and `TLibHandle` comes from `System` under FPC, from `mormot.core.os` under Delphi. `mormot.ui.pdf` turns `USE_GRAPHICS_UNIT` off for Delphi on `OSPOSIX` (no VCL): the `TBitmap`/`TGraphic` image API is left out, `GetSysColor` and `MM_TEXT` get local fallbacks. Android: `/system/fonts` is scanned, Roboto is the last fallback face; the app has to ship an NDK-built `libfreetype.so` (a glibc build does not load), and a program without a configured `TSynLog` family crashed in `TSynLog.FillInfo` on the first raised exception — configure it as `TSynTests.RunAsConsole` does.
@@ -670,10 +691,10 @@ Under `OSWINDOWS` the engine calls GDI itself where POSIX calls the
 embedding, which reads the `.ttc` and calls `GetTtcIndex` (on POSIX too).
 `fM`/`fOTM` are the Windows records there (`otms...` fields). A shaped glyph
 missing from the cmap gets its width from `GetCharABCWidthsI` by glyph index
-(`GetAndMarkGlyphAsUsed`, step 3) - `IFontProvider` has no such method. The
-printer (`GetDeviceCaps` for page size) and EMF (`TPdfEnum`) calls are
-Windows-only features and stay. Planned as step W3, after the Uniscribe
-shaper and the FontSub subsetter (W2). The whole-face embedding went first,
+(`GetAndMarkGlyphAsUsed`, step 3) - `IFontProvider` had no such method
+(`GetGlyphAdvance` since W3). The printer (`GetDeviceCaps` for page size) and
+EMF (`TPdfEnum`) calls are Windows-only features and stay. Done as step W3
+(2026-10-09), after the Uniscribe shaper and the FontSub subsetter (W2). The whole-face embedding went first,
 as a bug fix (2026-10-09): it read the whole collection and wrote it to
 `/FontFile2` - `GetTtcIndex`'s index was never used - and goes through
 `FontProvider.GetFaceFile` now; `GetTtcIndex` is gone.
@@ -709,4 +730,7 @@ PR #13), and the old POSIX backends are replaced by the library units
 into `mormot.lib.uniscribe` (2dce8feb6, `mormot.pdf.gdi` gone, move only);
 W2, the Uniscribe shaper and the FontSub subsetter there (2f8bf3d76, see "W2
 done" above); the whole face of a `.ttc` through `GetFaceFile` (0e40ec95c,
-bug fix); next W3, the engine's direct GDI calls behind `FontProvider`.
+bug fix); W3, the engine's direct GDI calls behind `FontProvider`
+(84012287b, 2026-10-09: `IFontProvider.GetGlyphAdvance`; the document DC, the
+font, its metrics, tables and glyph advances through the interfaces on every
+platform; `TLogFontW` kept as adapters). Next: Phase 1b, the DC removed.
