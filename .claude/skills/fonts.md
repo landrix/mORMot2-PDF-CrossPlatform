@@ -64,7 +64,7 @@ untagged output.
 
 | `EmbeddedWholeTtf` | Behaviour |
 |---|---|
-| `true` | Complete TTF bytes embedded. Safe for all scripts including RTL/Arabic. For a `.ttc`, the face alone is extracted as a standalone sfnt (`FontProvider.GetFaceFile`) — a raw `ttcf` container is not a valid `/FontFile2`. On Windows only since 2026-10-09: before, the whole collection was embedded. |
+| `true` | Complete TTF bytes embedded. Safe for all scripts including RTL/Arabic. For a `.ttc`, the face alone is extracted as a standalone sfnt (`IFontFace.GetFaceFile`) — a raw `ttcf` container is not a valid `/FontFile2`. On Windows only since 2026-10-09: before, the whole collection was embedded. |
 | `false` (default), Linux/macOS | Subset via `IFontSubsetter` (`mormot.lib.harfbuzz`, `libharfbuzz-subset`, R-12). Glyph IDs retained, so content streams, `/W` and `/ToUnicode` stay valid. Safe for Latin, CJK, shaped RTL and tagged output. |
 | `false` (default), Windows | Subset via `CreateFontPackage` with a glyph keep list (`TTFCFP_FLAGS_GLYPHLIST`, R-15). Glyph IDs retained, so it is safe for the same cases as hb-subset — Latin, CJK, shaped Arabic (Uniscribe), tagged output. |
 
@@ -104,7 +104,7 @@ face to CID-keyed CFF to silence it.
 extracts the loaded face once and caches it in `Sfnt`; with `SfntChecked` set
 and `Sfnt` empty it hands out FreeType's whole collection instead. The face then
 reads as neither CFF nor a single font, hb-subset fails, and the raw `ttcf`
-container lands in `/FontFile2` (veraPDF `ua1` 7.21.4.1). `CreateFont` left
+container lands in `/FontFile2` (veraPDF `ua1` 7.21.4.1). `CreateFont` (now `CreateFace`) left
 the flag to the heap until 2026-09-26 — `New()` initializes managed fields
 only — so this happened at random, by heap layout, on Linux and macOS. The
 signature: a PDF of megabytes, a CJK face without subset tag, a stream that
@@ -204,7 +204,7 @@ Arabic output (R-19, 2026-09-26):
 | `fUsedWide` | `TUsedWide` (dyn. array) | WinAnsi | parallel to `fUsedWideChar`: packed `(Width: word; Glyph: word)` per code point |
 | `fWinAnsiUsed` | `TSynAnsicharSet` | WinAnsi | 256-bit set of WinAnsi chars used (U+0020–U+00FF); drives `/FirstChar`–`/LastChar /Widths` |
 | `fDefaultWidth` | `cardinal` | WinAnsi | advance width of space char; used as PDF `/DW` for unregistered glyphs |
-| `fHGDI` | `TFontHandle` | both | platform font handle (GDI `HFONT` or FreeType `FT_Face`) |
+| `fFace` | `IFontFace` | both | the face, shared by both instances (reference counted); `fFace.Handle` is the GDI `HFONT` or the `PFreeTypeFont` (Phase 1b; `fHGDI` before) |
 | `fFixedWidth` | `boolean` | WinAnsi | true = monospace; `/W` is omitted, all glyphs use `/DW` |
 | `fIsSymbolFont` | `boolean` | Unicode | true = Symbol charset (glyphs at U+F0xx) |
 
@@ -228,8 +228,9 @@ the WinAnsi font's arrays only contain actually-used code points.
 ## 5. Font Loading — `TPdfTtf.Create` (`pdf.pas:6065`)
 
 Called once per Unicode font instance: `TPdfTtf.Create(self).Free`.
-Uses `GetDCWithFont` to select the font into the DC.
-Reads three TTF tables via `FontProvider.GetFontData`:
+Reads its tables from the face, `aUnicodeTtf.fFace.GetFontData` (before
+Phase 1b it read the document DC and relied on the font its caller had
+selected):
 
 1. **`head` + `hhea`** — provides `UnitsPerEm` and `numOfLongHorMetrics`
 2. **`cmap`** — Format 4 segment map: populates
@@ -317,7 +318,7 @@ TPdfWrite.AddUnicodeHexText:
     AddUnicodeHexTextNoUniScribe(...)            // Latin text, or no shaper
 
 AddUnicodeHexTextShaped:
-  FontShaper.Shape(PW, Len, WinAnsiTtf.fHGDI, RightToLeftText, Runs)
+  FontShaper.Shape(PW, Len, WinAnsiTtf.fFace.Handle, RightToLeftText, Runs)
     false → not shaped                           // e.g. no complex/RTL item
   every run checked first: inside the text, covering it, arrays aligned
     else → not shaped
@@ -421,7 +422,7 @@ Step 2: scan UnicodeFont.fUsedWide[0..Count-1].Glyph == aGlyph  (reverse CMAP)
 
 Step 3: GSUB-substituted glyph — not in CMAP at all (rare ligature, etc.)
   every platform since W3 (2026-10-09; Windows only before):
-          FontProvider.GetGlyphAdvance(GetDCWithFont(self), aGlyph, w)
+          fFace.GetGlyphAdvance(aGlyph, w)
                                     ← by glyph index, 1000/em units
                                       (GDI GetCharABCWidthsI, FreeType
                                        FT_Load_Glyph); failure → fDefaultWidth
@@ -481,7 +482,7 @@ inside
 Font embedding decision:
   if EmbeddedWholeTtf = true, for PDF/A-1, or with no FontSubsetter (or a
   symbol font and not SupportsSymbolic, or a failed subset):
-    FontProvider.GetFaceFile(DC, ttf)            → the face as one font file
+    fFace.GetFaceFile(ttf)                       → the face as one font file
     safe for all scripts; shaped GSUB glyph IDs are valid in the complete font
     .ttc: just the face, rebuilt as an sfnt (ExtractSfntFromTtc) - FreeType
           the face it loaded, GDI the face TtcFaceIndex finds (since
@@ -571,7 +572,7 @@ U+06xx code points mean Step 2, PUA U+E0xx values mean Step 3.
 
 `hb_ft_font_create` copies its scale out of `ft_face^.size^.metrics`, so the
 FT_Face **must be sized first** — `FreeTypeSetEmSize1000()` in the FreeType backend
-does this (1000 units per em at 72 dpi). `CreateFont` deliberately does not size
+does this (1000 units per em at 72 dpi). `CreateFace` deliberately does not size
 the face, because every other entry point uses `FT_LOAD_NO_SCALE` or reads
 design-unit fields.
 
@@ -710,7 +711,7 @@ Table tags are formed in `GetTtfData` (`pdf.pas:3610`) as `PCardinal(aTableName)
 a 4-char ASCII name read as a little-endian DWORD on LE machines.
 
 FreeType's `FT_Load_Sfnt_Table` uses the `FT_MAKE_TAG` big-endian convention.
-`TFreeTypeFontProvider.GetFontData` applies `bswap32(TableTag)` before calling
+`TFreeTypeFontFace.GetFontData` applies `bswap32(TableTag)` before calling
 `FT_Load_Sfnt_Table`. `bswap32(0)` = 0, preserving the tag=0 convention
 ("return entire font file") used by the whole-font embedding path.
 

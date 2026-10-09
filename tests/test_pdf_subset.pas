@@ -34,18 +34,15 @@ type
   protected
     fFace: RawByteString;
     fFaceName: RawUtf8;
-    // the font fFace was read from: FontSub resolves code points through it
-    fFont: TFontHandle;
+    // the face fFace was read from: FontSub resolves code points through it
+    fFont: IFontFace;
     // load the whole face of a common glyf-based font through the platform
     // backend; false (and a SKIP check) when no subsetter or no font exists
     function PrepareFace: boolean;
     // the same for a CFF-flavoured ('OTTO') face, which not every system has
-    // - the caller deletes aFont
-    function LoadCffFace(out aFace: RawByteString; out aFont: TFontHandle): boolean;
+    function LoadCffFace(out aFace: RawByteString; out aFont: IFontFace): boolean;
     function SubsetOf(const Unicodes, Glyphs: array of integer;
       out Sub: RawByteString): boolean;
-  public
-    destructor Destroy; override;
   published
     procedure TestSubsetterRegistered;
     procedure TestSubsetRetainsGids;
@@ -293,6 +290,15 @@ begin
 end;
 
 
+// the native handle of a face, nil for none
+function FaceHandle(const Face: IFontFace): TFontHandle;
+begin
+  if Face = nil then
+    result := nil
+  else
+    result := Face.Handle;
+end;
+
 { an empty request - Default() does not exist in Delphi 7 }
 procedure ClearRequest(out req: TFontSubsetRequest);
 begin
@@ -307,9 +313,8 @@ const
   FONTS: array[0..3] of RawUtf8 = (
     'Liberation Sans', 'Arial', 'DejaVu Sans', 'Verdana');
 var
-  dc: TFontDC;
   lf: TFontRequest;
-  font, prev: TFontHandle;
+  face: IFontFace;
   size: cardinal;
   f: PtrInt;
 begin
@@ -324,97 +329,73 @@ begin
     result := true;
     exit;
   end;
-  dc := FontDC.CreateDC;
-  try
-    for f := 0 to high(FONTS) do
+  for f := 0 to high(FONTS) do
+  begin
+    FillChar(lf, SizeOf(lf), 0);
+    lf.FaceName := SynUnicode(FONTS[f]);
+    lf.Height := -1000;
+    lf.Weight := 400;
+    face := FontProvider.CreateFace(lf);
+    if face = nil then
+      continue;
+    size := face.GetFontData(0, 0, nil, 0);
+    if size <> FONT_DATA_ERROR then
     begin
-      FillChar(lf, SizeOf(lf), 0);
-      lf.FaceName := SynUnicode(FONTS[f]);
-      lf.Height := -1000;
-      lf.Weight := 400;
-      font := FontProvider.CreateFont(lf);
-      if font = nil then
-        continue;
-      prev := FontProvider.SelectFont(dc, font);
-      size := FontProvider.GetFontData(dc, 0, 0, nil, 0);
-      if size <> FontProvider.FontDataError then
-      begin
-        SetLength(fFace, size);
-        if FontProvider.GetFontData(dc, 0, 0, pointer(fFace), size) <> size then
-          fFace := '';
-      end;
-      FontProvider.SelectFont(dc, prev);
-      if (fFace <> '') and
-         (copy(fFace, 1, 4) = #0#1#0#0) and
-         (SfntCmapLookup(fFace, ord('A')) <> 0) then
-      begin
-        fFaceName := FONTS[f];
-        fFont := font; // kept for the subsetter, deleted in Destroy
-        break;
-      end;
-      FontProvider.DeleteFont(font);
-      fFace := '';
+      SetLength(fFace, size);
+      if face.GetFontData(0, 0, pointer(fFace), size) <> size then
+        fFace := '';
     end;
-  finally
-    FontDC.DeleteDC(dc);
+    if (fFace <> '') and
+       (copy(fFace, 1, 4) = #0#1#0#0) and
+       (SfntCmapLookup(fFace, ord('A')) <> 0) then
+    begin
+      fFaceName := FONTS[f];
+      fFont := face; // kept for the subsetter
+      break;
+    end;
+    fFace := '';
   end;
   result := fFace <> '';
   if not result then
     Check(true, 'SKIP: no glyf-based test font found on this system');
 end;
 
-destructor TPdfSubsetTests.Destroy;
-begin
-  if fFont <> nil then
-    FontProvider.DeleteFont(fFont);
-  inherited Destroy;
-end;
-
 function TPdfSubsetTests.LoadCffFace(out aFace: RawByteString;
-  out aFont: TFontHandle): boolean;
+  out aFont: IFontFace): boolean;
 const
   // CFF system faces: macOS ships its CJK families as OpenType/CFF
   CFF_FONTS: array[0..2] of RawUtf8 = (
     'Hiragino Sans GB', 'Hiragino Mincho ProN', 'Source Han Sans');
 var
-  dc: TFontDC;
   lf: TFontRequest;
-  font, prev: TFontHandle;
+  face: IFontFace;
   size: cardinal;
   f: PtrInt;
 begin
   aFace := '';
   aFont := nil;
-  dc := FontDC.CreateDC;
-  try
-    for f := 0 to high(CFF_FONTS) do
+  for f := 0 to high(CFF_FONTS) do
+  begin
+    FillChar(lf, SizeOf(lf), 0);
+    lf.FaceName := SynUnicode(CFF_FONTS[f]);
+    lf.Height := -1000;
+    lf.Weight := 400;
+    face := FontProvider.CreateFace(lf);
+    if face = nil then
+      continue;
+    size := face.GetFontData(0, 0, nil, 0);
+    if size <> FONT_DATA_ERROR then
     begin
-      FillChar(lf, SizeOf(lf), 0);
-      lf.FaceName := SynUnicode(CFF_FONTS[f]);
-      lf.Height := -1000;
-      lf.Weight := 400;
-      font := FontProvider.CreateFont(lf);
-      if font = nil then
-        continue;
-      prev := FontProvider.SelectFont(dc, font);
-      size := FontProvider.GetFontData(dc, 0, 0, nil, 0);
-      if size <> FontProvider.FontDataError then
-      begin
-        SetLength(aFace, size);
-        if FontProvider.GetFontData(dc, 0, 0, pointer(aFace), size) <> size then
-          aFace := '';
-      end;
-      FontProvider.SelectFont(dc, prev);
-      if copy(aFace, 1, 4) = 'OTTO' then
-      begin
-        aFont := font;
-        break;
-      end;
-      FontProvider.DeleteFont(font);
-      aFace := '';
+      SetLength(aFace, size);
+      if face.GetFontData(0, 0, pointer(aFace), size) <> size then
+        aFace := '';
     end;
-  finally
-    FontDC.DeleteDC(dc);
+    if copy(aFace, 1, 4) = 'OTTO' then
+    begin
+      aFont := face;
+      break;
+    end;
+    aFace := '';
   end;
   result := aFace <> '';
   if not result then
@@ -433,7 +414,7 @@ begin
   SetLength(req.Glyphs, length(Glyphs));
   for i := 0 to high(Glyphs) do
     req.Glyphs[i] := Glyphs[i];
-  result := FontSubsetter.Subset(fFace, req, fFont, Sub);
+  result := FontSubsetter.Subset(fFace, req, fFont.Handle, Sub);
 end;
 
 procedure TPdfSubsetTests.TestSubsetterRegistered;
@@ -511,7 +492,7 @@ procedure TPdfSubsetTests.TestSubsetAcceptsCff;
 var
   face, sub: RawByteString;
   req: TFontSubsetRequest;
-  font: TFontHandle;
+  font: IFontFace;
 begin
   if FontSubsetter = nil then
   begin
@@ -527,33 +508,30 @@ begin
     font := fFont
   else
     font := nil;
-  Check(not FontSubsetter.Subset(RawByteString('OTTO' + StringOfChar(#0, 60)), req, font, sub),
+  Check(not FontSubsetter.Subset(RawByteString('OTTO' + StringOfChar(#0, 60)), req,
+    FaceHandle(font), sub),
     'a truncated CFF face must not be subset');
   CheckEqual(sub, '', 'no output expected');
   // a real CFF face is subset like any other: it goes to /FontFile3 with
   // /Subtype /OpenType, which the engine picks through PdfFontFileKey()
   if not LoadCffFace(face, font) then
     exit;
-  try
-    ClearRequest(req);
-    SetLength(req.Glyphs, 2);
-    req.Glyphs[0] := 1;
-    req.Glyphs[1] := 2;
-    {$ifdef OSWINDOWS}
-    // CreateFontPackage takes TrueType outlines only (it returns 1035 for a
-    // CFF face): the engine embeds such a face whole
-    Check(not FontSubsetter.Subset(face, req, font, sub),
-      'FontSub refuses a CFF face');
-    CheckEqual(sub, '', 'no output expected');
-    {$else}
-    Check(FontSubsetter.Subset(face, req, font, sub), 'a CFF face must be subset');
-    Check(sub <> '', 'subset output expected');
-    CheckEqual(copy(sub, 1, 4), 'OTTO', 'a CFF subset stays CFF');
-    Check(length(sub) < length(face) div 2, 'the subset must be much smaller');
-    {$endif OSWINDOWS}
-  finally
-    FontProvider.DeleteFont(font);
-  end;
+  ClearRequest(req);
+  SetLength(req.Glyphs, 2);
+  req.Glyphs[0] := 1;
+  req.Glyphs[1] := 2;
+  {$ifdef OSWINDOWS}
+  // CreateFontPackage takes TrueType outlines only (it returns 1035 for a
+  // CFF face): the engine embeds such a face whole
+  Check(not FontSubsetter.Subset(face, req, font.Handle, sub),
+    'FontSub refuses a CFF face');
+  CheckEqual(sub, '', 'no output expected');
+  {$else}
+  Check(FontSubsetter.Subset(face, req, font.Handle, sub), 'a CFF face must be subset');
+  Check(sub <> '', 'subset output expected');
+  CheckEqual(copy(sub, 1, 4), 'OTTO', 'a CFF subset stays CFF');
+  Check(length(sub) < length(face) div 2, 'the subset must be much smaller');
+  {$endif OSWINDOWS}
 end;
 
 procedure TPdfSubsetTests.TestSubsetRejectsGarbage;
@@ -561,7 +539,7 @@ var
   sub, junk: RawByteString;
   req: TFontSubsetRequest;
   i: PtrInt;
-  font: TFontHandle;
+  font: IFontFace;
 begin
   if FontSubsetter = nil then
   begin
@@ -581,7 +559,7 @@ begin
   else
     font := nil;
   // must not crash; whatever comes back, it must not claim to hold glyph A
-  if FontSubsetter.Subset(junk, req, font, sub) then
+  if FontSubsetter.Subset(junk, req, FaceHandle(font), sub) then
     Check(SfntGlyphLength(sub, 1) <= 0, 'garbage produced a glyph')
   else
     CheckEqual(sub, '', 'failure must not return data');
@@ -873,9 +851,8 @@ end;
   wrapped in an sfnt of its own so that the readers above take it }
 function PlatformFontTable(const aFont: RawUtf8; const Tag: RawUtf8): RawByteString;
 var
-  dc: TFontDC;
   req: TFontRequest;
-  font, prev: TFontHandle;
+  face: IFontFace;
   gdiTag, size: cardinal;
   table: RawByteString;
 begin
@@ -888,27 +865,19 @@ begin
   // the tag as GDI reads it: the four characters little-endian
   gdiTag := ord(Tag[1]) or (ord(Tag[2]) shl 8) or
             (ord(Tag[3]) shl 16) or (cardinal(ord(Tag[4])) shl 24);
-  dc := FontDC.CreateDC;
-  try
-    font := FontProvider.CreateFont(req);
-    if font = nil then
-      exit;
-    prev := FontProvider.SelectFont(dc, font);
-    size := FontProvider.GetFontData(dc, gdiTag, 0, nil, 0);
-    if (size <> FontProvider.FontDataError) and
-       (size > 0) then
-    begin
-      SetLength(table, size);
-      if FontProvider.GetFontData(dc, gdiTag, 0, pointer(table), size) = size then
-        // sfnt header, one table record at offset 28 (checksum left 0)
-        result := BE32Bytes($00010000) + BE16Bytes(1) + BE16Bytes(16) +
-          BE32Bytes(0) + Tag + BE32Bytes(0) + BE32Bytes(28) +
-          BE32Bytes(size) + table;
-    end;
-    FontProvider.SelectFont(dc, prev);
-    FontProvider.DeleteFont(font);
-  finally
-    FontDC.DeleteDC(dc);
+  face := FontProvider.CreateFace(req);
+  if face = nil then
+    exit;
+  size := face.GetFontData(gdiTag, 0, nil, 0);
+  if (size <> FONT_DATA_ERROR) and
+     (size > 0) then
+  begin
+    SetLength(table, size);
+    if face.GetFontData(gdiTag, 0, pointer(table), size) = size then
+      // sfnt header, one table record at offset 28 (checksum left 0)
+      result := BE32Bytes($00010000) + BE16Bytes(1) + BE16Bytes(16) +
+        BE32Bytes(0) + Tag + BE32Bytes(0) + BE32Bytes(28) +
+        BE32Bytes(size) + table;
   end;
 end;
 
@@ -922,7 +891,6 @@ const
     'Microsoft JhengHei UI', 'MS Gothic', 'Microsoft YaHei');
   SAMPLE = 'Hello';
 var
-  dc: TFontDC;
   fonts: TRawUtf8DynArray;
   f, i, g, found: integer;
   name: string;
@@ -930,13 +898,8 @@ var
   o, l, ho, hl: cardinal;
   same: boolean;
 begin
-  dc := FontDC.CreateDC;
-  try
-    fonts := nil;
-    FontEnumerator.EnumTrueTypeFonts(dc, fonts);
-  finally
-    FontDC.DeleteDC(dc);
-  end;
+  fonts := nil;
+  FontEnumerator.EnumTrueTypeFonts(fonts);
   found := 0;
   for f := 0 to high(TTC_FONTS) do
   begin
@@ -1018,7 +981,6 @@ const
   SYMBOL_FONTS: array[0..2] of RawUtf8 = ('Wingdings', 'Webdings', 'Symbol');
   SAMPLE = 'abc';
 var
-  dc: TFontDC;
   fonts: TRawUtf8DynArray;
   f, i, g: integer;
   name: string;
@@ -1038,13 +1000,8 @@ begin
   {$else}
   Check(not FontSubsetter.SupportsSymbolic, 'hb-subset leaves symbol fonts whole');
   {$endif OSWINDOWS}
-  dc := FontDC.CreateDC;
-  try
-    fonts := nil;
-    FontEnumerator.EnumTrueTypeFonts(dc, fonts);
-  finally
-    FontDC.DeleteDC(dc);
-  end;
+  fonts := nil;
+  FontEnumerator.EnumTrueTypeFonts(fonts);
   f := 0;
   while (f <= high(SYMBOL_FONTS)) and
         (FindRawUtf8(fonts, SYMBOL_FONTS[f]) < 0) do
@@ -1082,9 +1039,8 @@ const
     'Arial', 'Liberation Sans', 'DejaVu Sans', 'Helvetica');
   SAMPLE = 'MiW .';
 var
-  dc: TFontDC;
   req: TFontRequest;
-  font, prev: TFontHandle;
+  face: IFontFace;
   fonts: TRawUtf8DynArray;
   abc: TFontCharAbcArray;
   cmap: RawByteString;
@@ -1094,53 +1050,42 @@ begin
   { IFontProvider.GetGlyphAdvance gives a glyph its width by index - for a
     shaped glyph no character maps to (GetAndMarkGlyphAsUsed, step 3): for a
     glyph a character does map to, it agrees with GetCharAbcWidths }
-  dc := FontDC.CreateDC;
-  try
-    fonts := nil;
-    FontEnumerator.EnumTrueTypeFonts(dc, fonts);
-    f := 0;
-    while (f <= high(SANS_FONTS)) and
-          (FindRawUtf8(fonts, SANS_FONTS[f]) < 0) do
-      inc(f);
-    if f > high(SANS_FONTS) then
-    begin
-      Check(true, 'SKIP: no test font installed');
-      exit;
-    end;
-    cmap := PlatformFontTable(SANS_FONTS[f], 'cmap');
-    FillChar(req, SizeOf(req), 0);
-    req.FaceName := Utf8ToSynUnicode(SANS_FONTS[f]);
-    req.Height := -1000;
-    req.Weight := 400;
-    req.CharSet := PDF_DEFAULT_CHARSET;
-    font := FontProvider.CreateFont(req);
-    Check(font <> nil, 'font created');
-    if font = nil then
-      exit;
-    prev := FontProvider.SelectFont(dc, font);
-    try
-      Check(FontProvider.GetCharAbcWidths(dc, 32, 255, abc) and
-            (length(abc) = 224), 'widths by character');
-      same := length(abc) = 224;
-      for i := 1 to length(SAMPLE) do
-      begin
-        g := SfntCmapLookup(cmap, ord(SAMPLE[i]));
-        same := same and
-                (g > 0) and
-                FontProvider.GetGlyphAdvance(dc, g, adv) and
-                (adv = abc[ord(SAMPLE[i]) - 32].abcA +
-                       integer(abc[ord(SAMPLE[i]) - 32].abcB) +
-                       abc[ord(SAMPLE[i]) - 32].abcC);
-      end;
-      Check(same, Utf8ToString(SANS_FONTS[f]) +
-        ': the advance by glyph index is the one by character');
-    finally
-      FontProvider.SelectFont(dc, prev);
-      FontProvider.DeleteFont(font);
-    end;
-  finally
-    FontDC.DeleteDC(dc);
+  fonts := nil;
+  FontEnumerator.EnumTrueTypeFonts(fonts);
+  f := 0;
+  while (f <= high(SANS_FONTS)) and
+        (FindRawUtf8(fonts, SANS_FONTS[f]) < 0) do
+    inc(f);
+  if f > high(SANS_FONTS) then
+  begin
+    Check(true, 'SKIP: no test font installed');
+    exit;
   end;
+  cmap := PlatformFontTable(SANS_FONTS[f], 'cmap');
+  FillChar(req, SizeOf(req), 0);
+  req.FaceName := Utf8ToSynUnicode(SANS_FONTS[f]);
+  req.Height := -1000;
+  req.Weight := 400;
+  req.CharSet := PDF_DEFAULT_CHARSET;
+  face := FontProvider.CreateFace(req);
+  Check(face <> nil, 'face created');
+  if face = nil then
+    exit;
+  Check(face.GetCharAbcWidths(32, 255, abc) and
+        (length(abc) = 224), 'widths by character');
+  same := length(abc) = 224;
+  for i := 1 to length(SAMPLE) do
+  begin
+    g := SfntCmapLookup(cmap, ord(SAMPLE[i]));
+    same := same and
+            (g > 0) and
+            face.GetGlyphAdvance(g, adv) and
+            (adv = abc[ord(SAMPLE[i]) - 32].abcA +
+                   integer(abc[ord(SAMPLE[i]) - 32].abcB) +
+                   abc[ord(SAMPLE[i]) - 32].abcC);
+  end;
+  Check(same, Utf8ToString(SANS_FONTS[f]) +
+    ': the advance by glyph index is the one by character');
 end;
 
 type
