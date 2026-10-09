@@ -86,7 +86,12 @@ session (Windows: per compiler) does exactly this:
    into the output folder it shares with `mormot2`
 3. `test_runner`: the expected count, no failure. At a baseline also
    `test_runner --golden-record`; at a step, the plain run compares
-4. `pdfcheck run <compiler> <folder>` into the state's folder
+4. `pdfcheck run <compiler> <folder>` into the state's folder. It sets
+   `SOURCE_DATE_EPOCH` to 2026-01-01 unless it is set, and `report_demo` and
+   `mormot_demo` print that date: with the same valid value, unchanged demo
+   output compares equal across days. A folder made before (Phase 1b) differs
+   in the printed date, and possibly in what it moves (the text after it, the
+   subset) - look at every difference
 5. `tagged_unicode_<system>.pdf` from `test_runner`'s folder copied into it
 6. Reported: the count, the golden result, `pdfcheck`'s output
 
@@ -124,7 +129,9 @@ checked against that record:
    - `compare <dirA> <dirB>`: both sides normalized — streams inflated;
      dates, `/ID`, XMP uuids, subset prefixes, stream lengths and the
      cross-reference offsets masked (the method used by hand so far, ROADMAP
-     R-26, R-25) — then compared; the first differing line is shown
+     R-26, R-25) — then compared: up to ten differences across the objects
+     (members of object streams included) and the text outside them are
+     shown, the rest counted
    - `fonts <file>`: the fonts as `pdffonts` lists them — type, font file
      key, subset, `/ToUnicode`
    - `struct <file>`: the roles of the structure tree and their counts
@@ -156,8 +163,11 @@ checked against that record:
      real difference
    - the same assertion count with and without a recorded baseline: two per
      case, a difference by `Check(false)`, not `TestFailed()`
-   - one report of a difference: `ComparePdfText` names the object, the byte
-     and the line of each side, for the golden files and `pdfcheck` alike
+   - one report of a difference: `ComparePdfText` shows up to ten
+     differences across the objects (members of object streams included) and
+     the text outside them, the rest counted - an added or removed object by
+     number and generation, a changed one with the byte and the line of each
+     side - for the golden files and `pdfcheck` alike
 
    **Checked** on Windows (FPC Win64, Delphi 7, Delphi 2010): `test_runner`
    279/279 without a baseline, while recording and comparing; a changed
@@ -406,6 +416,39 @@ Qt `QRawFont`):
   nil font of the FreeType backend did
 - Output identical: golden files on every platform, the Windows demo PDFs
   (same `.res`) against `main`
+
+**Bug fixes** (one PR with the implementation PR, rule 2):
+
+- from Martin's review of #26: when embedding is required and neither a
+  subset nor the whole face is available, the save fails
+  (`EPdfInvalidOperation`) instead of writing the font without a font file -
+  and `Tagged` forces embedding as PDF/A does; the
+  bounds of `ExtractSfntFromTtc` cannot wrap on 32-bit; the FreeType side of
+  `GetFaceFile` is tested on a `.ttc` (Noto Sans CJK JP on Linux, Hiragino
+  Sans GB and Helvetica on macOS); `report_demo` and `mormot_demo` print the
+  date of `SOURCE_DATE_EPOCH`, which `pdfcheck run` sets, and `pdfcheck
+  compare` names up to ten changed, added or removed objects - paired by
+  number, also inside object streams - and counts the rest
+- **CFF - moved to the bug-fix PR of Phase 2** (decided with Sven
+  2026-10-09: eight commits that change the output on macOS and Linux, too
+  much for this PR). A CID-keyed CFF face (all CJK CFF faces measured: Noto
+  Sans CJK, Hiragino Sans GB) may not be a simple `/Type1` font (ISO 32000-1
+  table 126), and the codes of a `CIDFontType0` are CIDs, not glyph IDs -
+  Hiragino Sans GB has 288 glyphs whose CID differs. Decided: all text of a
+  CFF face through the Type0 font - a CID-keyed face writes the CIDs of its
+  charset, a name-keyed face its glyph IDs unchanged;
+  a CID-keyed face embedded as the bare `CFF ` table, `/FontFile3 /Subtype
+  /CIDFontType0C` (PDF 1.3, also PDF/A-1); a name-keyed face (a Latin OTF,
+  e.g. Nimbus Sans of Ubuntu's desktop) as `/OpenType`, the document raised
+  to PDF 1.6 before its header is written, refused under PDF/A-1 - no CFF
+  rewriter (cairo and LuaTeX convert name-keyed CFF to CID-keyed: a project
+  of its own). The plan, discussed with Codex: a bounded CFF reader with
+  synthetic fixtures, the internal WinAnsi peer kept out of the file, the
+  program kind deciding the descendant (not the subset), the codes of the
+  face (CIDs of a CID-keyed one) in content, `/W` (sorted by code) and
+  `/ToUnicode`, word spacing as `TJ`
+  adjustments (`Tw` does not reach two-byte codes), the routing, then
+  veraPDF/PAC and the Mac golden files
 
 ### Phase 2 — Raw PDF Without VCL/LCL
 

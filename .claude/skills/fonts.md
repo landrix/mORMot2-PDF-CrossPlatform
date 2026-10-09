@@ -51,7 +51,7 @@ Report.GetExportFonts(SansFont, SerifFont, MonoFont);
 | macOS | Trebuchet MS | Georgia | Andale Mono |
 | Linux | Liberation Sans | Liberation Serif | Liberation Mono |
 
-Fonts excluded from embedding: `TPdfDocument.EmbeddedTtfIgnore` (`TRawUtf8List`).
+Fonts excluded from optional embedding: `TPdfDocument.EmbeddedTtfIgnore` (`TRawUtf8List`) - ignored for PDF/A and tagged output.
 Fallback when a requested font is not found: `TPdfDocument.FontFallBackName` (string).
 
 ---
@@ -150,7 +150,9 @@ whatever cmap the lookup goes through — symbol fonts included, unlike POSIX
 collection at the index found from the bytes (`TtcFaceIndex`; before W2 the
 family-name list `GetTtcIndex`, wrong for 14 of 30 collections).
 `TestSubsetTtcFace` checks four such faces and two of index 0 on the saved
-PDF, and `TestWholeTtcFace` the same faces embedded whole
+PDF, and `TestWholeTtcFace` the same faces embedded whole; both also cover
+Noto Sans CJK JP on Linux and Hiragino Sans GB and Helvetica on macOS (the
+FreeType side, face 0), when installed
 (`EmbeddedWholeTtf`, PDF/A-1, no subsetter); both run wherever one of the
 fonts is installed - on Windows, or on a Mac with the Office fonts (face 0
 only there: `TFontFileMap` reaches no other). `TestSubsetSymbolFont`
@@ -483,6 +485,8 @@ Font embedding decision:
   if EmbeddedWholeTtf = true, for PDF/A-1, or with no FontSubsetter (or a
   symbol font and not SupportsSymbolic, or a failed subset):
     fFace.GetFaceFile(ttf)                       → the face as one font file
+    (no face → the save raises EPdfInvalidOperation; IsEmbedded is true for
+    PDF/A, for Tagged, or with EmbeddedTtf unless in EmbeddedTtfIgnore)
     safe for all scripts; shaped GSUB glyph IDs are valid in the complete font
     .ttc: just the face, rebuilt as an sfnt (ExtractSfntFromTtc) - FreeType
           the face it loaded, GDI the face TtcFaceIndex finds (since
