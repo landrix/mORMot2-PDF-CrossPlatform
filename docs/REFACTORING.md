@@ -88,8 +88,10 @@ session (Windows: per compiler) does exactly this:
    `test_runner --golden-record`; at a step, the plain run compares
 4. `pdfcheck run <compiler> <folder>` into the state's folder. It sets
    `SOURCE_DATE_EPOCH` to 2026-01-01 unless it is set, and `report_demo` and
-   `mormot_demo` print that date: the folders of two days compare equal. A
-   folder made before (Phase 1b) differs from a newer one in that date only
+   `mormot_demo` print that date: with the same valid value, unchanged demo
+   output compares equal across days. A folder made before (Phase 1b) differs
+   in the printed date, and possibly in what it moves (the text after it, the
+   subset) - look at every difference
 5. `tagged_unicode_<system>.pdf` from `test_runner`'s folder copied into it
 6. Reported: the count, the golden result, `pdfcheck`'s output
 
@@ -127,7 +129,9 @@ checked against that record:
    - `compare <dirA> <dirB>`: both sides normalized — streams inflated;
      dates, `/ID`, XMP uuids, subset prefixes, stream lengths and the
      cross-reference offsets masked (the method used by hand so far, ROADMAP
-     R-26, R-25) — then compared; the first differing line is shown
+     R-26, R-25) — then compared: up to ten differences across the objects
+     (members of object streams included) and the text outside them are
+     shown, the rest counted
    - `fonts <file>`: the fonts as `pdffonts` lists them — type, font file
      key, subset, `/ToUnicode`
    - `struct <file>`: the roles of the structure tree and their counts
@@ -159,8 +163,11 @@ checked against that record:
      real difference
    - the same assertion count with and without a recorded baseline: two per
      case, a difference by `Check(false)`, not `TestFailed()`
-   - one report of a difference: `ComparePdfText` names the object, the byte
-     and the line of each side, for the golden files and `pdfcheck` alike
+   - one report of a difference: `ComparePdfText` shows up to ten
+     differences across the objects (members of object streams included) and
+     the text outside them, the rest counted - an added or removed object by
+     number and generation, a changed one with the byte and the line of each
+     side - for the golden files and `pdfcheck` alike
 
    **Checked** on Windows (FPC Win64, Delphi 7, Delphi 2010): `test_runner`
    279/279 without a baseline, while recording and comparing; a changed
@@ -412,15 +419,16 @@ Qt `QRawFont`):
 
 **Bug fixes** (one PR with the implementation PR, rule 2):
 
-- from Martin's review of #26: a font asked to be embedded whose face cannot
-  be read fails the save (`EPdfInvalidOperation`) instead of going out
-  without a font file - and `Tagged` forces embedding as PDF/A does; the
+- from Martin's review of #26: when embedding is required and neither a
+  subset nor the whole face is available, the save fails
+  (`EPdfInvalidOperation`) instead of writing the font without a font file -
+  and `Tagged` forces embedding as PDF/A does; the
   bounds of `ExtractSfntFromTtc` cannot wrap on 32-bit; the FreeType side of
   `GetFaceFile` is tested on a `.ttc` (Noto Sans CJK JP on Linux, Hiragino
   Sans GB and Helvetica on macOS); `report_demo` and `mormot_demo` print the
   date of `SOURCE_DATE_EPOCH`, which `pdfcheck run` sets, and `pdfcheck
-  compare` names every differing, added or removed object - paired by
-  number, also inside object streams
+  compare` names up to ten changed, added or removed objects - paired by
+  number, also inside object streams - and counts the rest
 - **CFF** (after the face object, which detects the flavour): a CID-keyed
   CFF face (all CJK CFF faces measured: Noto Sans CJK, Hiragino Sans GB) may
   not be a simple `/Type1` font (ISO 32000-1 table 126), and the codes of a

@@ -471,7 +471,8 @@ var FontSubsetter: IFontSubsetter;  // mormot.lib.core; nil = no subsetter
   BMP dropped). A face of a `.ttc`: the whole collection (`'ttcf'`) is
   subset, at the index `TtcFaceIndex` finds by the face's table directory in
   the collection header; no single match -> false, and as `GetFaceFile`
-  needs the same match, the face is not embedded at all.
+  needs the same match, saving raises `EPdfInvalidOperation` (embedding
+  required, neither a subset nor the whole face).
   `ReduceTtf` keeps the ten tables a PDF needs. `SupportsSymbolic` = true:
   GDI maps the WinAnsi bytes of a symbol font. Without `Font` it returns
   false, and for a CFF face too (`CreateFontPackage` takes TrueType outlines

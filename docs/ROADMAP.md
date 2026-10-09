@@ -176,10 +176,10 @@ v0.10.0 (2026-09-30).
 - **Demos: the print date of `SOURCE_DATE_EPOCH`:** `report_demo` and
   `mormot_demo` print the day of `SOURCE_DATE_EPOCH` (UTC, ISO 8601) when it
   is set, as reproducible builds do, and today's date otherwise.
-  `pdfcheck run` sets it, so the demo PDFs of two days compare equal, and
-  `pdfcheck compare` (as the golden-file tests) names every differing, added
-  or removed object, paired by number and also inside object streams,
-  instead of only the first differing byte
+  `pdfcheck run` sets it, so unchanged demo PDFs of two days compare equal,
+  and `pdfcheck compare` (as the golden-file tests) names up to ten changed,
+  added or removed objects, paired by number and also inside object streams,
+  and counts the rest - instead of only the first differing byte
 - **Coming with R-20** (announce when done): the preview and the GUI demos
   on Delphi
 
