@@ -429,13 +429,26 @@ Qt `QRawFont`):
   date of `SOURCE_DATE_EPOCH`, which `pdfcheck run` sets, and `pdfcheck
   compare` names up to ten changed, added or removed objects - paired by
   number, also inside object streams - and counts the rest
-- **CFF** (after the face object, which detects the flavour): a CID-keyed
-  CFF face (all CJK CFF faces measured: Noto Sans CJK, Hiragino Sans GB) may
-  not be a simple `/Type1` font (ISO 32000-1 table 126), and the codes of a
-  `CIDFontType0` are CIDs, not glyph IDs - Hiragino Sans GB has 288 glyphs
-  whose CID differs. Decided: all text of a CFF face through the Type0 font,
-  the codes mapped through the CFF charset, the bare `CFF ` table embedded as
-  `/FontFile3 /Subtype /CIDFontType0C` (PDF 1.3, also PDF/A-1)
+- **CFF - moved to the bug-fix PR of Phase 2** (decided with Sven
+  2026-10-09: eight commits that change the output on macOS and Linux, too
+  much for this PR). A CID-keyed CFF face (all CJK CFF faces measured: Noto
+  Sans CJK, Hiragino Sans GB) may not be a simple `/Type1` font (ISO 32000-1
+  table 126), and the codes of a `CIDFontType0` are CIDs, not glyph IDs -
+  Hiragino Sans GB has 288 glyphs whose CID differs. Decided: all text of a
+  CFF face through the Type0 font - a CID-keyed face writes the CIDs of its
+  charset, a name-keyed face its glyph IDs unchanged;
+  a CID-keyed face embedded as the bare `CFF ` table, `/FontFile3 /Subtype
+  /CIDFontType0C` (PDF 1.3, also PDF/A-1); a name-keyed face (a Latin OTF,
+  e.g. Nimbus Sans of Ubuntu's desktop) as `/OpenType`, the document raised
+  to PDF 1.6 before its header is written, refused under PDF/A-1 - no CFF
+  rewriter (cairo and LuaTeX convert name-keyed CFF to CID-keyed: a project
+  of its own). The plan, discussed with Codex: a bounded CFF reader with
+  synthetic fixtures, the internal WinAnsi peer kept out of the file, the
+  program kind deciding the descendant (not the subset), the codes of the
+  face (CIDs of a CID-keyed one) in content, `/W` (sorted by code) and
+  `/ToUnicode`, word spacing as `TJ`
+  adjustments (`Tw` does not reach two-byte codes), the routing, then
+  veraPDF/PAC and the Mac golden files
 
 ### Phase 2 — Raw PDF Without VCL/LCL
 

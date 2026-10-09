@@ -761,7 +761,9 @@ valid; `TestTaggedUnicode` asserts that no simple TrueType font lacks
 shown, and leave an unused peer out of the page resources and the file. That
 touches the font lifecycle on every platform — see `fonts.md` §4 on the
 dual-instance model. Whether the `/Type1` peer of a CFF face needs the same
-stopgap (it too lacks `/Widths`) is to be checked with it.
+stopgap (it too lacks `/Widths`) is to be checked with it. For CFF faces the
+peer goes anyway with the CFF series of R-28 (Phase 2's bug-fix PR,
+`docs/REFACTORING.md`): a CID-keyed CFF may not be a simple `/Type1` at all.
 
 ### R-15b — Symbolic Fonts Are Not Subset on POSIX — unprioritised
 
