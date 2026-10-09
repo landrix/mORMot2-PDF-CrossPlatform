@@ -420,13 +420,14 @@ Step 2: scan UnicodeFont.fUsedWide[0..Count-1].Glyph == aGlyph  (reverse CMAP)
           → not found: fall through to Step 3
 
 Step 3: GSUB-substituted glyph — not in CMAP at all (rare ligature, etc.)
-  {$ifdef OSWINDOWS} only:
-          GetDCWithFont(self)                              select font into DC
-          GetCharABCWidthsI(fDoc.fDC, aGlyph, 1, nil, @abc)  ← by glyph index
-          w := abc.abcA + integer(abc.abcB) + abc.abcC    ← advance in 1000/em units
+  every platform since W3 (2026-10-09; Windows only before):
+          FontProvider.GetGlyphAdvance(GetDCWithFont(self), aGlyph, w)
+                                    ← by glyph index, 1000/em units
+                                      (GDI GetCharABCWidthsI, FreeType
+                                       FT_Load_Glyph); failure → fDefaultWidth
           AddShapedGlyph(aGlyph, w)                        ← WinAnsiFont.fShapedGlyph
   → glyph now registered in /W array; no more overlap from /DW fallback
-  {POSIX}: GetAndMarkGlyphAsUsedWithWidth does the same (see §10)
+  HarfBuzz runs carry their advances: GetAndMarkGlyphAsUsedWithWidth (see §10)
 ```
 
 **Arabic Presentation Forms in CMAP:** Fonts like Tahoma map U+FE70–U+FEFF (Arabic
@@ -434,7 +435,7 @@ Presentation Forms-B) to the same glyph IDs that Uniscribe produces for shaped c
 forms. Step 2 therefore finds most Arabic shaped glyphs. Step 3
 remains the backstop for fonts whose GSUB glyphs have no Presentation-Form Unicode slot.
 
-**Width unit compatibility:** `GetCharABCWidthsI` returns logical units. Because `lfHeight = -1000` (pdf.pas:8854), the DC em square = 1000 logical units, making these widths directly compatible with `fUsedWide[].Width` (also 1000/em from hmtx). No unit conversion needed.
+**Width unit compatibility:** `GetGlyphAdvance` returns logical units (GDI's `GetCharABCWidthsI`). Because `lfHeight = -1000` (pdf.pas:8854), the DC em square = 1000 logical units, making these widths directly compatible with `fUsedWide[].Width` (also 1000/em from hmtx). No unit conversion needed.
 
 ---
 
@@ -530,12 +531,14 @@ compile if it is ever gated again; `TestShapingSwitch` checks the output.
 - Uniscribe shapes Arabic contextual forms via `ScriptShape` → GSUB glyph IDs
 - `GetAndMarkGlyphAsUsed` registers shaped glyph IDs via reverse CMAP scan (Step 2)
 - Fonts like Tahoma: shaped glyphs found in Arabic Presentation Forms (U+FE70–U+FEFF)
-- For fonts without Presentation-Form coverage: Step 3 (`GetCharABCWidthsI` + `fShapedGlyph`) handles remaining GSUB-only glyphs (Windows only)
+- For fonts without Presentation-Form coverage: Step 3 (`GetGlyphAdvance` + `fShapedGlyph`) handles remaining GSUB-only glyphs
 
 ### Step 3 on Linux/macOS — HarfBuzz path (P2-A, APPLIED)
 
-`GetAndMarkGlyphAsUsed` Step 3 uses `GetCharABCWidthsI` (GDI API, Windows only).
-On Linux/macOS the equivalent is `GetAndMarkGlyphAsUsedWithWidth(aGlyph, aWidth)`:
+`GetAndMarkGlyphAsUsed` Step 3 uses `FontProvider.GetGlyphAdvance` (every
+platform since W3; before, `GetCharABCWidthsI`, Windows only). A HarfBuzz run
+brings its own advances, so Linux/macOS use
+`GetAndMarkGlyphAsUsedWithWidth(aGlyph, aWidth)` there:
 - Called from `AddShapedRun` for a run with `Advances` (HarfBuzz) instead of
   `GetAndMarkGlyphAsUsed`
 - the width written to `/W` comes from `GlyphHmtxWidth()`, i.e. the font's own
@@ -724,11 +727,14 @@ FreeType's `FT_Load_Sfnt_Table` uses the `FT_MAKE_TAG` big-endian convention.
 
 ## 13. GSUB Glyph Width — Implementation Notes (`pdf.pas:6247`)
 
-Relevant for `GetAndMarkGlyphAsUsed` Step 3 when `UseUniscribe=true` on Windows.
+Relevant for `GetAndMarkGlyphAsUsed` Step 3: a run without advances
+(Uniscribe) or the public `AddGlyphs`.
 
 ### `GetCharABCWidthsI` — API details
 
-Not in FPC's standard `windows` unit (commented out in `redef.inc`). Must be declared manually in `{$ifdef OSWINDOWS}` block at the start of `implementation`:
+Behind `IFontProvider.GetGlyphAdvance` in `mormot.lib.uniscribe` since W3.
+Not in FPC's standard `windows` unit (commented out in `redef.inc`), so it is
+declared there by hand:
 
 ```pascal
 // 5 parameters — pgi=nil means consecutive glyphs starting at giFirst
@@ -775,7 +781,7 @@ Arabic, but rendering is correct. The fix needs the source text per glyph
 ### Safety scope
 
 `GetAndMarkGlyphAsUsed` Step 3 is only reached when:
-- `{$ifdef OSWINDOWS}` — Windows only
+- (every platform since W3; Windows only before)
 - Called from `AddShapedRun` for a run without `Advances` (Uniscribe), or from
   the public `AddGlyphs`
 - Uniscribe gives runs only when an item is complex or right-to-left

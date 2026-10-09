@@ -21,6 +21,7 @@ uses
   mormot.lib.core,
   mormot.pdf.types,
   {$ifdef OSWINDOWS}
+  Windows,
   mormot.lib.uniscribe,
   {$else}
   mormot.lib.harfbuzz,
@@ -86,6 +87,10 @@ type
     procedure TestSubsetTtcFace;
     procedure TestWholeTtcFace;
     procedure TestSubsetSymbolFont;
+    procedure TestGlyphAdvanceByIndex;
+    {$ifdef OSWINDOWS}
+    procedure TestLogFontWidth;
+    {$endif OSWINDOWS}
   end;
 
 const
@@ -1071,9 +1076,117 @@ begin
   Check(kept, name + ': the glyphs of the text are kept');
 end;
 
+procedure TPdfSubsetEngineTests.TestGlyphAdvanceByIndex;
+const
+  SANS_FONTS: array[0..3] of RawUtf8 = (
+    'Arial', 'Liberation Sans', 'DejaVu Sans', 'Helvetica');
+  SAMPLE = 'MiW .';
+var
+  dc: TFontDC;
+  req: TFontRequest;
+  font, prev: TFontHandle;
+  fonts: TRawUtf8DynArray;
+  abc: TFontCharAbcArray;
+  cmap: RawByteString;
+  f, i, g, adv: integer;
+  same: boolean;
+begin
+  { IFontProvider.GetGlyphAdvance gives a glyph its width by index - for a
+    shaped glyph no character maps to (GetAndMarkGlyphAsUsed, step 3): for a
+    glyph a character does map to, it agrees with GetCharAbcWidths }
+  dc := FontDC.CreateDC;
+  try
+    fonts := nil;
+    FontEnumerator.EnumTrueTypeFonts(dc, fonts);
+    f := 0;
+    while (f <= high(SANS_FONTS)) and
+          (FindRawUtf8(fonts, SANS_FONTS[f]) < 0) do
+      inc(f);
+    if f > high(SANS_FONTS) then
+    begin
+      Check(true, 'SKIP: no test font installed');
+      exit;
+    end;
+    cmap := PlatformFontTable(SANS_FONTS[f], 'cmap');
+    FillChar(req, SizeOf(req), 0);
+    req.FaceName := Utf8ToSynUnicode(SANS_FONTS[f]);
+    req.Height := -1000;
+    req.Weight := 400;
+    req.CharSet := PDF_DEFAULT_CHARSET;
+    font := FontProvider.CreateFont(req);
+    Check(font <> nil, 'font created');
+    if font = nil then
+      exit;
+    prev := FontProvider.SelectFont(dc, font);
+    try
+      Check(FontProvider.GetCharAbcWidths(dc, 32, 255, abc) and
+            (length(abc) = 224), 'widths by character');
+      same := length(abc) = 224;
+      for i := 1 to length(SAMPLE) do
+      begin
+        g := SfntCmapLookup(cmap, ord(SAMPLE[i]));
+        same := same and
+                (g > 0) and
+                FontProvider.GetGlyphAdvance(dc, g, adv) and
+                (adv = abc[ord(SAMPLE[i]) - 32].abcA +
+                       integer(abc[ord(SAMPLE[i]) - 32].abcB) +
+                       abc[ord(SAMPLE[i]) - 32].abcC);
+      end;
+      Check(same, Utf8ToString(SANS_FONTS[f]) +
+        ': the advance by glyph index is the one by character');
+    finally
+      FontProvider.SelectFont(dc, prev);
+      FontProvider.DeleteFont(font);
+    end;
+  finally
+    FontDC.DeleteDC(dc);
+  end;
+end;
+
 type
   // reaches the glyph bookkeeping of a font
   TPdfFontTrueTypeAccess = class(TPdfFontTrueType);
+
+{$ifdef OSWINDOWS}
+
+type
+  // reaches the font index of the document
+  TPdfDocumentAccess = class(TPdfDocument);
+
+procedure TPdfSubsetEngineTests.TestLogFontWidth;
+var
+  PDF: TPdfDocument;
+  lf: TLogFontW;
+  ndx: integer;
+  normal, wide: TPdfFontTrueTypeAccess;
+begin
+  { the TLogFontW constructor creates the font from the whole LOGFONT, as
+    before W3: lfWidth widens the widths the engine reads from GDI
+    (TFontRequest has no width) }
+  PDF := TPdfDocument.Create(false, 0, pdfaNone);
+  try
+    ndx := TPdfDocumentAccess(PDF).GetTrueTypeFontIndex('Arial');
+    if ndx < 0 then
+    begin
+      Check(true, 'SKIP: Arial not installed');
+      exit;
+    end;
+    FillChar(lf, SizeOf(lf), 0);
+    lf.lfHeight := -1000;
+    lf.lfWeight := 400;
+    lf.lfCharSet := PDF_DEFAULT_CHARSET;
+    Utf8ToWideChar(@lf.lfFaceName, 'Arial');
+    normal := TPdfFontTrueTypeAccess(TPdfFontTrueType.Create(PDF, ndx, [], lf, nil));
+    lf.lfWidth := 1000;
+    wide := TPdfFontTrueTypeAccess(TPdfFontTrueType.Create(PDF, ndx, [], lf, nil));
+    Check(wide.fWinAnsiWidth^['M'] > normal.fWinAnsiWidth^['M'] + 500,
+      'lfWidth reaches the font');
+  finally
+    PDF.Free; // frees its registered fonts
+  end;
+end;
+
+{$endif OSWINDOWS}
 
 procedure TPdfSubsetEngineTests.TestShapedGlyphKeys;
 const

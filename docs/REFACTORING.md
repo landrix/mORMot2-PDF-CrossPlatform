@@ -199,7 +199,8 @@ checked against that record:
    `IFontSubsetter.SupportsSymbolic`), then `0e40ec95c` (2026-10-09:
    `IFontProvider.GetFaceFile`, the face of a `.ttc` as one font file;
    `ExtractSfntFromTtc` and `TtcFaceIndex` in `mormot.lib.core`; new GUIDs
-   for `IFontProvider` and `IFontSubsetter`).
+   for `IFontProvider` and `IFontSubsetter`), then `84012287b` (2026-10-09, step
+   W3: `IFontProvider.GetGlyphAdvance`).
    **Checked:** against `d60cc6e80`, today's `main`,
    `test_runner` 259/259 on Windows (FPC Win64, Delphi 7, Delphi 2010),
    298/298 on Linux, 317/317 on macOS (fpcupdeluxe, FPC 3.2.3). Against
@@ -324,9 +325,23 @@ Phase 1 is one PR to `synopse/mORMot2`.
   `mormot.ui.pdf`; they are the shaper and the subsetter of
   `mormot.lib.uniscribe` now (not in the gist), and the engine has one path
   for both platforms. The two paths differed in shape, not only in library -
-  see `.claude/skills/platform-backends.md`, "Phase 1 Notes". Left for W3:
-  the engine's remaining direct GDI calls (font creation, metrics, the
-  document DC, glyph widths by index)
+  see `.claude/skills/platform-backends.md`, "Phase 1 Notes"
+- **The engine's direct GDI calls behind the interfaces** (done in step W3,
+  2026-10-09): the document DC (`FontDC`), font creation and release, metrics,
+  character widths, tables and glyph advances by index (the new
+  `IFontProvider.GetGlyphAdvance`) go through `mormot.lib.core` on every
+  platform; `TPdfFontTrueType` holds a `TFontRequest`, `TFontMetrics` and
+  `TFontOutlineMetrics` everywhere. The `TLogFontW` API stays as Windows
+  adapters (decided with Sven, three alternatives, as cairo keeps its
+  LOGFONT constructors beside the generic ones); the `TLogFontW` constructor
+  still creates its font from the whole LOGFONT (`lfWidth`, found by Codex),
+  whether it should ignore it as cairo does is left to Phase 5. The EMF code
+  casts the DC back to a `HDC`. Output identical (golden files on every platform).
+  Intended difference: `GetAndMarkGlyphAsUsed` step 3 - a glyph no character
+  maps to, from the public `ShowGlyph` or a shaper giving no advances - now
+  gets its width on Linux/macOS too, where it stayed out of `/W` before
+  (`/DW` and overlap); HarfBuzz runs, which bring their advances, never went
+  there
   - **Accepted difference (rule 1), found by Martin on #25:** `rtl_demo` on
     Windows, line `EXPECTED_2A` (`Expected: U+0628 BA - ...`, shaped because
     Uniscribe calls the em dash complex): the space after `0628` moved from
