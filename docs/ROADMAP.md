@@ -120,8 +120,7 @@ v0.10.0 (2026-09-30).
   - **Fixed:** a face of a `.ttc` collection other than face 0 is subset
     from the right face - the index used to come from a list of family
     names, wrong on Windows 11 for 14 of 30 collections (e.g. `MS UI
-    Gothic`, `Yu Gothic UI`, `Microsoft YaHei UI`); a collection without a
-    clear match now embeds the face whole
+    Gothic`, `Yu Gothic UI`, `Microsoft YaHei UI`)
   - **Fixed:** Uniscribe no longer drops real text that shared its last item
     with the terminating `#0`, and frees its glyph cache after each call
   - `ShowText(..., NextLine = true)` with shaped text on Linux/macOS writes
@@ -130,6 +129,14 @@ v0.10.0 (2026-09-30).
   - code that reads `FontShaper = nil` or `FontSubsetter = nil` as "on
     Windows" no longer can; `NO_USE_UNISCRIBE`, set for the whole project,
     still turns both off
+- **Fixed: the whole face of a `.ttc` collection on Windows (R-28):** with
+  `EmbeddedWholeTtf`, for PDF/A-1 and without a subsetter, a font from a
+  `.ttc` (`MS Gothic`, `Microsoft YaHei`, `Cambria`...) embedded the whole
+  collection - megabytes, and no valid font program for a PDF reader or
+  validator. Now only its face is embedded, as on Linux/macOS; a face that
+  cannot be found in its collection is not embedded. A font backend of your
+  own implements the new `IFontProvider.GetFaceFile`; `IFontProvider` and
+  `IFontSubsetter` have new GUIDs
 - **Coming with R-20** (announce when done): the preview and the GUI demos
   on Delphi
 

@@ -26,7 +26,7 @@ env:
   # refactoring a commit of the font-layer branch of landrix/mORMot2, which
   # is the trunk's d60cc6e80 plus the new mormot.lib.* units
   MORMOT2_REPO: landrix/mORMot2
-  MORMOT2_COMMIT: 2f8bf3d76770bb2d4e2f35829ec46e439cf61b39
+  MORMOT2_COMMIT: 0e40ec95cbe254aaa178769ae3bdf5937461cf31
   TARGET: x86_64-linux
   # the official image of the veraPDF project
   VERAPDF_IMAGE: verapdf/cli:v1.30.2

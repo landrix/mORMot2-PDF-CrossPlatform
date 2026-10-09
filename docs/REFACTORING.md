@@ -23,9 +23,13 @@ section.
    identical to the baseline after normalization (Phase 0); existing tests
    stay valid. A difference is a defect until it is explained and accepted
    in this file. For the refactoring this replaces ROADMAP's pixel check.
-2. **One step, one PR, one kind of change.** Never two of: move units,
+2. **One step, one commit, one kind of change.** Never two of: move units,
    rename public API, change font metrics, change PDF serialization, change
-   report layout. Each must be reviewable on its own.
+   report layout. Each must be reviewable on its own. PRs (agreed with
+   Martin, 2026-10-09): per phase one PR with the complete implementation
+   and one with the bug fixes found on the way; the commits inside keep
+   the steps apart. Sven runs the check session on Windows (FPC, Delphi 7,
+   Delphi 13), Linux and macOS, Martin adds Delphi 2010.
 
 **Architecture**
 
@@ -56,12 +60,12 @@ section.
 
 | Check | Where |
 |---|---|
-| `test_runner` green, same assertion count, golden files unchanged | Windows: FPC Win64, Delphi 7, Delphi 2010 |
+| `test_runner` green, same assertion count, golden files unchanged | Windows: FPC, Delphi 7, Delphi 13 Win32/Win64 (Sven), Delphi 2010 (Martin) - since 2026-10-09, rule 2 |
 | All eight demos rebuilt (`-B`) and run (GUI demos with `--export`) — never an executable of an earlier state | the same |
 | Demo PDFs identical to the baseline after normalization | the same |
-| `test_runner`, demos, PDFs against the baseline | Linux and macOS — every step that touches POSIX code, otherwise at the end of the phase |
+| `test_runner`, demos, PDFs against the baseline | Linux and macOS (Sven, every PR since 2026-10-09) — every step that touches POSIX code, otherwise at the end of the phase |
 | PAC 2024, veraPDF | only when a PDF differs, and at the end of each phase |
-| Delphi 13 (Win64, Linux64, Android64) | the community; asked for at the end of each phase |
+| Delphi 13 (Linux64, Android64) | the community; asked for at the end of each phase |
 
 ---
 
@@ -192,7 +196,10 @@ checked against that record:
    are the safe ones: `fskPlain`, and the new `fsoUnknown`), then `2f8bf3d76`
    (2026-10-08, step W2: the Uniscribe shaper and the FontSub subsetter in
    `mormot.lib.uniscribe`, `NeedsShaping` in the HarfBuzz shaper,
-   `IFontSubsetter.SupportsSymbolic`).
+   `IFontSubsetter.SupportsSymbolic`), then `0e40ec95c` (2026-10-09:
+   `IFontProvider.GetFaceFile`, the face of a `.ttc` as one font file;
+   `ExtractSfntFromTtc` and `TtcFaceIndex` in `mormot.lib.core`; new GUIDs
+   for `IFontProvider` and `IFontSubsetter`).
    **Checked:** against `d60cc6e80`, today's `main`,
    `test_runner` 259/259 on Windows (FPC Win64, Delphi 7, Delphi 2010),
    298/298 on Linux, 317/317 on macOS (fpcupdeluxe, FPC 3.2.3). Against
@@ -215,7 +222,12 @@ checked against that record:
    Windows x64 (FPC 3.2.2) and Windows x86 (Delphi 7, Delphi 2010), 360/360
    on Linux aarch64 (FPC 3.2.3, with fonts-noto-cjk; 348 without), 363/363
    on macOS aarch64 (FPC 3.2.3); golden files unchanged, `pdfcheck` 9/9,
-   veraPDF `ua1` and `3u` pass.
+   veraPDF `ua1` and `3u` pass. Against `2f8bf3d76`, PRs #23 to #25 as one
+   block (Martin, checked on #25): 368/368 on Windows x64 (FPC 3.2.2) and
+   Windows x86 (Delphi 7, Delphi 2010), 366/366 on Linux aarch64, 373/373
+   on macOS aarch64; golden files unchanged; `pdfcheck` 9/9 on Linux and
+   macOS, 8/9 on Windows - `rtl_demo`, explained in Phase 1 (W2); veraPDF
+   `ua1` 35/35, `3u` 5/5.
    `mormot_demo` (SQLite from `static/`) builds and exports on all three
    Windows compilers, the PDFs identical after normalization. FPC warns of
    a duplicate `mormot.lib.uniscribe` (the package's and our copy) — gone
@@ -314,7 +326,25 @@ Phase 1 is one PR to `synopse/mORMot2`.
   for both platforms. The two paths differed in shape, not only in library -
   see `.claude/skills/platform-backends.md`, "Phase 1 Notes". Left for W3:
   the engine's remaining direct GDI calls (font creation, metrics, the
-  document DC, the whole-face embedding with `GetTtcIndex`)
+  document DC, glyph widths by index)
+  - **Accepted difference (rule 1), found by Martin on #25:** `rtl_demo` on
+    Windows, line `EXPECTED_2A` (`Expected: U+0628 BA - ...`, shaped because
+    Uniscribe calls the em dash complex): the space after `0628` moved from
+    the start of one `Tj` to the end of the one before - same glyphs, same
+    font, no positioning between them, the same page. W2 itemizes exactly
+    the text: `ScriptItemize` on the text with the `#0` gave `0628` at bidi
+    level 2 and ` BA ` as items, without it `0628 ` at level 0 and `BA `
+    (measured 2026-10-09, Windows 11). The trailing `#0` changed the level
+    of the digits, and with it where the space went. PR #23 said "the same
+    items": that held for the 15,000 Arabic and Hebrew strings Codex
+    probed, which had no digits, not for this line
+- **The whole face of a `.ttc` on Windows** (bug fix, 2026-10-09): the
+  whole-face embedding read the collection with `'ttcf'`, computed an index
+  with `GetTtcIndex` and never used it - the whole collection went to
+  `/FontFile2` (9 to 21 MB, no font program; from the trunk original). Now
+  `IFontProvider.GetFaceFile` gives the face as one font file on every
+  platform (GDI: `TtcFaceIndex` and `ExtractSfntFromTtc`; FreeType: the
+  face it loaded), and `GetTtcIndex` is gone
 - `libharfbuzz` and `libharfbuzz-subset` stay separately loaded
 - The device-context interface moves unchanged, marked transitional
 

@@ -52,7 +52,21 @@ IFontProvider = interface
                         Buffer: pointer; BufferSize: cardinal): cardinal;
   // Sentinel value returned by GetFontData on error ($FFFFFFFF on all platforms)
   function  FontDataError: cardinal;
+  // The selected face as one standalone font file: a face of a .ttc is
+  // extracted (GDI: TtcFaceIndex + ExtractSfntFromTtc; FreeType: the loaded
+  // face); false if it cannot be found or extracted (since 2026-10-09)
+  function  GetFaceFile(DC: TFontDC; out Face: RawByteString): boolean;
 end;
+```
+
+`GetFontData(DC, 0, ...)` stays raw: on Windows it returns the face's table
+directory with offsets into the collection, which `TtcFaceIndex` and the
+FontSub subsetter need - only `GetFaceFile` promises a font file. The two
+`.ttc` helpers, `ExtractSfntFromTtc` and `TtcFaceIndex`, live in
+`mormot.lib.core` since 2026-10-09, shared by both backends; `IFontProvider`
+and `IFontSubsetter` got new GUIDs then (methods added since the old ones).
+
+```pascal
 ```
 
 ### IFontEnumerator — Font Enumeration
@@ -185,7 +199,7 @@ and `mormot.lib.harfbuzz` elsewhere. `mormot.lib.harfbuzz` loads
 `libharfbuzz`) for the subsetter, each through `TSynLibrary`, and registers
 each one only when its library resolves, so a missing library leaves shaping
 or subsetting off — no build dependency. A program that names a platform unit
-itself (the tests use `mormot.lib.freetype` for `ExtractSfntFromTtc`) does no
+itself (the tests use `mormot.lib.freetype` for FreeType face checks) does no
 harm; no program needs to. Until 2026-10-07 the backends were
 `mormot.pdf.freetype`, `mormot.pdf.harfbuzz` and `mormot.pdf.hbsubset` in
 `src/platform/unix` (R-28 Phase 1). Before 2026-09-29 `mormot.pdf.harfbuzz` had to be added by the
@@ -419,7 +433,8 @@ var FontSubsetter: IFontSubsetter;  // mormot.lib.core; nil = no subsetter
   (`GGI_MARK_NONEXISTING_GLYPHS`; unmapped ones and code points outside the
   BMP dropped). A face of a `.ttc`: the whole collection (`'ttcf'`) is
   subset, at the index `TtcFaceIndex` finds by the face's table directory in
-  the collection header; no single match -> false, the face is embedded whole.
+  the collection header; no single match -> false, and as `GetFaceFile`
+  needs the same match, the face is not embedded at all.
   `ReduceTtf` keeps the ten tables a PDF needs. `SupportsSymbolic` = true:
   GDI maps the WinAnsi bytes of a symbol font. Without `Font` it returns
   false, and for a CFF face too (`CreateFontPackage` takes TrueType outlines
@@ -658,7 +673,10 @@ missing from the cmap gets its width from `GetCharABCWidthsI` by glyph index
 (`GetAndMarkGlyphAsUsed`, step 3) - `IFontProvider` has no such method. The
 printer (`GetDeviceCaps` for page size) and EMF (`TPdfEnum`) calls are
 Windows-only features and stay. Planned as step W3, after the Uniscribe
-shaper and the FontSub subsetter (W2); `GetTtcIndex` can only go with W3.
+shaper and the FontSub subsetter (W2). The whole-face embedding went first,
+as a bug fix (2026-10-09): it read the whole collection and wrote it to
+`/FontFile2` - `GetTtcIndex`'s index was never used - and goes through
+`FontProvider.GetFaceFile` now; `GetTtcIndex` is gone.
 
 **W2 done (2026-10-08):** `TUniscribeShaper` and `TFontSubSubsetter` in
 `mormot.lib.uniscribe`, `NeedsShaping` in the HarfBuzz shaper,
@@ -672,8 +690,11 @@ W2. Intended differences, all outside the golden files: the TTC index of the
 Windows subset comes from the bytes (right for the 14 collections the name
 list got wrong); Uniscribe itemizes exactly the text, without the `#0` item
 that could swallow real text (Codex probed 15,000 strings with Arabic or
-Hebrew: the same items and order; digit-only strings showed other levels or
-boundaries - not checked further); its `SCRIPT_CACHE` is freed; `ShowText(...,
+Hebrew: the same items and order; with digits the `#0` changes their bidi
+level and the item boundaries - `rtl_demo`, line `EXPECTED_2A`: `0628` +
+` BA ` became `0628 ` + `BA `, the space moving from one `Tj` to the one
+before, the same page; Martin, #25; `docs/REFACTORING.md`, Phase 1); its
+`SCRIPT_CACHE` is freed; `ShowText(...,
 NextLine = true)` of shaped text on POSIX writes `T*` before the font switch
 (as Uniscribe did); FontSub resolves every code point of the request, not
 only the WinAnsi ones (the same glyphs, as the cmap gives them).
@@ -687,5 +708,5 @@ PR #13), and the old POSIX backends are replaced by the library units
 (2026-10-07, move only). The Windows part: W1, the GDI services moved
 into `mormot.lib.uniscribe` (2dce8feb6, `mormot.pdf.gdi` gone, move only);
 W2, the Uniscribe shaper and the FontSub subsetter there (2f8bf3d76, see "W2
-done" above); next W3, the engine's direct GDI calls behind `FontProvider`
-(`GetTtcIndex` of the whole-face embedding goes with it).
+done" above); the whole face of a `.ttc` through `GetFaceFile` (0e40ec95c,
+bug fix); next W3, the engine's direct GDI calls behind `FontProvider`.
