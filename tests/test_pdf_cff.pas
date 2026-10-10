@@ -38,6 +38,10 @@ type
     procedure SystemFaces;
     procedure Type0Codes;
     procedure Type0CodesOfAFace;
+    procedure Type0CidCodes;
+    procedure SubsetKeepsCids;
+    procedure Type0CidPaths;
+    procedure SystemFaceCids;
   end;
 
 /// a bare 'CFF ' table of Glyphs glyphs
@@ -426,12 +430,15 @@ begin
 end;
 
 // a face of the tables above, mapping Chars to Glyphs, with Cff if not ''
+// - Marker: the bytes of a table 'zzzz', to find the face in a PDF
 function FakeFace(const Chars, Glyphs: array of integer;
-  const Cff: RawByteString): TFakeFace;
+  const Cff: RawByteString; const Marker: RawByteString = ''): TFakeFace;
 begin
   result := TFakeFace.Create;
   if Cff <> '' then
     result.AddTable('CFF ', Cff);
+  if Marker <> '' then
+    result.AddTable('zzzz', Marker);
   result.AddTable('cmap', FakeCmap(Chars, Glyphs));
   result.AddTable('head', FakeHead);
   result.AddTable('hhea', FakeHhea);
@@ -828,25 +835,41 @@ begin
   Check(sorted, '/ToUnicode sorted by code, no code twice');
 end;
 
+type
+  // draws on the page of FakeFacePdf instead of Text in the fake face
+  TFakeDraw = procedure(Pdf: TPdfDocument);
+
 // draw Text in the fake face, return the inflated PDF
-function FakeFacePdf(const Face: IFontFace; const Text: RawUtf8): RawUtf8;
+// - with a Subsetter, the face is embedded and subset by it
+function FakeFacePdf(const Face: IFontFace; const Text: RawUtf8;
+  const Subsetter: IFontSubsetter = nil; Draw: TFakeDraw = nil): RawUtf8;
 var
   pdf: TPdfDocument;
   stream: TMemoryStream;
   previous: IFontProvider;
+  previoussub: IFontSubsetter;
 begin
   previous := FontProvider;
+  previoussub := FontSubsetter;
   FontProvider := TFakeProvider.Create(previous, Face, FAKE_FACE);
+  if Subsetter <> nil then
+    FontSubsetter := Subsetter; // before Create: it decides EmbeddedWholeTtf
   try
     stream := TMemoryStream.Create;
     try
       pdf := TPdfDocument.Create(false, 0, pdfaNone);
       try
         pdf.CompressionMethod := cmNone;
+        pdf.EmbeddedTTF := Subsetter <> nil;
         pdf.AddTrueTypeFont(FAKE_FACE);
         pdf.AddPage;
-        pdf.Canvas.SetFont(FAKE_FACE, 12, [], PDF_DEFAULT_CHARSET);
-        DrawUtf8Text(pdf, 40, 700, Text);
+        if Assigned(Draw) then
+          Draw(pdf)
+        else
+        begin
+          pdf.Canvas.SetFont(FAKE_FACE, 12, [], PDF_DEFAULT_CHARSET);
+          DrawUtf8Text(pdf, 40, 700, Text);
+        end;
         pdf.SaveToStream(stream);
       finally
         pdf.Free;
@@ -859,31 +882,308 @@ begin
     end;
   finally
     FontProvider := previous;
+    FontSubsetter := previoussub;
   end;
   result := InflatePdf(result);
 end;
 
-procedure TPdfCffTests.Type0CodesOfAFace;
+// a charset of format 0 giving glyph g of Count the CID Shift - g
+function FakeCidCharset(Shift: integer = 141;
+  Count: integer = FAKE_GLYPHS): RawByteString;
+var
+  g: integer;
+  cids: array of integer;
+begin
+  SetLength(cids, Count - 1);
+  for g := 1 to Count - 1 do
+    cids[g - 1] := Shift - g;
+  result := CffCharset0(cids);
+end;
+
 const
   // U+0100..U+0104: glyphs 7, 2, 3, 7, 41 - U+0103 an alias of U+0100
+  ALIAS_CHARS: array[0..4] of integer = ($100, $101, $102, $103, $104);
+  ALIAS_GLYPHS: array[0..4] of integer = (7, 2, 3, 7, 41);
   ALIAS_TEXT: RawUtf8 = {$ifdef HASCODEPAGE}
     #$0104#$0100#$0101#$0103#$0102
     {$else}
     #$C4#$84#$C4#$80#$C4#$81#$C4#$83#$C4#$82
     {$endif};
+
+type
+  // Subset gives Output, whatever it is asked
+  TFakeSubsetter = class(TInterfacedObject, IFontSubsetter)
+  protected
+    fOutput: RawByteString;
+  public
+    Called: integer;
+    constructor Create(const Output: RawByteString);
+    function Subset(const Face: RawByteString; const Request: TFontSubsetRequest;
+      Font: TFontHandle; out Output: RawByteString): boolean;
+    function SupportsSymbolic: boolean;
+  end;
+
+constructor TFakeSubsetter.Create(const Output: RawByteString);
+begin
+  inherited Create;
+  fOutput := Output;
+end;
+
+function TFakeSubsetter.Subset(const Face: RawByteString;
+  const Request: TFontSubsetRequest; Font: TFontHandle;
+  out Output: RawByteString): boolean;
+begin
+  inc(Called);
+  Output := fOutput;
+  result := true;
+end;
+
+function TFakeSubsetter.SupportsSymbolic: boolean;
+begin
+  result := true;
+end;
+
+procedure TPdfCffTests.Type0CodesOfAFace;
 var
   s: RawUtf8;
 begin
   // a face built here: the codes, their widths and their characters are
   // known whatever fonts are installed
-  s := FakeFacePdf(FakeFace([$100, $101, $102, $103, $104], [7, 2, 3, 7, 41],
-    ''), ALIAS_TEXT);
+  s := FakeFacePdf(FakeFace(ALIAS_CHARS, ALIAS_GLYPHS, ''), ALIAS_TEXT);
   Check(PosEx('/W [2[120 130]7[170]41[510]]', s) > 0,
     'runs of /W: sorted, code 7 once, widths of hmtx');
   Check(PosEx('4 beginbfchar'#10'<0002> <0101>'#10'<0003> <0102>'#10 +
     '<0007> <0100>'#10'<0029> <0104>'#10'endbfchar', s) > 0,
     '/ToUnicode: sorted, the smaller character of code 7');
   Check(PosEx('<00290007000200070003>', s) > 0, 'the text in glyph codes');
+end;
+
+procedure TPdfCffTests.Type0CidCodes;
+var
+  s: RawUtf8;
+begin
+  // glyph g is CID 141 - g: the codes are 100 (glyph 41), 134 (7), 138 (3)
+  // and 139 (2), /W and /ToUnicode sorted by them
+  s := FakeFacePdf(FakeFace(ALIAS_CHARS, ALIAS_GLYPHS,
+    CffTable(true, FAKE_GLYPHS, FakeCidCharset)), ALIAS_TEXT);
+  Check(PosEx('/W [100[510]134[170]138[130 120]]', s) > 0,
+    '/W keyed by CID, the widths of the glyphs');
+  Check(PosEx('4 beginbfchar'#10'<0064> <0104>'#10'<0086> <0100>'#10 +
+    '<008A> <0102>'#10'<008B> <0101>'#10'endbfchar', s) > 0,
+    '/ToUnicode keyed by CID');
+  Check(PosEx('<00640086008B0086008A>', s) > 0, 'the text in CIDs');
+  // a name-keyed face: the glyph index is the code
+  s := FakeFacePdf(FakeFace(ALIAS_CHARS, ALIAS_GLYPHS,
+    CffTable(false, FAKE_GLYPHS, '')), ALIAS_TEXT);
+  Check(PosEx('<00290007000200070003>', s) > 0, 'name-keyed: glyph codes');
+end;
+
+procedure TPdfCffTests.SubsetKeepsCids;
+var
+  s: RawUtf8;
+  sub: TFakeSubsetter;
+  keep: IFontSubsetter;
+begin
+  // a subset whose charset gives the glyphs the CIDs of the face is embedded
+  sub := TFakeSubsetter.Create(FakeFace(ALIAS_CHARS, ALIAS_GLYPHS,
+    CffTable(true, FAKE_GLYPHS, FakeCidCharset), 'SUBSET-SAME-CIDS').fWhole);
+  keep := sub;
+  s := FakeFacePdf(FakeFace(ALIAS_CHARS, ALIAS_GLYPHS,
+    CffTable(true, FAKE_GLYPHS, FakeCidCharset), 'THE-WHOLE-FACE'),
+    ALIAS_TEXT, keep);
+  CheckEqual(sub.Called, 1, 'subset asked');
+  Check(PosEx('SUBSET-SAME-CIDS', s) > 0, 'the subset embedded');
+  Check(PosEx('THE-WHOLE-FACE', s) = 0, 'not the face');
+  // other CIDs: the content would draw other glyphs - the face is embedded
+  sub := TFakeSubsetter.Create(FakeFace(ALIAS_CHARS, ALIAS_GLYPHS,
+    CffTable(true, FAKE_GLYPHS, FakeCidCharset(142)), 'SUBSET-OTHER-CIDS').fWhole);
+  keep := sub;
+  s := FakeFacePdf(FakeFace(ALIAS_CHARS, ALIAS_GLYPHS,
+    CffTable(true, FAKE_GLYPHS, FakeCidCharset), 'THE-WHOLE-FACE'),
+    ALIAS_TEXT, keep);
+  CheckEqual(sub.Called, 1, 'subset asked');
+  Check(PosEx('SUBSET-OTHER-CIDS', s) = 0, 'not the subset');
+  Check(PosEx('THE-WHOLE-FACE', s) > 0, 'the face embedded');
+  // a subset that is no CID-keyed CFF any more
+  sub := TFakeSubsetter.Create(FakeFace(ALIAS_CHARS, ALIAS_GLYPHS,
+    CffTable(false, FAKE_GLYPHS, ''), 'SUBSET-NAME-KEYED').fWhole);
+  keep := sub;
+  s := FakeFacePdf(FakeFace(ALIAS_CHARS, ALIAS_GLYPHS,
+    CffTable(true, FAKE_GLYPHS, FakeCidCharset), 'THE-WHOLE-FACE'),
+    ALIAS_TEXT, keep);
+  Check(PosEx('SUBSET-NAME-KEYED', s) = 0, 'not the name-keyed subset');
+  Check(PosEx('THE-WHOLE-FACE', s) > 0, 'the face embedded instead');
+  // the same CIDs, but glyph 41 left out: CID 100 would draw nothing
+  sub := TFakeSubsetter.Create(FakeFace(ALIAS_CHARS, ALIAS_GLYPHS,
+    CffTable(true, 8, FakeCidCharset(141, 8)), 'SUBSET-TOO-SHORT').fWhole);
+  keep := sub;
+  s := FakeFacePdf(FakeFace(ALIAS_CHARS, ALIAS_GLYPHS,
+    CffTable(true, FAKE_GLYPHS, FakeCidCharset), 'THE-WHOLE-FACE'),
+    ALIAS_TEXT, keep);
+  Check(PosEx('SUBSET-TOO-SHORT', s) = 0, 'not a subset without glyph 41');
+  Check(PosEx('THE-WHOLE-FACE', s) > 0, 'the face embedded for it');
+end;
+
+procedure TPdfCffTests.SystemFaceCids;
+{$ifdef OSDARWIN}
+const
+  // U+9FA6: glyph 29064 of Hiragino Sans GB, CID 30284 ($764C)
+  CHAR_9FA6: RawUtf8 = {$ifdef HASCODEPAGE} #$9FA6 {$else} #$E9#$BE#$A6 {$endif};
+var
+  pdf: TPdfDocument;
+  stream: TMemoryStream;
+  s: RawUtf8;
+begin
+  stream := TMemoryStream.Create;
+  try
+    pdf := TPdfDocument.Create(false, 0, pdfaNone);
+    try
+      pdf.CompressionMethod := cmNone;
+      pdf.EmbeddedTTF := true;
+      pdf.AddPage;
+      pdf.Canvas.SetFont('Hiragino Sans GB', 12, [], PDF_DEFAULT_CHARSET);
+      DrawUtf8Text(pdf, 40, 700, CHAR_9FA6);
+      pdf.SaveToStream(stream);
+    finally
+      pdf.Free;
+    end;
+    SetLength(s, stream.Size);
+    stream.Position := 0;
+    stream.Read(pointer(s)^, stream.Size);
+  finally
+    stream.Free;
+  end;
+  s := InflatePdf(s);
+  Check(PosEx('<764C>', s) > 0, 'U+9FA6 drawn as CID 30284, not glyph 29064');
+  Check(PosEx('<7188>', s) = 0, 'no glyph index');
+  Check(PosEx('/W [30284[', s) > 0, '/W keyed by the CID');
+  Check(PosEx('<764C> <9FA6>', s) > 0, '/ToUnicode keyed by the CID');
+end;
+{$else}
+begin
+  Check(true, 'SKIP: Hiragino Sans GB is a macOS face');
+end;
+{$endif OSDARWIN}
+
+type
+  // Shape gives one shaped run of the glyphs 41, 7, 2 - with the advances of
+  // the face when Mode > 0, with offsets too when Mode > 1
+  TFakeShaper = class(TInterfacedObject, IFontShaper)
+  public
+    Mode: integer;
+    function Shape(Text: PWideChar; Len: integer; Font: TFontHandle;
+      RightToLeft: boolean; out Runs: TFontShapedRuns): boolean;
+  end;
+
+function TFakeShaper.Shape(Text: PWideChar; Len: integer; Font: TFontHandle;
+  RightToLeft: boolean; out Runs: TFontShapedRuns): boolean;
+begin
+  SetLength(Runs, 1);
+  Runs[0].Kind := fskShaped;
+  Runs[0].Outcome := fsoDone;
+  Runs[0].TextStart := 0;
+  Runs[0].TextLen := Len;
+  SetLength(Runs[0].Glyphs, 3);
+  Runs[0].Glyphs[0] := 41;
+  Runs[0].Glyphs[1] := 7;
+  Runs[0].Glyphs[2] := 2;
+  if Mode > 0 then
+  begin
+    SetLength(Runs[0].Advances, 3);
+    Runs[0].Advances[0] := 510; // as FakeHmtx: no correction needed
+    Runs[0].Advances[1] := 170;
+    Runs[0].Advances[2] := 120;
+  end;
+  if Mode > 1 then
+  begin
+    SetLength(Runs[0].Offsets, 3);
+    Runs[0].Offsets[1] := 50;
+  end;
+  result := true;
+end;
+
+procedure DrawShaped(Pdf: TPdfDocument);
+begin
+  Pdf.UseUniscribe := true;
+  Pdf.Canvas.SetFont(FAKE_FACE, 12, [], PDF_DEFAULT_CHARSET);
+  DrawUtf8Text(Pdf, 40, 700, ALIAS_TEXT);
+end;
+
+procedure DrawGlyphs(Pdf: TPdfDocument);
+var
+  g: array[0..2] of word;
+begin
+  Pdf.Canvas.SetFont(FAKE_FACE, 12, [], PDF_DEFAULT_CHARSET);
+  g[0] := 41;
+  g[1] := 7;
+  g[2] := 0;
+  Pdf.Canvas.BeginText;
+  Pdf.Canvas.MoveTextPoint(40, 700);
+  Pdf.Canvas.ShowGlyph(@g[0], 3);
+  Pdf.Canvas.EndText;
+end;
+
+const
+  // U+FDD0 is a noncharacter: no system face maps it, the fake face does
+  CHAR_FDD0: RawUtf8 = {$ifdef HASCODEPAGE} #$FDD0 {$else} #$EF#$B7#$90 {$endif};
+  // U+0200 is in no cmap of the fake face
+  CHAR_0200: RawUtf8 = {$ifdef HASCODEPAGE} #$0200 {$else} #$C8#$80 {$endif};
+
+procedure DrawFallback(Pdf: TPdfDocument);
+var
+  sans, serif, mono: string;
+begin
+  GetPdfFonts(true, sans, serif, mono);
+  Pdf.FontFallBackName := FAKE_FACE;
+  Pdf.Canvas.SetFont(StringToUtf8(sans), 12, [], PDF_DEFAULT_CHARSET);
+  DrawUtf8Text(Pdf, 40, 700, CHAR_FDD0);
+end;
+
+procedure DrawMissing(Pdf: TPdfDocument);
+begin
+  Pdf.UseFontFallBack := false;
+  Pdf.Canvas.SetFont(FAKE_FACE, 12, [], PDF_DEFAULT_CHARSET);
+  DrawUtf8Text(Pdf, 40, 700, CHAR_0200);
+end;
+
+procedure TPdfCffTests.Type0CidPaths;
+var
+  face: IFontFace;
+  shaper: TFakeShaper;
+  previous: IFontShaper;
+  s: RawUtf8;
+  m: integer;
+begin
+  // every writer of Type0 codes writes the CID: glyph g is CID 141 - g
+  face := FakeFace([$100, $101, $102, $103, $104, $FDD0], [7, 2, 3, 7, 41, 41],
+    CffTable(true, FAKE_GLYPHS, FakeCidCharset));
+  // the three branches of a shaped run: font advances, advances, offsets
+  previous := FontShaper;
+  shaper := TFakeShaper.Create;
+  FontShaper := shaper;
+  try
+    for m := 0 to 2 do
+    begin
+      shaper.Mode := m;
+      s := FakeFacePdf(face, '', nil, DrawShaped);
+      if m < 2 then
+        Check(PosEx('<00640086008B> Tj', s) > 0, 'shaped run in CIDs')
+      else
+        Check(PosEx('[<0064> -50<0086> 50<008B>] TJ', s) > 0,
+          'positioned glyphs in CIDs');
+    end;
+  finally
+    FontShaper := previous;
+  end;
+  // explicit glyphs, glyph 0 among them
+  s := FakeFacePdf(face, '', nil, DrawGlyphs);
+  Check(PosEx('<006400860000> Tj', s) > 0, 'ShowGlyph in CIDs');
+  // the fallback face draws the character its own way
+  s := FakeFacePdf(face, '', nil, DrawFallback);
+  Check(PosEx('<0064> Tj', s) > 0, 'the fallback face writes its CID');
+  // a character the face has no glyph for: .notdef, CID 0
+  s := FakeFacePdf(face, '', nil, DrawMissing);
+  Check(PosEx('<0000> Tj', s) > 0, 'no glyph: CID 0');
 end;
 
 end.

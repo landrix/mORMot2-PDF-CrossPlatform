@@ -2885,6 +2885,9 @@ type
     // 'hmtx'/'head'/'hhea' cache for GlyphHmtxWidth, filled on first use
     fHmtx, fHmtxHead, fHmtxHhea: TWordDynArray;
     fHmtxChecked: boolean;
+    // the 'CFF ' table of the face, read on first use by GetCff
+    fCff: TPdfCffInfo;
+    fCffRead: boolean;
     // below are some bigger structures
     fLogFont: TFontRequest;
     fM: TFontMetrics;
@@ -2923,6 +2926,12 @@ type
     // the width registered for aGlyph, i.e. the one that will reach /W
     // - returns 0 if the glyph is not registered on this font instance
     function UsedWideGlyphWidth(aGlyph: word): integer;
+    // the CFF kind of the face, its table read once by the WinAnsi font
+    function GetCff: TPdfCffKind;
+    // the code of aGlyph in the Type0 font: its CID in a CID-keyed CFF face
+    // (ISO 32000-1 9.7.4.2), the glyph index otherwise - the shaper, the
+    // metrics and the subsetter keep using glyph indexes
+    function GlyphCode(aGlyph: word): word;
   public
     /// create the TrueType font object instance
     constructor Create(ADoc: TPdfDocument; AFontIndex: integer;
@@ -5336,7 +5345,8 @@ begin
     // the advances of the font apply (Uniscribe): one Tj
     Add('<');
     for i := 0 to n - 1 do
-      AddHex4(WinAnsiTtf.GetAndMarkGlyphAsUsed(Run.Glyphs[i]));
+      AddHex4(WinAnsiTtf.GlyphCode(
+        WinAnsiTtf.GetAndMarkGlyphAsUsed(Run.Glyphs[i])));
     Add('> Tj'#10);
     exit;
   end;
@@ -5368,7 +5378,7 @@ begin
     // fast path: nothing to correct - single Tj
     Add('<');
     for i := 0 to n - 1 do
-      AddHex4(Run.Glyphs[i]);
+      AddHex4(WinAnsiTtf.GlyphCode(Run.Glyphs[i]));
     Add('> Tj'#10);
   end
   else
@@ -5384,7 +5394,7 @@ begin
     for i := 0 to n - 1 do
     begin
       Add('<');
-      AddHex4(Run.Glyphs[i]);
+      AddHex4(WinAnsiTtf.GlyphCode(Run.Glyphs[i]));
       Add('>');
       kern := Widths[i] - Run.Advances[i];
       if i < n - 1 then
@@ -5507,7 +5517,7 @@ begin
   Canvas.SetPdfFont(fnt.UnicodeFont, Canvas.fPage.FontSize);
   if changed then
     Add('<');
-  AddHex4(Glyph);
+  AddHex4(fnt.GlyphCode(Glyph)); // the code of the face drawing it
 end;
 
 procedure TPdfWrite.AddGlyphFlush(Canvas: TPdfCanvas; Ttf: TPdfFontTrueType;
@@ -5664,7 +5674,7 @@ begin
           first := false;
           Add('<');
         end;
-        AddHex4(glyph);
+        AddHex4(Ttf.WinAnsiFont.GlyphCode(glyph));
       end;
       inc(Glyphs);
       dec(GlyphsCount);
@@ -6356,6 +6366,30 @@ begin
   i := fShapedGlyph.IndexOf(aGlyph);
   if i >= 0 then
     result := fShapedWidth[i];
+end;
+
+function TPdfFontTrueType.GetCff: TPdfCffKind;
+begin
+  with WinAnsiFont do
+  begin
+    if not fCffRead then
+    begin
+      PdfFaceCffInfo(fFace, fCff);
+      fCffRead := true;
+    end;
+    result := fCff.Kind;
+  end;
+end;
+
+function TPdfFontTrueType.GlyphCode(aGlyph: word): word;
+begin
+  result := aGlyph;
+  if GetCff = pcCidKeyed then
+    with WinAnsiFont.fCff do
+      if aGlyph < length(Cid) then
+        result := Cid[aGlyph]
+      else
+        result := 0; // no such glyph in the face: .notdef
 end;
 
 function TPdfFontTrueType.GlyphHmtxWidth(aGlyph: word): integer;
@@ -7146,6 +7180,7 @@ begin
 end;
 
 // the used glyphs of a Type0 font as code shl 32 + Unicode shl 16 + width,
+// the code being GlyphCode(),
 // sorted by code, one entry per code: /W and /ToUnicode are keyed by the code
 // - of two characters drawn with one glyph, the smallest Unicode value wins
 // (the $E000+ key of a glyph without a code point loses against a BMP letter)
@@ -7162,7 +7197,8 @@ begin
     with used[i] do
       if Used <> 0 then
       begin
-        result[n] := Int64(Glyph) shl 32 + Int64(keys[i]) shl 16 + Width;
+        result[n] := Int64(WinAnsi.GlyphCode(Glyph)) shl 32 +
+                     Int64(keys[i]) shl 16 + Width;
         inc(n);
       end;
   if n > 1 then
@@ -9015,6 +9051,60 @@ begin
   result[7] := '+';
 end;
 
+// the bytes of table Tag of the sfnt Data, '' if there is none
+function SfntTableOf(const Data: RawByteString; const Tag: RawByteString): RawByteString;
+var
+  P: PByteArray;
+  i, n: integer;
+  off, len: cardinal;
+begin
+  result := '';
+  P := pointer(Data);
+  if length(Data) < 12 then
+    exit;
+  n := P[4] shl 8 + P[5];
+  if 12 + 16 * n > length(Data) then
+    exit;
+  for i := 0 to n - 1 do
+    if CompareMem(@P[12 + 16 * i], pointer(Tag), 4) then
+    begin
+      off := CffCard(P, 12 + 16 * i + 8, 4);
+      len := CffCard(P, 12 + 16 * i + 12, 4);
+      if (off <= cardinal(length(Data))) and
+         (len <= cardinal(length(Data)) - off) then
+        result := copy(Data, off + 1, len);
+      exit;
+    end;
+end;
+
+// true if the subset of a CID-keyed face keeps each used glyph with the CID
+// the face gives it: the content codes were written with the CIDs of the face
+function PdfSubsetKeepsCids(const Subset: RawByteString;
+  const Face: TPdfCffInfo; const Glyphs: TIntegerDynArray): boolean;
+var
+  cff: RawByteString;
+  sub: TPdfCffInfo;
+  i, g: PtrInt;
+begin
+  cff := SfntTableOf(Subset, 'CFF ');
+  result := (PdfCffParse(pointer(cff), length(cff), sub) = pcCidKeyed) and
+            (sub.Registry = Face.Registry) and
+            (sub.Ordering = Face.Ordering) and
+            (sub.Supplement = Face.Supplement);
+  if result then
+    for i := 0 to high(Glyphs) do
+    begin
+      g := Glyphs[i];
+      if (g < Face.GlyphCount) and // else GlyphCode() wrote .notdef
+         ((g >= sub.GlyphCount) or
+          (sub.Cid[g] <> Face.Cid[g])) then
+      begin
+        result := false;
+        exit;
+      end;
+    end;
+end;
+
 procedure TPdfDocument.PrepareFontSubsets;
 var
   i, j: PtrInt;
@@ -9070,6 +9160,13 @@ begin
     begin
       ok := FontSubsetter.Subset(Face, Request,
         TPdfFontTrueType(Font).fFace.Handle, Subset);
+      // a subset of a CID-keyed face has to keep its CIDs: the content
+      // was written with them
+      if ok and
+         (TPdfFontTrueType(Font).GetCff = pcCidKeyed) and
+         not PdfSubsetKeepsCids(Subset, TPdfFontTrueType(Font).fCff,
+           Request.Glyphs) then
+        ok := false;
       if ok then
         Tag := SubsetTag(Subset)
       else
