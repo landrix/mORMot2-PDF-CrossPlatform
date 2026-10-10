@@ -62,7 +62,7 @@ Shows how to produce a 3-page PDF from TCanvas commands using `TPdfDocumentVcl` 
 **Core pattern:**
 
 ```pascal
-uses mormot.pdf.types, mormot.pdf, mormot.ui.pdfcanvas;
+uses mormot.pdf, mormot.ui.pdfcanvas;
 
 var Doc: TPdfDocumentVcl; C: TPdfVclCanvas;
 begin
@@ -468,7 +468,7 @@ Shows how to render Chinese (CJK) text with `TPdfDocumentVcl`. CJK ideographs re
 **Core pattern:**
 
 ```pascal
-uses mormot.pdf.types, mormot.pdf, mormot.ui.pdfcanvas;
+uses mormot.pdf, mormot.ui.pdfcanvas;
 
 const CJK_FONT = 'Microsoft YaHei'; // Windows example
 
@@ -707,7 +707,7 @@ until roadmap R-20 is done.
 - Text in the same encoding on both compilers: UTF-8 in, `Utf8ToSynUnicode`,
   `TextOutW`. Non-ASCII characters are UTF-8 bytes in a `RawUtf8` constant,
   never literal characters in the source
-- `GetPdfFonts` from `mormot.pdf.types` gives the platform's faces without the
+- `GetPdfFonts` of `mormot.pdf` gives the platform's faces without the
   report engine; ask for them after `Tagged := True`
 - With this API you build the structure yourself: `BeginStructContent` for
   `H1`/`H2`/`P`, a `Figure` with alternate text, and `CreateOutline` for
@@ -727,8 +727,8 @@ until roadmap R-20 is done.
 
 ```pascal
 uses
-  mormot.core.base, mormot.core.unicode, mormot.pdf.types,
-  mormot.pdf;   // brings the platform backend itself
+  mormot.core.base, mormot.core.unicode,
+  mormot.pdf;   // roles, GetPdfFonts; brings the platform backend itself
 
 procedure DrawText(C: TPdfCanvas; X, Y: single; const Text: RawUtf8);
 var W: SynUnicode;

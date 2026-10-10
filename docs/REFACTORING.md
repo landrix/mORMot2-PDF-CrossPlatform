@@ -509,6 +509,59 @@ cairo):
   document, draws text and shapes, saves and checks the file; built clean,
   without any LCL/VCL path (FPC), and with its unit list checked (Delphi)
 
+**Done** (2026-10-10, branch `pr/phase2`, one commit per kind of change):
+
+- **Tests first:** `tests/test_pdf_images.pas` - `TBitmap` in every pixel
+  format, reuse (palette and row padding in the key, on the VCL), the color
+  key, a clipped draw, both JPEG ways, `TPdfDocumentGdi` with the comments,
+  `RenderMetaFile` - as golden files, recorded on the commit before anything
+  moved; `pdf_inspect` keeps `/DCTDecode` image data as it is
+- **Raw input in the engine:** `TPdfImagePixels` (`ipfRgb24`, `ipfBgr24`,
+  `ipfBgrx32`, `ipfIndexed8` with its palette; stride, also negative; buffer
+  size; color key), `TPdfImage.CreatePixels`/`CreateJpeg`/`Hash`,
+  `TPdfDocument.CreateOrGetImage(Pixels)`/`RegisterImage`/`DrawImage`, the
+  input checked before anything reaches the xref; `TPdfImageRawTests` on
+  every compiler
+- **The changed API:** `CreateOrGetBitmapImage(Doc, Bitmap, ..)` replaces
+  `Doc.CreateOrGetImage(Bitmap, ..)`, `CreateGraphicImage(Doc, Graphic, ..)`
+  replaces `TPdfImage.Create(Doc, Graphic, ..)` - functions of
+  `mormot.pdf.canvas`
+- **The move:** `mormot.pdf.defines.inc` (the switches, shared);
+  `TPdfFormXObject`, the engine's side of `TPdfForm` (a page lists the fonts
+  of a form it draws - `FormFonts` tests it); then the EMF code reaching the
+  engine through implementation-local access classes, as `TORHook` in
+  `mormot.core.json` - **not the "narrow access methods" planned above**:
+  the members were protected already, so no engine member changed its
+  visibility and no public accessor was added (Codex, three alternatives;
+  the EMF state leaving `TPdfCanvas` for `TPdfEnum` is a later step); then
+  `mormot.pdf.canvas` by a pure move, every removed block verbatim
+- **No GUI import left:** `MM_TEXT` and `GetSysColor` from the windows unit
+  on Windows, fixed Windows defaults on POSIX - on FPC POSIX they came from
+  the LCL theme before; `TPdfVclCanvas` resolves its colors with
+  `ColorToRGB` first, so only a program that hands the engine a system color
+  directly sees it (ROADMAP "To Announce")
+- **Renamed:** `src/pdf/mormot.pdf.pas`, with `mormot.pdf.canvas`, `.types`,
+  `.fpimage` and `defines.inc` beside it; `mormot.ui.*` stay in `src/core`.
+  The XMP toolkit name `x:xmptk="mormot.ui.pdf"` is output and stays - a
+  change for later, with its golden files
+- **`uses mormot.pdf` is enough:** it re-exports `TPdfFileFormat`,
+  `TPdfStructRole`, `TPdfFontEnumCallback`, every `pdf1x` and `psr*` value,
+  the `PDF_FONT_*` constants and `GetPdfFonts`; the demos dropped
+  `mormot.pdf.types`
+- **Proof:** `layer1_demo` - `uses mormot.pdf` alone, no `Interfaces`, no LCL
+  package - built with `fpc -n` (RTL and mORMot paths only) on Windows and
+  Linux: no LCL unit loaded, its PDF equal to `main`'s; with Delphi 7 too.
+  A console probe (create, draw, save) the same way
+- **Found** (bug-fix PR): `TPdfForm.Create(DocGdi, MetaFile)` raises an access
+  violation (its page has no MediaBox), and raising without a current page
+  leaves the canvas on the page it frees; with the LCL, pf1bit/pf4bit/pf8bit
+  bitmaps raise `EPdfInvalidValue` where the VCL indexes them
+- **Checked:** `test_runner` 574/574 on Windows (FPC 3.3.1, Delphi 7, Delphi
+  13 Win32/Win64), 521/521 on Linux, 545/545 on macOS, golden files
+  unchanged after every commit; the 7 runnable demo PDFs of Windows FPC
+  equal `main`'s (`pdfcheck compare`; `mormot_demo` lacks an aarch64 sqlite3
+  library). Open: Delphi 2010 (Martin), PAC/veraPDF at the end of the phase
+
 ### Phase 3 — Canvas Adapter
 
 Gist §11. `mormot.pdf.canvas`: `TPdfDocumentVcl`, `TPdfVclCanvas` - joining

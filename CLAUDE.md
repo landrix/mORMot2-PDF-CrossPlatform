@@ -154,7 +154,7 @@ For interface and backend details: `.claude/skills/platform-backends.md`
 | chinese_demo | `TPdfDocumentVcl` | Console | CJK text, subset embedding |
 | rtl_demo | `TPdfDocumentVcl` | Console | Arabic RTL, HarfBuzz/Uniscribe shaping |
 | zugferd_demo | `TGDIPages` | Console | PDF/A-3U + PDF/UA-1, page read from the embedded XML, `AddExportPdfAttachment`, `PdfMetadataFacturX`, sample invoice XML of XRechnung for Delphi |
-| layer1_demo | `TPdfDocument` | Console | Layer 1 only, PDF points (Y=0 bottom), tagged H1/H2/P/Figure and a Table with THead/TBody/TFoot, UTF-8 via `TextOutW`; builds with Delphi 7, as do all console demos |
+| layer1_demo | `TPdfDocument` | Console | Layer 1 only, PDF points (Y=0 bottom), tagged H1/H2/P/Figure and a Table with THead/TBody/TFoot, UTF-8 via `TextOutW`; `uses mormot.pdf` alone, no VCL/LCL; builds with Delphi 7, as do all console demos |
 
 Detailed description with code examples: `docs/DEMOS.md`
 

@@ -36,8 +36,8 @@ layer's API takes from below, that layer re-exports:
 | 2 — `TPdfDocumentVcl` | `mormot.ui.pdfcanvas`, `mormot.pdf` | `TPdfALevel`, `TPdfAFRelationship`, `PdfMetadataFacturX`; the rest of the document API comes from `mormot.pdf` |
 | 1 — `TPdfDocument` | `mormot.pdf` | — |
 
-`mormot.pdf.types` goes beside layers 1 and 2 for the structure roles
-(`psrH1`, `psrP`, …) and `GetPdfFonts`.
+The structure roles (`psrH1`, `psrP`, …) and `GetPdfFonts` come with
+`mormot.pdf` (declared in `mormot.pdf.types`, re-exported).
 
 **The platform units need no `uses` of yours.** `mormot.pdf` pulls in GDI
 and Uniscribe on Windows, and FreeType2, the HarfBuzz shaper and the hb-subset

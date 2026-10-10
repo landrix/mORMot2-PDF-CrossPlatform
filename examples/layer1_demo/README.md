@@ -2,8 +2,10 @@
 
 Demo 8 of the [learning path](../../docs/DEMOS.md#demo-8--layer1_demo).
 
-**Layer 1.** `uses mormot.pdf`, plus `mormot.pdf.types` for the structure
-roles and `GetPdfFonts`. The platform backend comes with `mormot.pdf`.
+**Layer 1.** `uses mormot.pdf` and nothing else of the PDF engine: the
+structure roles, `GetPdfFonts` and the platform backend come with it. No VCL
+or LCL either (R-28 Phase 2): the project needs no LCL package, and
+`fpc -n` with only the RTL and mORMot paths builds it.
 
 Draws a two-page tagged PDF with the low-level API only: no TCanvas bridge and
 no report engine. It was the first demo that built with Delphi 7 as well as

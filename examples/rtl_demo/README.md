@@ -3,8 +3,8 @@
 Demo 6 of the [learning path](../../docs/DEMOS.md#demo-6--rtl_demo).
 
 **Layer 2.** `uses mormot.ui.pdfcanvas, mormot.pdf` — the latter also for
-`TPdfCanvas.RightToLeftText`, one layer below the bridge — plus
-`mormot.pdf.types` for `GetPdfFonts`. The shaper — Uniscribe, or HarfBuzz on
+`TPdfCanvas.RightToLeftText`, one layer below the bridge, and for
+`GetPdfFonts`. The shaper — Uniscribe, or HarfBuzz on
 Linux/macOS — comes with `mormot.pdf`.
 
 Draws Arabic with `TPdfDocumentVcl` twice in one PDF, unshaped and shaped, so

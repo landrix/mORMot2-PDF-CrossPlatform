@@ -516,7 +516,9 @@ writes `/S /TH` with `/Scope /Row` (PDF/UA-1 7.5); `psrTH` heads its column.
 
 ### Enum
 
-`TPdfStructRole` is defined in `mormot.pdf.types`:
+`TPdfStructRole` is defined in `mormot.pdf.types` and re-exported by `mormot.pdf`
+(the type, every `psr*` value, `TPdfFileFormat` with `pdf13`..`pdf17`, the
+`PDF_FONT_*` constants and `GetPdfFonts`), so `uses mormot.pdf` is enough:
 
 ```pascal
 TPdfStructRole = (psrDocument, psrH1, psrH2, psrH3, psrH4, psrH5, psrH6,

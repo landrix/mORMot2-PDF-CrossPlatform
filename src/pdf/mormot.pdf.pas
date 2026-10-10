@@ -57,6 +57,53 @@ uses
 {************ Shared types and functions }
 
 type
+  // the types of mormot.pdf.types, so that "uses mormot.pdf" is enough for a
+  // program - with the same ordinals, mormot.pdf.types stays the declaration
+  TPdfFileFormat = mormot.pdf.types.TPdfFileFormat;
+  TPdfStructRole = mormot.pdf.types.TPdfStructRole;
+  TPdfFontEnumCallback = mormot.pdf.types.TPdfFontEnumCallback;
+
+const
+  pdf13 = mormot.pdf.types.pdf13;
+  pdf14 = mormot.pdf.types.pdf14;
+  pdf15 = mormot.pdf.types.pdf15;
+  pdf16 = mormot.pdf.types.pdf16;
+  pdf17 = mormot.pdf.types.pdf17;
+  psrDocument = mormot.pdf.types.psrDocument;
+  psrH1 = mormot.pdf.types.psrH1;
+  psrH2 = mormot.pdf.types.psrH2;
+  psrH3 = mormot.pdf.types.psrH3;
+  psrH4 = mormot.pdf.types.psrH4;
+  psrH5 = mormot.pdf.types.psrH5;
+  psrH6 = mormot.pdf.types.psrH6;
+  psrP = mormot.pdf.types.psrP;
+  psrSpan = mormot.pdf.types.psrSpan;
+  psrFigure = mormot.pdf.types.psrFigure;
+  psrTable = mormot.pdf.types.psrTable;
+  psrTR = mormot.pdf.types.psrTR;
+  psrTH = mormot.pdf.types.psrTH;
+  psrTD = mormot.pdf.types.psrTD;
+  psrL = mormot.pdf.types.psrL;
+  psrLI = mormot.pdf.types.psrLI;
+  psrLbl = mormot.pdf.types.psrLbl;
+  psrLBody = mormot.pdf.types.psrLBody;
+  psrTHead = mormot.pdf.types.psrTHead;
+  psrTBody = mormot.pdf.types.psrTBody;
+  psrTFoot = mormot.pdf.types.psrTFoot;
+  psrTHRow = mormot.pdf.types.psrTHRow;
+  PDF_FONT_STD_SANS = mormot.pdf.types.PDF_FONT_STD_SANS;
+  PDF_FONT_STD_SERIF = mormot.pdf.types.PDF_FONT_STD_SERIF;
+  PDF_FONT_STD_MONO = mormot.pdf.types.PDF_FONT_STD_MONO;
+  PDF_FONT_TTF_SANS = mormot.pdf.types.PDF_FONT_TTF_SANS;
+  PDF_FONT_TTF_SERIF = mormot.pdf.types.PDF_FONT_TTF_SERIF;
+  PDF_FONT_TTF_MONO = mormot.pdf.types.PDF_FONT_TTF_MONO;
+
+/// font names matching the embedding mode - see mormot.pdf.types
+procedure GetPdfFonts(Embedded: boolean;
+  out SansFont, SerifFont, MonoFont: string);
+  {$ifdef HASINLINE} inline; {$endif}
+
+type
   /// the PDF library uses internaly AnsiString text encoding
   // - the corresponding charset/codepage is the current system charset, or
   // the one supplied as a parameter to TPdfDocument.Create
@@ -3254,6 +3301,12 @@ implementation
 
 
 {************ Shared types and functions }
+
+procedure GetPdfFonts(Embedded: boolean;
+  out SansFont, SerifFont, MonoFont: string);
+begin
+  mormot.pdf.types.GetPdfFonts(Embedded, SansFont, SerifFont, MonoFont);
+end;
 
 {$ifdef FPC}
 

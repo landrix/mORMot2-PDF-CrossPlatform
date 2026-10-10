@@ -37,8 +37,8 @@ selbst weiter:
 | 2 — `TPdfDocumentVcl` | `mormot.ui.pdfcanvas`, `mormot.pdf` | `TPdfALevel`, `TPdfAFRelationship`, `PdfMetadataFacturX`; der Rest der Dokument-API kommt aus `mormot.pdf` |
 | 1 — `TPdfDocument` | `mormot.pdf` | — |
 
-`mormot.pdf.types` kommt bei Ebene 1 und 2 für die Strukturrollen
-(`psrH1`, `psrP`, …) und `GetPdfFonts` dazu.
+Die Strukturrollen (`psrH1`, `psrP`, …) und `GetPdfFonts` kommen mit
+`mormot.pdf` (deklariert in `mormot.pdf.types`, re-exportiert).
 
 **Die Plattform-Units brauchen kein eigenes `uses`.** `mormot.pdf` bindet
 unter Windows GDI und Uniscribe ein, unter Linux und macOS FreeType2, den
