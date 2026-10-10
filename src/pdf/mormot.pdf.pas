@@ -5490,7 +5490,10 @@ begin
             (fFontFallBackIndex >= 0) then
     begin
       if fAddGlyphFont = fMain then
+      begin
         AddGlyphFlush(Canvas, Ttf, NextLine);
+        changed := true; // the fallback string is a new one
+      end;
       fAddGlyphFont := fFallBack;
       fnt := Canvas.SetFont('', Canvas.fPage.FontSize, Ttf.fStyle, -1,
         fFontFallBackIndex) as TPdfFontTrueType;

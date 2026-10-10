@@ -41,6 +41,7 @@ type
     procedure Type0CidCodes;
     procedure SubsetKeepsCids;
     procedure Type0CidPaths;
+    procedure FallbackMidRun;
     procedure SystemFaceCids;
   end;
 
@@ -1124,6 +1125,8 @@ begin
 end;
 
 const
+  // U+0101: in every system sans face, not in WinAnsi
+  ALIAS_A: RawUtf8 = {$ifdef HASCODEPAGE} #$0101 {$else} #$C4#$81 {$endif};
   // U+FDD0 is a noncharacter: no system face maps it, the fake face does
   CHAR_FDD0: RawUtf8 = {$ifdef HASCODEPAGE} #$FDD0 {$else} #$EF#$B7#$90 {$endif};
   // U+0200 is in no cmap of the fake face
@@ -1144,6 +1147,17 @@ begin
   Pdf.UseFontFallBack := false;
   Pdf.Canvas.SetFont(FAKE_FACE, 12, [], PDF_DEFAULT_CHARSET);
   DrawUtf8Text(Pdf, 40, 700, CHAR_0200);
+end;
+
+procedure DrawFallbackMidRun(Pdf: TPdfDocument);
+var
+  sans, serif, mono: string;
+begin
+  GetPdfFonts(true, sans, serif, mono);
+  Pdf.FontFallBackName := FAKE_FACE;
+  Pdf.Canvas.SetFont(StringToUtf8(sans), 12, [], PDF_DEFAULT_CHARSET);
+  // U+0101 in the system face, then U+FDD0 from the fallback, then U+0101
+  DrawUtf8Text(Pdf, 40, 700, ALIAS_A + CHAR_FDD0 + ALIAS_A);
 end;
 
 procedure TPdfCffTests.Type0CidPaths;
@@ -1184,6 +1198,25 @@ begin
   // a character the face has no glyph for: .notdef, CID 0
   s := FakeFacePdf(face, '', nil, DrawMissing);
   Check(PosEx('<0000> Tj', s) > 0, 'no glyph: CID 0');
+end;
+
+procedure TPdfCffTests.FallbackMidRun;
+var
+  s: RawUtf8;
+  i, j: PtrInt;
+begin
+  // a run that switches to the fallback face and back: each font change
+  // closes the hex string with Tj and opens a new one
+  s := FakeFacePdf(FakeFace([$100, $101, $102, $103, $104, $FDD0],
+    [7, 2, 3, 7, 41, 41], CffTable(true, FAKE_GLYPHS, FakeCidCharset)),
+    '', nil, DrawFallbackMidRun);
+  i := PosEx('BT'#10, s);
+  j := PosEx('ET'#10, s, i);
+  Check((i > 0) and
+        (j > i), 'one text object');
+  s := copy(s, i, j - i);
+  Check(PosEx(#10'<0064> Tj', s) > 0, 'the fallback string opened');
+  CheckEqual(CountOf('<', s), CountOf('> Tj', s), 'every string opened and shown');
 end;
 
 end.
