@@ -354,6 +354,35 @@ C.DrawXObjectEx(X, Y, Width, Height, 'ImageName', ClipRect, Angle);
 C.ExecuteXObject('ImageName');  // raw Do operator
 ```
 
+**Raw pixels, no VCL/LCL** (R-28 Phase 2) - what a framework adapter feeds:
+
+```pascal
+var px: TPdfImagePixels;
+px.Width := W; px.Height := H;
+px.Format := ipfRgb24;            // ipfBgr24, ipfBgrx32 (x skipped, no alpha), ipfIndexed8
+px.Data := TopRow;                // row y at Data + y * Stride
+px.Stride := RowBytes;            // negative for a bottom-up DIB
+px.Size := BufferBytes;           // >= (H - 1) * Abs(Stride) + one row
+px.Palette := Rgb768;             // ipfIndexed8 only: 256 x R, G, B
+px.HasColorKey := true; px.ColorKey := $BBGGRR; // /Mask, RGB formats only
+Name := Doc.CreateOrGetImage(px, @DrawAt, @ClipRc); // reuse by row bytes + palette
+// JPEG bytes as they are (/DeviceRGB; grayscale: CreateJpegDirect):
+Img := TPdfImage.CreateJpeg(Doc, Data, Len, W, H, {DontAddToFXref=}false);
+Name := Doc.RegisterImage(Img);   // 'SynImg<n>'; AddXObject or RegisterXObject by xref state
+Doc.DrawImage(Name, @DrawAt);
+```
+
+`CheckPixels` raises `EPdfInvalidValue` for an empty image, a stride below a
+row, a short `Size`, a palette that is missing, not 768 bytes or given to an
+RGB format, a color key with `ipfIndexed8`. `ForceJPEGCompression` does not
+apply to raw pixels (no encoder in the engine). The reuse key of raw pixels
+(CRC32C lanes over the row bytes, after the palette, the format and the
+color key, one lane seeded apart) does not equal the key of
+a `TBitmap` (padded DIB rows, after its `TPaletteEntry` array) - the same
+picture added both ways gives two images. `TPdfImage.Create(TGraphic)` and
+`CreateOrGetImage(TBitmap)` fill a `TPdfImagePixels` from `ScanLine[]` and
+call the same code.
+
 How the image paths behave today (measured by `tests/test_pdf_images.pas`,
 before Phase 2 moves the `TBitmap` conversion out of the engine):
 

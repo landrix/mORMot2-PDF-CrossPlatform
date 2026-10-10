@@ -97,7 +97,7 @@ tests/
   test_pdf_subset.pas          font subsetting: IFontSubsetter and TPdfDocument
   test_pdf_pdfa.pas            PDF/A-3: associated files, XMP schemas, PdfMetadataFacturX, level U
   test_pdf_golden.pas          golden files: generated PDFs against this machine's baseline (layers 1-2)
-  test_pdf_images.pas          golden files of the image paths (TBitmap formats, reuse, color key, JPEG) and of EMF (TPdfDocumentGdi, RenderMetaFile; Windows)
+  test_pdf_images.pas          golden files of the image paths (raw pixels on every compiler; TBitmap formats, reuse, color key, JPEG) and of EMF (TPdfDocumentGdi, RenderMetaFile; Windows)
   test_report_golden.pas       the same for TGDIPages (layer 3)
   test_coordinates.pas         page geometry
   test_report_coordinates.pas  report geometry

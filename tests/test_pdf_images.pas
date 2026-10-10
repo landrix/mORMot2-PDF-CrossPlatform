@@ -1,4 +1,5 @@
 /// golden files of the image and metafile paths of the engine
+// - raw pixels and JPEG through TPdfImagePixels, on every compiler
 // - TBitmap in every pixel format, reuse, color key, both JPEG ways and
 // TPdfDocumentGdi/RenderMetaFile, as they are before they leave the engine
 // for an adapter: the baseline recorded on the commit before the move proves
@@ -12,14 +13,11 @@ interface
 {$I mormot.defines.inc}
 {$I test_defines.inc}
 
-{$ifdef PDF_HASVCLCANVAS}
-
 uses
+  {$ifdef PDF_HASVCLCANVAS}
   {$ifdef OSWINDOWS}
   Windows,
   {$endif OSWINDOWS}
-  Classes,
-  SysUtils,
   Types,                // Point, Rect of the canvas, not the engine's
   Graphics,             // TBitmap, TPixelFormat
   {$ifdef OSWINDOWS}
@@ -28,6 +26,9 @@ uses
   {$endif FPC}
   mormot.ui.gdiplus,    // TJpegImage, as the engine uses it on Windows
   {$endif OSWINDOWS}
+  {$endif PDF_HASVCLCANVAS}
+  Classes,
+  SysUtils,
   mormot.core.base,
   mormot.core.os,
   mormot.core.test,
@@ -38,6 +39,17 @@ uses
   test_pdf_golden;
 
 type
+  /// raw pixels and JPEG data through TPdfImagePixels and TPdfImage
+  TPdfImageRawTests = class(TPdfGoldenTestCase)
+  published
+    procedure PixelFormats;
+    procedure PixelReuse;
+    procedure PixelChecks;
+    procedure JpegData;
+  end;
+
+{$ifdef PDF_HASVCLCANVAS}
+
   /// images and metafiles through the engine, recorded as golden files
   TPdfImageGoldenTests = class(TPdfGoldenTestCase)
   protected
@@ -54,6 +66,326 @@ type
 
 
 implementation
+
+function CountOf(const Sub, Text: RawUtf8): integer;
+var
+  i: PtrInt;
+begin
+  result := 0;
+  i := PosEx(Sub, Text);
+  while i > 0 do
+  begin
+    inc(result);
+    i := PosEx(Sub, Text, i + length(Sub));
+  end;
+end;
+
+function Box(L, B, W, H: single): TPdfBox;
+begin
+  result.Left := L;
+  result.Top := B;
+  result.Width := W;
+  result.Height := H;
+end;
+
+
+function SaveToString(Doc: TPdfDocument): RawByteString;
+var
+  ms: TMemoryStream;
+begin
+  ms := TMemoryStream.Create;
+  try
+    Doc.SaveToStream(ms, GOLDEN_DATE);
+    FastSetRawByteString(result, ms.Memory, ms.Size);
+  finally
+    ms.Free;
+  end;
+end;
+
+// the data of the uncompressed image named Name in a normalized PDF
+function ImageData(const Txt, Name: RawUtf8): RawUtf8;
+var
+  i, j: PtrInt;
+begin
+  result := '';
+  i := PosEx('/Name/' + Name + '/', Txt);
+  if i = 0 then
+    i := PosEx('/Name/' + Name + '>>', Txt);
+  if i = 0 then
+    exit;
+  i := PosEx('stream'#10, Txt, i);
+  j := PosEx(#10'endstream', Txt, i);
+  if (i > 0) and
+     (j > i) then
+    result := copy(Txt, i + 7, j - i - 7);
+end;
+
+const
+  RAW_W = 4;
+  RAW_H = 3;
+
+// RAW_W x RAW_H pixels of Format, top row first, rows of Pad extra bytes;
+// Data points at the buffer, which holds them all
+function RawPixels(Format: TPdfImagePixelFormat; var Buf: RawByteString;
+  Pad: integer = 0; BottomUp: boolean = false): TPdfImagePixels;
+const
+  BYTES: array[TPdfImagePixelFormat] of integer = (3, 3, 4, 1);
+var
+  x, y, row, n: integer;
+  r, g, b: byte;
+  p: PAnsiChar;
+begin
+  FillCharFast(result, SizeOf(result), 0);
+  result.Width := RAW_W;
+  result.Height := RAW_H;
+  result.Format := Format;
+  n := BYTES[Format];
+  row := RAW_W * n + Pad;
+  SetLength(Buf, row * RAW_H);
+  FillCharFast(pointer(Buf)^, length(Buf), $AA); // the padding
+  for y := 0 to RAW_H - 1 do
+  begin
+    p := pointer(Buf);
+    if BottomUp then
+      inc(p, (RAW_H - 1 - y) * row)
+    else
+      inc(p, y * row);
+    for x := 0 to RAW_W - 1 do
+    begin
+      r := 10 + x * 60;
+      g := 20 + y * 70;
+      b := 200 - x * 30 - y * 10;
+      case Format of
+        ipfRgb24:
+          begin
+            p[0] := AnsiChar(r);
+            p[1] := AnsiChar(g);
+            p[2] := AnsiChar(b);
+          end;
+        ipfBgr24, ipfBgrx32:
+          begin
+            p[0] := AnsiChar(b);
+            p[1] := AnsiChar(g);
+            p[2] := AnsiChar(r);
+            if Format = ipfBgrx32 then
+              p[3] := #$EE; // skipped, not alpha
+          end;
+        ipfIndexed8:
+          p[0] := AnsiChar(x + y * RAW_W);
+      end;
+      inc(p, n);
+    end;
+  end;
+  result.Size := length(Buf);
+  if BottomUp then
+  begin
+    result.Data := PAnsiChar(pointer(Buf)) + (RAW_H - 1) * row;
+    result.Stride := -row;
+  end
+  else
+  begin
+    result.Data := pointer(Buf);
+    result.Stride := row;
+  end;
+  if Format = ipfIndexed8 then
+  begin
+    SetLength(result.Palette, 768);
+    for x := 0 to 767 do
+      result.Palette[x + 1] := AnsiChar((x * 7) and 255);
+  end;
+end;
+
+
+{ TPdfImageRawTests }
+
+procedure TPdfImageRawTests.PixelFormats;
+var
+  doc: TPdfDocument;
+  buf: array[0..5] of RawByteString;
+  px: TPdfImagePixels;
+  names: array[0..5] of PdfString;
+  b: TPdfBox;
+  i: integer;
+  pdf: RawByteString;
+  txt, err, rgb: RawUtf8;
+begin
+  doc := TPdfDocument.Create;
+  try
+    doc.Info.CreationDate := GOLDEN_DATE;
+    doc.CompressionMethod := cmNone;
+    doc.StandardFontsReplace := true;
+    doc.AddPage;
+    for i := 0 to 5 do
+    begin
+      case i of
+        0: px := RawPixels(ipfRgb24, buf[i]);
+        1: px := RawPixels(ipfBgr24, buf[i], 2); // padded rows
+        2: px := RawPixels(ipfBgrx32, buf[i]);
+        3: px := RawPixels(ipfIndexed8, buf[i], 1);
+        4: px := RawPixels(ipfBgr24, buf[i], 2, true); // bottom-up, as 1
+      else
+        begin
+          px := RawPixels(ipfRgb24, buf[i]);
+          px.HasColorKey := true;
+          px.ColorKey := $C8140A; // R 10, G 20, B 200
+          inc(PByte(px.Data)^); // other pixels, not the same image
+        end;
+      end;
+      b := Box(40 + i * 60, 700, RAW_W * 10, RAW_H * 10);
+      names[i] := doc.CreateOrGetImage(px, @b);
+    end;
+    pdf := SaveToString(doc);
+  finally
+    doc.Free;
+  end;
+  txt := NormalizePdf(pdf, err);
+  CheckEqual(err, '');
+  // the bottom-up rows are the rows of the padded BGR image: reused
+  CheckEqual(names[4], names[1], 'the same rows in another layout: one image');
+  CheckEqual(CountOf('/Subtype/Image', txt), 5, 'five images');
+  rgb := ImageData(txt, names[0]);
+  CheckEqual(length(rgb), RAW_W * RAW_H * 3, 'RGB rows');
+  CheckEqual(ImageData(txt, names[1]), rgb, 'BGR padded = RGB');
+  CheckEqual(ImageData(txt, names[2]), rgb, 'BGRx = RGB, x skipped');
+  CheckEqual(length(ImageData(txt, names[3])), RAW_W * RAW_H, 'one index per pixel');
+  CheckEqual(CountOf('<00070E 151C23 ', txt), 1, 'the palette');
+  CheckEqual(CountOf('/Mask[10 10 20 20 200 200]', txt), 1, 'the color key');
+  CheckGolden('images_raw', pdf);
+end;
+
+procedure TPdfImageRawTests.PixelReuse;
+var
+  doc: TPdfDocument;
+  buf, buf2: RawByteString;
+  px, px2: TPdfImagePixels;
+  n1, n2, n3, n4, n5, n6: PdfString;
+begin
+  doc := TPdfDocument.Create;
+  try
+    doc.AddPage;
+    px := RawPixels(ipfIndexed8, buf);
+    px2 := RawPixels(ipfIndexed8, buf2);
+    n1 := doc.CreateOrGetImage(px);
+    n2 := doc.CreateOrGetImage(px2);
+    px2.Palette[1] := #1;
+    n3 := doc.CreateOrGetImage(px2);
+    // the same bytes as another format, or with a color key: other images
+    px := RawPixels(ipfRgb24, buf);
+    n5 := doc.CreateOrGetImage(px);
+    px.Format := ipfBgr24;
+    n6 := doc.CreateOrGetImage(px);
+    Check(n6 <> n5, 'the same bytes as BGR: another image');
+    px.Format := ipfRgb24;
+    px.HasColorKey := true;
+    n6 := doc.CreateOrGetImage(px);
+    Check(n6 <> n5, 'the same bytes with a color key: another image');
+    doc.ForceNoBitmapReuse := true;
+    n4 := doc.CreateOrGetImage(px);
+  finally
+    doc.Free;
+  end;
+  Check(n1 <> '', 'named');
+  CheckEqual(n2, n1, 'the same pixels in another buffer: one image');
+  Check(n3 <> n1, 'another palette: another image');
+  Check(n4 <> n1, 'ForceNoBitmapReuse: always a new image');
+end;
+
+procedure TPdfImageRawTests.PixelChecks;
+var
+  doc: TPdfDocument;
+  buf: RawByteString;
+  px: TPdfImagePixels;
+  i: integer;
+  raised: boolean;
+begin
+  doc := TPdfDocument.Create;
+  try
+    doc.AddPage;
+    for i := 0 to 9 do
+    begin
+      if i in [4, 5, 6] then
+        px := RawPixels(ipfIndexed8, buf)
+      else
+        px := RawPixels(ipfRgb24, buf);
+      case i of
+        0: px.Width := 0;
+        1: px.Stride := RAW_W * 3 - 1;
+        2: dec(px.Size);
+        3: px.Data := nil;
+        4: px.Palette := '';
+        5: SetLength(px.Palette, 767);
+        6: px.HasColorKey := true;
+        7: px.Palette := buf; // no palette with RGB
+        8: px.Stride := High(PtrInt) div 2; // (Height - 1) * Stride overflows
+      else
+        px.Stride := Low(PtrInt);
+      end;
+      raised := false;
+      try
+        doc.CreateOrGetImage(px);
+      except
+        on EPdfInvalidValue do
+          raised := true;
+      end;
+      Check(raised, FormatString('case % raises', [i]));
+    end;
+  finally
+    doc.Free;
+  end;
+end;
+
+procedure TPdfImageRawTests.JpegData;
+var
+  doc: TPdfDocument;
+  img: TPdfImage;
+  name1, name2: PdfString;
+  b: TPdfBox;
+  pdf: RawByteString;
+  txt, err: RawUtf8;
+  jpg: RawByteString;
+  raised: boolean;
+begin
+  // not decoded by the engine: written as it is - SOI, text, EOI
+  jpg := 'xxxxengine-opaquexx';
+  jpg[1] := AnsiChar($FF);
+  jpg[2] := AnsiChar($D8);
+  jpg[3] := AnsiChar($FF);
+  jpg[4] := AnsiChar($E0);
+  jpg[18] := AnsiChar($FF);
+  jpg[19] := AnsiChar($D9);
+  doc := TPdfDocument.Create;
+  try
+    doc.Info.CreationDate := GOLDEN_DATE;
+    doc.StandardFontsReplace := true;
+    doc.AddPage;
+    // in the xref from its constructor, or added by RegisterImage
+    img := TPdfImage.CreateJpeg(doc, pointer(jpg), length(jpg), 8, 6, false);
+    name1 := doc.RegisterImage(img);
+    img := TPdfImage.CreateJpeg(doc, pointer(jpg), length(jpg), 8, 6, true);
+    name2 := doc.RegisterImage(img);
+    b := Box(40, 700, 80, 60);
+    doc.DrawImage(name1, @b);
+    b := Box(140, 700, 80, 60);
+    doc.DrawImage(name2, @b);
+    pdf := SaveToString(doc);
+  finally
+    doc.Free;
+  end;
+  txt := NormalizePdf(pdf, err);
+  CheckEqual(err, '');
+  Check(name1 <> name2, 'two names');
+  raised := false;
+  try
+    TPdfImage.CreateJpeg(nil, nil, 0, 8, 6, false); // raises before the xref
+  except
+    on EPdfInvalidValue do
+      raised := true;
+  end;
+  Check(raised, 'no JPEG data raises');
+  CheckEqual(CountOf('/ColorSpace/DeviceRGB', txt), 2, 'RGB');
+  CheckEqual(CountOf(jpg, txt), 2, 'the data as it is');
+  CheckGolden('images_jpegdata', pdf);
+end;
 
 {$ifdef PDF_HASVCLCANVAS}
 
@@ -105,28 +437,6 @@ begin
   result.Height := IMG_H;
   FillBitmap(result, Seed);
 end;
-
-function CountOf(const Sub, Text: RawUtf8): integer;
-var
-  i: PtrInt;
-begin
-  result := 0;
-  i := PosEx(Sub, Text);
-  while i > 0 do
-  begin
-    inc(result);
-    i := PosEx(Sub, Text, i + length(Sub));
-  end;
-end;
-
-function Box(L, B, W, H: single): TPdfBox;
-begin
-  result.Left := L;
-  result.Top := B;
-  result.Width := W;
-  result.Height := H;
-end;
-
 
 { TPdfImageGoldenTests }
 

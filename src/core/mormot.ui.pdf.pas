@@ -640,6 +640,40 @@ type
   TPdfFont = class;
   TPdfFontTrueType = class;
   TPdfDocument = class;
+  TPdfImage = class;
+
+  /// how the raw pixels of a TPdfImagePixels are laid out
+  // - ipfBgr24 and ipfBgrx32 are the rows of a Windows DIB or of a VCL/LCL
+  // TBitmap.ScanLine[]; the x byte of ipfBgrx32 is skipped, not taken as
+  // alpha (no /SMask is written)
+  TPdfImagePixelFormat = (
+    ipfRgb24,
+    ipfBgr24,
+    ipfBgrx32,
+    ipfIndexed8);
+
+  /// raw pixels of an image, as TPdfImage.CreatePixels and
+  // TPdfDocument.CreateOrGetImage take them - no VCL/LCL type involved
+  TPdfImagePixels = record
+    /// size of the image, in pixels
+    Width, Height: integer;
+    /// how each row is laid out
+    Format: TPdfImagePixelFormat;
+    /// the top row; row y starts at Data + y * Stride
+    Data: pointer;
+    /// distance between two rows in bytes, padding included
+    // - negative for a bottom-up bitmap, whose top row is the last in memory
+    Stride: PtrInt;
+    /// readable bytes from the row lowest in memory, at least
+    // (Height - 1) * Abs(Stride) plus the bytes of one row
+    Size: PtrInt;
+    /// the 256 colors of ipfIndexed8, as 768 bytes R, G, B
+    Palette: RawByteString;
+    /// the pixels of ColorKey are not painted (/Mask) - RGB formats only
+    HasColorKey: boolean;
+    /// the color HasColorKey leaves out, as $BBGGRR
+    ColorKey: TPdfColorRGB;
+  end;
 
 
 {$ifdef USE_PDFSECURITY}
@@ -1674,8 +1708,25 @@ type
     // - you can specify a clipping rectangle region as ClipRc parameter
     {$ifdef USE_GRAPHICS_UNIT}
     function CreateOrGetImage(B: TBitmap; DrawAt: PPdfBox = nil;
-      ClipRc: PPdfBox = nil): PdfString;
+      ClipRc: PPdfBox = nil): PdfString; overload;
     {$endif USE_GRAPHICS_UNIT}
+    /// create an image from raw pixels, or reuse the same pixels added before
+    // - returns the internal XObject name of the resulting TPdfImage, and
+    // draws it at DrawAt if given, clipped to ClipRc if given
+    // - the same Width, Height, rows and palette give the same image, unless
+    // ForceNoBitmapReuse is set
+    // - ForceJPEGCompression does not apply: the engine has no JPEG encoder;
+    // encode the pixels first and use TPdfImage.CreateJpeg and RegisterImage
+    function CreateOrGetImage(const Pixels: TPdfImagePixels; DrawAt: PPdfBox = nil;
+      ClipRc: PPdfBox = nil): PdfString; overload;
+    /// add a new TPdfImage to the XObjects of this document, named SynImg<n>
+    // - returns the name; an image already in the xref (created with
+    // DontAddToFXref = false) is registered as it is
+    function RegisterImage(Image: TPdfImage): PdfString;
+    /// draw the image registered as AName at DrawAt, clipped to ClipRc if
+    // given - nothing is drawn if DrawAt is nil
+    procedure DrawImage(const AName: PdfString; DrawAt: PPdfBox;
+      ClipRc: PPdfBox = nil);
     /// create a new optional content group (layer)
     // - returns a TPdfOptionalContentGroup needed for
     // TPdfCanvas.BeginMarkedContent
@@ -3075,6 +3126,18 @@ type
     fPixelWidth: integer;
     fHash: THash128Rec; // 128-bit hash of the TBitmap raw content
   public
+    /// create the image from raw pixels
+    // - raises EPdfInvalidValue if aPixels does not describe a valid buffer
+    // - an optional DontAddToFXref is available, if you don't want to add
+    // this object to the main XRef list of the PDF file
+    constructor CreatePixels(aDoc: TPdfDocument; const aPixels: TPdfImagePixels;
+      DontAddToFXref: boolean);
+    /// create the image from JPEG content, written as it is
+    // - the image is declared /DeviceRGB: for a grayscale JPEG, use
+    // CreateJpegDirect, which reads the color space from the data
+    // - raises EPdfInvalidValue for no data or no size
+    constructor CreateJpeg(aDoc: TPdfDocument; aJpeg: pointer; aJpegLen: PtrInt;
+      aWidth, aHeight: integer; DontAddToFXref: boolean);
     /// create the image from a supplied VCL/LCL TGraphic instance
     // - handle TBitmap and SynGdiPlus picture types, i.e. TJpegImage
     // (stored as jpeg), and TGifImage/TPngImage (stored as bitmap)
@@ -3103,6 +3166,10 @@ type
     /// height of the image, in pixels units
     property PixelHeight: integer
       read fPixelHeight;
+    /// the key TPdfDocument.GetXObjectImageName finds this image with
+    // - zero: the image is never reused
+    property Hash: THash128Rec
+      read fHash write fHash;
   end;
 
   /// a form XObject with a Canvas for drawing
@@ -5084,7 +5151,9 @@ end;
 
 destructor TPdfStream.Destroy;
 begin
-  fWriter.fDestStream.Free;
+  // nil when a constructor of TPdfImage raised before inherited Create
+  if fWriter <> nil then
+    fWriter.fDestStream.Free;
   fWriter.Free;
   fAttributes.Free;
   inherited;
@@ -9189,83 +9258,193 @@ begin
 end;
 
 {$ifdef USE_GRAPHICS_UNIT}
-function TPdfDocument.CreateOrGetImage(
-  B: TBitmap; DrawAt, ClipRc: PPdfBox): PdfString;
+// the reuse key of a bitmap: four CRC32C lanes over its rows as a DIB pads
+// them, after its palette entries
+function BitmapHash(B: TBitmap): THash128Rec;
 var
-  jpg: TJpegImage;
-  img: TPdfImage;
-  hash: THash128Rec; // no DefaultHasher128() because AesNiHash128() makes GPF
   y, w, h, row: integer;
   palcount: cardinal;
   pal: array of TPaletteEntry;
 const
   PERROW: array[TPixelFormat] of byte = (0, 1, 4, 8, 15, 16, 24, 32, 0);
 begin
+  FillZero(result.b);
+  w := B.Width;
+  h := B.Height;
+  row := PERROW[B.PixelFormat];
+  if row = 0 then
+  begin
+    B.PixelFormat := pf24bit; // convert any device or custom bitmap
+    row := 24;
+  end;
+  if B.Palette <> 0 then
+  begin
+    palcount := 0;
+    if (GetObject(B.Palette, SizeOf(palcount), @palcount) <> 0) and
+       (palcount > 0) then
+    begin
+      SetLength(pal, palcount);
+      if GetPaletteEntries(B.Palette, 0, palcount, pal[0]) = palcount then
+        result.c0 := crc32c(result.c0, pointer(pal), palcount * SizeOf(pal[0]));
+    end;
+  end;
+  row := (((w * row) + 31) and (not 31)) shr 3; // inlined BytesPerScanLine
+  for y := 0 to h - 1 do
+    result.c[y and 3] := crc32c(result.c[y and 3], B.{%H-}ScanLine[y], row);
+end;
+
+function TPdfDocument.CreateOrGetImage(
+  B: TBitmap; DrawAt, ClipRc: PPdfBox): PdfString;
+var
+  jpg: TJpegImage;
+  img: TPdfImage;
+  hash: THash128Rec; // no DefaultHasher128() because AesNiHash128() makes GPF
+begin
   result := '';
   if (self = nil) or
      (B = nil) then
     exit;
-  w := B.Width;
-  h := B.Height;
   FillZero(hash.b);
   if not ForceNoBitmapReuse then
   begin
-    row := PERROW[B.PixelFormat];
-    if row = 0 then
-    begin
-      B.PixelFormat := pf24bit; // convert any device or custom bitmap
-      row := 24;
-    end;
-    if B.Palette <> 0 then
-    begin
-      palcount := 0;
-      if (GetObject(B.Palette, SizeOf(palcount), @palcount) <> 0) and
-         (palcount > 0) then
-      begin
-        SetLength(pal, palcount);
-        if GetPaletteEntries(B.Palette, 0, palcount, pal[0]) = palcount then
-          hash.c0 := crc32c(hash.c0, pointer(pal), palcount * SizeOf(pal[0]));
-      end;
-    end;
-    row := (((w * row) + 31) and (not 31)) shr 3; // inlined BytesPerScanLine
-    for y := 0 to h - 1 do
-      hash.c[y and 3] := crc32c(hash.c[y and 3], B.{%H-}ScanLine[y], row);
-    result := GetXObjectImageName(hash, w, h); // search for matching image
+    hash := BitmapHash(B);
+    result := GetXObjectImageName(hash, B.Width, B.Height); // search for matching image
   end;
   if result = '' then
   begin
      // create new if no existing TPdfImage match
     if ForceJPEGCompression = 0 then
-      img := TPdfImage.Create(Canvas.fDoc, B, true)
+      img := TPdfImage.Create(self, B, true)
     else
     begin
       jpg := TJpegImage.Create;
       try
         jpg.Assign(B);
-        img := TPdfImage.Create(Canvas.fDoc, jpg, false);
+        img := TPdfImage.Create(self, jpg, false);
       finally
         jpg.Free;
       end;
     end;
-    if not ForceNoBitmapReuse then
-      img.fHash := hash;
-    result := 'SynImg' + UInt32ToPdfString(fXObjectList.ItemCount);
-    if ForceJPEGCompression = 0 then
-      AddXObject(result, img)
-    else
-      RegisterXObject(img, result);
+    img.Hash := hash;
+    result := RegisterImage(img);
   end;
-  // draw bitmap as XObject
+  DrawImage(result, DrawAt, ClipRc);
+end;
+{$endif USE_GRAPHICS_UNIT}
+
+// the reuse key of raw pixels: four CRC32C lanes over the bytes of the rows,
+// after the palette, the format and the color key - one lane seeded apart,
+// so that it does not equal the key of a TBitmap with the same bytes
+function PixelsHash(const P: TPdfImagePixels): THash128Rec;
+const
+  BYTES: array[TPdfImagePixelFormat] of byte = (3, 3, 4, 1);
+var
+  y: integer;
+  key: packed record
+    format, haskey: byte;
+    color: cardinal;
+  end;
+begin
+  FillZero(result.b);
+  key.format := ord(P.Format);
+  key.haskey := ord(P.HasColorKey);
+  key.color := 0;
+  if P.HasColorKey then
+    key.color := P.ColorKey;
+  result.c3 := crc32c($50495853, @key, SizeOf(key));
+  if P.Palette <> '' then
+    result.c0 := crc32c(result.c0, pointer(P.Palette), length(P.Palette));
+  for y := 0 to P.Height - 1 do
+    result.c[y and 3] := crc32c(result.c[y and 3],
+      PAnsiChar(P.Data) + PtrInt(y) * P.Stride, P.Width * BYTES[P.Format]);
+end;
+
+// raise EPdfInvalidValue unless P describes rows that can be read
+procedure CheckPixels(const P: TPdfImagePixels);
+const
+  BYTES: array[TPdfImagePixelFormat] of byte = (3, 3, 4, 1);
+var
+  row, stride: Int64;
+begin
+  if (P.Width <= 0) or
+     (P.Height <= 0) or
+     (P.Data = nil) then
+    EPdfInvalidValue.RaiseUtf8('TPdfImagePixels: no pixels (% x %)',
+      [P.Width, P.Height]);
+  row := Int64(P.Width) * BYTES[P.Format];
+  if row > MaxInt then
+    EPdfInvalidValue.RaiseUtf8('TPdfImagePixels: a row of % bytes', [row]);
+  stride := 0;
+  if P.Height > 1 then
+  begin
+    // divided before multiplied: (Height - 1) * stride + row cannot overflow
+    if P.Stride <> Low(PtrInt) then
+      stride := Abs(Int64(P.Stride));
+    if stride < row then
+      EPdfInvalidValue.RaiseUtf8('TPdfImagePixels: Stride % below a row of %',
+        [P.Stride, row]);
+    if stride > (High(Int64) - row) div (P.Height - 1) then
+      EPdfInvalidValue.RaiseUtf8('TPdfImagePixels: Stride % too big', [P.Stride]);
+  end;
+  if Int64(P.Size) < Int64(P.Height - 1) * stride + row then
+    EPdfInvalidValue.RaiseUtf8('TPdfImagePixels: Size % too small', [P.Size]);
+  if (P.Format = ipfIndexed8) <> (P.Palette <> '') then
+    raise EPdfInvalidValue.Create('TPdfImagePixels: a palette with ipfIndexed8 only');
+  if (P.Format = ipfIndexed8) and
+     (length(P.Palette) <> 768) then
+    EPdfInvalidValue.RaiseUtf8('TPdfImagePixels: palette of % bytes, not 768',
+      [length(P.Palette)]);
+  if P.HasColorKey and
+     (P.Format = ipfIndexed8) then
+    raise EPdfInvalidValue.Create('TPdfImagePixels: no color key with ipfIndexed8');
+end;
+
+function TPdfDocument.CreateOrGetImage(const Pixels: TPdfImagePixels;
+  DrawAt, ClipRc: PPdfBox): PdfString;
+var
+  img: TPdfImage;
+  hash: THash128Rec;
+begin
+  result := '';
+  if self = nil then
+    exit;
+  CheckPixels(Pixels);
+  FillZero(hash.b);
+  if not ForceNoBitmapReuse then
+  begin
+    hash := PixelsHash(Pixels);
+    result := GetXObjectImageName(hash, Pixels.Width, Pixels.Height);
+  end;
+  if result = '' then
+  begin
+    img := TPdfImage.CreatePixels(self, Pixels, true);
+    img.Hash := hash;
+    result := RegisterImage(img);
+  end;
+  DrawImage(result, DrawAt, ClipRc);
+end;
+
+function TPdfDocument.RegisterImage(Image: TPdfImage): PdfString;
+begin
+  result := 'SynImg' + UInt32ToPdfString(fXObjectList.ItemCount);
+  if Image.ObjectType = otDirectObject then
+    AddXObject(result, Image)
+  else
+    RegisterXObject(Image, result);
+end;
+
+procedure TPdfDocument.DrawImage(const AName: PdfString;
+  DrawAt, ClipRc: PPdfBox);
+begin
   if DrawAt <> nil then
     if ClipRc <> nil then
       with DrawAt^ do
         Canvas.DrawXObjectEx(Left, Top, Width, Height,
-          ClipRc^.Left, ClipRc^.Top, ClipRc^.Width, ClipRc^.Height, result)
+          ClipRc^.Left, ClipRc^.Top, ClipRc^.Width, ClipRc^.Height, AName)
     else
       with DrawAt^ do
-        Canvas.DrawXObject(Left, Top, Width, Height, result);
+        Canvas.DrawXObject(Left, Top, Width, Height, AName);
 end;
-{$endif USE_GRAPHICS_UNIT}
 
 function TPdfDocument.CreateOptionalContentGroup(
   ParentContentGroup: TPdfOptionalContentGroup; const Title: string;
@@ -11704,128 +11883,211 @@ constructor TPdfImage.Create(aDoc: TPdfDocument; aImage: TGraphic;
   DontAddToFXref: boolean);
 var
   bmp: TBitmap;
-  pinc, y: integer;
-  pal: PdfString;
+  ms: TMemoryStream;
+  px: TPdfImagePixels;
   entry: array of TPaletteEntry;
-  ca: TPdfArray;
-  transcolor: TPdfColorRGB;
+  i: integer;
+  p: PAnsiChar;
 
   procedure NeedBitmap(PF: TPixelFormat);
   begin
     bmp := TBitmap.Create; // create a temp bitmap (pixelformat may change)
     bmp.PixelFormat := PF;
-    bmp.Width := fPixelWidth;
-    bmp.Height := fPixelHeight;
+    bmp.Width := aImage.Width;
+    bmp.Height := aImage.Height;
     bmp.Canvas.Draw(0, 0, aImage);
   end;
 
-  procedure WritePal(P: PAnsiChar; pal: PPaletteEntry);
-  var
-    i: integer;
-  begin
-    P^ := '<';
-    inc(P);
-    for i := 0 to 255 do
-      with pal^ do
-      begin
-        P[0] := HexChars[peRed shr 4];
-        P[1] := HexChars[peRed and $F];
-        P[2] := HexChars[peGreen shr 4];
-        P[3] := HexChars[peGreen and $F];
-        P[4] := HexChars[peBlue shr 4];
-        P[5] := HexChars[peBlue and $F];
-        P[6] := ' ';
-        inc(P, 7);
-        inc(pal);
-      end;
-    P^ := '>';
-  end;
-
 begin
-  inherited Create(aDoc, DontAddToFXref);
-  fPixelWidth := aImage.Width;
-  fPixelHeight := aImage.Height;
-  fAttributes.AddItem('Type', 'XObject');
-  fAttributes.AddItem('Subtype', 'Image');
   if aImage.InheritsFrom(TJpegImage) then
   begin
-    fAttributes.AddItem('ColorSpace', 'DeviceRGB');
-    fFilter := 'DCTDecode';
-    fWriter.Save; // flush to allow direct access to fDestStream
-    with TJpegImage(aImage) do
-    begin
-      if aDoc.ForceJPEGCompression <> 0 then
-        CompressionQuality := aDoc.ForceJPEGCompression;
-      {$ifdef USE_SYNGDIPLUS}
-      if aDoc.ForceJPEGCompression = 0 then // recompression only if necessary
-        SaveInternalToStream(fWriter.fDestStream)
-      else
-      {$endif USE_SYNGDIPLUS}
-        SaveToStream(fWriter.fDestStream); // with CompressionQuality recompress
+    ms := TMemoryStream.Create;
+    try
+      with TJpegImage(aImage) do
+      begin
+        if aDoc.ForceJPEGCompression <> 0 then
+          CompressionQuality := aDoc.ForceJPEGCompression;
+        {$ifdef USE_SYNGDIPLUS}
+        if aDoc.ForceJPEGCompression = 0 then // recompression only if necessary
+          SaveInternalToStream(ms)
+        else
+        {$endif USE_SYNGDIPLUS}
+          SaveToStream(ms); // with CompressionQuality recompress
+      end;
+      CreateJpeg(aDoc, ms.Memory, ms.Size, aImage.Width, aImage.Height,
+        DontAddToFXref);
+    finally
+      ms.Free;
     end;
-    fWriter.fDestStreamPosition := fWriter.fDestStream.Position;
+    exit;
+  end;
+  if aImage.InheritsFrom(TBitmap) then
+    bmp := TBitmap(aImage)
+  else
+    NeedBitmap(pf24bit);
+  try
+    FillCharFast(px, SizeOf(px), 0);
+    case bmp.PixelFormat of
+      pf1bit,
+      pf4bit,
+      pf8bit:
+        begin
+          if bmp.PixelFormat <> pf8bit then
+            NeedBitmap(pf8bit);
+          SetLength(entry, 256);
+          if GetPaletteEntries(bmp.Palette, 0, 256, entry[0]) <> 256 then
+            raise EPdfInvalidValue.Create('TPdfImage');
+          SetLength(px.Palette, 768);
+          p := pointer(px.Palette);
+          for i := 0 to 255 do
+          begin
+            p[0] := AnsiChar(entry[i].peRed);
+            p[1] := AnsiChar(entry[i].peGreen);
+            p[2] := AnsiChar(entry[i].peBlue);
+            inc(p, 3);
+          end;
+          px.Format := ipfIndexed8;
+        end;
+    else
+      begin
+        if not (bmp.PixelFormat in [pf24bit, pf32bit]) then
+          NeedBitmap(pf24bit);
+        if bmp.PixelFormat = pf24bit then
+        begin
+          px.Format := ipfBgr24;
+          // [ min1 max1 ... minn maxn ]
+          px.HasColorKey := bmp.TransparentMode = tmFixed;
+          if px.HasColorKey then
+            px.ColorKey := bmp.TransparentColor;
+        end
+        else
+          px.Format := ipfBgrx32;
+      end;
+    end;
+    // the rows as ScanLine[] gives them: a DIB is bottom-up
+    px.Width := bmp.Width;
+    px.Height := bmp.Height;
+    px.Data := bmp.{%H-}ScanLine[0];
+    case px.Format of
+      ipfIndexed8:
+        px.Stride := px.Width;
+      ipfBgr24:
+        px.Stride := px.Width * 3;
+    else
+      px.Stride := px.Width * 4;
+    end;
+    px.Size := px.Stride;
+    if px.Height > 1 then
+    begin
+      px.Stride := PAnsiChar(bmp.{%H-}ScanLine[1]) - PAnsiChar(px.Data);
+      px.Size := PtrInt(px.Height - 1) * Abs(px.Stride) + px.Size;
+    end;
+    CreatePixels(aDoc, px, DontAddToFXref);
+  finally
+    if bmp <> aImage then
+      bmp.Free;
+  end;
+end;
+{$endif USE_GRAPHICS_UNIT}
+
+constructor TPdfImage.CreatePixels(aDoc: TPdfDocument;
+  const aPixels: TPdfImagePixels; DontAddToFXref: boolean);
+var
+  pal: PdfString;
+  ca: TPdfArray;
+  row: PAnsiChar;
+  y, i: integer;
+  P: PAnsiChar;
+begin
+  CheckPixels(aPixels);
+  inherited Create(aDoc, DontAddToFXref);
+  fPixelWidth := aPixels.Width;
+  fPixelHeight := aPixels.Height;
+  fAttributes.AddItem('Type', 'XObject');
+  fAttributes.AddItem('Subtype', 'Image');
+  row := aPixels.Data;
+  if aPixels.Format = ipfIndexed8 then
+  begin
+    // '<rrggbb rrggbb ... >', each entry followed by a space
+    SetLength(pal, 7 * 256 + 2);
+    P := pointer(pal);
+    P^ := '<';
+    inc(P);
+    for i := 0 to 767 do
+    begin
+      P[0] := HexChars[ord(aPixels.Palette[i + 1]) shr 4];
+      P[1] := HexChars[ord(aPixels.Palette[i + 1]) and $F];
+      inc(P, 2);
+      if i mod 3 = 2 then
+      begin
+        P^ := ' ';
+        inc(P);
+      end;
+    end;
+    P^ := '>';
+    ca := TPdfArray.Create(nil);
+    ca.AddItem(TPdfName.Create('Indexed'));
+    ca.AddItem(TPdfName.Create('DeviceRGB'));
+    ca.AddItem(TPdfNumber.Create(255));
+    ca.AddItem(TPdfRawText.Create(pal));
+    fAttributes.AddItem('ColorSpace', ca);
+    for y := 0 to fPixelHeight - 1 do
+    begin
+      fWriter.Add(row, fPixelWidth);
+      inc(row, aPixels.Stride);
+    end;
   end
   else
   begin
-    if aImage.InheritsFrom(TBitmap) then
-      bmp := TBitmap(aImage)
-    else
-      NeedBitmap(pf24bit);
-    try
-      case bmp.PixelFormat of
-        pf1bit,
-        pf4bit,
-        pf8bit:
-          begin
-            if bmp.PixelFormat <> pf8bit then
-              NeedBitmap(pf8bit);
-            SetLength(entry, 256);
-            if GetPaletteEntries(bmp.Palette, 0, 256, entry[0]) <> 256 then
-              raise EPdfInvalidValue.Create('TPdfImage');
-            SetLength(pal, 7 * 256 + 2);
-            WritePal(pointer(pal), pointer(entry));
-            ca := TPdfArray.Create(nil);
-            ca.AddItem(TPdfName.Create('Indexed'));
-            ca.AddItem(TPdfName.Create('DeviceRGB'));
-            ca.AddItem(TPdfNumber.Create(255));
-            ca.AddItem(TPdfRawText.Create(pal));
-            fAttributes.AddItem('ColorSpace', ca);
-            for y := 0 to fPixelHeight - 1 do
-              fWriter.Add(PAnsiChar(bmp.{%H-}ScanLine[y]), fPixelWidth);
-          end;
+    fAttributes.AddItem('ColorSpace', 'DeviceRGB');
+    for y := 0 to fPixelHeight - 1 do
+    begin
+      case aPixels.Format of
+        ipfRgb24:
+          fWriter.Add(row, fPixelWidth * 3);
+        ipfBgr24:
+          fWriter.AddRGB(row, 3, fPixelWidth);
       else
-        begin
-          fAttributes.AddItem('ColorSpace', 'DeviceRGB');
-          if not (bmp.PixelFormat in [pf24bit, pf32bit]) then
-            NeedBitmap(pf24bit);
-          if bmp.PixelFormat = pf24bit then
-            pinc := 3
-          else
-            pinc := 4;
-          for y := 0 to fPixelHeight - 1 do
-            fWriter.AddRGB(bmp.{%H-}ScanLine[y], pinc, fPixelWidth);
-          if (pinc = 3) and
-             (bmp.TransparentMode = tmFixed) then
-          begin
-            // [ min1 max1 ... minn maxn ]
-            transcolor := bmp.TransparentColor;
-            fAttributes.AddItem('Mask', TPdfArray.CreateReals(nil,
-              [(transcolor and $ff), (transcolor and $ff),
-               (transcolor shr 8 and $ff), (transcolor shr 8 and $ff),
-               (transcolor shr 16 and $ff), (transcolor shr 16 and $ff)]));
-          end;
-        end;
+        fWriter.AddRGB(row, 4, fPixelWidth);
       end;
-    finally
-      if bmp <> aImage then
-        bmp.Free;
+      inc(row, aPixels.Stride);
     end;
+    if aPixels.HasColorKey then
+      with aPixels do
+        fAttributes.AddItem('Mask', TPdfArray.CreateReals(nil,
+          [(ColorKey and $ff), (ColorKey and $ff),
+           (ColorKey shr 8 and $ff), (ColorKey shr 8 and $ff),
+           (ColorKey shr 16 and $ff), (ColorKey shr 16 and $ff)]));
   end;
   fAttributes.AddItem('Width', fPixelWidth);
   fAttributes.AddItem('Height', fPixelHeight);
   fAttributes.AddItem('BitsPerComponent', 8);
 end;
-{$endif USE_GRAPHICS_UNIT}
+
+constructor TPdfImage.CreateJpeg(aDoc: TPdfDocument; aJpeg: pointer;
+  aJpegLen: PtrInt; aWidth, aHeight: integer; DontAddToFXref: boolean);
+begin
+  // before inherited Create: a raise there leaves nothing in the xref
+  if (aJpeg = nil) or
+     (aJpegLen <= 0) or
+     (aWidth <= 0) or
+     (aHeight <= 0) then
+    EPdfInvalidValue.RaiseUtf8('TPdfImage.CreateJpeg: no JPEG (% bytes, % x %)',
+      [aJpegLen, aWidth, aHeight]);
+  inherited Create(aDoc, DontAddToFXref);
+  fPixelWidth := aWidth;
+  fPixelHeight := aHeight;
+  fAttributes.AddItem('Type', 'XObject');
+  fAttributes.AddItem('Subtype', 'Image');
+  fAttributes.AddItem('ColorSpace', 'DeviceRGB');
+  fFilter := 'DCTDecode';
+  fWriter.Save; // flush to allow direct access to fDestStream
+  fWriter.fDestStream.WriteBuffer(aJpeg^, aJpegLen);
+  fWriter.fDestStreamPosition := fWriter.fDestStream.Position;
+  fAttributes.AddItem('Width', fPixelWidth);
+  fAttributes.AddItem('Height', fPixelHeight);
+  fAttributes.AddItem('BitsPerComponent', 8);
+end;
 
 constructor TPdfImage.CreateJpegDirect(aDoc: TPdfDocument;
   const aJpegFileName: TFileName; DontAddToFXref: boolean);
