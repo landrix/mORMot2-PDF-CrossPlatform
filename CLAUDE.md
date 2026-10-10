@@ -85,7 +85,7 @@ examples/
   (each demo folder carries a short README.md; the source header of its .lpr
    (`layer1_demo`: .dpr) says the same thing in two sentences)
 tests/
-  test_runner.lpr              runs every suite below (green: 506 assertions on Windows with FPC, Delphi 13 and Delphi 7, with the CJK and symbol faces of Windows 11 - Delphi 2010 last measured at 506 (#29); 477 on macOS with Geeza Pro, Hiragino Sans GB and Helvetica, 453 on Linux with fonts-noto-cjk — the rest are skips; the golden files add two per case with or without a baseline. Delphi 13, measured before the golden files: 259 on Windows, 171 on Linux64, 129 on Android64, layer 1 only)
+  test_runner.lpr              runs every suite below (green: 760 assertions on Windows with FPC, Delphi 13 and Delphi 7, with the CJK and symbol faces of Windows 11 - Delphi 2010 last measured at 506 (#29); 736 on macOS with Geeza Pro, Hiragino Sans GB and Helvetica, 709 on Linux with fonts-noto-cjk — the rest are skips; the golden files add two per case with or without a baseline. Delphi 13, measured before the golden files: 259 on Windows, 171 on Linux64, 129 on Android64, layer 1 only)
   test_defines.inc             PDF_HASVCLCANVAS: the TCanvas bridge suites (all compilers since R-20)
   build_delphi7.bat            dcc32 build of one project (R-19)
   build_delphi2010.bat         the same with Delphi 2010, warnings on (R-25, Unicode Delphi)
@@ -101,6 +101,7 @@ tests/
   test_pdf_subset.pas          font subsetting: IFontSubsetter and TPdfDocument
   test_pdf_pdfa.pas            PDF/A-3: associated files, XMP schemas, PdfMetadataFacturX, level U
   test_pdf_golden.pas          golden files: generated PDFs against this machine's baseline (layers 1-2)
+  test_pdf_cff.pas             the CFF reader on tables built in code, and every CFF path through a synthetic face swapped into FontProvider (codes, /W, /ToUnicode, routing, word spacing, programs, names)
   test_pdf_images.pas          golden files of the image paths (raw pixels on every compiler; TBitmap formats, reuse, color key, JPEG) and of EMF (TPdfDocumentGdi, RenderMetaFile; Windows)
   test_report_golden.pas       the same for TGDIPages (layer 3)
   test_coordinates.pas         page geometry
@@ -361,7 +362,7 @@ itself is in each demo's `uReport.pas`; the form only passes its options.
 - **mORMot Refactoring** (R-28, in progress): before any step of it, read
   `docs/REFACTORING.md` — its rules apply on top of this file
 - **Font subsetting**: default (`EmbeddedWholeTtf = False`) on all platforms, two implementations, both keeping the original glyph IDs and therefore safe for CJK, shaped Arabic and tagged output. **Linux/macOS** (R-12): `IFontSubsetter` (`mormot.lib.core`) implemented by `mormot.lib.harfbuzz` (`libharfbuzz-subset`); 97–99.5% smaller PDFs. **Windows** (R-15): `IFontSubsetter` implemented by `mormot.lib.uniscribe` (`CreateFontPackage` with a glyph keep list, `TTFCFP_FLAGS_GLYPHLIST`; the face of a `.ttc` found from the bytes) - one path through `FontSubsetter` on every platform since R-28 Phase 1 W2. The whole face is embedded instead for PDF/A-1 (no `/CIDSet`), for symbol fonts on POSIX (R-15b) and when `libharfbuzz-subset` is missing. See `.claude/skills/fonts.md` §3, §9
-- **CFF faces are subset too** (R-15c, done): a CFF-flavoured face goes to `/FontFile3` with `/Subtype /OpenType` as a `CIDFontType0`; `glyf` goes to `/FontFile2`. `PdfFontFileKey()` picks the key. Embedding CFF in `/FontFile2` is a spec violation (ISO 32000-1 9.9) — do not reintroduce it by assuming one key fits both
+- **CFF faces: Type0 only** (R-15c, then the CFF series of R-28): a CFF face draws all its text through its Type0 font as a `CIDFontType0` - the codes of a CID-keyed face are its CIDs, not glyph indexes; it is embedded as its bare CFF (`/FontFile3 /Subtype /CIDFontType0C`), a name-keyed one as an OpenType font file (PDF 1.6, not PDF/A-1); its WinAnsi font is internal and not written. `glyf` goes to `/FontFile2`. Embedding CFF in `/FontFile2` is a spec violation (ISO 32000-1 9.9). See `.claude/skills/fonts.md` "CFF Faces: Type0 Only"
 - **RTL / Arabic text**: one switch, `UseUniscribe` — HarfBuzz delivers correct ligatures on Linux/macOS, Windows uses Uniscribe; `RightToLeftText` is the direction only — see `.claude/skills/fonts.md` §10
 - **Testing RTL**: Linux fonts (Noto Naskh Arabic) resolve shaped glyphs through the CMAP, so they never exercise the shaper's own advance path. Validate RTL work against a font without Arabic presentation forms — see `.claude/skills/fonts.md` §10
 - **TTC collections**: only face index 0 is reachable; `TFontFileMap` (`mormot.lib.freetype`) has no face index, so the other faces of a `.ttc` cannot be selected by name
@@ -378,7 +379,8 @@ itself is in each demo's `uReport.pas`; the form only passes its options.
 - **Links in tagged output**: no `Link` role, `OBJR` or `/StructParent` for annotations — `CreateHyperLink` in tagged output fails veraPDF `ua1` on four 7.18 rules (measured). `TGDIPages.DrawLink` draws link-styled text as a `Span` and drops the URL: conformant, not clickable (roadmap R-29, item 7)
 - **Delphi** (R-19, R-21, R-23, R-25, R-27 done; R-20 steps 1–6 done): layer 1,
   the TCanvas bridge and the `TGDIPages` core build on Delphi 7 and Delphi
-  2010 (Unicode Delphi), Win32; `test_runner` 506/506 on Delphi 7 (Delphi 2010 last measured at 506/506, #29). All six console
+  2010 (Unicode Delphi), Win32; `test_runner` green on Delphi 7 (counts: the
+  test list above; Delphi 2010 last measured at 506/506, #29). All six console
   demos and the `--export` of the two GUI demos build and give the same PDF as
   FPC (the GUI demos build their report in `uReport.pas`, without a form);
   PAC 2024 and veraPDF pass the files of both compilers. Open: the preview and

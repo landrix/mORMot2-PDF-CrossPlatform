@@ -322,7 +322,8 @@ TPdfDocument.GetRegisteredTrueTypeFont(LogFont)
 │  stores in fRegisteredFonts; fFontList
 │
 │  Note: UnicodeFont (fUnicode=true) is created lazily by CreateAssociatedUnicodeFont
-│        on the first non-Latin character — NOT here.
+│        on the first non-Latin character — NOT here; for a CFF face when
+│        SetPdfFont selects it (it stands for the WinAnsi font).
 │        CMAP loading (TPdfTtf.Create) happens at that point (see Path 4e).
 │
 └─ returns TPdfFontTrueType (WinAnsi instance)
@@ -341,6 +342,8 @@ AddUnicodeHexText (pdf.pas:5549):
     → AddUnicodeHexTextNoUniScribe(PW, ttf, false, Canvas)   [see path 4c]
 
 AddUnicodeHexTextNoUniScribe (pdf.pas:5484):
+  a CFF face (Type0Only): every character as a glyph of the Unicode font,
+  the WinAnsi branch skipped - fonts.md "CFF Faces: Type0 Only"
   for each WideChar:
     if WideCharToWinAnsi(ch) >= 0:         // U+0000..U+00FF  (Latin-1)
       SetPdfFont(WinAnsiFont)
@@ -389,7 +392,7 @@ AddUnicodeHexText (pdf.pas) — UseUniscribe gates the one shaper (since W2):
 AddShapedRun(Run, WinAnsiTtf):          ← the font it was shaped with
   CreateAssociatedUnicodeFont if needed; SetPdfFont(UnicodeFont, size)
   no glyph → done (the font switch only)
-  no Advances (Uniscribe): '<' GetAndMarkGlyphAsUsed(g)… '> Tj'   [below]
+  no Advances (Uniscribe): '<' GlyphCode(GetAndMarkGlyphAsUsed(g))… '> Tj'
   Advances (HarfBuzz): for each glyph
       WinAnsiTtf.GetAndMarkGlyphAsUsedWithWidth(Glyph, Advance_1000)
         Step 1: already registered (fUsedWide or fShapedGlyph) → exit
@@ -397,6 +400,8 @@ AddShapedRun(Run, WinAnsiTtf):          ← the font it was shaped with
           ← hmtx width from TPdfTtf.Create: (int64(hmtx) * 1000) div UPM
         Step 3: AddShapedGlyph with the hmtx width (not in CMAP)
     one Tj, or a TJ where an offset or the hmtx width differs (P3-B, U-2)
+    every code written as WinAnsiTtf.GlyphCode(g): the CID of a CID-keyed
+    CFF face, the glyph index otherwise
 
   if not shaped:
     → AddUnicodeHexTextNoUniScribe(…)           ← Latin fallback
@@ -415,7 +420,7 @@ public AddGlyphs (→ AddGlyphsOf with the page font, VisAttr filter if given):
     │           AddShapedGlyph(glyph, w) → WinAnsiFont.fShapedGlyph (by glyph ID)
     │           → glyph registered in /W array; no overlap from /DW fallback
     │           (before W3 Windows only: on POSIX the glyph stayed out of /W)
-    AddHex4(glyph)
+    AddHex4(Ttf.WinAnsiFont.GlyphCode(glyph))
   Add('> Tj') if any glyph was kept
 ```
 
@@ -447,13 +452,15 @@ TPdfDocument.SaveToStream / SaveToFile → SaveToStreamDirectEnd
       /DW = WinAnsiFont.fDefaultWidth         (space char advance width)
       WinAnsiFont.GetUsedGlyphs(keys, used): fUsedWide[] and fShapedGlyph
         merged in key order (a shaped glyph under $E000 + gid mod 4096)
-      /W array from used[]:
-        if fFixedWidth: omit /W (use /DW for all)
-        else: [Glyph, [Width]] for each registered entry
-      fFirstChar/fLastChar = .Glyph of the FIRST/LAST entry in key order -
-        not min/max: the codespace may miss glyphs (open, see fonts.md 9)
-      ToUnicode codespace = <fFirstChar> <fLastChar>
-        no entry at all → codespace <0000><0000>
+      PdfUsedCodes: GlyphCode(Glyph) (the CID of a CID-keyed CFF face),
+        sorted, one entry per code (the smallest Unicode value wins)
+      /W array from the codes:
+        if fFixedWidth and not PDF/A: omit /W (use /DW for all)
+        else: c [w1 w2 ...] per run of consecutive codes
+      ToUnicode codespace = <0000> <FFFF>, bfchar sorted by code
+      descendant: CIDFontType0 for a CFF face (Type0Only), no CIDToGIDMap;
+        CIDFontType2 with /CIDToGIDMap /Identity otherwise; /CIDSystemInfo
+        the ROS of a CID-keyed face, Adobe-Identity-0 otherwise
 
     WinAnsi font branch (builds /Widths, embeds font file):
       /FirstChar, /LastChar, /Widths from fWinAnsiUsed + ABC widths
@@ -468,7 +475,13 @@ TPdfDocument.SaveToStream / SaveToFile → SaveToStreamDirectEnd
         no bytes → raise EPdfInvalidOperation (since Phase 1b: before, the
           font went out without a font file)
 
-        GetOrCreateFontFile2(ttf) → one /FontFile2 per distinct byte string
+        a CFF face: /FontName and /BaseFont := tag + program name
+        CID-keyed: SfntTableOf(ttf, 'CFF ') → /FontFile3 /CIDFontType0C
+        other OTTO: CheckFontProgram (PDF 1.6) → /FontFile3 /OpenType
+        glyf: /FontFile2 /Length1
+        GetOrCreateFontFile2(bytes, subtype) → one stream per bytes+subtype
+      the WinAnsi font of a CFF face is internal: its dictionary is not
+        written (fInternal), nor its /ToUnicode
   fFontSubsets := nil
 ```
 

@@ -1141,12 +1141,13 @@ begin
       entry in a Type 2 CID font" }
     CheckEqual(FontsWithout(s, '/Subtype/CIDFontType2', '/CIDToGIDMap/Identity'), 0,
       'every CIDFontType2 has CIDToGIDMap Identity');
-    { a .ttc face is embedded alone, a CFF face in /FontFile3 (fonts.md 3);
-      the defect behind this depended on the heap, so it may not show }
+    { a .ttc face is embedded alone, an OpenType font file with its subtype
+      (fonts.md 3); the defect behind this depended on the heap, so it may
+      not show }
     CheckEqual(CountOf('stream'#10'ttcf', s), 0,
       'no whole .ttc collection embedded');
     CheckEqual(StreamsWithout(s, 'OTTO', '/Subtype/OpenType'), 0,
-      'every CFF face is a /FontFile3 with Subtype OpenType');
+      'every OpenType font file has Subtype OpenType');
   finally
     Stream.Free;
   end;

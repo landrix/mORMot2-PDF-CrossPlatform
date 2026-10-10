@@ -556,8 +556,8 @@ begin
     FaceHandle(font), sub),
     'a truncated CFF face must not be subset');
   CheckEqual(sub, '', 'no output expected');
-  // a real CFF face is subset like any other: it goes to /FontFile3 with
-  // /Subtype /OpenType, which the engine picks through PdfFontFileKey()
+  // a real CFF face is subset like any other - the engine embeds a CID-keyed
+  // one as its bare CFF (/CIDFontType0C), a name-keyed one as /OpenType
   if not LoadCffFace(face, font) then
     exit;
   ClearRequest(req);

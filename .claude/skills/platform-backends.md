@@ -256,7 +256,9 @@ required FreeType before HarfBuzz.
   rest takes the simple font
 - Linux/macOS: HarfBuzz shapes a run when `RightToLeftText` is set or
   `NeedsShaping` (in the shaper since W2) finds a character of a script that
-  needs it; Latin text keeps the simple font, as with Uniscribe
+  needs it; Latin text keeps the simple font, as with Uniscribe - a CFF
+  face has none: all its text is glyphs of the Type0 font (fonts.md "CFF
+  Faces: Type0 Only")
 - `RightToLeftText` is the direction only. HarfBuzz gets RTL forced when it
   is set; otherwise `hb_buffer_guess_segment_properties` takes the direction
   from the script (a forced LTR shaped Arabic in the wrong order). Glyphs come

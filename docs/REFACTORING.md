@@ -429,26 +429,21 @@ Qt `QRawFont`):
   date of `SOURCE_DATE_EPOCH`, which `pdfcheck run` sets, and `pdfcheck
   compare` names up to ten changed, added or removed objects - paired by
   number, also inside object streams - and counts the rest
-- **CFF - moved to a PR of its own after Phase 2's bug-fix PR** (decided
-  with Sven 2026-10-09, separated 2026-10-10: eight commits that change the output on macOS and Linux, too
-  much for this PR). A CID-keyed CFF face (all CJK CFF faces measured: Noto
-  Sans CJK, Hiragino Sans GB) may not be a simple `/Type1` font (ISO 32000-1
-  table 126), and the codes of a `CIDFontType0` are CIDs, not glyph IDs -
-  Hiragino Sans GB has 288 glyphs whose CID differs. Decided: all text of a
-  CFF face through the Type0 font - a CID-keyed face writes the CIDs of its
-  charset, a name-keyed face its glyph IDs unchanged;
-  a CID-keyed face embedded as the bare `CFF ` table, `/FontFile3 /Subtype
-  /CIDFontType0C` (PDF 1.3, also PDF/A-1); a name-keyed face (a Latin OTF,
-  e.g. Nimbus Sans of Ubuntu's desktop) as `/OpenType`, the document raised
-  to PDF 1.6 before its header is written, refused under PDF/A-1 - no CFF
-  rewriter (cairo and LuaTeX convert name-keyed CFF to CID-keyed: a project
-  of its own). The plan, discussed with Codex: a bounded CFF reader with
-  synthetic fixtures, the internal WinAnsi peer kept out of the file, the
-  program kind deciding the descendant (not the subset), the codes of the
-  face (CIDs of a CID-keyed one) in content, `/W` (sorted by code) and
-  `/ToUnicode`, word spacing as `TJ`
-  adjustments (`Tw` does not reach two-byte codes), the routing, then
-  veraPDF/PAC and the Mac golden files
+- **CFF - a PR of its own after Phase 2's bug-fix PR, done** (decided with
+  Sven 2026-10-09/10, branch `pr/cff`): all text of a CFF face through its
+  Type0 font, the CIDs of a CID-keyed face as codes, a CID-keyed face as its
+  bare CFF (`CIDFontType0C`, PDF 1.3), a name-keyed one as `/OpenType` (PDF
+  1.6, refused under PDF/A-1) - no name-keyed-to-CID-keyed rewriter (cairo
+  and LuaTeX have one: a project of its own). How it works: `fonts.md` "CFF
+  Faces: Type0 Only". Every commit Codex-reviewed, each test shown to fail
+  on the engine before it. Left open: CFF faces the reader refuses, word
+  spacing in shaped runs (ROADMAP); veraPDF and PAC on the macOS output (no
+  veraPDF here). Checked: `test_runner` 760/760 on Windows (FPC 3.3.1
+  aarch64, Delphi 7, Delphi 13 Win32/Win64 - now with a golden baseline of
+  their own), 736/736 on macOS M2, 709/709 on Linux aarch64; golden files:
+  `cjk_subset` and `arabic_shaped` on every platform (`/W` and `/ToUnicode`
+  sorted), `cjk_subset` on macOS three times more (four in all); U+9FA6 of
+  Hiragino rendered by PDFKit as CoreText draws it
 
 **Checked** (#28, #29): `test_runner` 506/506 on Windows (FPC 3.3.1 aarch64
 and 3.2.2 x64, Delphi 7, Delphi 13 Win32/Win64, Delphi 2010), 477/477 on

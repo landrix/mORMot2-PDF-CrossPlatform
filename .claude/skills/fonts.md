@@ -72,11 +72,9 @@ The whole face is embedded instead — silently, as before R-12 — when no
 subsetter is registered (library missing, HarfBuzz < 2.9), for PDF/A-1 (6.3.5
 would need a `/CIDSet`, which is not written), for symbol fonts (reached
 through the `(3,0)` cmap). CFF-flavoured faces (`OTTO`) **are** subset since
-R-15c — they go to `/FontFile3` with `/Subtype /OpenType` and no `/Length1`,
-as a `CIDFontType0` whose simple peer is a `/Type1` (9.6.2.1, 9.7.4, 9.9).
-`PdfFontFileKey()` picks the descriptor key from the sfnt signature, and
-`TPdfFontSubset.IsCff` carries the flavour, which is only knowable while the
-whole face is in hand.
+R-15c; since the CFF series of R-28 a CID-keyed one is embedded as its bare
+`CFF ` table (`/FontFile3 /Subtype /CIDFontType0C`), a name-keyed one as an
+OpenType font file - see "CFF Faces: Type0 Only" below.
 
 **macOS is where this matters.** Its CJK system faces are CFF:
 `Hiragino Sans GB.ttc` is `OTTO` in all four faces, with a `CFF ` table and no
@@ -99,8 +97,8 @@ is Adobe-Identity, every CID its index. hb-subset keeps the ROS, the
 FDArray and the charset: the subset in the Mac `cjk_subset` baseline is
 Adobe-GB1-6, 3416 glyphs (`--retain-gids`). The codes of a `CIDFontType0`
 are CIDs (ISO 32000-1 9.7.4.2), not glyph indexes, so writing glyph indexes
-under Identity-H draws the wrong glyph for those 288 - what the CFF series
-after R-28 Phase 2 fixes. An earlier note here called Hiragino name-keyed
+under Identity-H draws the wrong glyph for those 288 - fixed by the CFF
+series of R-28 (below). An earlier note here called Hiragino name-keyed
 after a veraPDF log line (`The Top DICT does not begin with ROS operator`);
 the measurement contradicts it.
 
@@ -114,6 +112,76 @@ no PDF 1.x font program). `PdfFaceCffInfo` reads the table raw through
 OTF such as Nimbus Sans of `fonts-urw-base35`) has no ROS; its code is the
 glyph index. None is installed on the test machines: Windows 11 has no CFF
 face at all, WSL Ubuntu only Noto CJK.
+
+### CFF Faces: Type0 Only (the CFF series of R-28)
+
+A CFF face (`TPdfFontTrueType.Type0Only`: `GetCff <> pcNone`) draws all its
+text through its Type0 font. A simple font cannot take a CID-keyed CFF
+program (9.6.2.1, table 126), and its Latin text went through one before.
+- **Codes:** `GlyphCode(glyph)` is the CID of a CID-keyed face (`fCff.Cid`,
+  read once by `GetCff` on the WinAnsi font), the glyph index otherwise.
+  Every writer of Type0 codes goes through it - the three branches of
+  `AddShapedRun`, `AddGlyphFromChar` with the face that drew the glyph (a
+  fallback face its own way), `AddGlyphsOf` - and `PdfUsedCodes`, which
+  keys `/W` and `/ToUnicode`. Shaping, metrics and the subset request keep
+  glyph indexes
+- **Routing:** `SetPdfFont` puts the Type0 font in place of the WinAnsi font
+  of such a face before its equality check, the page resources and `Tf`
+  (`SetFont` still returns the WinAnsi font); `ShowText(PdfString)` leaves
+  its literal fast path and decodes with the document code page; the
+  unshaped writer keeps WinAnsi characters in the glyph string, one string
+  per run
+- **The WinAnsi font is internal:** created with `TPdfFont.Create(...,
+  ARegister = false)` (`fInternal`), it keeps the metrics, the descriptor,
+  the subset request and the font file, but its dictionary is not in the
+  xref - it frees it - and it writes no `/ToUnicode` stream
+- **Measurement:** `GetAnsiCharWidth` of the Unicode font asks the WinAnsi
+  font (it has no WinAnsi widths: the default width - also after Unicode
+  text with a glyf face); a CFF face measures with the widths of `/W` it is
+  drawn with (`GetWideCharWidth` skips the WinAnsi shortcut)
+- **Word spacing:** `Tw` applies to the one-byte code 32 only (9.3.3). A
+  Type0 glyph string with a word spacing is a `TJ` array with
+  `-1000 * WordSpace / FontSize` after each U+0020/U+00A0, the next line
+  written before it as `T*` (TJ has no next-line form). Spaces inside a
+  shaped run and `ShowGlyph` get no adjustment (open: HarfBuzz gives
+  clusters, Uniscribe not)
+- **q/Q:** `GSave` keeps the page's font, size and word spacing
+  (`fTextStateSaved`), `GRestore` puts them back as `Q` restores `Tf` and
+  `Tw` - the canvas cached them across `Q`, so a `Tf` could be skipped and
+  the adjustment computed from a stale size. `TPdfForm` keeps the page's
+  saved states apart from its own q/Q
+- **Subset:** kept only if every used glyph has the CID of the face in it,
+  under the same ROS (`PdfSubsetKeepsCids`, on `Request.Glyphs`); the whole
+  face otherwise. hb-subset keeps the charset as a prefix of the face's
+- **Program:** CID-keyed - the bare `CFF ` table (`SfntTableOf`) as
+  `/FontFile3 /Subtype /CIDFontType0C`, PDF 1.3, so also PDF/A-1 (whole face
+  there, no `/CIDSet` needed), the face's ROS as `/CIDSystemInfo`;
+  name-keyed - the OpenType font file, `/Subtype /OpenType`, PDF 1.6:
+  `CheckFontProgram` raises `FileFormat` before the header, refuses after it
+  (`HeaderFileFormat`, rechecked before the program is written, as
+  `EmbeddedTTF` may change) and under PDF/A-1. The descendant is a
+  `CIDFontType0` for every CFF face, read from the face - a whole or
+  unembedded one was a `CIDFontType2` before
+- **Names:** `/BaseFont` and `/FontName` are the program's name behind the
+  subset tag (tables 117, 122): the CIDFontName of a bare CFF
+  (`TPdfCffInfo.FontName`), the PostScript name (name ID 6,
+  `SfntPostScriptName`) of an OpenType font file, which may differ from its
+  CFF name. A space in a name is `#20` (7.3.5): `ESCAPENAME` lacked it
+- **Not conforming, left as before:** a CFF face the reader refuses
+  (malformed, CFF2) is embedded as an OpenType font file with glyph-index
+  codes. No name-keyed-to-CID-keyed rewriter (cairo and LuaTeX have one)
+- **Checked on macOS** (2026-10-10): U+9FA6 of Hiragino Sans GB (glyph
+  29064, CID 30284) rendered by PDFKit as CoreText draws it, and extracted
+  as U+9FA6. The synthetic face of `test_pdf_cff` (`FakeFace`,
+  `SwapInFakeFace`: cmap, head, hhea, hmtx, maxp, CFF and name tables built
+  in code, swapped into `FontProvider`) runs every path on every platform
+
+Found on the way: a run that switched to the fallback face mid-run wrote
+the fallback codes without an opening `<` (also in the original,
+`reference/mormot.ui.pdf.pas:5340`); and the `/ToUnicode` codespace of
+every Type0 font ran from the glyph of the first character to the glyph of
+the last - inverted whenever they were out of order. It is `<0000> <FFFF>`
+now, and `/W` and `/ToUnicode` are sorted by code, one entry per code.
 
 **Every `.ttc` face hinges on `TFreeTypeFont.SfntChecked`.** `GetFontData(0)`
 extracts the loaded face once and caches it in `Sfnt`; with `SfntChecked` set
@@ -194,24 +262,27 @@ Every TrueType font exists as **two linked instances**:
 
 | Instance | `fUnicode` | Purpose |
 |---|---|---|
-| WinAnsi font | `false` | Renders U+0000–U+00FF via `(text) Tj`; tracks actually-used chars |
-| Unicode font | `true` | CID/Identity-H font; renders non-Latin via `<XXXX> Tj`; loaded with full CMAP at creation |
+| WinAnsi font | `false` | Renders U+0000–U+00FF via `(text) Tj`; tracks actually-used chars - of a CFF face: internal, never selected, not written |
+| Unicode font | `true` | CID/Identity-H font; renders non-Latin via `<XXXX> Tj` - of a CFF face: all text; loaded with full CMAP at creation |
 
 Navigation:
 - `WinAnsiFont` — returns the WinAnsi instance (self or linked peer)
-- `UnicodeFont` — `nil` until first non-Latin char; created lazily by `CreateAssociatedUnicodeFont`
+- `UnicodeFont` — `nil` until first non-Latin char (of a CFF face: until
+  `SetPdfFont` selects it); created lazily by `CreateAssociatedUnicodeFont`
 
 Two rules of the written dictionaries, both found by PAC 2024 on tagged CJK and
 Arabic output (R-19, 2026-09-26):
-- **A WinAnsi peer with no used character** — a face that draws only CJK or
-  Arabic: `SetFont` writes `Tf` for it anyway, and it was written without
+- **A WinAnsi peer with no used character** — a glyf face that draws only
+  CJK or Arabic: `SetFont` writes `Tf` for it anyway, and it was written without
   `/FirstChar`, `/LastChar` and `/Widths`, which a simple TrueType font
   requires. It now gets `/FirstChar 32 /LastChar 32` and the width of the
   space. Dropping the peer altogether is on the roadmap.
 - **`/CIDToGIDMap /Identity`** is written for every `CIDFontType2`, not for
   PDF/A only: PDF/UA-1 7.21.3.2 wants it although Identity is the default. A
-  `CIDFontType0` (CFF) writes it for PDF/A only, as before.
-`TestTaggedUnicode` (`test_pdf_smoke`) asserts both.
+  `CIDFontType0` (CFF) never has one (table 117 defines it for Type2 only) -
+  since the CFF series; before, it was written for PDF/A.
+`TestTaggedUnicode` (`test_pdf_smoke`) asserts both for glyf faces,
+`EmbeddedPrograms` (`test_pdf_cff`) the CFF side.
 
 ### Key Fields (`pdf.pas:2611`)
 
@@ -222,7 +293,7 @@ Arabic output (R-19, 2026-09-26):
 | `fWinAnsiUsed` | `TSynAnsicharSet` | WinAnsi | 256-bit set of WinAnsi chars used (U+0020–U+00FF); drives `/FirstChar`–`/LastChar /Widths` |
 | `fDefaultWidth` | `cardinal` | WinAnsi | advance width of space char; used as PDF `/DW` for unregistered glyphs |
 | `fFace` | `IFontFace` | both | the face, shared by both instances (reference counted); `fFace.Handle` is the GDI `HFONT` or the `PFreeTypeFont` (Phase 1b; `fHGDI` before) |
-| `fFixedWidth` | `boolean` | WinAnsi | true = monospace; `/W` is omitted, all glyphs use `/DW` |
+| `fFixedWidth` | `boolean` | WinAnsi | true = monospace; outside PDF/A `/W` is omitted, all glyphs use `/DW` |
 | `fIsSymbolFont` | `boolean` | Unicode | true = Symbol charset (glyphs at U+F0xx) |
 
 ### TUsedWide Packed Record (`pdf.pas:2598`)
@@ -308,6 +379,7 @@ TPdfWrite.AddUnicodeHexText:
     → AddUnicodeHexTextNoUniScribe(PW, ttf, false, Canvas)
 
 AddUnicodeHexTextNoUniScribe (pdf.pas:5484):
+  (a CFF face: every character takes the non-Latin branch below)
   for each WideChar PW^:
     if WideCharToWinAnsi(PW^) >= 0:           // U+0000..U+00FF in Latin-1
       Add('(') … Add(') Tj')
@@ -348,9 +420,10 @@ AddUnicodeHexTextShaped:
 AddShapedRun(Run, WinAnsiTtf):
   SetPdfFont(WinAnsiTtf.UnicodeFont, FontSize)   // CID font, even with no glyph
   no glyph → done (Uniscribe: every glyph was zero-width)
-  no Advances (Uniscribe): '<' + WinAnsiTtf.GetAndMarkGlyphAsUsed(g)... + '> Tj'  // §8
+  no Advances (Uniscribe): '<' + GlyphCode(GetAndMarkGlyphAsUsed(g))... + '> Tj'  // §8
   Advances (HarfBuzz): GetAndMarkGlyphAsUsedWithWidth per glyph, then one Tj,
-    or a TJ where an offset or the hmtx width differs (§10, U-2)
+    or a TJ where an offset or the hmtx width differs (§10, U-2) - the codes
+    GlyphCode(g): the CID of a CID-keyed CFF face
 ```
 
 **Important:** a shaped run always goes to the Unicode (CID) font of the font
@@ -467,29 +540,25 @@ after `PrepareFontSubsets` (§3). Runs for **both** WinAnsi and Unicode instance
 ```
 /DW  = WinAnsiFont.fDefaultWidth               (space char width, e.g. 167 for Tahoma)
 
-WinAnsiFont.GetUsedGlyphs(keys, used)   characters (fUsedWide[]) and glyphs
-                                        without a code point (fShapedGlyph),
-                                        merged in key order (§8)
+PdfUsedCodes(WinAnsiFont)   GetUsedGlyphs: characters (fUsedWide[]) and
+                            glyphs without a code point (fShapedGlyph),
+                            merged in key order (§8); each glyph's code
+                            GlyphCode() (the CID of a CID-keyed CFF face),
+                            sorted by code, one entry per code - the
+                            smallest Unicode value wins
 /W array construction:
-  if WinAnsiFont.fFixedWidth:
+  if WinAnsiFont.fFixedWidth and not PDF/A:
     omit /W entirely (all glyphs use /DW)
   else:
-    for each entry of used[] with Used <> 0:
-      emit [Glyph, [Width]]
+    c [w1 w2 ...] per run of consecutive codes
 
-fFirstChar / fLastChar = .Glyph of the first / last entry in KEY order
-ToUnicode CMap codespace = <fFirstChar> <fLastChar>
-
-no entry at all: /W = [], codespace = <0000> <0000>
+ToUnicode CMap codespace = <0000> <FFFF>, bfchar sorted by code
 ```
 
-**Open (found 2026-10-08, older than the glyph list):** the codespace bounds
-are the glyphs of the first and last entry by key, not the smallest and
-largest glyph, so they need not enclose every glyph of the CMap - with Segoe
-UI's shaped glyphs 240, 241 and 4336 the codespace is `<0000> <00F1>` and
-glyph `<10F0>` lies outside (ISO 32000-1 9.10.3). Fix separately: bounds from
-the emitted glyphs, or `<0000> <FFFF>`, with a test that every mapping lies
-inside
+Until the CFF series of R-28 the codespace ran from the glyph of the first
+to the glyph of the last entry by key - with Segoe UI's shaped glyphs 240,
+241 and 4336 `<0000> <00F1>`, glyph `<10F0>` outside; the Windows CJK golden
+file had the inverted `<040D> <036B>`
 
 ### WinAnsi font branch (`pdf.pas:6671`): builds /Widths array, embeds font file
 
@@ -671,7 +740,8 @@ the `#0` (`platform-backends.md`, "The Windows paths").
 | CMAP coverage | Format-4 BMP subtable covers all CJK Unified Ideographs (U+4E00–U+9FFF) | Arabic Presentation Forms (U+FE70–U+FEFF) |
 
 With `UseUniscribe=false`, each CJK code point is looked up directly in the CMAP
-(`UnicodeFont.fUsedWideChar.IndexOf`), glyph ID written as `<XXXX> Tj`.
+(`UnicodeFont.fUsedWideChar.IndexOf`), its code `GlyphCode(glyph)` written
+as `<XXXX> Tj` - the glyph ID, or the CID of a CID-keyed CFF face.
 No GSUB shaping; `GetAndMarkGlyphAsUsed` is not called.
 
 **Linux/macOS CJK font note:** CJK-only fallback fonts (e.g. `Droid Sans Fallback`) do not
@@ -789,8 +859,8 @@ shaped glyphs 4096 apart, or a shaped glyph and a real character of that value,
 then shared one slot: the later one overwrote glyph and width of the earlier,
 which vanished from `/W`, `/ToUnicode` and the subset keep list, and the
 synthetic keys went to hb-subset as code points (`TestShapedGlyphKeys`). The
-merge keeps the old order, so `/W`, `/ToUnicode` and the codespace bounds are
-unchanged without such a collision. The subset may still change on POSIX:
+merge kept the old order (since the CFF series `/W` and `/ToUnicode` are
+sorted by code anyway). The subset may still change on POSIX:
 hb-subset no longer gets the synthetic keys as code points.
 
 **Still open:** `/ToUnicode` maps these shaped glyphs to the PUA values instead

@@ -6885,9 +6885,9 @@ begin
   end;
 end;
 
-// a CFF-flavoured sfnt carries a 'CFF ' table under the 'OTTO' signature, and
-// ISO 32000-1 9.9 puts it in /FontFile3 with /Subtype /OpenType - /FontFile2 is
-// for the glyf flavour only, and /Length1 is defined for that flavour alone
+// a CFF-flavoured sfnt carries a 'CFF ' table under the 'OTTO' signature:
+// ISO 32000-1 9.9 puts it in /FontFile3 (as /OpenType, or its bare CFF as
+// /CIDFontType0C) - /FontFile2 and /Length1 are for the glyf flavour only
 function PdfIsCffFace(const aTtf: PdfString): boolean;
   {$ifdef HASINLINE} inline;{$endif}
 begin

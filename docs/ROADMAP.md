@@ -217,6 +217,29 @@ v0.10.0 (2026-09-30).
   `TGDIPages.DrawBitmap` came out with wrong colors. And a pf1bit, pf4bit or
   pf8bit bitmap - gray in the LCL - raised `EPdfInvalidValue`; it is written
   indexed with a gray ramp now, on Windows (FPC) too
+- **Fixed (macOS, Linux): text in a CFF face** (the CFF series of R-28) -
+  the codes of a CID-keyed CFF face (the CJK faces of macOS and Linux) are
+  its CIDs, not its glyph indexes: Hiragino Sans GB drew another glyph for
+  92 BMP characters, e.g. U+9FA6. All text of a CFF face now goes through
+  its Type0 font (the Latin text went through a simple `/Type1` font, which
+  a CID-keyed CFF may not be); a CID-keyed face is embedded as its bare CFF
+  (`/CIDFontType0C`, PDF 1.3, so also PDF/A-1) with its ROS and its own
+  font name, a name-keyed one as an OpenType font file - `FileFormat` is
+  raised to PDF 1.6 for it before the header is written; PDF/A-1 refuses it,
+  and so does `SaveToStreamDirectEnd` after a lower header was streamed
+  (`EPdfInvalidOperation` - set `FileFormat := pdf16` before
+  `SaveToStreamDirectBegin`). Word spacing reaches such text as `TJ`
+  adjustments
+- **Fixed: font fallback in the middle of a run** wrote the fallback face's
+  codes without an opening `<`, breaking the content stream (also in the
+  original `mormot.ui.pdf`)
+- **Fixed: Type0 fonts** - the `/ToUnicode` codespace could be an inverted
+  range (it is `<0000> <FFFF>` now), `/W` and `/ToUnicode` are sorted by
+  code, one entry per code - of two characters drawn with one glyph, text
+  extraction now gives the smaller one (it gave the last listed); `TextWidth` after Unicode text measured with the default width;
+  `GRestore` did not restore the font, size and word spacing the canvas
+  tracks, so a `Tf` could be skipped after `Q`; a space in a PDF name is
+  written `#20`
 - **Coming with R-20** (announce when done): the preview and the GUI demos
   on Delphi
 
@@ -747,18 +770,22 @@ instead of being shown on a failure.
 mORMot2 fork and as a PR to Synopse; then drop the `{$ifdef OSPOSIX}` in
 `tests/pdfcheck.lpr`.
 
-### `/ToUnicode` Codespace Bounds — unprioritised
+### CFF Faces the Reader Refuses — unprioritised
 
-**Files:** `src/pdf/mormot.pdf.pas` (`PrepareForSaving`)
+A CFF face `PdfCffParse` refuses (`pcInvalid`: malformed, a ROS of CFF
+standard strings, CFF2) is embedded as an OpenType font file with
+glyph-index codes, as before the CFF series - not conforming (table 126 has
+no CFF2, and the codes of a CID-keyed program are CIDs). A policy is open:
+refuse before measuring, or substitute a face. No such face was found on
+the test machines.
 
-The codespace range of a Type0 font's `/ToUnicode` CMap is written as the
-glyphs of the first and last entry in key order, not the smallest and largest
-glyph, so it need not enclose every glyph the CMap maps (ISO 32000-1 9.10.3).
-Found in the Codex review of #20 (2026-10-08); older than that change: with
-Segoe UI's shaped glyphs 240, 241 and 4336 the range is `<0000> <00F1>` and
-`<10F0>` lies outside. **Fix:** the range from the emitted glyphs (or
-`<0000> <FFFF>`), with a test that every mapping lies inside it. Details:
-`fonts.md` §9.
+### Word Spacing in Shaped Runs — unprioritised
+
+`Tw` does not reach two-byte codes; the unshaped Type0 path writes a `TJ`
+adjustment after each space (the CFF series), `AddShapedRun` none. HarfBuzz
+gives the source cluster of each glyph, the Uniscribe adapter discards
+`logclust`; `ShowGlyph` has no source text at all. Matters for justified
+text in a CFF or complex-script face.
 
 ### Shaped Text: Real `/ToUnicode` and Vertical Offsets — after R-28 Phase 1
 
@@ -794,13 +821,12 @@ it on 2026-09-24.
 valid; `TestTaggedUnicode` asserts that no simple TrueType font lacks
 `/FirstChar` (fails 1/5 without the change).
 
-**The fix still open:** stop emitting the peer — write `Tf` only when text is
-shown, and leave an unused peer out of the page resources and the file. That
-touches the font lifecycle on every platform — see `fonts.md` §4 on the
-dual-instance model. Whether the `/Type1` peer of a CFF face needs the same
-stopgap (it too lacks `/Widths`) is to be checked with it. For CFF faces the
-peer goes anyway with the CFF series of R-28 (a PR of its own after
-Phase 2's bug-fix PR, `docs/REFACTORING.md`): a CID-keyed CFF may not be a simple `/Type1` at all.
+**The fix still open for glyf faces:** stop emitting the peer — write `Tf`
+only when text is shown, and leave an unused peer out of the page resources
+and the file. That touches the font lifecycle on every platform — see
+`fonts.md` §4 on the dual-instance model. **Done for CFF faces** (the CFF
+series of R-28): their WinAnsi font is internal, never selected and not
+written - a CID-keyed CFF may not be a simple `/Type1` at all.
 
 ### R-15b — Symbolic Fonts Are Not Subset on POSIX — unprioritised
 
@@ -814,22 +840,22 @@ cmap under the `F0xx` convention, and `AddToSubsetRequest` knows neither those
 code points nor the glyph IDs behind them, so hb-subset would drop every glyph
 the WinAnsi instance draws. Keeping the whole face is the safe answer there.
 
-Windows does not need the exclusion since R-15a: `AddWinAnsiGlyphs` resolves the
-characters to glyph indices through the face itself, which works whatever cmap
-the lookup goes through. Aligning the two therefore means **improving POSIX**,
+Windows does not need the exclusion since R-15a: FontSub resolves the
+characters to glyph indices through the face itself (`GetGlyphIndicesW`),
+which works whatever cmap the lookup goes through. Aligning the two therefore means **improving POSIX**,
 not restricting Windows — give `IFontProvider` a character-to-glyph lookup
 (FreeType has `FT_Get_Char_Index`) and let `AddToSubsetRequest` fill the glyph
 list on both platforms, then drop the exclusion.
 
-Neither side is verified: no demo and no test uses a symbolic face, so the
-Windows claim above is an argument from the code, not a measurement. Whoever
-takes this should add a demo or test with Wingdings/Symbol first.
+`TestSubsetSymbolFont` covers both sides where Wingdings, Webdings or Symbol
+is installed (Windows: subset by FontSub; macOS: Symbol embedded whole); no
+demo uses a symbolic face.
 
 Related and equally untested: what `CreateFontPackage` does with a **CFF** face
-on Windows. POSIX subsets CFF since R-15c; every face in the demos is
-`glyf`-based, so the Windows CFF path has never run. Whether PDF/A or tagged
-output impose extra `/FontFile3` conditions is likewise unchecked —
-`chinese_demo`, the only CFF case, is neither.
+on Windows - Windows 11 ships none; a failed subset embeds the whole face.
+The CFF series of R-28 tests the CFF programs, the PDF/A-1 refusal of a
+name-keyed face and the routing with a synthetic face (`test_pdf_cff`, not
+tagged); veraPDF and PAC on real CFF output (macOS) are still to run.
 
 ### `TGDIPages.ExportPDF` Ignores `Protect` and `Encrypt` — R-28 Phase 4
 
