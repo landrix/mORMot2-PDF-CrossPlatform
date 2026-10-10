@@ -3477,6 +3477,15 @@ procedure RenderMetaFile(C: TPdfCanvas; MF: TMetaFile; ScaleX: single = 1.0;
 implementation
 
 
+type
+  // reach the protected state of the engine classes, as TORHook does in
+  // mormot.core.json: no field, no override - only a cast of an instance
+  TPdfCanvasAccess = class(TPdfCanvas);
+  TPdfDocumentAccess = class(TPdfDocument);
+  TPdfObjectAccess = class(TPdfObject);
+  TPdfFontTrueTypeAccess = class(TPdfFontTrueType);
+
+
 
 {************ Shared types and functions }
 
@@ -12533,10 +12542,11 @@ end;
 function TPdfDocumentGdi.AddPage: TPdfPage;
 begin
   if (fCanvas <> nil) and
-     (fCanvas.fPage <> nil) then
-    TPdfPageGdi(fCanvas.fPage).FlushVclCanvas;
+     (TPdfCanvasAccess(fCanvas).fPage <> nil) then
+    TPdfPageGdi(TPdfCanvasAccess(fCanvas).fPage).FlushVclCanvas;
   result := inherited AddPage;
-  fCanvas.fContents.fSaveAtTheEnd := true; // as expected in SaveToStream() below
+  // as expected in SaveToStream() below
+  TPdfObjectAccess(TPdfObject(TPdfCanvasAccess(fCanvas).fContents)).fSaveAtTheEnd := true;
 end;
 
 constructor TPdfDocumentGdi.Create(AUseOutlines: boolean; ACodePage: integer;
@@ -12552,7 +12562,7 @@ end;
 
 function TPdfDocumentGdi.GetVclCanvas: TCanvas;
 begin
-  with TPdfPageGdi(fCanvas.fPage) do
+  with TPdfPageGdi(TPdfCanvasAccess(fCanvas).fPage) do
   begin
     if fVclCurrentCanvas = nil then
       CreateVclCanvas;
@@ -12563,8 +12573,8 @@ end;
 function TPdfDocumentGdi.GetVclCanvasSize: TSize;
 begin
   if (fCanvas <> nil) and
-     (fCanvas.fPage <> nil) then
-    with TPdfPageGdi(fCanvas.fPage) do
+     (TPdfCanvasAccess(fCanvas).fPage <> nil) then
+    with TPdfPageGdi(TPdfCanvasAccess(fCanvas).fPage) do
     begin
       if fVclCurrentCanvas = nil then
         CreateVclCanvas;
@@ -12611,14 +12621,15 @@ begin
   if fRawPages.Count > 0 then
   begin
     P := fRawPages.List[fRawPages.Count - 1];
-    if (P = fCanvas.fPage) and
+    if (P = TPdfCanvasAccess(fCanvas).fPage) and
        (P.fVclMetaFileCompressed = '') and
        (P.fVclCurrentMetaFile <> nil) and
        (P.fVclCurrentCanvas <> nil) then
     begin
       FreeAndNil(P.fVclCurrentCanvas); // manual P.SetVclCurrentMetaFile
       try
-        fCanvas.fContents.fSaveAtTheEnd := false; // force flush NOW
+        // force flush NOW
+        TPdfObjectAccess(TPdfObject(TPdfCanvasAccess(fCanvas).fContents)).fSaveAtTheEnd := false;
         RenderMetaFile(fCanvas, P.fVclCurrentMetaFile, 1, 1, 0, 0,
           fUseMetaFileTextPositioning, KerningHScaleBottom, KerningHScaleTop,
           fUseMetaFileTextClipping);
@@ -12640,8 +12651,8 @@ var
 begin
   assert(fVclCurrentMetaFile = nil);
   fVclCurrentMetaFile := TMetaFile.Create;
-  fVclCanvasSize.cx := MulDiv(PageWidth, fDoc.fScreenLogPixels, 72);
-  fVclCanvasSize.cy := MulDiv(PageHeight, fDoc.fScreenLogPixels, 72);
+  fVclCanvasSize.cx := MulDiv(PageWidth, fDoc.ScreenLogPixels, 72);
+  fVclCanvasSize.cy := MulDiv(PageHeight, fDoc.ScreenLogPixels, 72);
   fVclCurrentMetaFile.Width := fVclCanvasSize.cx;
   fVclCurrentMetaFile.Height := fVclCanvasSize.cy;
   if fVclMetaFileCompressed <> '' then
@@ -12661,7 +12672,8 @@ end;
 procedure TPdfPageGdi.CreateVclCanvas;
 begin
   SetVclCurrentMetaFile;
-  fVclCurrentCanvas := TMetaFileCanvas.Create(fVclCurrentMetaFile, fDoc.EmfDC);
+  fVclCurrentCanvas := TMetaFileCanvas.Create(fVclCurrentMetaFile,
+    TPdfDocumentAccess(fDoc).EmfDC);
 end;
 
 procedure TPdfPageGdi.FlushVclCanvas;
@@ -12714,16 +12726,16 @@ begin
     res.AddItem('Font', fFontList);
     res.AddItem('ProcSet',
       TPdfArray.CreateNames(nil, ['PDF', 'Text', 'ImageC']));
-    with aDoc.fCanvas do
+    with TPdfCanvasAccess(TPdfDocumentAccess(TPdfDocument(aDoc)).fCanvas) do
     begin
       old := fPage;
       fPage := P;
       try
         fPageFontList := fFontList;
         fContents := self;
-        fPage.SetPageHeight(h);
+        fPage.PageHeight := h; // SetPageHeight, protected
         fFactor := 1;
-        RenderMetaFile(aDoc.fCanvas, aMetaFile);
+        RenderMetaFile(TPdfDocumentAccess(TPdfDocument(aDoc)).fCanvas, aMetaFile);
       finally
         if old <> nil then
           SetPage(old);
@@ -12799,7 +12811,7 @@ type
     procedure SetFillColor(Value: integer);
     procedure SetStrokeColor(Value: integer);
   protected
-    Canvas: TPdfCanvas;
+    Canvas: TPdfCanvasAccess;
     // the pen/font/brush objects table, indexed like the THandleTable
     Obj: array of record
       case kind: integer of
@@ -13629,6 +13641,7 @@ procedure RenderMetaFile(C: TPdfCanvas; MF: TMetaFile; ScaleX, ScaleY,
   KerningHScaleBottom, KerningHScaleTop: single;
   TextClipping: TPdfCanvasRenderMetaFileTextClipping);
 var
+  A: TPdfCanvasAccess;
   E: TPdfEnum;
   R: TRect;
 begin
@@ -13638,20 +13651,24 @@ begin
   R.Bottom := MF.Height;
   if ScaleY = 0 then
     ScaleY := ScaleX; // if ScaleY is ommited -> assume symmetric coordinates
+  A := TPdfCanvasAccess(C);
   E := TPdfEnum.Create(C);
   try
-    C.fOffsetXDef := XOff;
-    C.fOffsetYDef := YOff;
-    C.fDevScaleX := ScaleX * C.fFactor;
-    C.fDevScaleY := ScaleY * C.fFactor;
-    C.fEmfBounds := R; // keep device rect
-    C.fUseMetaFileTextPositioning := TextPositioning;
-    C.fUseMetaFileTextClipping := TextClipping;
-    C.fKerningHScaleBottom := KerningHScaleBottom;
-    C.fKerningHScaleTop := KerningHScaleTop;
-    if C.fDoc.fPrinterPxPerInch.X = 0 then
-      C.fDoc.fPrinterPxPerInch := CurrentPrinterRes; // caching for major speedup
-    C.fPrinterPxPerInch := C.fDoc.fPrinterPxPerInch;
+    A.fOffsetXDef := XOff;
+    A.fOffsetYDef := YOff;
+    A.fDevScaleX := ScaleX * A.fFactor;
+    A.fDevScaleY := ScaleY * A.fFactor;
+    A.fEmfBounds := R; // keep device rect
+    A.fUseMetaFileTextPositioning := TextPositioning;
+    A.fUseMetaFileTextClipping := TextClipping;
+    A.fKerningHScaleBottom := KerningHScaleBottom;
+    A.fKerningHScaleTop := KerningHScaleTop;
+    with TPdfDocumentAccess(A.fDoc) do
+    begin
+      if fPrinterPxPerInch.X = 0 then
+        fPrinterPxPerInch := CurrentPrinterRes; // caching for major speedup
+      A.fPrinterPxPerInch := fPrinterPxPerInch;
+    end;
     with E.DC[0] do
     begin
       Int64(WinSize) := PInt64(@R.Right)^;
@@ -13660,9 +13677,9 @@ begin
     C.GSave;
     try
       {$ifdef FPC}
-      EnumEnhMetaFile(C.fDoc.EmfDC, MF.Handle, @EnumEMFFunc, E, Windows.RECT(R));
+      EnumEnhMetaFile(TPdfDocumentAccess(A.fDoc).EmfDC, MF.Handle, @EnumEMFFunc, E, Windows.RECT(R));
       {$else}
-      EnumEnhMetaFile(C.fDoc.EmfDC, MF.Handle, @EnumEMFFunc, E, TRect(R));
+      EnumEnhMetaFile(TPdfDocumentAccess(A.fDoc).EmfDC, MF.Handle, @EnumEMFFunc, E, TRect(R));
       {$endif FPC}
     finally
       C.GRestore;
@@ -13678,7 +13695,7 @@ end;
 
 constructor TPdfEnum.Create(ACanvas: TPdfCanvas);
 begin
-  Canvas := ACanvas;
+  Canvas := TPdfCanvasAccess(ACanvas);
   // set invalid colors or style -> force paint
   fFillColor := -1;
   fStrokeColor := -1;
@@ -13701,7 +13718,7 @@ var
   old: HGDIOBJ;
   dest: HDC;
 begin
-  dest := Canvas.fDoc.EmfDC;
+  dest := TPdfDocumentAccess(Canvas.fDoc).EmfDC;
   hf := CreateFontIndirectW(aLogFont.elfw.elfLogFont);
   old := SelectObject(dest, hf);
   GetTextMetrics(dest, tm);
@@ -14527,7 +14544,7 @@ begin
       else
         ss := Abs(Font.spec.cell) * fscaleY;
       // ensure this font is selected (very fast if was already selected)
-      {$ifdef USE_UNISCRIBE}fnt :={$endif} Canvas.SetFont(Canvas.fDoc.EmfDC, Font.LogFont, ss);
+      {$ifdef USE_UNISCRIBE}fnt :={$endif} Canvas.SetFont(TPdfDocumentAccess(Canvas.fDoc).EmfDC, Font.LogFont, ss);
       // calculate coordinates
       po := Canvas.fUseMetaFileTextPositioning;
       if (R.emrtext.fOptions and ETO_GLYPH_INDEX <> 0) then
@@ -14540,11 +14557,11 @@ begin
            fnt.InheritsFrom(TPdfFontTrueType) then
         begin
           // the face's HFONT, selected for this measure only
-          dest := Canvas.fDoc.EmfDC;
+          dest := TPdfDocumentAccess(Canvas.fDoc).EmfDC;
           old := SelectObject(dest,
-            HGDIOBJ(TPdfFontTrueType(fnt).fFace.Handle));
+            HGDIOBJ(TPdfFontTrueTypeAccess(fnt).fFace.Handle));
           if GetTextExtentPoint32W(dest, pointer(tmp), R.emrtext.nChars, siz) then
-            ws := (siz.cX * Canvas.fPage.fFontSize) / 1000;
+            ws := (siz.cX * Canvas.fPage.FontSize) / 1000;
           SelectObject(dest, old);
         end;
         {$endif USE_UNISCRIBE}
