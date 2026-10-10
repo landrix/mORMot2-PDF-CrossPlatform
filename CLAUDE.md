@@ -9,7 +9,7 @@ The original document (`reference/mormot.ui.pdf.pas`) was Windows/GDI-only; this
 
 **RULE: Read the relevant skill file(s) BEFORE doing anything else — before reading source files, before searching, before planning.**
 
-Skills contain complete, distilled API and architectural knowledge. The main source files are very large (mormot.ui.pdf.pas is 15,000+ lines, mormot.ui.report.pas 2,900+); reading them without necessity wastes context and time.
+Skills contain complete, distilled API and architectural knowledge. The main source files are very large (mormot.pdf.pas is 11,800+ lines, mormot.pdf.canvas.pas 3,000+, mormot.ui.report.pas 2,900+); reading them without necessity wastes context and time.
 
 | Skill | When to use |
 |---|---|
@@ -43,30 +43,31 @@ All files under `src/` require justification and user approval before reading.
 
 | File | Purpose | Status |
 |---|---|---|
-| `src/core/mormot.ui.pdf.pas` | PDF engine (cross-platform) | Production |
+| `src/pdf/mormot.pdf.pas` | PDF engine (cross-platform) | Production |
 | `src/core/mormot.ui.report.pas` | Report engine (`TGDIPages`) | Production |
 | `src/core/mormot.ui.reportpreview.pas` | Preview window and printing for `TGDIPages` (LCL) | Production |
 | `src/core/mormot.ui.pdfcanvas.pas` | TCanvas bridge (`TPdfDocumentVcl`) | Production |
-| `src/core/mormot.pdf.canvas.pas` | VCL/LCL adapter: `TBitmap`/`TGraphic` images; `TPdfDocumentGdi`, `RenderMetaFile`, printer helpers (Windows) - R-28 Phase 2 | Production |
-| `src/core/mormot.pdf.types.pas` | PDF types; former font type names as aliases of mormot.lib.core | Production |
+| `src/pdf/mormot.pdf.canvas.pas` | VCL/LCL adapter: `TBitmap`/`TGraphic` images; `TPdfDocumentGdi`, `RenderMetaFile`, printer helpers (Windows) - R-28 Phase 2 | Production |
+| `src/pdf/mormot.pdf.types.pas` | PDF types; former font type names as aliases of mormot.lib.core | Production |
 | mORMot2 `src/lib/mormot.lib.uniscribe.pas` | GDI backend (Windows), Uniscribe shaper and FontSub subsetter, beside their bindings | Production |
 | mORMot2 `src/lib/mormot.lib.freetype.pas` | FreeType2 backend (POSIX) | Production |
 | mORMot2 `src/lib/mormot.lib.harfbuzz.pas` | HarfBuzz shaper (RTL/complex scripts) and hb-subset subsetter (R-12) | Production |
-| `src/core/mormot.pdf.fpimage.pas` | FPImage bitmap adapter | Production |
+| `src/pdf/mormot.pdf.fpimage.pas` | FPImage bitmap adapter | Production |
 
 ## File Structure
 
 ```
 src/
-  core/
-    mormot.ui.pdf.pas           PDF objects, TPdfDocument, TPdfCanvas
+  pdf/                          the units under their trunk names (R-28)
+    mormot.pdf.pas              PDF objects, TPdfDocument, TPdfCanvas - no VCL/LCL
+    mormot.pdf.canvas.pas       TBitmap/TGraphic images, TPdfDocumentGdi and EMF (Windows)
+    mormot.pdf.defines.inc      the USE_* switches of mormot.pdf and mormot.pdf.canvas
+    mormot.pdf.types.pas        PDF types, aliases of the mormot.lib.core font types
+    mormot.pdf.fpimage.pas      Bitmap embedding (FPImage)
+  core/                         the units of the later phases
     mormot.ui.report.pas        TGDIPages — layout engine, no forms or printer
     mormot.ui.reportpreview.pas ShowReportPreview, PrintReport (LCL)
     mormot.ui.pdfcanvas.pas     TPdfDocumentVcl, TPdfVclCanvas
-    mormot.pdf.canvas.pas       TBitmap/TGraphic images, TPdfDocumentGdi and EMF (Windows)
-    mormot.pdf.defines.inc      the USE_* switches of mormot.ui.pdf and mormot.pdf.canvas
-    mormot.pdf.types.pas        PDF types, aliases of the mormot.lib.core font types
-    mormot.pdf.fpimage.pas      Bitmap embedding (FPImage)
     mormot.ui.core.pas          UI helper functions   } the trunk's units of mORMot2 src/ui (only the include path differs),
     mormot.ui.gdiplus.pas       GDI+ support (Windows) } which is not on the search path
   (the backends are mORMot2 units in src/lib: mormot.lib.uniscribe on Windows
@@ -130,7 +131,7 @@ TGDIPages (mormot.ui.report)          <- High-level layout
     | RenderPageToCanvas()
 TPdfDocumentVcl / TPdfVclCanvas       <- TCanvas bridge
     | automatic coordinate conversion
-TPdfCanvas / TPdfDocument (mormot.ui.pdf) <- Low-level PDF
+TPdfCanvas / TPdfDocument (mormot.pdf) <- Low-level PDF
     | via interfaces
 IFontProvider (→ IFontFace) / IFontEnumerator
     |                + optional: IFontShaper, IFontSubsetter
@@ -210,14 +211,14 @@ Details: `.claude/skills/report-engine.md` (Tables), `.claude/skills/call-graph.
 ### One Unit per Layer
 
 A program uses the unit of its layer: `mormot.ui.report` (layer 3),
-`mormot.ui.pdfcanvas` with `mormot.ui.pdf` (layer 2), `mormot.ui.pdf`
+`mormot.ui.pdfcanvas` with `mormot.pdf` (layer 2), `mormot.pdf`
 (layer 1). What a layer's API takes from below is re-exported by that layer —
 `mormot.ui.report` re-exports the PDF/A levels, `TPdfFileFormat`, `afr*` and
-`PdfMetadataFacturX`. Never put `mormot.ui.pdf` beside `mormot.ui.report`:
+`PdfMetadataFacturX`. Never put `mormot.pdf` beside `mormot.ui.report`:
 both declare `psA4`, and `TRect` differs from the LCL's, so the uses order
 decides which one a name means. Details: `.claude/skills/report-engine.md`
 
-The platform units need no `uses` in a program: `mormot.ui.pdf` brings
+The platform units need no `uses` in a program: `mormot.pdf` brings
 `mormot.lib.uniscribe`, or `mormot.lib.freetype` and `mormot.lib.harfbuzz`; a
 missing HarfBuzz library only leaves shaping or subsetting off, a missing
 `libfreetype` makes `TPdfDocument.Create` raise.
@@ -228,7 +229,7 @@ conditional. Details: `.claude/skills/platform-backends.md` (Registration)
 
 ### Platform Abstraction
 
-New platform feature: use interface method, do not add `{$ifdef}` inside `mormot.ui.pdf.pas`.
+New platform feature: use interface method, do not add `{$ifdef}` inside `mormot.pdf.pas`.
 Details on interfaces and registration: `.claude/skills/platform-backends.md`
 
 ## Coding Conventions (mORMot2 style)
@@ -394,7 +395,7 @@ itself is in each demo's `uReport.pas`; the form only passes its options.
   `mormot.defines.inc` include: FPC's project makes a console executable,
   dcc32 a GUI one without it, where `WriteLn` raises I/O error 105. Never put
   `mORMot2/src/ui` on a Delphi search path: it holds the original
-  `mormot.ui.pdf`/`report`/`core`
+  `mormot.ui.pdf`/`report`/`core` - the last two have the names of ours
 
 Current verification status per platform, and the open items in detail:
 `docs/ROADMAP.md`

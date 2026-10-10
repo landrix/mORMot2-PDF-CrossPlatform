@@ -1,7 +1,7 @@
 # PDF Engine — TPdfDocument / TPdfDocumentVcl
 
-Source: `src/core/mormot.ui.pdf.pas`, canvas bridge: `src/core/mormot.ui.pdfcanvas.pas`
-FPImage adapter: `src/core/mormot.pdf.fpimage.pas`
+Source: `src/pdf/mormot.pdf.pas`, canvas bridge: `src/core/mormot.ui.pdfcanvas.pas`
+FPImage adapter: `src/pdf/mormot.pdf.fpimage.pas`
 
 ## Two Entry Points
 
@@ -118,7 +118,7 @@ PDF_PERMISSION_NOCOPYNORPRINT // no copy and no print
 ## TPdfDocument — Direct PDF API
 
 ```pascal
-uses mormot.ui.pdf;
+uses mormot.pdf;
 
 Doc := TPdfDocument.Create;
 Doc.DefaultPaperSize := psA4;     // psA4, psLetter, psA3, psA5, ...
@@ -450,7 +450,7 @@ N := C.MeasureText('Long', MaxWidth);  // chars fitting within MaxWidth
 ## TPdfDocumentVcl — TCanvas-Compatible Wrapper
 
 ```pascal
-uses mormot.ui.pdf, mormot.ui.pdfcanvas;
+uses mormot.pdf, mormot.ui.pdfcanvas;
 
 Doc := TPdfDocumentVcl.Create;
 Doc.DefaultPaperSize := psA4;
@@ -635,7 +635,7 @@ Doc.EndStructContent;            // delegates to Canvas.EndStructContent
 ### TGDIPages integration
 
 ```pascal
-// In mormot.ui.report.pas — uses mormot.pdf.types (not mormot.ui.pdf)
+// In mormot.ui.report.pas — uses mormot.pdf.types (not mormot.pdf)
 Report.ExportPdfTagged   := True;    // default False — set BEFORE drawing:
                                      // it forces ExportPdfEmbeddedTTF / clears
                                      // ExportPdfStandardFonts, and those decide
@@ -659,7 +659,7 @@ Report.ExportPdfLanguage := 'en';    // default 'en'
 Requires compile-time flag `USE_PDFSECURITY`.
 
 ```pascal
-uses mormot.ui.pdf;
+uses mormot.pdf;
 
 var Enc: TPdfEncryption;
 // RC4-40 (PDF 1.3), RC4-128 (PDF 1.4), AES-128-CBC (PDF 1.6):

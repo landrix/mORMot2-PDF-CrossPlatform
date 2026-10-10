@@ -37,7 +37,7 @@ uses
   mormot.core.os,
   mormot.core.unicode,
   mormot.pdf.types,   // GetPdfFonts
-  mormot.ui.pdf,
+  mormot.pdf,
   mormot.ui.pdfcanvas;
 
 {$R *.res}
@@ -177,7 +177,7 @@ begin
     // UseUniscribe is the one shaping switch: Uniscribe on Windows, HarfBuzz
     // on Linux/macOS (if libharfbuzz loaded); RightToLeftText is the direction.
     // No conditional: an {$ifdef USE_UNISCRIBE} would compile the assignment
-    // away, as that symbol never leaves mormot.ui.pdf (ROADMAP R-16)
+    // away, as that symbol never leaves mormot.pdf (ROADMAP R-16)
     Doc.UseUniscribe := true;
 
     C.Font.Name  := SansFont;

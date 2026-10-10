@@ -2,7 +2,7 @@
 
 Demo 5 of the [learning path](../../docs/DEMOS.md#demo-5--chinese_demo).
 
-**Layer 2.** `uses mormot.ui.pdfcanvas, mormot.ui.pdf`, plus `mormot.pdf.types`
+**Layer 2.** `uses mormot.ui.pdfcanvas, mormot.pdf`, plus `mormot.pdf.types`
 for `GetPdfFonts`.
 
 Draws multi-line Chinese with `TPdfDocumentVcl` and embeds the face as a

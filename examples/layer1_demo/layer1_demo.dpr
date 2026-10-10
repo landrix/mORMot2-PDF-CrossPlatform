@@ -42,7 +42,7 @@ uses
   mormot.core.text,   // FormatUtf8
   mormot.core.unicode,
   mormot.pdf.types,   // TPdfStructRole, GetPdfFonts
-  mormot.ui.pdf;      // registers the platform backend itself
+  mormot.pdf;      // registers the platform backend itself
 
 const
   /// the face's full cmap, not the ANSI part only (fonts.md 10)

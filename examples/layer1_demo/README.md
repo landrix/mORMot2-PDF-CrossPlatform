@@ -2,8 +2,8 @@
 
 Demo 8 of the [learning path](../../docs/DEMOS.md#demo-8--layer1_demo).
 
-**Layer 1.** `uses mormot.ui.pdf`, plus `mormot.pdf.types` for the structure
-roles and `GetPdfFonts`. The platform backend comes with `mormot.ui.pdf`.
+**Layer 1.** `uses mormot.pdf`, plus `mormot.pdf.types` for the structure
+roles and `GetPdfFonts`. The platform backend comes with `mormot.pdf`.
 
 Draws a two-page tagged PDF with the low-level API only: no TCanvas bridge and
 no report engine. It was the first demo that built with Delphi 7 as well as
@@ -56,8 +56,9 @@ bin\d7\layer1_demo\layer1_demo.exe       &rem -> bin\d7\layer1_demo\layer1_demo_
 
 **One source for both IDEs.** `layer1_demo.dpr` is the program Lazarus opens
 through `layer1_demo.lpi` and Delphi opens directly. In the Delphi IDE, set
-the project's search path to this repository's `src\core`, plus mORMot2's
+the project's search path to this repository's `src\pdf` and `src\core`, plus mORMot2's
 `src\core`, `src\lib` (which holds the font backends) and `src\crypt`, and
 add mORMot2's `src` for `mormot.defines.inc`. Leave
-mORMot2's `src\ui` out: it holds the original `mormot.ui.pdf`, which Delphi
-would take instead of this project's without a word.
+mORMot2's `src\ui` out: it holds the original `mormot.ui.pdf`,
+`mormot.ui.report` and `mormot.ui.core` - the last two have the names of this
+project's units, which Delphi would take instead without a word.

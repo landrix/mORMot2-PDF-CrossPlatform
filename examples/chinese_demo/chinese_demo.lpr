@@ -31,7 +31,7 @@ uses
   mormot.core.os,
   mormot.core.unicode,
   mormot.pdf.types,   // GetPdfFonts
-  mormot.ui.pdf,
+  mormot.pdf,
   mormot.ui.pdfcanvas;
 
 {$R *.res}

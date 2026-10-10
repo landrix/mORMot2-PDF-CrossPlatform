@@ -19,7 +19,7 @@ interface
 
 {$I mormot.defines.inc}
 
-{$I mormot.pdf.defines.inc} // the same switches as mormot.ui.pdf
+{$I mormot.pdf.defines.inc} // the same switches as mormot.pdf
 
 uses
   {$ifdef OSWINDOWS}
@@ -60,7 +60,7 @@ uses
   mormot.core.text,
   mormot.core.buffers,
   mormot.pdf.types,
-  mormot.ui.pdf;
+  mormot.pdf;
 
 
 {$ifdef USE_GRAPHICS_UNIT}

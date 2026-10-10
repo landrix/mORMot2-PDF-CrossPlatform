@@ -28,7 +28,7 @@ uses
   mormot.core.text,     // FormatUtf8, FormatString
   mormot.core.unicode,  // StringToUtf8
   mormot.pdf.types,     // TPdfStructRole, GetPdfFonts
-  mormot.ui.pdf,
+  mormot.pdf,
   pdf_inspect,          // NormalizePdf, ComparePdfText
   test_pdf_subset;      // DrawUtf8Text
 

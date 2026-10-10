@@ -28,7 +28,7 @@ uses
   mormot.core.os,
   mormot.core.unicode,
   mormot.pdf.types,   // TPdfStructRole: psrH1, psrP, psrFigure, psrTable, ...
-  mormot.ui.pdf,
+  mormot.pdf,
   mormot.ui.pdfcanvas;
 
 { <demo>_<os>_<cpu>_<compiler>.pdf next to the executable, e.g.

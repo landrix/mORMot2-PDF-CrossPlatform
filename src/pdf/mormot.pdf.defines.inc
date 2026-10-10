@@ -1,5 +1,5 @@
 // the feature switches of the PDF engine and its VCL/LCL adapter
-// - included by mormot.ui.pdf and mormot.pdf.canvas after mormot.defines.inc,
+// - included by mormot.pdf and mormot.pdf.canvas after mormot.defines.inc,
 // so that both units see the same switches: USE_PDFSECURITY changes the
 // constructor of TPdfDocument and its descendants
 // - each can be switched off for a whole project with its NO_USE_* define

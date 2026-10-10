@@ -34,7 +34,7 @@ uses
   mormot.core.test,
   mormot.core.text,
   mormot.core.unicode,
-  mormot.ui.pdf,
+  mormot.pdf,
   {$ifdef PDF_HASVCLCANVAS}
   mormot.pdf.canvas,
   {$endif PDF_HASVCLCANVAS}
@@ -757,7 +757,7 @@ begin
     doc.AddPage;
     DrawSample(doc.VclCanvas);
     GdiCommentLink(doc.VclCanvas.Handle, 'page1',
-      {$ifdef FPC}mormot.ui.pdf.{$else}Types.{$endif}Rect(40, 30, 200, 50), false);
+      {$ifdef FPC}mormot.pdf.{$else}Types.{$endif}Rect(40, 30, 200, 50), false);
     pdf := SaveDoc(doc);
   finally
     doc.Free;
