@@ -751,6 +751,8 @@ type
     fDestStream: TStream;
     fDestStreamPosition: integer;
     fAddGlyphFont: (fNone, fMain, fFallBack);
+    // the glyph string is a TJ array: word spacing as adjustments
+    fAddGlyphTJ: boolean;
     fDoc: TPdfDocument;
     fTmp: TTemp512;
     /// internal Ansi->Unicode conversion, using the CodePage used in Create()
@@ -2018,6 +2020,13 @@ type
       read GetPageLandscape write SetPageLandscape;
   end;
 
+  /// the text state of a page TPdfCanvas.GSave keeps, as q saves it
+  TPdfTextStateSaved = record
+    Font: TPdfFont;
+    FontSize, WordSpace: single;
+  end;
+  TPdfTextStateSavedDynArray = array of TPdfTextStateSaved;
+
   /// access to the PDF Canvas, used to draw on the page
   TPdfCanvas = class
   protected
@@ -2056,6 +2065,10 @@ type
     fLineWidth: single;
     /// number of open GSave (q) on the current page
     fGStateDepth: integer;
+    // the text state of the page at each fGStateDepth: Q restores Tf and Tw,
+    // which the page caches - SetPdfFont skips a Tf by it, and the TJ
+    // adjustments of Type0 text are computed from it
+    fTextStateSaved: TPdfTextStateSavedDynArray;
     /// fGStateDepth + 1 at which ConcatToCTM changed the CTM, 0 if unchanged
     // - coordinates are then no longer in page space and cannot extend a
     // Figure's /BBox
@@ -2932,11 +2945,19 @@ type
     // (ISO 32000-1 9.7.4.2), the glyph index otherwise - the shaper, the
     // metrics and the subsetter keep using glyph indexes
     function GlyphCode(aGlyph: word): word;
+    // true for a CFF face: all its text goes through the Type0 font, its
+    // WinAnsi font is never selected - a simple font cannot take a CID-keyed
+    // CFF program (ISO 32000-1 9.6.2.1, table 126)
+    function Type0Only: boolean;
   public
     /// create the TrueType font object instance
     constructor Create(ADoc: TPdfDocument; AFontIndex: integer;
       AStyle: TPdfFontStyles; const ALogFont: TFontRequest;
       AWinAnsiFont: TPdfFontTrueType); reintroduce; overload;
+    /// the width of a WinAnsi character, from the WinAnsi font of the face
+    // - the Unicode font has no WinAnsi widths of its own, and is the page
+    // font after Unicode text or for all the text of a CFF face
+    function GetAnsiCharWidth(const AText: PdfString; APos: integer): integer; override;
     {$ifdef OSWINDOWS}
     /// create the TrueType font object instance from a Windows logical font
     // - the font is created from the whole LOGFONT (e.g. lfWidth), the rest
@@ -5519,8 +5540,30 @@ begin
     fnt.CreateAssociatedUnicodeFont;
   Canvas.SetPdfFont(fnt.UnicodeFont, Canvas.fPage.FontSize);
   if changed then
-    Add('<');
+  begin
+    // Tw applies to the one-byte code 32 only (ISO 32000-1 9.3.3): a word
+    // spacing becomes an adjustment after each space of a TJ array
+    fAddGlyphTJ := (Canvas.fPage.WordSpace <> 0) and
+                   (Canvas.fPage.FontSize > 0);
+    if fAddGlyphTJ then
+    begin
+      if (NextLine <> nil) and
+         NextLine^ then
+      begin
+        Add('T*'#10); // TJ has no form that moves to the next line first
+        NextLine^ := false;
+      end;
+      Add('[<');
+    end
+    else
+      Add('<');
+  end;
   AddHex4(fnt.GlyphCode(Glyph)); // the code of the face drawing it
+  if fAddGlyphTJ and
+     ((Char = ' ') or
+      (Char = #160)) then
+    Add('> ').AddWithSpace(-1000 * Canvas.fPage.WordSpace /
+      Canvas.fPage.FontSize).Add('<');
 end;
 
 procedure TPdfWrite.AddGlyphFlush(Canvas: TPdfCanvas; Ttf: TPdfFontTrueType;
@@ -5538,15 +5581,19 @@ begin
     NextLine^ := false;  // MoveToNextLine only once
   end;
   fAddGlyphFont := fNone;
-  Add('>').Add(SHOWTEXTCMD[nxtlin]);
+  if fAddGlyphTJ then
+    Add('>] TJ'#10) // NextLine was written before the array
+  else
+    Add('>').Add(SHOWTEXTCMD[nxtlin]);
 end;
 
 procedure TPdfWrite.AddUnicodeHexTextNoUniScribe(PW: PWideChar;
   Ttf: TPdfFontTrueType; NextLine: boolean; Canvas: TPdfCanvas);
 var
   ansi: integer;
-  symbolfont: boolean;
+  symbolfont, type0only: boolean;
 begin
+  type0only := false;
   if Ttf <> nil then
   begin
     if Ttf.UnicodeFont <> nil then
@@ -5554,6 +5601,7 @@ begin
     else
       symbolfont := Ttf.fIsSymbolFont;
     Ttf := Ttf.WinAnsiFont; // we expect the WinAnsi font in the code below
+    type0only := Ttf.Type0Only; // WinAnsi characters as glyphs too
   end
   else
     symbolfont := false;
@@ -5564,7 +5612,8 @@ begin
   while ansi <> 0 do
   begin
     if (ansi > 0) and
-       not symbolfont then
+       not symbolfont and
+       not type0only then
     begin
       // add WinAnsi-encoded chars as such
       if (Ttf <> nil) and
@@ -5601,7 +5650,9 @@ begin
       if ansi = 32 then
         if WideCharToWinAnsi(cardinal(PW[1])) < 0 then
           continue; // we allow one space inside Unicode text
-    until ansi >= 0;
+    until (ansi = 0) or
+          ((ansi > 0) and
+           not type0only);
     AddGlyphFlush(Canvas, Ttf, @NextLine);
   end;
 end;
@@ -6395,6 +6446,23 @@ begin
         result := 0; // no such glyph in the face: .notdef
 end;
 
+function TPdfFontTrueType.Type0Only: boolean;
+begin
+  result := GetCff <> pcNone;
+end;
+
+function TPdfFontTrueType.GetAnsiCharWidth(const AText: PdfString;
+  APos: integer): integer;
+begin
+  if Type0Only then // drawn as glyphs: the widths of /W
+    result := WinAnsiFont.GetWideCharWidth(
+      WideChar(WinAnsiConvert.AnsiToWide[ord(AText[APos])]))
+  else if fUnicode then
+    result := fWinAnsiFont.GetAnsiCharWidth(AText, APos)
+  else
+    result := inherited GetAnsiCharWidth(AText, APos);
+end;
+
 function TPdfFontTrueType.GlyphHmtxWidth(aGlyph: word): integer;
 // the advance width of aGlyph as the embedded font program states it
 var
@@ -6681,6 +6749,8 @@ begin
     exit;
   end;
   result := WideCharToWinAnsi(ord(aWideChar));
+  if Type0Only then
+    result := -1; // a WinAnsi character is drawn as a glyph too: its /W width
   if result >= 0 then
     if (fWinAnsiWidth <> nil) and
        (result >= 32) then
@@ -10015,6 +10085,16 @@ end;
 
 procedure TPdfCanvas.SetPdfFont(AFont: TPdfFont; ASize: single);
 begin
+  // the WinAnsi font of a CFF face stands for its Type0 font
+  if (AFont <> nil) and
+     (AFont.FTrueTypeFontsIndex <> 0) and
+     not AFont.Unicode and
+     TPdfFontTrueType(AFont).Type0Only then
+  begin
+    if TPdfFontTrueType(AFont).UnicodeFont = nil then
+      TPdfFontTrueType(AFont).CreateAssociatedUnicodeFont;
+    AFont := TPdfFontTrueType(AFont).UnicodeFont;
+  end;
   // check if this font is already the current font
   if (AFont = nil) or
      ((fPage.Font = AFont) and
@@ -10690,6 +10770,17 @@ end;
 
 procedure TPdfCanvas.GSave;
 begin
+  if fPage <> nil then
+  begin
+    if fGStateDepth >= length(fTextStateSaved) then
+      SetLength(fTextStateSaved, fGStateDepth + 8);
+    with fTextStateSaved[fGStateDepth] do
+    begin
+      Font := fPage.fFont;
+      FontSize := fPage.fFontSize;
+      WordSpace := fPage.fWordSpace;
+    end;
+  end;
   inc(fGStateDepth);
   if fContents <> nil then
     fContents.Writer.Add('q'#10);
@@ -10698,7 +10789,18 @@ end;
 procedure TPdfCanvas.GRestore;
 begin
   if fGStateDepth > 0 then
+  begin
     dec(fGStateDepth);
+    if (fPage <> nil) and
+       (fGStateDepth < length(fTextStateSaved)) then
+      with fTextStateSaved[fGStateDepth] do
+      begin
+        // as Q restores Tf and Tw
+        fPage.fFont := Font;
+        fPage.fFontSize := FontSize;
+        fPage.fWordSpace := WordSpace;
+      end;
+  end;
   if fCTMDepth > fGStateDepth + 1 then
     fCTMDepth := 0; // the q which saved the untransformed CTM was restored
   if fContents <> nil then
@@ -11008,8 +11110,10 @@ procedure TPdfCanvas.ShowText(const text: PdfString; NextLine: boolean);
 begin
   if (fContents <> nil) and
      (text <> '') then
-    if (fDoc.fCharSet = ANSI_CHARSET) or
-       IsAnsiCompatible(text) then
+    if ((fDoc.fCharSet = ANSI_CHARSET) or
+        IsAnsiCompatible(text)) and
+       ((fPage.fFont.FTrueTypeFontsIndex = 0) or
+        not TPdfFontTrueType(fPage.fFont).Type0Only) then
     begin
       if fPage.Font.Unicode and
          (fPage.fFont.FTrueTypeFontsIndex <> 0) then

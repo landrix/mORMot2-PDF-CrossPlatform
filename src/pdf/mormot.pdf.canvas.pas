@@ -1098,6 +1098,7 @@ var
   oldContents: TPdfStream;
   oldFactor, oldLineWidth: single;
   oldGState, oldCTM: integer;
+  oldTextState: TPdfTextStateSavedDynArray;
   oldNewPath, oldArtifact, oldPathArtifact, oldRtl: boolean;
 begin
   inherited Create(aDoc, true);
@@ -1127,6 +1128,7 @@ begin
     oldFactor := c.fFactor;
     oldLineWidth := c.fLineWidth;
     oldGState := c.fGStateDepth;
+    oldTextState := c.fTextStateSaved;
     oldCTM := c.fCTMDepth;
     oldNewPath := c.fNewPath;
     oldArtifact := c.fArtifactOpen;
@@ -1139,6 +1141,7 @@ begin
       c.fFactor := 1;
       c.fLineWidth := 1;
       c.fGStateDepth := 0;
+      c.fTextStateSaved := nil; // the form's q/Q, not the page's
       c.fCTMDepth := 0;
       // a path or an artifact the page left open is not the form's to close
       c.fNewPath := false;
@@ -1152,6 +1155,7 @@ begin
       c.fFactor := oldFactor;
       c.fLineWidth := oldLineWidth;
       c.fGStateDepth := oldGState;
+      c.fTextStateSaved := oldTextState;
       c.fCTMDepth := oldCTM;
       c.fNewPath := oldNewPath;
       c.fArtifactOpen := oldArtifact;

@@ -42,6 +42,7 @@ type
     procedure SubsetKeepsCids;
     procedure Type0CidPaths;
     procedure FallbackMidRun;
+    procedure Type0Routing;
     procedure SystemFaceCids;
   end;
 
@@ -62,6 +63,18 @@ function CffCharset0(const Cids: array of integer): RawByteString;
 
 /// a charset of format 1 or 2 from (first, nLeft) pairs
 function CffCharsetRanges(Format: integer; const Ranges: array of integer): RawByteString;
+
+const
+  /// the name of the synthetic face of SwapInFakeFace
+  FAKE_FACE = 'CffTestFace';
+
+/// a synthetic CID-keyed CFF face: space, W, i are CIDs 140, 136, 135
+function FakeRoutingFace: IFontFace;
+
+/// put a provider into FontProvider which gives Face for FAKE_FACE
+// - returns the provider before, to be put back; register the name with
+// TPdfDocument.AddTrueTypeFont(FAKE_FACE)
+function SwapInFakeFace(const Face: IFontFace): IFontProvider;
 
 
 implementation
@@ -248,7 +261,7 @@ begin
   fWhole := dir + data;
 end;
 
-// metrics of an em of 1000 units, advances of 500 for WinAnsi
+// metrics of an em of 1000 units, WinAnsi advances of 300 + 20 * (c mod 10)
 function TFakeFace.GetTextMetrics(out Metrics: TFontMetrics): boolean;
 begin
   FillChar(Metrics, SizeOf(Metrics), 0);
@@ -283,7 +296,7 @@ begin
   for i := 0 to high(Widths) do
   begin
     Widths[i].abcA := 0;
-    Widths[i].abcB := 500;
+    Widths[i].abcB := 300 + ((integer(FirstChar) + i) mod 10) * 20;
     Widths[i].abcC := 0;
   end;
   result := true;
@@ -368,7 +381,6 @@ begin
 end;
 
 const
-  FAKE_FACE = 'CffTestFace';
   FAKE_GLYPHS = 42;
 
 // 'head' of an em of 1000 units
@@ -1217,6 +1229,160 @@ begin
   s := copy(s, i, j - i);
   Check(PosEx(#10'<0064> Tj', s) > 0, 'the fallback string opened');
   CheckEqual(CountOf('<', s), CountOf('> Tj', s), 'every string opened and shown');
+end;
+
+var
+  // what the routing draws report back to Type0Routing
+  RoutedWidth: single;
+  RoutedText: PdfString;
+  RoutedNextLine: boolean;
+  RoutedWordSpace: single;
+  RoutedRestore: boolean;
+
+procedure DrawRouted(Pdf: TPdfDocument);
+begin
+  Pdf.Canvas.SetFont(FAKE_FACE, 12, [], PDF_DEFAULT_CHARSET);
+  RoutedWidth := Pdf.Canvas.TextWidth(RoutedText);
+  if RoutedWordSpace <> 0 then
+    Pdf.Canvas.SetWordSpace(RoutedWordSpace);
+  if RoutedRestore then
+  begin
+    // q, no word spacing at 24 pt, Q: the spacing and size of before apply
+    // again - q/Q are not allowed in a text object
+    Pdf.Canvas.GSave;
+    Pdf.Canvas.SetWordSpace(0);
+    Pdf.Canvas.SetFont(FAKE_FACE, 24, [], PDF_DEFAULT_CHARSET);
+    Pdf.Canvas.GRestore;
+  end;
+  Pdf.Canvas.BeginText;
+  Pdf.Canvas.MoveTextPoint(40, 700);
+  Pdf.Canvas.ShowText(RoutedText, RoutedNextLine);
+  Pdf.Canvas.EndText;
+end;
+
+// after Unicode text the page font is the Unicode font of the face
+procedure DrawUnicodeThenMeasure(Pdf: TPdfDocument);
+begin
+  Pdf.Canvas.SetFont(FAKE_FACE, 12, [], PDF_DEFAULT_CHARSET);
+  DrawUtf8Text(Pdf, 40, 700, ALIAS_TEXT);
+  RoutedWidth := Pdf.Canvas.TextWidth(RoutedText);
+end;
+
+// the text object of an inflated PDF, and every font a Tf of the PDF selects
+// has to be a Type0 font
+function TextObjectOfType0(const Pdf: RawUtf8; out Text: RawUtf8): boolean;
+var
+  i, j, k, o, e: PtrInt;
+  name, obj: RawUtf8;
+begin
+  result := false;
+  i := PosEx('BT'#10, Pdf);
+  j := PosEx('ET'#10, Pdf, i);
+  if (i = 0) or
+     (j = 0) then
+    exit;
+  Text := copy(Pdf, i, j - i);
+  k := PosEx(' Tf'#10, Pdf);
+  if k = 0 then
+    exit;
+  while k > 0 do
+  begin
+    o := k - 1;
+    while (o > 1) and
+          (Pdf[o] <> '/') do
+      dec(o);
+    name := copy(Pdf, o, k - o); // '/F1 12' of '/F1 12 Tf'
+    name := copy(name, 1, PosEx(' ', name) - 1);
+    o := PosEx('/Name' + name + '/', Pdf);
+    if o = 0 then
+      o := PosEx('/Name' + name + '>', Pdf);
+    if o = 0 then
+      exit;
+    e := PosEx('endobj', Pdf, o);
+    while (o > 1) and
+          not ((Pdf[o] = 'o') and
+               (copy(Pdf, o, 3) = 'obj')) do
+      dec(o);
+    obj := copy(Pdf, o, e - o);
+    if PosEx('/Subtype/Type0', obj) = 0 then
+      exit;
+    k := PosEx(' Tf'#10, Pdf, k + 3);
+  end;
+  result := true;
+end;
+
+function FakeRoutingFace: IFontFace;
+begin
+  // space, W, i: glyphs 1, 5, 6 - CIDs 140, 136, 135 ($8C, $88, $87); their
+  // WinAnsi widths 340, 440, 400, their /W widths 110, 150, 160
+  result := FakeFace([$20, $57, $69, $100], [1, 5, 6, 7],
+    CffTable(true, FAKE_GLYPHS, FakeCidCharset));
+end;
+
+function SwapInFakeFace(const Face: IFontFace): IFontProvider;
+begin
+  result := FontProvider;
+  FontProvider := TFakeProvider.Create(result, Face, FAKE_FACE);
+end;
+
+procedure TPdfCffTests.Type0Routing;
+var
+  face: IFontFace;
+  s, t: RawUtf8;
+begin
+  face := FakeRoutingFace;
+  // ASCII text as a PdfString: the Type0 font, CIDs, no literal string
+  RoutedText := 'Wi Wi';
+  RoutedNextLine := false;
+  RoutedWordSpace := 0;
+  s := FakeFacePdf(face, '', nil, DrawRouted);
+  Check(TextObjectOfType0(s, t), 'only the Type0 font selected');
+  Check(PosEx('<00880087008C00880087> Tj', t) > 0, 'ASCII in CIDs');
+  Check(PosEx('(', t) = 0, 'no literal string');
+  // the advances of /W (hmtx: 100 + 10 * glyph), as the glyphs are drawn,
+  // not the WinAnsi widths of the provider
+  CheckSame(RoutedWidth, (150 + 160 + 110 + 150 + 160) * 12 / 1000, 1E-4,
+    'TextWidth with the widths of /W');
+  Check(PosEx('/W [135[160 150]140[110]]', s) > 0, 'those widths in /W');
+  // the same text as UTF-16
+  s := FakeFacePdf(face, 'Wi Wi');
+  Check(TextObjectOfType0(s, t), 'only the Type0 font for UTF-16 text');
+  Check(PosEx('<00880087008C00880087> Tj', t) > 0, 'UTF-16 in CIDs');
+  // next line: the ' operator
+  RoutedNextLine := true;
+  s := FakeFacePdf(face, '', nil, DrawRouted);
+  Check(TextObjectOfType0(s, t), 'Type0 font, next line');
+  Check(PosEx('<00880087008C00880087> ''', t) > 0, 'next line and show');
+  // word spacing: Tw does not reach two-byte codes, a TJ adjustment does
+  RoutedNextLine := false;
+  RoutedWordSpace := 6; // -1000 * 6 / 12
+  s := FakeFacePdf(face, '', nil, DrawRouted);
+  Check(TextObjectOfType0(s, t), 'Type0 font, word spacing');
+  Check(PosEx('[<00880087008C> -500 <00880087>] TJ', t) > 0,
+    'word spacing after the space');
+  RoutedNextLine := true;
+  s := FakeFacePdf(face, '', nil, DrawRouted);
+  Check(TextObjectOfType0(s, t), 'Type0 font, word spacing, next line');
+  Check(PosEx('T*'#10'[<00880087008C> -500 <00880087>] TJ', t) > 0,
+    'next line before the array');
+  // Q restores Tw: the adjustment follows it
+  RoutedNextLine := false;
+  RoutedWordSpace := 6;
+  RoutedRestore := true;
+  s := FakeFacePdf(face, '', nil, DrawRouted);
+  RoutedRestore := false;
+  Check(TextObjectOfType0(s, t), 'Type0 font, restored word spacing');
+  Check(PosEx('[<00880087008C> -500 <00880087>] TJ', t) > 0,
+    'the word spacing and the size restored by Q');
+  Check(PosEx('/F1 24 Tf'#10'Q'#10, s) > 0, 'the size inside q/Q');
+  RoutedWordSpace := 0;
+  // a glyf face after Unicode text: the Unicode font measures WinAnsi text
+  // with the widths of the WinAnsi font, not its default width
+  RoutedWidth := 0;
+  FakeFacePdf(FakeFace([$20, $57, $69, $100, $101, $102, $103, $104],
+    [1, 5, 6, 7, 2, 3, 7, 41], ''), '', nil, DrawUnicodeThenMeasure);
+  CheckSame(RoutedWidth, (440 + 400 + 340 + 440 + 400) * 12 / 1000, 1E-4,
+    'TextWidth on the Unicode font');
 end;
 
 end.
