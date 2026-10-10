@@ -23,6 +23,9 @@ unit mormot.ui.pdfcanvas;
 interface
 
 {$I mormot.defines.inc}
+// the switches of mormot.pdf - USE_PDFSECURITY adds the AEncryption parameter
+// of TPdfDocumentVcl.Create; relative until this unit joins src/pdf (Phase 3)
+{$I ..\pdf\mormot.pdf.defines.inc}
 
 // the LCL declares the TCanvas drawing methods virtual, Delphi 7's VCL does
 // not: there they are reintroduced, and only a TPdfVclCanvas reference
