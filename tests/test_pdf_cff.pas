@@ -44,6 +44,7 @@ type
     procedure FallbackMidRun;
     procedure Type0Routing;
     procedure WinAnsiFontNotWritten;
+    procedure EmbeddedPrograms;
     procedure SystemFaceCids;
   end;
 
@@ -54,10 +55,13 @@ type
 // - Extra: DICT bytes put before the ROS when RosFirst is false, after it
 // otherwise
 // - OffSize: of the CharStrings INDEX, 0 for the smallest that fits
+// - Name: of the Name INDEX; Ordering, Supplement: of the ROS
 function CffTable(CidKeyed: boolean; Glyphs: integer;
   const Charset: RawByteString; RosReg: integer = 391; RosOrd: integer = 392;
   const Extra: RawByteString = ''; RosFirst: boolean = true;
-  OffSize: integer = 0): RawByteString;
+  OffSize: integer = 0; const Name: RawByteString = 'Test';
+  const Ordering: RawByteString = 'Identity';
+  Supplement: integer = 0): RawByteString;
 
 /// a charset of format 0 for the CIDs of glyphs 1, 2, ...
 function CffCharset0(const Cids: array of integer): RawByteString;
@@ -144,7 +148,8 @@ end;
 
 function CffTable(CidKeyed: boolean; Glyphs: integer;
   const Charset: RawByteString; RosReg, RosOrd: integer;
-  const Extra: RawByteString; RosFirst: boolean; OffSize: integer): RawByteString;
+  const Extra: RawByteString; RosFirst: boolean; OffSize: integer;
+  const Name, Ordering: RawByteString; Supplement: integer): RawByteString;
 var
   ros, dict, head, strings, glyph: RawByteString;
   charstrings: array of RawByteString;
@@ -152,7 +157,7 @@ var
 begin
   ros := '';
   if CidKeyed then
-    ros := DictInt(RosReg) + DictInt(RosOrd) + DictInt(0) + #12#30;
+    ros := DictInt(RosReg) + DictInt(RosOrd) + DictInt(Supplement) + #12#30;
   if RosFirst then
     dict := ros + Extra
   else
@@ -161,8 +166,8 @@ begin
   topsize := length(dict) + 12;
   if Charset = '' then
     dec(topsize, 6);
-  head := #1#0#4#1 + IndexOf(['Test']);
-  strings := IndexOf(['Adobe', 'Identity']);
+  head := #1#0#4#1 + IndexOf([Name]);
+  strings := IndexOf(['Adobe', Ordering]);
   // the Top DICT INDEX: 2 + 1 + 2 offsets + topsize
   charsetpos := length(head) + 5 + topsize + length(strings) + 2;
   if Charset <> '' then
@@ -443,16 +448,34 @@ begin
   result := Card16(0) + Card16(1) + Card16(3) + Card16(1) + Card32(12) + result;
 end;
 
+// a 'name' table of one PostScript name (ID 6), Windows Unicode
+function FakeNameTable(const PostScript: RawByteString): RawByteString;
+var
+  i: integer;
+  utf16: RawByteString;
+begin
+  utf16 := '';
+  for i := 1 to length(PostScript) do
+    utf16 := utf16 + #0 + PostScript[i];
+  result := Card16(0) + Card16(1) + Card16(6 + 12) +
+    Card16(3) + Card16(1) + Card16($409) + Card16(6) + Card16(length(utf16)) +
+    Card16(0) + utf16;
+end;
+
 // a face of the tables above, mapping Chars to Glyphs, with Cff if not ''
 // - Marker: the bytes of a table 'zzzz', to find the face in a PDF
+// - PostScript: the name ID 6 of a 'name' table, none if ''
 function FakeFace(const Chars, Glyphs: array of integer;
-  const Cff: RawByteString; const Marker: RawByteString = ''): TFakeFace;
+  const Cff: RawByteString; const Marker: RawByteString = '';
+  const PostScript: RawByteString = ''): TFakeFace;
 begin
   result := TFakeFace.Create;
   if Cff <> '' then
     result.AddTable('CFF ', Cff);
   if Marker <> '' then
     result.AddTable('zzzz', Marker);
+  if PostScript <> '' then
+    result.AddTable('name', FakeNameTable(PostScript));
   result.AddTable('cmap', FakeCmap(Chars, Glyphs));
   result.AddTable('head', FakeHead);
   result.AddTable('hhea', FakeHhea);
@@ -855,6 +878,11 @@ type
 
 // draw Text in the fake face, return the inflated PDF
 // - with a Subsetter, the face is embedded and subset by it
+var
+  // the PDF/A level of the documents of FakeFacePdf, and whether it embeds
+  FakePdfA: TPdfALevel;
+  FakeEmbedded: boolean;
+
 function FakeFacePdf(const Face: IFontFace; const Text: RawUtf8;
   const Subsetter: IFontSubsetter = nil; Draw: TFakeDraw = nil): RawUtf8;
 var
@@ -871,10 +899,10 @@ begin
   try
     stream := TMemoryStream.Create;
     try
-      pdf := TPdfDocument.Create(false, 0, pdfaNone);
+      pdf := TPdfDocument.Create(false, 0, FakePdfA);
       try
         pdf.CompressionMethod := cmNone;
-        pdf.EmbeddedTTF := Subsetter <> nil;
+        pdf.EmbeddedTTF := (Subsetter <> nil) or FakeEmbedded;
         pdf.AddTrueTypeFont(FAKE_FACE);
         pdf.AddPage;
         if Assigned(Draw) then
@@ -1000,39 +1028,47 @@ var
 begin
   // a subset whose charset gives the glyphs the CIDs of the face is embedded
   sub := TFakeSubsetter.Create(FakeFace(ALIAS_CHARS, ALIAS_GLYPHS,
-    CffTable(true, FAKE_GLYPHS, FakeCidCharset), 'SUBSET-SAME-CIDS').fWhole);
+    CffTable(true, FAKE_GLYPHS, FakeCidCharset, 391, 392, '', true, 0,
+    'SUBSET-SAME-CIDS')).fWhole);
   keep := sub;
   s := FakeFacePdf(FakeFace(ALIAS_CHARS, ALIAS_GLYPHS,
-    CffTable(true, FAKE_GLYPHS, FakeCidCharset), 'THE-WHOLE-FACE'),
+    CffTable(true, FAKE_GLYPHS, FakeCidCharset, 391, 392, '', true, 0,
+    'THE-WHOLE-FACE')),
     ALIAS_TEXT, keep);
   CheckEqual(sub.Called, 1, 'subset asked');
   Check(PosEx('SUBSET-SAME-CIDS', s) > 0, 'the subset embedded');
   Check(PosEx('THE-WHOLE-FACE', s) = 0, 'not the face');
   // other CIDs: the content would draw other glyphs - the face is embedded
   sub := TFakeSubsetter.Create(FakeFace(ALIAS_CHARS, ALIAS_GLYPHS,
-    CffTable(true, FAKE_GLYPHS, FakeCidCharset(142)), 'SUBSET-OTHER-CIDS').fWhole);
+    CffTable(true, FAKE_GLYPHS, FakeCidCharset(142), 391, 392, '', true, 0,
+    'SUBSET-OTHER-CIDS')).fWhole);
   keep := sub;
   s := FakeFacePdf(FakeFace(ALIAS_CHARS, ALIAS_GLYPHS,
-    CffTable(true, FAKE_GLYPHS, FakeCidCharset), 'THE-WHOLE-FACE'),
+    CffTable(true, FAKE_GLYPHS, FakeCidCharset, 391, 392, '', true, 0,
+    'THE-WHOLE-FACE')),
     ALIAS_TEXT, keep);
   CheckEqual(sub.Called, 1, 'subset asked');
   Check(PosEx('SUBSET-OTHER-CIDS', s) = 0, 'not the subset');
   Check(PosEx('THE-WHOLE-FACE', s) > 0, 'the face embedded');
   // a subset that is no CID-keyed CFF any more
   sub := TFakeSubsetter.Create(FakeFace(ALIAS_CHARS, ALIAS_GLYPHS,
-    CffTable(false, FAKE_GLYPHS, ''), 'SUBSET-NAME-KEYED').fWhole);
+    CffTable(false, FAKE_GLYPHS, '', 391, 392, '', true, 0,
+    'SUBSET-NAME-KEYED')).fWhole);
   keep := sub;
   s := FakeFacePdf(FakeFace(ALIAS_CHARS, ALIAS_GLYPHS,
-    CffTable(true, FAKE_GLYPHS, FakeCidCharset), 'THE-WHOLE-FACE'),
+    CffTable(true, FAKE_GLYPHS, FakeCidCharset, 391, 392, '', true, 0,
+    'THE-WHOLE-FACE')),
     ALIAS_TEXT, keep);
   Check(PosEx('SUBSET-NAME-KEYED', s) = 0, 'not the name-keyed subset');
   Check(PosEx('THE-WHOLE-FACE', s) > 0, 'the face embedded instead');
   // the same CIDs, but glyph 41 left out: CID 100 would draw nothing
   sub := TFakeSubsetter.Create(FakeFace(ALIAS_CHARS, ALIAS_GLYPHS,
-    CffTable(true, 8, FakeCidCharset(141, 8)), 'SUBSET-TOO-SHORT').fWhole);
+    CffTable(true, 8, FakeCidCharset(141, 8), 391, 392, '', true, 0,
+    'SUBSET-TOO-SHORT')).fWhole);
   keep := sub;
   s := FakeFacePdf(FakeFace(ALIAS_CHARS, ALIAS_GLYPHS,
-    CffTable(true, FAKE_GLYPHS, FakeCidCharset), 'THE-WHOLE-FACE'),
+    CffTable(true, FAKE_GLYPHS, FakeCidCharset, 391, 392, '', true, 0,
+    'THE-WHOLE-FACE')),
     ALIAS_TEXT, keep);
   Check(PosEx('SUBSET-TOO-SHORT', s) = 0, 'not a subset without glyph 41');
   Check(PosEx('THE-WHOLE-FACE', s) > 0, 'the face embedded for it');
@@ -1400,6 +1436,127 @@ begin
   // a glyf face keeps its WinAnsi font
   s := FakeFacePdf(FakeFace([$20, $57, $69, $100], [1, 5, 6, 7], ''), 'Wi Wi');
   Check(PosEx('WinAnsiEncoding', s) > 0, 'the simple font of a glyf face');
+end;
+
+// a name-keyed face drawn after SaveToStreamDirectBegin wrote PDF 1.3, and
+// embedded once EmbeddedTTF is set before SaveToStreamDirectEnd: true if
+// SaveToStreamDirectEnd refuses it
+function StreamedLateEmbedding: boolean;
+var
+  previous: IFontProvider;
+  stream: TMemoryStream;
+  pdf: TPdfDocument;
+begin
+  result := false;
+  previous := SwapInFakeFace(FakeFace(ALIAS_CHARS, ALIAS_GLYPHS,
+    CffTable(false, FAKE_GLYPHS, '')));
+  try
+    stream := TMemoryStream.Create;
+    try
+      pdf := TPdfDocument.Create(false, 0, pdfaNone);
+      try
+        pdf.EmbeddedTTF := false;
+        pdf.AddTrueTypeFont(FAKE_FACE);
+        pdf.SaveToStreamDirectBegin(stream);
+        pdf.AddPage;
+        pdf.Canvas.SetFont(FAKE_FACE, 12, [], PDF_DEFAULT_CHARSET);
+        DrawUtf8Text(pdf, 40, 700, ALIAS_TEXT);
+        pdf.EmbeddedTTF := true;
+        try
+          pdf.SaveToStreamDirectEnd;
+        except
+          on EPdfInvalidOperation do
+            result := true;
+        end;
+      finally
+        pdf.Free;
+      end;
+    finally
+      stream.Free;
+    end;
+  finally
+    FontProvider := previous;
+  end;
+end;
+
+procedure TPdfCffTests.EmbeddedPrograms;
+var
+  s: RawUtf8;
+  keep: IFontSubsetter;
+  raised: boolean;
+begin
+  // a CID-keyed face: its bare 'CFF ' table as CIDFontType0C, its ROS
+  keep := TFakeSubsetter.Create(FakeFace(ALIAS_CHARS, ALIAS_GLYPHS,
+    CffTable(true, FAKE_GLYPHS, FakeCidCharset, 391, 392, '', true, 0,
+    'CID-KEYED', 'Japan1', 6)).fWhole);
+  s := FakeFacePdf(FakeFace(ALIAS_CHARS, ALIAS_GLYPHS,
+    CffTable(true, FAKE_GLYPHS, FakeCidCharset, 391, 392, '', true, 0,
+    'CID-KEYED', 'Japan1', 6)), ALIAS_TEXT, keep);
+  Check(PosEx('/FontFile3', s) > 0, 'FontFile3');
+  Check(PosEx('/Subtype/CIDFontType0C', s) > 0, 'the bare CFF program');
+  Check(PosEx('stream'#13#10#1#0#4, s) + PosEx('stream'#10#1#0#4, s) > 0,
+    'the stream is the CFF table');
+  Check(PosEx('OTTO', s) = 0, 'no OpenType font file');
+  Check(PosEx('/Subtype/CIDFontType0/', s) > 0, 'a CIDFontType0');
+  Check(PosEx('/CIDToGIDMap', s) = 0, 'no CIDToGIDMap for CFF');
+  Check(PosEx('/CIDSystemInfo<</Supplement 6/Ordering(Japan1)/Registry(Adobe)>>',
+    s) > 0, 'the ROS of the face');
+  Check(PosEx('%PDF-1.3', s) = 1, 'PDF 1.3 is enough');
+  Check(PosEx('+CID-KEYED/', s) > 0, 'the name of the program, behind the tag');
+  Check(PosEx(FAKE_FACE, s) = 0, 'not the family name');
+  // a space in it is #20 in a PDF name; the PostScript name of the sfnt is
+  // not the bare CFF's
+  keep := TFakeSubsetter.Create(FakeFace(ALIAS_CHARS, ALIAS_GLYPHS,
+    CffTable(true, FAKE_GLYPHS, FakeCidCharset, 391, 392, '', true, 0,
+    'CID KEYED'), '', 'Other-PS').fWhole);
+  s := FakeFacePdf(FakeFace(ALIAS_CHARS, ALIAS_GLYPHS,
+    CffTable(true, FAKE_GLYPHS, FakeCidCharset, 391, 392, '', true, 0,
+    'CID KEYED'), '', 'Other-PS'), ALIAS_TEXT, keep);
+  Check(PosEx('+CID#20KEYED/', s) > 0, 'the space escaped');
+  Check(PosEx('Other-PS', s) = 0, 'the CIDFontName, not the PostScript name');
+  // a name-keyed face: the OpenType font file, PDF 1.6
+  FakeEmbedded := true;
+  try
+    s := FakeFacePdf(FakeFace(ALIAS_CHARS, ALIAS_GLYPHS,
+      CffTable(false, FAKE_GLYPHS, ''), '', 'Name#Keyed-PS'), ALIAS_TEXT);
+  finally
+    FakeEmbedded := false;
+  end;
+  Check(PosEx('/Subtype/OpenType', s) > 0, 'the OpenType font file');
+  Check(PosEx('/Subtype/CIDFontType0/', s) > 0, 'a CIDFontType0 too');
+  Check(PosEx('/CIDToGIDMap', s) = 0, 'no CIDToGIDMap');
+  Check(PosEx('/Registry(Adobe)', s) > 0, 'Adobe-Identity');
+  Check(PosEx('%PDF-1.6', s) = 1, 'PDF 1.6 for an OpenType font file');
+  Check(PosEx('Name#23Keyed-PS/', s) > 0,
+    'the PostScript name of the font file, its # escaped');
+  Check(PosEx('Test/', s) = 0, 'not the name in its CFF');
+  // which PDF/A-1 (PDF 1.4) cannot give
+  FakePdfA := pdfa1B;
+  raised := false;
+  try
+    try
+      FakeFacePdf(FakeFace(ALIAS_CHARS, ALIAS_GLYPHS,
+        CffTable(false, FAKE_GLYPHS, '')), ALIAS_TEXT);
+    except
+      on EPdfInvalidOperation do
+        raised := true;
+    end;
+  finally
+    FakePdfA := pdfaNone;
+  end;
+  Check(raised, 'PDF/A-1 refuses a name-keyed CFF face');
+  // embedding switched on after the header: PDF 1.3 was written
+  Check(StreamedLateEmbedding, 'an OpenType font file after a 1.3 header');
+  // a glyf face as before
+  FakeEmbedded := true;
+  try
+    s := FakeFacePdf(FakeFace(ALIAS_CHARS, ALIAS_GLYPHS, ''), ALIAS_TEXT);
+  finally
+    FakeEmbedded := false;
+  end;
+  Check(PosEx('/FontFile2', s) > 0, 'glyf: FontFile2');
+  Check(PosEx('/Subtype/CIDFontType2/', s) > 0, 'glyf: CIDFontType2');
+  Check(PosEx('/CIDToGIDMap/Identity', s) > 0, 'glyf: CIDToGIDMap');
 end;
 
 end.

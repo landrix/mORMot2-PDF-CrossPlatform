@@ -70,6 +70,10 @@ type
     function SansFont: string;
     // check the font file of every installed .ttc face of a list against the
     // face the platform selects: cmap and hhea
+    // the bare CFF program of a CID-keyed face (CheckTtcFaces): 3 checks, as
+    // the three of a font file for the other faces
+    procedure CheckBareCff(const aFont, aSample: RawUtf8;
+      const aProgram: RawByteString; const aName: string);
     procedure CheckTtcFaces(aWholeTtf: boolean; aPdfA: TPdfALevel;
       aSubset: boolean; const aWhat: string);
   published
@@ -267,7 +271,8 @@ var
   p, q, len: PtrInt;
 begin
   { the glyf flavour has /Length1, a CFF face (/FontFile3) /Subtype
-    /OpenType instead: then its /Length, read from the stream dictionary }
+    /OpenType or /CIDFontType0C (the bare CFF of a CID-keyed face) instead:
+    then its /Length, read from the stream dictionary }
   result := '';
   p := Pos(RawByteString('/Length1 '), Pdf);
   if p > 0 then
@@ -275,6 +280,8 @@ begin
   else
   begin
     p := Pos(RawByteString('/OpenType'), Pdf);
+    if p = 0 then
+      p := Pos(RawByteString('/CIDFontType0C'), Pdf);
     if p = 0 then
       exit;
     q := PosEx(RawByteString(#10'stream'#10), Pdf, p);
@@ -956,6 +963,41 @@ begin
   end;
 end;
 
+procedure TPdfSubsetEngineTests.CheckBareCff(const aFont, aSample: RawUtf8;
+  const aProgram: RawByteString; const aName: string);
+var
+  cmap: RawByteString;
+  face, prog: TPdfCffInfo;
+  facecff: RawByteString;
+  i, g: integer;
+  o, l: cardinal;
+  same: boolean;
+begin
+  cmap := PlatformFontTable(aFont, 'cmap');
+  facecff := PlatformFontTable(aFont, 'CFF '); // in an sfnt of its own
+  if SfntFindTable(facecff, 'CFF ', o, l) then
+    facecff := copy(facecff, o + 1, l)
+  else
+    facecff := '';
+  Check(PdfCffParse(pointer(aProgram), length(aProgram), prog) = pcCidKeyed,
+    aName + ': one CID-keyed CFF program, not a collection');
+  Check(PdfCffParse(pointer(facecff), length(facecff), face) = pcCidKeyed,
+    aName + ': the face is CID-keyed');
+  same := (prog.Registry = face.Registry) and
+          (prog.Ordering = face.Ordering) and
+          (prog.Supplement = face.Supplement);
+  for i := 1 to length(aSample) do
+  begin
+    g := SfntCmapLookup(cmap, ord(aSample[i]));
+    same := same and
+            (g > 0) and
+            (g < length(prog.Cid)) and
+            (g < length(face.Cid)) and
+            (prog.Cid[g] = face.Cid[g]);
+  end;
+  Check(same, aName + ': the program gives the glyphs of the text their CIDs');
+end;
+
 procedure TPdfSubsetEngineTests.CheckTtcFaces(aWholeTtf: boolean;
   aPdfA: TPdfALevel; aSubset: boolean; const aWhat: string);
 const
@@ -997,6 +1039,12 @@ begin
       aPdfA);
     face := FirstFontFile(pdf);
     Check((FirstSubsetTag(pdf) <> '') = aSubset, name + ': subset or whole');
+    if copy(face, 1, 1) = #1 then
+    begin
+      // the bare CFF of a CID-keyed face: its glyphs and name, not its cmap
+      CheckBareCff(TTC_FONTS[f], SAMPLE, face, name);
+      continue;
+    end;
     Check((copy(face, 1, 4) = #0#1#0#0) or
           (copy(face, 1, 4) = 'OTTO'), name + ': one face, not a collection');
     same := true;
