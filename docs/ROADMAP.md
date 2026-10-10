@@ -820,6 +820,18 @@ on Windows. POSIX subsets CFF since R-15c; every face in the demos is
 output impose extra `/FontFile3` conditions is likewise unchecked —
 `chinese_demo`, the only CFF case, is neither.
 
+### `TGDIPages.ExportPDF` Ignores `Protect` and `Encrypt` — R-28 Phase 4
+
+`ExportPDF(FileName, Protect, Encrypt, ..)` takes both flags and passes
+neither on; `ExportPdfStream` creates its `TPdfDocumentVcl` without a
+`TPdfEncryption` (`src/core/mormot.ui.report.pas`, found by Codex while
+deciding the bug fixes of Phase 2). The trunk's `TGdiPages` has
+`ExportPdfEncryptionLevel`, `ExportPdfEncryptionUserPassword`,
+`ExportPdfEncryptionOwnerPassword` and `ExportPdfEncryptionPermissions` and passes
+`TPdfEncryption.New(..)`. Needs a password and permission policy; until
+then a requested protection should be refused rather than ignored. The
+bridge's own encryption parameter is scheduled for Phase 2's bug-fix PR.
+
 ### R-10 — Table Row Pagination — unprioritised
 
 **Effort:** 2–3 days | **File:** `src/core/mormot.ui.report.pas`
