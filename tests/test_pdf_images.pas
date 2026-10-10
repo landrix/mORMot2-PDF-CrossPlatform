@@ -263,6 +263,8 @@ var
   buf, buf2: RawByteString;
   px, px2: TPdfImagePixels;
   n1, n2, n3, n4, n5, n6: PdfString;
+  pdf: RawByteString;
+  txt, err: RawUtf8;
 begin
   doc := TPdfDocument.Create;
   try
@@ -283,11 +285,19 @@ begin
     px.HasColorKey := true;
     n6 := doc.CreateOrGetImage(px);
     Check(n6 <> n5, 'the same bytes with a color key: another image');
+    // a color key for 32-bit rows, which the TBitmap adapter never sets
+    px := RawPixels(ipfBgrx32, buf);
+    px.HasColorKey := true;
+    px.ColorKey := $C8140A; // R 10, G 20, B 200
+    Check(doc.CreateOrGetImage(px) <> '', 'BGRx with a color key');
     doc.ForceNoBitmapReuse := true;
     n4 := doc.CreateOrGetImage(px);
+    pdf := SaveToString(doc);
   finally
     doc.Free;
   end;
+  txt := NormalizePdf(pdf, err);
+  CheckEqual(CountOf('/Mask[10 10 20 20 200 200]', txt), 2, 'the key of BGRx, R G B');
   Check(n1 <> '', 'named');
   CheckEqual(n2, n1, 'the same pixels in another buffer: one image');
   Check(n3 <> n1, 'another palette: another image');
@@ -305,7 +315,7 @@ begin
   doc := TPdfDocument.Create;
   try
     doc.AddPage;
-    for i := 0 to 9 do
+    for i := 0 to 10 do
     begin
       if i in [4, 5, 6] then
         px := RawPixels(ipfIndexed8, buf)
@@ -321,6 +331,7 @@ begin
         6: px.HasColorKey := true;
         7: px.Palette := buf; // no palette with RGB
         8: px.Stride := High(PtrInt) div 2; // (Height - 1) * Stride overflows
+        10: px.Height := 0;
       else
         px.Stride := Low(PtrInt);
       end;
@@ -367,6 +378,7 @@ begin
     name1 := doc.RegisterImage(img);
     img := TPdfImage.CreateJpeg(doc, pointer(jpg), length(jpg), 8, 6, true);
     name2 := doc.RegisterImage(img);
+    CheckEqual(doc.RegisterImage(img), name2, 'registered twice: its name');
     b := Box(40, 700, 80, 60);
     doc.DrawImage(name1, @b);
     b := Box(140, 700, 80, 60);
@@ -509,6 +521,38 @@ begin
   end;
 end;
 
+// the rows of B as the image stream must hold them, read from ScanLine[]:
+// R, G, B of each pixel of Bytes bytes (B, G, R first), or the index bytes
+function ScanRgb(B: TBitmap; Bytes: integer): RawByteString;
+var
+  x, y: integer;
+  p: PByteArray;
+  d: PAnsiChar;
+begin
+  SetLength(result, B.Width * B.Height * 3);
+  d := pointer(result);
+  for y := 0 to B.Height - 1 do
+  begin
+    p := B.ScanLine[y];
+    for x := 0 to B.Width - 1 do
+    begin
+      d[0] := AnsiChar(p[x * Bytes + 2]);
+      d[1] := AnsiChar(p[x * Bytes + 1]);
+      d[2] := AnsiChar(p[x * Bytes]);
+      inc(d, 3);
+    end;
+  end;
+end;
+
+function ScanIndexes(B: TBitmap): RawByteString;
+var
+  y: integer;
+begin
+  SetLength(result, B.Width * B.Height);
+  for y := 0 to B.Height - 1 do
+    MoveFast(B.ScanLine[y]^, PByteArray(result)[y * B.Width], B.Width);
+end;
+
 procedure TPdfImageGoldenTests.BitmapFormats;
 var
   doc: TPdfDocument;
@@ -518,6 +562,9 @@ var
   pdf: RawByteString;
   txt, err: RawUtf8;
   i, raised: integer;
+  rgb24, rgb32, idx8, empty: RawByteString;
+  none: PdfString;
+  e: TBitmap;
 begin
   raised := 0;
   FillCharFast(bmp, SizeOf(bmp), 0);
@@ -551,12 +598,26 @@ begin
     b := Box(300, 700, IMG_W * 4, IMG_H * 8);
     c := Box(310, 700, IMG_W * 2, IMG_H * 8);
     names[6] := CreateOrGetBitmapImage(doc, bmp[0], @b, @c);
+    // an empty bitmap gives no image
+    e := TBitmap.Create;
+    try
+      none := CreateOrGetBitmapImage(doc, e, @b);
+    finally
+      e.Free;
+    end;
+    // what the streams must hold: the ScanLine[] rows, top first, B G R
+    // swapped - the bytes the golden file holds as well, checked without it
+    rgb24 := ScanRgb(bmp[0], 3);
+    rgb32 := ScanRgb(bmp[1], 4);
+    idx8 := ScanIndexes(bmp[2]);
     pdf := SaveDoc(doc);
   finally
     doc.Free;
     for i := 0 to 5 do
       bmp[i].Free;
   end;
+  empty := '';
+  CheckEqual(none, empty, 'an empty bitmap: no image');
   Check(names[6] = names[0], 'same bitmap, same image');
   Check((names[0] <> names[1]) and (names[1] <> names[5]), 'one image per bitmap');
   txt := NormalizePdf(pdf, err);
@@ -571,6 +632,13 @@ begin
   CheckEqual(CountOf('/Indexed', txt), 3, 'palette formats stay indexed');
   {$endif FPC}
   CheckEqual(CountOf('/Mask', txt), 1, 'the color key');
+  Check(ImageData(txt, names[0]) = rgb24, 'pf24bit: the rows, RGB');
+  Check(ImageData(txt, names[1]) = rgb32, 'pf32bit: the rows, RGB, x skipped');
+  {$ifdef FPC}
+  Check(idx8 <> '', 'SKIP: no palette image with the LCL');
+  {$else}
+  Check(ImageData(txt, names[2]) = idx8, 'pf8bit: the index bytes');
+  {$endif FPC}
   CheckGolden('images_bitmap', pdf);
 end;
 
@@ -653,7 +721,7 @@ var
   ms: TMemoryStream;
   img: TPdfImage;
   b: TPdfBox;
-  pdf: RawByteString;
+  pdf, encoded: RawByteString;
   txt, err: RawUtf8;
 begin
   ms := TMemoryStream.Create;
@@ -668,6 +736,7 @@ begin
     finally
       jpg.Free;
     end;
+    FastSetRawByteString(encoded, ms.Memory, ms.Size);
     doc.Info.CreationDate := GOLDEN_DATE;
     doc.StandardFontsReplace := true;
     doc.AddPage;
@@ -701,6 +770,13 @@ begin
   txt := NormalizePdf(pdf, err);
   CheckEqual(err, '');
   CheckEqual(CountOf('/DCTDecode', txt), 3, 'three JPEG images');
+  Check(ImageData(txt, 'JpgDirect') = encoded, 'CreateJpegDirect: the bytes');
+  {$ifdef OSWINDOWS}
+  // GDI+: SaveInternalToStream writes the bytes it was loaded from
+  Check(ImageData(txt, 'JpgPass') = encoded, 'passed through: the bytes');
+  {$else}
+  Check(true, 'SKIP: the LCL may encode a TJpegImage again');
+  {$endif OSWINDOWS}
   CheckGolden('images_jpeg', pdf);
 end;
 

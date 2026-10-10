@@ -73,6 +73,7 @@ uses
 // Doc.ForceNoBitmapReuse is false
 // - if Doc.ForceJPEGCompression is set, the picture will be stored as a JPEG
 // - you can specify a clipping rectangle region as ClipRc parameter
+// - an empty bitmap (no width or no height) gives no image: returns ''
 // - replaces TPdfDocument.CreateOrGetImage(TBitmap); raw pixels go through
 // TPdfDocument.CreateOrGetImage(TPdfImagePixels)
 function CreateOrGetBitmapImage(Doc: TPdfDocument; B: TBitmap;
@@ -84,6 +85,7 @@ function CreateOrGetBitmapImage(Doc: TPdfDocument; B: TBitmap;
 // - use TPdfForm to handle TMetafile in vectorial format
 // - an optional DontAddToFXref is available, if you don't want to add
 // this object to the main XRef list of the PDF file
+// - raises EPdfInvalidValue for an empty graphic (no width or no height)
 // - replaces the TPdfImage.Create(TGraphic) constructor
 function CreateGraphicImage(Doc: TPdfDocument; Graphic: TGraphic;
   DontAddToFXref: boolean): TPdfImage;
@@ -105,7 +107,6 @@ function CurrentPrinterRes: TPoint;
 
 {$ifdef USE_METAFILE}
 
-{$ifdef USE_METAFILE}
 
 /// append a EMR_GDICOMMENT message for handling PDF bookmarks
 // - will create a PDF destination at the current position (i.e. the last Y
@@ -136,8 +137,6 @@ procedure GdiCommentBeginMarkContent(MetaHandle: HDC;
 /// append a EMR_GDICOMMENT message mapping EndMarkedContent
 procedure GdiCommentEndMarkContent(MetaHandle: HDC);
 
-{$endif USE_METAFILE}
-
 type
   /// a PDF page, with its corresponding Meta File and Canvas
   TPdfPageGdi = class(TPdfPage)
@@ -167,10 +166,10 @@ type
     fUseMetaFileTextClipping: TPdfCanvasRenderMetaFileTextClipping;
     fKerningHScaleTop: single;
     fKerningHScaleBottom: single;
+    // not inline: they reach the canvas through TPdfCanvasAccess, which is
+    // local to the implementation (Delphi E2441)
     function GetVclCanvas: TCanvas;
-      {$ifdef HASINLINE}inline;{$endif}
     function GetVclCanvasSize: TSize;
-      {$ifdef HASINLINE}inline;{$endif}
   public
     /// create the PDF document instance, with a VCL/LCL Canvas property
     // - see TPdfDocument.Create connstructor for the arguments expectations
@@ -556,8 +555,11 @@ var
   hash: THash128Rec; // no DefaultHasher128() because AesNiHash128() makes GPF
 begin
   result := '';
+  // an empty bitmap gives no image: ScanLine[0] would raise
   if (Doc = nil) or
-     (B = nil) then
+     (B = nil) or
+     (B.Width <= 0) or
+     (B.Height <= 0) then
     exit;
   FillZero(hash.b);
   if not Doc.ForceNoBitmapReuse then
@@ -608,6 +610,10 @@ var
   end;
 
 begin
+  if (Graphic.Width <= 0) or
+     (Graphic.Height <= 0) then
+    EPdfInvalidValue.RaiseUtf8('CreateGraphicImage: empty % (% x %)',
+      [Graphic.ClassName, Graphic.Width, Graphic.Height]);
   if Graphic.InheritsFrom(TJpegImage) then
   begin
     ms := TMemoryStream.Create;

@@ -411,9 +411,18 @@ before Phase 2 moves the `TBitmap` conversion out of the engine):
   (the base of `TPdfForm` since Phase 2) into the font list of the page:
   `AddItem` wraps an indirect font in a new `TPdfVirtualObject`, so nothing
   is shared - a direct value would be (no form adds one).
-  `TPdfImageRawTests.FormFonts` covers the copy
-  The original and the trunk have the same code. `RenderMetaFile` into a
-  page works
+  `TPdfImageRawTests.FormFonts` covers the copy. The original and the trunk
+  have the same code. `RenderMetaFile` into a page works
+- Found by the Fable review of Phase 2, for the bug-fix PR (both older than
+  it): `TPdfDocumentVcl.Create` never has its `AEncryption` parameter -
+  `mormot.ui.pdfcanvas` does not include `mormot.pdf.defines.inc`, so
+  `USE_PDFSECURITY` is undefined there; `BitmapHash` reads each row as a DIB
+  pads it ((w * bits + 31) and not 31) shr 3), which on the LCL can pass the
+  end of the last row when the widgetset aligns rows less - the tests use a
+  width of 32 pixels to stay clear of it
+- An empty `TBitmap` (no width or no height) gives no image since Phase 2
+  (`CreateOrGetBitmapImage` returns ''), where the engine wrote a 0 x 0
+  image before; `CreateGraphicImage` raises `EPdfInvalidValue` for it
 
 ### Optional Content (Layers)
 

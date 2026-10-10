@@ -555,12 +555,22 @@ cairo):
 - **Found** (bug-fix PR): `TPdfForm.Create(DocGdi, MetaFile)` raises an access
   violation (its page has no MediaBox), and raising without a current page
   leaves the canvas on the page it frees; with the LCL, pf1bit/pf4bit/pf8bit
-  bitmaps raise `EPdfInvalidValue` where the VCL indexes them
-- **Checked:** `test_runner` 574/574 on Windows (FPC 3.3.1, Delphi 7, Delphi
-  13 Win32/Win64), 521/521 on Linux, 545/545 on macOS, golden files
-  unchanged after every commit; the 7 runnable demo PDFs of Windows FPC
+  bitmaps raise `EPdfInvalidValue` where the VCL indexes them; by the Fable
+  review: `TPdfDocumentVcl.Create` never has its `AEncryption` parameter
+  (`mormot.ui.pdfcanvas` does not see `USE_PDFSECURITY`), and `BitmapHash`
+  reads each row as a DIB pads it, past the last row's end on an LCL that
+  aligns rows less. An empty `TBitmap` gives no image now (`''`), where a
+  0 x 0 image was written (ROADMAP "To Announce")
+- **Checked:** `test_runner` 584/584 on Windows (FPC 3.3.1, Delphi 7, Delphi
+  13 Win32/Win64), 531/531 on Linux, 555/555 on macOS, golden files
+  unchanged after every commit - except Delphi 13 from the access classes to
+  the fixes after the Fable review: the inline getters of `TPdfDocumentGdi`
+  used the implementation-local `TPdfCanvasAccess` (E2441), and the build
+  script ran a stale executable; the 7 runnable demo PDFs of Windows FPC
   equal `main`'s (`pdfcheck compare`; `mormot_demo` lacks an aarch64 sqlite3
-  library). Open: Delphi 2010 (Martin), PAC/veraPDF at the end of the phase
+  library). Reviewed by Codex commit by commit and by Fable on the whole
+  branch. Open: Delphi 2010 (Martin), PAC/veraPDF at the end of the phase,
+  Delphi 13 Linux64/Android64 (the community)
 
 ### Phase 3 — Canvas Adapter
 

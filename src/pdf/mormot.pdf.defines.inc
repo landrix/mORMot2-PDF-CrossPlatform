@@ -4,7 +4,11 @@
 // constructor of TPdfDocument and its descendants
 // - each can be switched off for a whole project with its NO_USE_* define
 // - the engine reads USE_PDFSECURITY, USE_UNISCRIBE and USE_METAFILE (its
-// EmfDC); USE_SYNGDIPLUS and USE_GRAPHICS_UNIT concern mormot.pdf.canvas only
+// EmfDC); USE_SYNGDIPLUS and USE_GRAPHICS_UNIT concern mormot.pdf.canvas only,
+// which needs the VCL or the LCL anyway
+// - a unit that declares a descendant of TPdfDocument with the AEncryption
+// parameter must include this file too (mormot.ui.pdfcanvas does not yet:
+// its TPdfDocumentVcl.Create never has the parameter - for the bug-fix PR)
 
 {$ifdef OSPOSIX}
   {$undef USE_METAFILE}
@@ -38,7 +42,7 @@
   // this special conditional can be set globaly for an application which does
   // not need the UniScribe features
   {$undef USE_UNISCRIBE}
-{$endif USE_UNISCRIBE}
+{$endif NO_USE_UNISCRIBE}
 
 {$define USE_SYNGDIPLUS}
 // if defined, the PDF engine will use SynGdiPlus to handle all

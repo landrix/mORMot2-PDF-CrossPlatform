@@ -530,7 +530,7 @@ Shows Arabic right-to-left text in two sections: an unshared isolated-letter bas
 - Section 2 (shaper): contextual Arabic letter forms (connected ligatures) via Uniscribe or HarfBuzz
 - Why HarfBuzz: FreeType alone cannot perform Arabic GSUB substitutions. `mormot.pdf` brings `mormot.lib.harfbuzz` itself, like the FreeType2 backend; it shapes when `libharfbuzz` loads
 - `EmbeddedWholeTtf := False` is safe on every platform: both subsetters receive the shaped glyph IDs themselves — hb-subset on Linux/macOS (ROADMAP R-12), `CreateFontPackage` with a glyph keep list on Windows (R-15)
-- **Set `UseUniscribe := True` without a conditional.** `USE_UNISCRIBE` is defined inside `mormot.pdf` and does not reach your unit, so `{$ifdef USE_UNISCRIBE}` around the assignment compiles to nothing and the shaper never runs. That was ROADMAP R-16, and it is why the property is declared on every platform — on Linux and macOS the same switch shapes with HarfBuzz. `RightToLeftText` only sets the direction
+- **Set `UseUniscribe := True` without a conditional.** `USE_UNISCRIBE` is defined in `mormot.pdf.defines.inc` for `mormot.pdf` and does not reach your unit, so `{$ifdef USE_UNISCRIBE}` around the assignment compiles to nothing and the shaper never runs. That was ROADMAP R-16, and it is why the property is declared on every platform — on Linux and macOS the same switch shapes with HarfBuzz. `RightToLeftText` only sets the direction
 - Platform-specific Arabic fonts: Tahoma (Windows) / Geeza Pro (macOS) / Noto Naskh Arabic (Linux)
 
 **Font and library requirements:**

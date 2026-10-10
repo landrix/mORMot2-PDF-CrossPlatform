@@ -1658,7 +1658,8 @@ type
       ClipRc: PPdfBox = nil): PdfString;
     /// add a new TPdfImage to the XObjects of this document, named SynImg<n>
     // - returns the name; an image already in the xref (created with
-    // DontAddToFXref = false) is registered as it is
+    // DontAddToFXref = false) is registered as it is, an image registered
+    // before keeps its name
     function RegisterImage(Image: TPdfImage): PdfString;
     /// draw the image registered as AName at DrawAt, clipped to ClipRc if
     // given - nothing is drawn if DrawAt is nil
@@ -1832,7 +1833,8 @@ type
       read GetFontFallBackName write SetFontFallBackName;
 
     /// this property can force saving all canvas bitmaps images as JPEG
-    // - handle bitmaps added by VclCanvas/TMetaFile and bitmaps added as TPdfImage
+    // - read by the bitmaps of mormot.pdf.canvas (CreateOrGetBitmapImage,
+    // CreateGraphicImage, VclCanvas/TMetaFile); raw pixels have no encoder
     // - by default, this property is set to 0 by the constructor of this class,
     // meaning that the JPEG compression is not forced, and the engine will use
     // the native resolution of the bitmap - in this case, the resulting
@@ -8902,7 +8904,16 @@ begin
 end;
 
 function TPdfDocument.RegisterImage(Image: TPdfImage): PdfString;
+var
+  name: TPdfName;
 begin
+  // registered before: its name, as RegisterXObject keeps it
+  name := TPdfName(Image.Attributes.ValueByName('Name'));
+  if name <> nil then
+  begin
+    result := name.Value;
+    exit;
+  end;
   result := 'SynImg' + UInt32ToPdfString(fXObjectList.ItemCount);
   if Image.ObjectType = otDirectObject then
     AddXObject(result, Image)

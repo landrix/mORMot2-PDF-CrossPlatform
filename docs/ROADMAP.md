@@ -200,7 +200,9 @@ v0.10.0 (2026-09-30).
   system color (`clBtnFace` ...) given to the engine directly is resolved
   from fixed Windows defaults, no longer from the LCL theme - as Delphi on
   Linux did already; `TPdfVclCanvas` resolves its colors with `ColorToRGB`
-  first, as before
+  first, as before. An empty `TBitmap` gives no image (`''`) and
+  `CreateGraphicImage` raises `EPdfInvalidValue` for an empty graphic, where
+  a 0 x 0 image was written before
 - **Coming with R-20** (announce when done): the preview and the GUI demos
   on Delphi
 
