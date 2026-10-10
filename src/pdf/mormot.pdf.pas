@@ -7145,6 +7145,40 @@ begin
     'can be read%', [fDoc.fTrueTypeFonts[fTrueTypeFontsIndex - 1], style, hint]);
 end;
 
+// the used glyphs of a Type0 font as code shl 32 + Unicode shl 16 + width,
+// sorted by code, one entry per code: /W and /ToUnicode are keyed by the code
+// - of two characters drawn with one glyph, the smallest Unicode value wins
+// (the $E000+ key of a glyph without a code point loses against a BMP letter)
+function PdfUsedCodes(WinAnsi: TPdfFontTrueType): TInt64DynArray;
+var
+  keys: TWordDynArray;
+  used: TUsedWide;
+  i, n: PtrInt;
+begin
+  WinAnsi.GetUsedGlyphs(keys, used);
+  SetLength(result, length(keys));
+  n := 0;
+  for i := 0 to high(keys) do
+    with used[i] do
+      if Used <> 0 then
+      begin
+        result[n] := Int64(Glyph) shl 32 + Int64(keys[i]) shl 16 + Width;
+        inc(n);
+      end;
+  if n > 1 then
+    QuickSortInt64(pointer(result), 0, n - 1);
+  SetLength(result, n);
+  n := 0;
+  for i := 0 to high(result) do
+    if (n = 0) or
+       (result[i] shr 32 <> result[n - 1] shr 32) then
+    begin
+      result[n] := result[i];
+      inc(n);
+    end;
+  SetLength(result, n);
+end;
+
 procedure TPdfFontTrueType.PrepareForSaving;
 var
   c: AnsiChar;
@@ -7156,8 +7190,8 @@ var
   WR: TPdfWrite;
   ttf: PdfString;
   sub: PPdfFontSubset;
-  keys: TWordDynArray;
-  used: TUsedWide;
+  codes: TInt64DynArray;
+  code: cardinal;
 begin
   str := TMemoryStream.Create;
   WR := TPdfWrite.Create(fDoc, str);
@@ -7196,23 +7230,30 @@ begin
       info.AddItemText('Ordering', 'Identity');
       info.AddItemText('Registry', 'Adobe');
       font.AddItem('CIDSystemInfo', info);
-      WinAnsiFont.GetUsedGlyphs(keys, used);
-      n := length(keys);
-      if n > 0 then
-      begin
-        fFirstChar := used[0].Glyph;
-        fLastChar := used[n - 1].Glyph;
-      end;
+      codes := PdfUsedCodes(WinAnsiFont);
+      n := length(codes);
       font.AddItem('DW', WinAnsiFont.fDefaultWidth);
       if (fDoc.fPdfA <> pdfaNone) or
          not WinAnsiFont.fFixedWidth then
       begin
         WR.Add('['); // fixed width will use /DW value
-        // used[] holds the glyphs used by ShowText
+        // one c [w1 w2 ...] per run of consecutive codes
         for i := 0 to n - 1 do
-          with used[i] do
-            if Used <> 0 then
-              WR.Add(Glyph).Add('[').Add(Width).Add(']');
+        begin
+          code := cardinal(codes[i] shr 32);
+          if (i = 0) or
+             (code <> cardinal(codes[i - 1] shr 32) + 1) then
+          begin
+            if i > 0 then
+              WR.Add(']');
+            WR.Add(code).Add('[');
+          end
+          else
+            WR.Add(' ');
+          WR.Add(integer(codes[i] and $ffff));
+        end;
+        if n > 0 then
+          WR.Add(']');
         font.AddItem('W', TPdfRawText.Create(WR.Add(']').ToPdfString));
       end;
       font.AddItem('FontDescriptor', WinAnsiFont.fFontDescriptor);
@@ -7228,8 +7269,8 @@ begin
         Add(ShortCut).
         Add('+0)'#10'/Ordering (UCS)'#10'/Supplement 0'#10'>> def'#10 +
         '/CMapName/').Add(ShortCut).Add('+0 def'#10'/CMapType 2 def'#10 +
-        '1 begincodespacerange'#10'<').AddHex4(fFirstChar).
-        Add('> <').AddHex4(fLastChar).Add('>'#10'endcodespacerange'#10);
+        // every two-byte code: the used codes are not a range of their own
+        '1 begincodespacerange'#10'<0000> <FFFF>'#10'endcodespacerange'#10);
       ndx := 0;
       while n > 0 do
       begin
@@ -7237,17 +7278,11 @@ begin
           L := 99
         else
           L := n;
-        count := L; // calculate real count of items in this beginbfchar
+        tounicode.Writer.Add(L).Add(' beginbfchar'#10);
         for i := ndx to ndx + L - 1 do
-          if used[i].Used = 0 then
-            dec(count);
-        tounicode.Writer.Add(count).
-                         Add(' beginbfchar'#10);
-        for i := ndx to ndx + L - 1 do
-          with used[i] do
-            if Used <> 0 then
-              tounicode.Writer.Add('<').AddHex4(Glyph).Add('> <').
-                AddHex4(keys[i]).Add('>'#10);
+          tounicode.Writer.Add('<').AddHex4(cardinal(codes[i] shr 32)).
+            Add('> <').AddHex4(cardinal(codes[i] shr 16) and $ffff).
+            Add('>'#10);
         dec(n, L);
         inc(ndx, L);
         tounicode.Writer.Add('endbfchar'#10);

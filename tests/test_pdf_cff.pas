@@ -18,7 +18,9 @@ uses
   mormot.core.unicode,
   mormot.core.test,
   mormot.lib.core,
-  mormot.pdf;
+  mormot.pdf,
+  test_pdf_subset,      // DrawUtf8Text, PDF_DEFAULT_CHARSET
+  pdf_inspect;          // InflatePdf
 
 type
   /// PdfCffParse test cases
@@ -34,6 +36,8 @@ type
     procedure FlippedBytes;
     procedure FaceTables;
     procedure SystemFaces;
+    procedure Type0Codes;
+    procedure Type0CodesOfAFace;
   end;
 
 /// a bare 'CFF ' table of Glyphs glyphs
@@ -59,7 +63,13 @@ implementation
 
 function Card16(v: integer): RawByteString;
 begin
-  result := AnsiChar(v shr 8) + AnsiChar(v and 255);
+  result := AnsiChar((v shr 8) and 255) + AnsiChar(v and 255);
+end;
+
+function Card32(v: cardinal): RawByteString;
+begin
+  result := AnsiChar(v shr 24) + AnsiChar((v shr 16) and 255) +
+            AnsiChar((v shr 8) and 255) + AnsiChar(v and 255);
 end;
 
 // a DICT integer of 5 bytes, so that the size of the DICT is known before
@@ -179,8 +189,11 @@ type
   protected
     fTags: array of cardinal;
     fTables: array of RawByteString;
+    fWhole: RawByteString;
   public
     procedure AddTable(const Tag: RawByteString; const Data: RawByteString);
+    // the sfnt of the tables added, as GetFontData(0) and GetFaceFile give it
+    procedure Seal(const Signature: RawByteString);
     function Handle: TFontHandle;
     function GetTextMetrics(out Metrics: TFontMetrics): boolean;
     function GetOutlineMetrics(out Metrics: TFontOutlineMetrics): boolean;
@@ -208,29 +221,73 @@ begin
   result := nil;
 end;
 
+procedure TFakeFace.Seal(const Signature: RawByteString);
+var
+  i, n, off: integer;
+  dir, data, t, tag: RawByteString;
+begin
+  n := length(fTags);
+  dir := Signature + Card16(n) + Card16(0) + Card16(0) + Card16(0);
+  off := 12 + 16 * n;
+  data := '';
+  for i := 0 to n - 1 do
+  begin
+    t := fTables[i];
+    SetString(tag, PAnsiChar(@fTags[i]), 4);
+    dir := dir + tag + Card32(0) + Card32(off + length(data)) +
+      Card32(length(t));
+    while length(t) and 3 <> 0 do
+      t := t + #0;
+    data := data + t;
+  end;
+  fWhole := dir + data;
+end;
+
+// metrics of an em of 1000 units, advances of 500 for WinAnsi
 function TFakeFace.GetTextMetrics(out Metrics: TFontMetrics): boolean;
 begin
   FillChar(Metrics, SizeOf(Metrics), 0);
-  result := false;
+  Metrics.tmHeight := 1000;
+  Metrics.tmAscent := 800;
+  Metrics.tmDescent := 200;
+  Metrics.tmAveCharWidth := 500;
+  Metrics.tmMaxCharWidth := 510;
+  Metrics.tmWeight := 400;
+  Metrics.tmPitchAndFamily := 1; // TMPF_FIXED_PITCH set: proportional (GDI)
+  result := true;
 end;
 
 function TFakeFace.GetOutlineMetrics(out Metrics: TFontOutlineMetrics): boolean;
 begin
   FillChar(Metrics, SizeOf(Metrics), 0);
-  result := false;
+  Metrics.otmAscent := 800;
+  Metrics.otmDescent := -200;
+  Metrics.otmrcFontBox.Right := 1000;
+  Metrics.otmrcFontBox.Top := 800;
+  Metrics.otmrcFontBox.Bottom := -200;
+  Metrics.otmEMSquare := 1000;
+  result := true;
 end;
 
 function TFakeFace.GetCharAbcWidths(FirstChar, LastChar: cardinal;
   out Widths: TFontCharAbcArray): boolean;
+var
+  i: integer;
 begin
-  Widths := nil;
-  result := false;
+  SetLength(Widths, LastChar - FirstChar + 1);
+  for i := 0 to high(Widths) do
+  begin
+    Widths[i].abcA := 0;
+    Widths[i].abcB := 500;
+    Widths[i].abcC := 0;
+  end;
+  result := true;
 end;
 
 function TFakeFace.GetGlyphAdvance(Glyph: cardinal; out Advance: integer): boolean;
 begin
-  Advance := 0;
-  result := false;
+  Advance := 100 + integer(Glyph) * 10; // as FakeHmtx
+  result := true;
 end;
 
 function TFakeFace.GetFontData(TableTag, Offset: cardinal; Buffer: pointer;
@@ -239,6 +296,20 @@ var
   i: integer;
 begin
   result := FONT_DATA_ERROR;
+  if (TableTag = 0) and
+     (fWhole <> '') then
+  begin
+    if Offset > cardinal(length(fWhole)) then
+      exit;
+    result := cardinal(length(fWhole)) - Offset;
+    if Buffer <> nil then
+    begin
+      if result > BufferSize then
+        result := BufferSize;
+      MoveFast(PByteArray(fWhole)[Offset], Buffer^, result);
+    end;
+    exit;
+  end;
   for i := 0 to high(fTags) do
     if fTags[i] = TableTag then
     begin
@@ -257,8 +328,151 @@ end;
 
 function TFakeFace.GetFaceFile(out Face: RawByteString): boolean;
 begin
-  Face := '';
-  result := false;
+  Face := fWhole;
+  result := Face <> '';
+end;
+
+type
+  // CreateFace gives Face for Name, and asks the provider before it otherwise
+  TFakeProvider = class(TInterfacedObject, IFontProvider)
+  protected
+    fPrevious: IFontProvider;
+    fFace: IFontFace;
+    fName: SynUnicode;
+  public
+    constructor Create(const Previous: IFontProvider; const Face: IFontFace;
+      const Name: RawUtf8);
+    function CreateFace(const Request: TFontRequest): IFontFace;
+  end;
+
+constructor TFakeProvider.Create(const Previous: IFontProvider;
+  const Face: IFontFace; const Name: RawUtf8);
+begin
+  inherited Create;
+  fPrevious := Previous;
+  fFace := Face;
+  fName := Utf8ToSynUnicode(Name);
+end;
+
+function TFakeProvider.CreateFace(const Request: TFontRequest): IFontFace;
+begin
+  if Request.FaceName = fName then
+    result := fFace
+  else
+    result := fPrevious.CreateFace(Request);
+end;
+
+const
+  FAKE_FACE = 'CffTestFace';
+  FAKE_GLYPHS = 42;
+
+// 'head' of an em of 1000 units
+function FakeHead: RawByteString;
+begin
+  result := Card32($00010000) + Card32($00010000) + Card32(0) +
+    Card32($5F0F3CF5) + Card16(0) + Card16(1000) + StringOfChar(#0, 16) +
+    Card16(0) + Card16(65336) + Card16(1000) + Card16(800) +
+    Card16(0) + Card16(3) + Card16(2) + Card16(0) + Card16(0);
+end;
+
+// 'hhea' with FAKE_GLYPHS advances
+function FakeHhea: RawByteString;
+begin
+  result := Card32($00010000) + Card16(800) + Card16(65336) + Card16(0) +
+    Card16(510) + StringOfChar(#0, 22) + Card16(FAKE_GLYPHS);
+end;
+
+// 'hmtx': glyph g advances 100 + 10 * g units
+function FakeHmtx: RawByteString;
+var
+  g: integer;
+begin
+  result := '';
+  for g := 0 to FAKE_GLYPHS - 1 do
+    result := result + Card16(100 + g * 10) + Card16(0);
+end;
+
+function FakeMaxp: RawByteString;
+begin
+  result := Card32($00005000) + Card16(FAKE_GLYPHS);
+end;
+
+// a (3,1) 'cmap' of format 4: Chars[i] -> Glyphs[i], one segment each
+function FakeCmap(const Chars, Glyphs: array of integer): RawByteString;
+var
+  i, n: integer;
+  ends, starts, deltas, ranges: RawByteString;
+begin
+  n := length(Chars) + 1; // and the final $FFFF segment
+  ends := '';
+  starts := '';
+  deltas := '';
+  ranges := '';
+  for i := 0 to high(Chars) do
+  begin
+    ends := ends + Card16(Chars[i]);
+    starts := starts + Card16(Chars[i]);
+    deltas := deltas + Card16((Glyphs[i] - Chars[i]) and $ffff);
+    ranges := ranges + Card16(0);
+  end;
+  ends := ends + Card16($ffff);
+  starts := starts + Card16($ffff);
+  deltas := deltas + Card16(1);
+  ranges := ranges + Card16(0);
+  result := Card16(4) + Card16(16 + n * 8) + Card16(0) + Card16(n * 2) +
+    Card16(0) + Card16(0) + Card16(0) + ends + Card16(0) + starts + deltas +
+    ranges;
+  result := Card16(0) + Card16(1) + Card16(3) + Card16(1) + Card32(12) + result;
+end;
+
+// a face of the tables above, mapping Chars to Glyphs, with Cff if not ''
+function FakeFace(const Chars, Glyphs: array of integer;
+  const Cff: RawByteString): TFakeFace;
+begin
+  result := TFakeFace.Create;
+  if Cff <> '' then
+    result.AddTable('CFF ', Cff);
+  result.AddTable('cmap', FakeCmap(Chars, Glyphs));
+  result.AddTable('head', FakeHead);
+  result.AddTable('hhea', FakeHhea);
+  result.AddTable('hmtx', FakeHmtx);
+  result.AddTable('maxp', FakeMaxp);
+  if Cff <> '' then
+    result.Seal('OTTO')
+  else
+    result.Seal(#0#1#0#0);
+end;
+
+const
+  // Greek, Cyrillic and Latin Extended, out of the glyph order of most faces
+  MIXED_TEXT: RawUtf8 = {$ifdef HASCODEPAGE}
+    #$03C9#$03B1#$03B2' '#$0416#$0434' '#$0101#$0100#$0436#$03B3
+    {$else}
+    #$CF#$89#$CE#$B1#$CE#$B2' '#$D0#$96#$D0#$B4' '#$C4#$81#$C4#$80#$D0#$B6#$CE#$B3
+    {$endif};
+
+// the hex value of <XXXX> at s[i], -1 if there is none
+function Hex4At(const s: RawUtf8; i: PtrInt): integer;
+var
+  k, v: integer;
+begin
+  result := -1;
+  if (i < 1) or
+     (i + 5 > length(s)) or
+     (s[i] <> '<') or
+     (s[i + 5] <> '>') then
+    exit;
+  v := 0;
+  for k := i + 1 to i + 4 do
+    case s[k] of
+      '0'..'9':
+        v := v * 16 + ord(s[k]) - ord('0');
+      'A'..'F':
+        v := v * 16 + ord(s[k]) - ord('A') + 10;
+    else
+      exit;
+    end;
+  result := v;
 end;
 
 function Parse(const Table: RawByteString; out Info: TPdfCffInfo): TPdfCffKind;
@@ -526,6 +740,150 @@ begin
   Check(true, 'SKIP: no CFF system face known here');
   {$endif OSLINUX}
   {$endif OSDARWIN}
+end;
+
+procedure TPdfCffTests.Type0Codes;
+var
+  pdf: TPdfDocument;
+  stream: TMemoryStream;
+  sans, serif, mono: string;
+  s: RawUtf8;
+  i, j, e, code, last, runs, chars: PtrInt;
+  sorted: boolean;
+begin
+  // /W and /ToUnicode of a Type0 font are keyed by the code, sorted, one
+  // entry per code, under the codespace of every two-byte code
+  stream := TMemoryStream.Create;
+  try
+    pdf := TPdfDocument.Create(false, 0, pdfaNone);
+    try
+      pdf.CompressionMethod := cmNone;
+      pdf.EmbeddedTTF := true;
+      pdf.AddPage;
+      GetPdfFonts(true, sans, serif, mono);
+      pdf.Canvas.SetFont(StringToUtf8(sans), 12, [], PDF_DEFAULT_CHARSET);
+      DrawUtf8Text(pdf, 40, 700, MIXED_TEXT);
+      pdf.SaveToStream(stream);
+    finally
+      pdf.Free;
+    end;
+    SetLength(s, stream.Size);
+    stream.Position := 0;
+    stream.Read(pointer(s)^, stream.Size);
+  finally
+    stream.Free;
+  end;
+  s := InflatePdf(s);
+  // /W [c [w ...] c [w ...]]: each run starts after the end of the one before
+  i := PosEx('/W [', s);
+  Check(i > 0, '/W');
+  inc(i, 4);
+  last := -1;
+  runs := 0;
+  sorted := true;
+  while (i <= length(s)) and
+        (s[i] in ['0'..'9']) do
+  begin
+    code := 0;
+    while s[i] in ['0'..'9'] do
+    begin
+      code := code * 10 + ord(s[i]) - ord('0');
+      inc(i);
+    end;
+    if code <= last then
+      sorted := false;
+    e := PosEx(']', s, i);
+    if (s[i] <> '[') or
+       (e = 0) then
+      break;
+    last := code;
+    for j := i + 1 to e - 1 do
+      if s[j] = ' ' then
+        inc(last); // one width more in this run
+    inc(runs);
+    i := e + 1;
+  end;
+  Check(runs > 0, 'runs of /W');
+  Check(sorted, '/W sorted by code, no code twice');
+  // /ToUnicode
+  Check(PosEx('begincodespacerange'#10'<0000> <FFFF>'#10, s) > 0, 'codespace');
+  i := PosEx('beginbfchar'#10, s);
+  Check(i > 0, 'bfchar');
+  inc(i, 12);
+  last := -1;
+  chars := 0;
+  sorted := true;
+  while Hex4At(s, i) >= 0 do
+  begin
+    code := Hex4At(s, i);
+    if code <= last then
+      sorted := false;
+    last := code;
+    inc(chars);
+    i := PosEx(#10, s, i) + 1;
+    if copy(s, i, 9) = 'endbfchar' then
+      i := PosEx('beginbfchar'#10, s, i) + 12;
+  end;
+  CheckEqual(chars, 9, 'one code per character out of WinAnsi');
+  Check(sorted, '/ToUnicode sorted by code, no code twice');
+end;
+
+// draw Text in the fake face, return the inflated PDF
+function FakeFacePdf(const Face: IFontFace; const Text: RawUtf8): RawUtf8;
+var
+  pdf: TPdfDocument;
+  stream: TMemoryStream;
+  previous: IFontProvider;
+begin
+  previous := FontProvider;
+  FontProvider := TFakeProvider.Create(previous, Face, FAKE_FACE);
+  try
+    stream := TMemoryStream.Create;
+    try
+      pdf := TPdfDocument.Create(false, 0, pdfaNone);
+      try
+        pdf.CompressionMethod := cmNone;
+        pdf.AddTrueTypeFont(FAKE_FACE);
+        pdf.AddPage;
+        pdf.Canvas.SetFont(FAKE_FACE, 12, [], PDF_DEFAULT_CHARSET);
+        DrawUtf8Text(pdf, 40, 700, Text);
+        pdf.SaveToStream(stream);
+      finally
+        pdf.Free;
+      end;
+      SetLength(result, stream.Size);
+      stream.Position := 0;
+      stream.Read(pointer(result)^, stream.Size);
+    finally
+      stream.Free;
+    end;
+  finally
+    FontProvider := previous;
+  end;
+  result := InflatePdf(result);
+end;
+
+procedure TPdfCffTests.Type0CodesOfAFace;
+const
+  // U+0100..U+0104: glyphs 7, 2, 3, 7, 41 - U+0103 an alias of U+0100
+  ALIAS_TEXT: RawUtf8 = {$ifdef HASCODEPAGE}
+    #$0104#$0100#$0101#$0103#$0102
+    {$else}
+    #$C4#$84#$C4#$80#$C4#$81#$C4#$83#$C4#$82
+    {$endif};
+var
+  s: RawUtf8;
+begin
+  // a face built here: the codes, their widths and their characters are
+  // known whatever fonts are installed
+  s := FakeFacePdf(FakeFace([$100, $101, $102, $103, $104], [7, 2, 3, 7, 41],
+    ''), ALIAS_TEXT);
+  Check(PosEx('/W [2[120 130]7[170]41[510]]', s) > 0,
+    'runs of /W: sorted, code 7 once, widths of hmtx');
+  Check(PosEx('4 beginbfchar'#10'<0002> <0101>'#10'<0003> <0102>'#10 +
+    '<0007> <0100>'#10'<0029> <0104>'#10'endbfchar', s) > 0,
+    '/ToUnicode: sorted, the smaller character of code 7');
+  Check(PosEx('<00290007000200070003>', s) > 0, 'the text in glyph codes');
 end;
 
 end.
