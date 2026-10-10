@@ -45,6 +45,8 @@ type
     procedure Type0Routing;
     procedure WinAnsiFontNotWritten;
     procedure EmbeddedPrograms;
+    procedure UnembeddedNameKeyed;
+    procedure TextStateAcrossQ;
     procedure SystemFaceCids;
   end;
 
@@ -1438,16 +1440,19 @@ begin
   Check(PosEx('WinAnsiEncoding', s) > 0, 'the simple font of a glyf face');
 end;
 
-// a name-keyed face drawn after SaveToStreamDirectBegin wrote PDF 1.3, and
-// embedded once EmbeddedTTF is set before SaveToStreamDirectEnd: true if
-// SaveToStreamDirectEnd refuses it
-function StreamedLateEmbedding: boolean;
+// a name-keyed face first drawn on page 2, after SaveToStreamDirectBegin
+// wrote PDF 1.3 and page 1 was flushed, and embedded once EmbeddedTTF is set
+// before SaveToStreamDirectEnd: the inflated PDF
+// - EmbedFirst: embedded before the face is created, as TPdfDocumentGdi
+function StreamedLateEmbedding(const Version: RawUtf8 = '';
+  EmbedFirst: boolean = false): RawUtf8;
 var
   previous: IFontProvider;
   stream: TMemoryStream;
   pdf: TPdfDocument;
+  sans, serif, mono: string;
 begin
-  result := false;
+  result := '';
   previous := SwapInFakeFace(FakeFace(ALIAS_CHARS, ALIAS_GLYPHS,
     CffTable(false, FAKE_GLYPHS, '')));
   try
@@ -1457,26 +1462,41 @@ begin
       try
         pdf.EmbeddedTTF := false;
         pdf.AddTrueTypeFont(FAKE_FACE);
+        pdf.CompressionMethod := cmNone;
+        if Version <> '' then
+          pdf.Root.Data.AddItem('Version', Version);
         pdf.SaveToStreamDirectBegin(stream);
         pdf.AddPage;
+        GetPdfFonts(true, sans, serif, mono);
+        pdf.Canvas.SetFont(StringToUtf8(sans), 12, [], PDF_DEFAULT_CHARSET);
+        DrawUtf8Text(pdf, 40, 700, 'page 1');
+        pdf.SaveToStreamDirectPageFlush;
+        pdf.AddPage;
+        if EmbedFirst then
+          pdf.EmbeddedTTF := true;
         pdf.Canvas.SetFont(FAKE_FACE, 12, [], PDF_DEFAULT_CHARSET);
         DrawUtf8Text(pdf, 40, 700, ALIAS_TEXT);
         pdf.EmbeddedTTF := true;
-        try
-          pdf.SaveToStreamDirectEnd;
-        except
-          on EPdfInvalidOperation do
-            result := true;
-        end;
+        pdf.SaveToStreamDirectEnd;
       finally
         pdf.Free;
       end;
+      SetLength(result, stream.Size);
+      stream.Position := 0;
+      stream.Read(pointer(result)^, stream.Size);
     finally
       stream.Free;
     end;
   finally
     FontProvider := previous;
   end;
+end;
+
+procedure DrawThenUnembed(Pdf: TPdfDocument);
+begin
+  Pdf.Canvas.SetFont(FAKE_FACE, 12, [], PDF_DEFAULT_CHARSET);
+  DrawUtf8Text(Pdf, 40, 700, ALIAS_TEXT);
+  Pdf.EmbeddedTTF := false;
 end;
 
 procedure TPdfCffTests.EmbeddedPrograms;
@@ -1545,8 +1565,37 @@ begin
     FakePdfA := pdfaNone;
   end;
   Check(raised, 'PDF/A-1 refuses a name-keyed CFF face');
-  // embedding switched on after the header: PDF 1.3 was written
-  Check(StreamedLateEmbedding, 'an OpenType font file after a 1.3 header');
+  // first drawn after the header and a page flush: the catalog says 1.6
+  s := InflatePdf(StreamedLateEmbedding);
+  Check(PosEx('%PDF-1.3', s) = 1, 'the header written before the face');
+  Check(PosEx('/Type/Catalog', s) > 0, 'a catalog');
+  Check(PosEx('/Version/1.6', s) > 0, 'its /Version for the OpenType file');
+  Check(PosEx('/Subtype/OpenType', s) > 0, 'the OpenType font file');
+  Check(PosEx('/Subtype/Type1/', s) > 0,
+    'embedded after its creation: its simple font a /Type1');
+  // a higher /Version set before is kept
+  s := InflatePdf(StreamedLateEmbedding('1.7'));
+  Check((PosEx('/Version/1.7', s) > 0) and
+        (PosEx('/Version/1.6', s) = 0), 'a higher /Version kept');
+  // created embedded after the header: internal, its /Version from creation
+  s := InflatePdf(StreamedLateEmbedding('', true));
+  Check(PosEx('/Version/1.6', s) > 0, 'created after the header: /Version');
+  Check(PosEx('/Subtype/Type1/', s) = 0, 'its WinAnsi font not written');
+  // switched off after it drew through its Type0 font: refused
+  raised := false;
+  FakeEmbedded := true;
+  try
+    try
+      FakeFacePdf(FakeFace(ALIAS_CHARS, ALIAS_GLYPHS,
+        CffTable(false, FAKE_GLYPHS, '')), ALIAS_TEXT, nil, DrawThenUnembed);
+    except
+      on EPdfInvalidOperation do
+        raised := true;
+    end;
+  finally
+    FakeEmbedded := false;
+  end;
+  Check(raised, 'embedding switched off after the text: refused');
   // a glyf face as before
   FakeEmbedded := true;
   try
@@ -1557,6 +1606,105 @@ begin
   Check(PosEx('/FontFile2', s) > 0, 'glyf: FontFile2');
   Check(PosEx('/Subtype/CIDFontType2/', s) > 0, 'glyf: CIDFontType2');
   Check(PosEx('/CIDToGIDMap/Identity', s) > 0, 'glyf: CIDToGIDMap');
+end;
+
+procedure DrawGlyfWordSpaced(Pdf: TPdfDocument);
+begin
+  Pdf.Canvas.SetFont(FAKE_FACE, 12, [], PDF_DEFAULT_CHARSET);
+  Pdf.Canvas.SetWordSpace(6);
+  DrawUtf8Text(Pdf, 40, 700, ALIAS_TEXT);
+end;
+
+procedure TPdfCffTests.UnembeddedNameKeyed;
+var
+  s: RawUtf8;
+begin
+  // the glyph indexes of an unembedded name-keyed face mean nothing to a
+  // viewer: its Latin text stays in the simple font, which it substitutes
+  s := FakeFacePdf(FakeFace([$20, $57, $69, $100], [1, 5, 6, 7],
+    CffTable(false, FAKE_GLYPHS, '')), 'Wi Wi');
+  Check(PosEx('(Wi Wi) Tj', s) > 0, 'Latin text as WinAnsi');
+  Check(PosEx('WinAnsiEncoding', s) > 0, 'the simple font written');
+  // an unembedded CID-keyed face: its CIDs of a known ROS mean something
+  s := FakeFacePdf(FakeRoutingFace, 'Wi Wi');
+  Check(PosEx('(Wi Wi)', s) = 0, 'CID-keyed: through the Type0 font');
+  // a glyf face with a word spacing: its spaces are WinAnsi, no TJ array
+  s := FakeFacePdf(FakeFace(ALIAS_CHARS, ALIAS_GLYPHS, ''), '', nil,
+    DrawGlyfWordSpaced);
+  Check(PosEx('] TJ', s) = 0, 'glyf: no TJ array for Tw');
+  Check(PosEx('> Tj', s) > 0, 'glyf: the glyph string as before');
+end;
+
+procedure TPdfCffTests.TextStateAcrossQ;
+var
+  pdf: TPdfDocument;
+  stream: TMemoryStream;
+  s, ab, text: RawUtf8;
+  sans, serif, mono: string;
+  ok: boolean;
+begin
+  // Q restores Tc, Tz and TL: a value set again after it is written again
+  stream := TMemoryStream.Create;
+  try
+    pdf := TPdfDocument.Create(false, 0, pdfaNone);
+    try
+      pdf.CompressionMethod := cmNone;
+      pdf.AddPage;
+      GetPdfFonts(true, sans, serif, mono);
+      pdf.Canvas.SetCharSpace(1);
+      pdf.Canvas.SetHorizontalScaling(90);
+      pdf.Canvas.SetLeading(14);
+      pdf.Canvas.GSave;
+      pdf.Canvas.SetCharSpace(2);
+      pdf.Canvas.SetHorizontalScaling(80);
+      pdf.Canvas.SetLeading(20);
+      // a font selected inside q/Q only: Q puts none back
+      pdf.Canvas.SetFont(StringToUtf8(sans), 12, [], PDF_DEFAULT_CHARSET);
+      pdf.Canvas.GRestore;
+      // text in its own q/Q first: the Tf written there is gone after it
+      pdf.Canvas.GSave;
+      pdf.Canvas.BeginText;
+      text := 'A';
+      pdf.Canvas.ShowText(PdfString(text));
+      pdf.Canvas.EndText;
+      pdf.Canvas.GRestore;
+      pdf.Canvas.BeginText;
+      text := 'B';
+      pdf.Canvas.ShowText(PdfString(text));
+      pdf.Canvas.EndText;
+      pdf.Canvas.SetCharSpace(2);
+      pdf.Canvas.SetHorizontalScaling(80);
+      pdf.Canvas.SetLeading(20);
+      ok := true;
+      try
+        pdf.Canvas.BeginText;
+        text := 'x';
+        pdf.Canvas.ShowText(PdfString(text));
+        pdf.Canvas.EndText;
+      except
+        ok := false;
+      end;
+      Check(ok, 'text after Q without a font of its own');
+      pdf.SaveToStream(stream);
+    finally
+      pdf.Free;
+    end;
+    SetLength(s, stream.Size);
+    stream.Position := 0;
+    stream.Read(pointer(s)^, stream.Size);
+  finally
+    stream.Free;
+  end;
+  ab := copy(s, PosEx('(A)', s), maxInt);
+  ab := copy(ab, PosEx('Q'#10, ab), maxInt);
+  s := copy(s, PosEx('Q'#10, s), maxInt);
+  Check(PosEx(' Tf'#10, s) > 0,
+    'the font selected again before the text after Q');
+  Check(PosEx('2 Tc', s) > 0, 'Tc after Q');
+  Check(PosEx('80 Tz', s) > 0, 'Tz after Q');
+  Check(PosEx('20 TL', s) > 0, 'TL after Q');
+  Check((PosEx(' Tf', ab) > 0) and
+        (PosEx(' Tf', ab) < PosEx('(B)', ab)), 'the font selected again before B');
 end;
 
 end.

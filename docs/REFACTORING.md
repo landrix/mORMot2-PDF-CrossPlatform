@@ -434,13 +434,19 @@ Qt `QRawFont`):
   Type0 font, the CIDs of a CID-keyed face as codes, a CID-keyed face as its
   bare CFF (`CIDFontType0C`, PDF 1.3), a name-keyed one as `/OpenType` (PDF
   1.6, refused under PDF/A-1) - no name-keyed-to-CID-keyed rewriter (cairo
-  and LuaTeX have one: a project of its own). How it works: `fonts.md` "CFF
+  and LuaTeX have one: a project of its own). After the Fable review of the
+  whole branch, decided with Sven 2026-10-10 (three alternatives, discussed
+  with Codex against iText/OpenPDF, PDFium, LibreOffice, cairo, pdfTeX): a
+  name-keyed face first known after the header (`TPdfDocumentGdi`,
+  `TGDIPages` stream from the start) sets `/Version /1.6` in the catalog,
+  which is written last, instead of raising; an unembedded name-keyed face
+  keeps its Latin text in the simple font. How it works: `fonts.md` "CFF
   Faces: Type0 Only". Every commit Codex-reviewed, each test shown to fail
   on the engine before it. Left open: CFF faces the reader refuses, word
   spacing in shaped runs (ROADMAP); veraPDF and PAC on the macOS output (no
-  veraPDF here). Checked: `test_runner` 760/760 on Windows (FPC 3.3.1
+  veraPDF here). Checked: `test_runner` 779/779 on Windows (FPC 3.3.1
   aarch64, Delphi 7, Delphi 13 Win32/Win64 - now with a golden baseline of
-  their own), 736/736 on macOS M2, 709/709 on Linux aarch64; golden files:
+  their own), 755/755 on macOS M2, 728/728 on Linux aarch64; golden files:
   `cjk_subset` and `arabic_shaped` on every platform (`/W` and `/ToUnicode`
   sorted), `cjk_subset` on macOS three times more (four in all); U+9FA6 of
   Hiragino rendered by PDFKit as CoreText draws it

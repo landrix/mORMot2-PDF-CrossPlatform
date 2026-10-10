@@ -1099,6 +1099,7 @@ var
   oldFactor, oldLineWidth: single;
   oldGState, oldCTM: integer;
   oldTextState: TPdfTextStateSavedDynArray;
+  oldReselect: boolean;
   oldNewPath, oldArtifact, oldPathArtifact, oldRtl: boolean;
 begin
   inherited Create(aDoc, true);
@@ -1129,6 +1130,7 @@ begin
     oldLineWidth := c.fLineWidth;
     oldGState := c.fGStateDepth;
     oldTextState := c.fTextStateSaved;
+    oldReselect := c.fFontReselect;
     oldCTM := c.fCTMDepth;
     oldNewPath := c.fNewPath;
     oldArtifact := c.fArtifactOpen;
@@ -1142,6 +1144,7 @@ begin
       c.fLineWidth := 1;
       c.fGStateDepth := 0;
       c.fTextStateSaved := nil; // the form's q/Q, not the page's
+      c.fFontReselect := false;
       c.fCTMDepth := 0;
       // a path or an artifact the page left open is not the form's to close
       c.fNewPath := false;
@@ -1156,6 +1159,7 @@ begin
       c.fLineWidth := oldLineWidth;
       c.fGStateDepth := oldGState;
       c.fTextStateSaved := oldTextState;
+      c.fFontReselect := oldReselect;
       c.fCTMDepth := oldCTM;
       c.fNewPath := oldNewPath;
       c.fArtifactOpen := oldArtifact;

@@ -115,9 +115,16 @@ face at all, WSL Ubuntu only Noto CJK.
 
 ### CFF Faces: Type0 Only (the CFF series of R-28)
 
-A CFF face (`TPdfFontTrueType.Type0Only`: `GetCff <> pcNone`) draws all its
-text through its Type0 font. A simple font cannot take a CID-keyed CFF
-program (9.6.2.1, table 126), and its Latin text went through one before.
+A CID-keyed or an embedded CFF face (`TPdfFontTrueType.Type0Only`, decided
+when the WinAnsi font is created: `fInternal`) draws all its text through
+its Type0 font. A simple font cannot take a CID-keyed CFF program (9.6.2.1,
+table 126), and its Latin text went through one before. An unembedded
+name-keyed face keeps its Latin text in the simple font: without a program
+its glyph indexes mean nothing to a viewer, a WinAnsi font it substitutes.
+The descendant, `/CIDToGIDMap` and the names follow `GetCff <> pcNone`.
+Embedding switched on after such a face was created renames its simple font
+`/Type1`; switched off after a name-keyed face was created embedded, the save
+raises `EPdfInvalidOperation` (its text is glyph indexes without a program).
 - **Codes:** `GlyphCode(glyph)` is the CID of a CID-keyed face (`fCff.Cid`,
   read once by `GetCff` on the WinAnsi font), the glyph index otherwise.
   Every writer of Type0 codes goes through it - the three branches of
@@ -137,19 +144,25 @@ program (9.6.2.1, table 126), and its Latin text went through one before.
   xref - it frees it - and it writes no `/ToUnicode` stream
 - **Measurement:** `GetAnsiCharWidth` of the Unicode font asks the WinAnsi
   font (it has no WinAnsi widths: the default width - also after Unicode
-  text with a glyf face); a CFF face measures with the widths of `/W` it is
-  drawn with (`GetWideCharWidth` skips the WinAnsi shortcut)
+  text with a glyf face); a Type0Only face measures with the widths of `/W`
+  it is drawn with (`GetWideCharWidth` skips the WinAnsi shortcut) - which
+  registers the measured characters as used: they reach `/W`, `/ToUnicode`
+  and the subset even if never drawn, as non-Latin text measured did before
 - **Word spacing:** `Tw` applies to the one-byte code 32 only (9.3.3). A
   Type0 glyph string with a word spacing is a `TJ` array with
   `-1000 * WordSpace / FontSize` after each U+0020/U+00A0, the next line
-  written before it as `T*` (TJ has no next-line form). Spaces inside a
-  shaped run and `ShowGlyph` get no adjustment (open: HarfBuzz gives
-  clusters, Uniscribe not)
-- **q/Q:** `GSave` keeps the page's font, size and word spacing
-  (`fTextStateSaved`), `GRestore` puts them back as `Q` restores `Tf` and
-  `Tw` - the canvas cached them across `Q`, so a `Tf` could be skipped and
-  the adjustment computed from a stale size. `TPdfForm` keeps the page's
-  saved states apart from its own q/Q
+  written before it as `T*` (TJ has no next-line form) - for a Type0Only
+  face only: a glyf face keeps its output - the one space allowed inside a
+  Unicode run and the spaces of a symbol font get no adjustment, as before
+  the series. Spaces inside a shaped run and `ShowGlyph` get no adjustment
+  (open: HarfBuzz gives clusters, Uniscribe not)
+- **q/Q:** `GSave` keeps the page's font, size, word and character
+  spacing, scaling and leading (`fTextStateSaved`), `GRestore` puts them
+  back as `Q` restores `Tf`, `Tw`, `Tc`, `Tz` and `TL` - the canvas cached
+  them across `Q`, so a setting could be skipped and the adjustment computed
+  from a stale size. No font is put back (one selected inside q/Q only):
+  text after it keeps the font of before rather than none. `TPdfForm` keeps
+  the page's saved states apart from its own q/Q
 - **Subset:** kept only if every used glyph has the CID of the face in it,
   under the same ROS (`PdfSubsetKeepsCids`, on `Request.Glyphs`); the whole
   face otherwise. hb-subset keeps the charset as a prefix of the face's
@@ -157,9 +170,11 @@ program (9.6.2.1, table 126), and its Latin text went through one before.
   `/FontFile3 /Subtype /CIDFontType0C`, PDF 1.3, so also PDF/A-1 (whole face
   there, no `/CIDSet` needed), the face's ROS as `/CIDSystemInfo`;
   name-keyed - the OpenType font file, `/Subtype /OpenType`, PDF 1.6:
-  `CheckFontProgram` raises `FileFormat` before the header, refuses after it
-  (`HeaderFileFormat`, rechecked before the program is written, as
-  `EmbeddedTTF` may change) and under PDF/A-1. The descendant is a
+  `CheckFontProgram` raises `FileFormat` before the header; after it
+  (`HeaderFileFormat` - `TPdfDocumentGdi` and `TGDIPages` stream from the
+  start) it sets `/Version /1.6` in the catalog, which is written last
+  (7.5.2, as iText does); rechecked before the program is written, as
+  `EmbeddedTTF` may change; PDF/A-1 refuses. The descendant is a
   `CIDFontType0` for every CFF face, read from the face - a whole or
   unembedded one was a `CIDFontType2` before
 - **Names:** `/BaseFont` and `/FontName` are the program's name behind the

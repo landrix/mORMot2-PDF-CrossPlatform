@@ -607,9 +607,7 @@ type
     /// the Supplement of the ROS - CID-keyed only
     Supplement: integer;
     /// the CID of each glyph index, GlyphCount entries - CID-keyed only
-    // - the codes of a CIDFontType0 are CIDs (ISO 32000-1 9.7.4.2), which
-    // differ from the glyph indexes the shaper, the metrics and the
-    // subsetter use: Hiragino Sans GB has 288 such glyphs
+    // - the codes of a CIDFontType0 are CIDs (ISO 32000-1 9.7.4.2)
     Cid: TWordDynArray;
   end;
 
@@ -1570,9 +1568,11 @@ type
       const aSubtype: PdfString): TPdfStream;
     /// check that the font program of aFont can be written: an OpenType font
     // file needs PDF 1.6, which PDF/A-1 excludes
-    // - raises the file format before the header is written, raises an error
-    // after it or under PDF/A-1
+    // - raises the file format before the header is written, sets /Version
+    // in the catalog after it, raises an error under PDF/A-1
     procedure CheckFontProgram(aFont: TPdfFontTrueType);
+    /// true if the TrueType font of index aFontIndex is to be embedded
+    function FontEmbedded(aFontIndex: integer): boolean;
     /// the version written to the header by SaveToStreamDirectBegin
     property HeaderFileFormat: TPdfFileFormat
       read fHeaderFileFormat;
@@ -2033,7 +2033,8 @@ type
   /// the text state of a page TPdfCanvas.GSave keeps, as q saves it
   TPdfTextStateSaved = record
     Font: TPdfFont;
-    FontSize, WordSpace: single;
+    FontSize, WordSpace, CharSpace, HorizontalScaling, Leading: single;
+    FontReselect: boolean;
   end;
   TPdfTextStateSavedDynArray = array of TPdfTextStateSaved;
 
@@ -2079,6 +2080,8 @@ type
     // which the page caches - SetPdfFont skips a Tf by it, and the TJ
     // adjustments of Type0 text are computed from it
     fTextStateSaved: TPdfTextStateSavedDynArray;
+    // a Q restored a state without font: Tf is written again before text
+    fFontReselect: boolean;
     /// fGStateDepth + 1 at which ConcatToCTM changed the CTM, 0 if unchanged
     // - coordinates are then no longer in page space and cannot extend a
     // Figure's /BBox
@@ -2096,6 +2099,8 @@ type
     fPreviousRasterFontName: RawUtf8;
     fPreviousRasterFontIndex: integer;
     // result := fOffsetX + (X * fFactorX);
+    // write Tf again if fFontReselect, before text
+    procedure ReselectFont;
     function I2X(X: integer): single;
     function S2X(X: single): single;
     // result := fOffsetY - Y * fFactorY;
@@ -2914,7 +2919,8 @@ type
     // the 'CFF ' table of the face, read on first use by GetCff
     fCff: TPdfCffInfo;
     fCffRead: boolean;
-    // the WinAnsi font of a CFF face: its dictionary is not in the file
+    // the WinAnsi font of a CID-keyed or an embedded CFF face (Type0Only):
+    // its dictionary is not in the file
     fInternal: boolean;
     // below are some bigger structures
     fLogFont: TFontRequest;
@@ -2960,9 +2966,11 @@ type
     // (ISO 32000-1 9.7.4.2), the glyph index otherwise - the shaper, the
     // metrics and the subsetter keep using glyph indexes
     function GlyphCode(aGlyph: word): word;
-    // true for a CFF face: all its text goes through the Type0 font, its
-    // WinAnsi font is never selected - a simple font cannot take a CID-keyed
-    // CFF program (ISO 32000-1 9.6.2.1, table 126)
+    // true for a CID-keyed or an embedded CFF face: all its text goes through
+    // the Type0 font, its WinAnsi font is never selected - a simple font
+    // cannot take a CID-keyed CFF program (ISO 32000-1 9.6.2.1, table 126);
+    // the glyph indexes of an unembedded name-keyed face mean nothing to a
+    // viewer, its Latin text stays in the simple font
     function Type0Only: boolean;
   public
     /// create the TrueType font object instance
@@ -5563,7 +5571,8 @@ begin
     // Tw applies to the one-byte code 32 only (ISO 32000-1 9.3.3): a word
     // spacing becomes an adjustment after each space of a TJ array
     fAddGlyphTJ := (Canvas.fPage.WordSpace <> 0) and
-                   (Canvas.fPage.FontSize > 0);
+                   (Canvas.fPage.FontSize > 0) and
+                   fnt.Type0Only; // glyf faces: their output as before
     if fAddGlyphTJ then
     begin
       if (NextLine <> nil) and
@@ -6476,7 +6485,7 @@ end;
 
 function TPdfFontTrueType.Type0Only: boolean;
 begin
-  result := GetCff <> pcNone;
+  result := WinAnsiFont.fInternal;
 end;
 
 function TPdfFontTrueType.GetAnsiCharWidth(const AText: PdfString;
@@ -6619,10 +6628,15 @@ begin
   else
   begin
     nam := ADoc.TtfFontPostcriptName(AFontIndex, AStyle, self);
-    // a CFF face draws through its Type0 font only (Type0Only): its WinAnsi
+    // a CFF face drawing through its Type0 font only (Type0Only): its WinAnsi
     // font is internal - metrics, descriptor, subset - and not written
     fCffRead := true;
-    fInternal := PdfFaceCffInfo(fFace, fCff) <> pcNone;
+    case PdfFaceCffInfo(fFace, fCff) of
+      pcCidKeyed:
+        fInternal := true;
+      pcNameKeyed, pcInvalid:
+        fInternal := ADoc.FontEmbedded(AFontIndex);
+    end;
   end;
   inherited Create(ADoc.fXRef, nam, not fInternal);
   fDoc := ADoc;
@@ -6805,14 +6819,7 @@ end;
 
 function TPdfFontTrueType.IsEmbedded: boolean;
 begin
-  // PDF/UA (Tagged) needs every font embedded, as PDF/A does: EmbeddedTtf
-  // or EmbeddedTtfIgnore set after Tagged must not undo it
-  result := (fDoc.PdfA <> pdfaNone) or
-            fDoc.fTagged or
-            (fDoc.EmbeddedTtf and
-             ((fDoc.fEmbeddedTtfIgnore = nil) or
-              (fDoc.fEmbeddedTtfIgnore.IndexOf(
-                 fDoc.fTrueTypeFonts[fTrueTypeFontsIndex - 1]) < 0)));
+  result := fDoc.FontEmbedded(fTrueTypeFontsIndex - 1);
 end;
 
 function TPdfFontTrueType.IsSymbolic: boolean;
@@ -7363,11 +7370,8 @@ begin
     'can be read%', [fDoc.fTrueTypeFonts[fTrueTypeFontsIndex - 1], style, hint]);
 end;
 
-// the used glyphs of a Type0 font as code shl 32 + Unicode shl 16 + width,
-// the code being GlyphCode(),
-// sorted by code, one entry per code: /W and /ToUnicode are keyed by the code
-// - of two characters drawn with one glyph, the smallest Unicode value wins
-// (the $E000+ key of a glyph without a code point loses against a BMP letter)
+// the used glyphs of a Type0 font as GlyphCode() shl 32 + Unicode shl 16 +
+// width, sorted, one entry per code - the smallest Unicode value wins
 function PdfUsedCodes(WinAnsi: TPdfFontTrueType): TInt64DynArray;
 var
   keys: TWordDynArray;
@@ -7426,7 +7430,7 @@ begin
       font.AddItem('Type', 'Font');
       // 9.7.4: a CFF face is a CIDFontType0, a glyf one a CIDFontType2 -
       // read from the face, whether it is subset, embedded whole or not
-      if WinAnsiFont.Type0Only then
+      if WinAnsiFont.GetCff <> pcNone then
         font.AddItem('Subtype', 'CIDFontType0')
       else
         font.AddItem('Subtype', 'CIDFontType2');
@@ -7441,7 +7445,7 @@ begin
       // only a CIDFontType2 maps CIDs to glyphs (table 117); Identity is the
       // default, but PDF/A and PDF/UA-1 (7.21.3.2) want it written - PAC
       // 2024 fails the font otherwise
-      if not WinAnsiFont.Type0Only then
+      if WinAnsiFont.GetCff = pcNone then
         font.AddItem('CIDToGIDMap', 'Identity');
       // the ROS of a CID-keyed face, whose CIDs the codes are (9.7.3);
       // Adobe-Identity-0 for glyph indexes
@@ -7559,6 +7563,13 @@ begin
         WR.Add('[').AddWithSpace(fWinAnsiWidth[' ']);
         fData.AddItem('Widths', TPdfRawText.Create(WR.Add(']').ToPdfString));
       end;
+      // a name-keyed face drew its text as glyph indexes when it was created
+      // embedded: without its program they would mean nothing
+      if fInternal and
+         (GetCff <> pcCidKeyed) and
+         not IsEmbedded then
+        raise EPdfInvalidOperation.CreateUtf8('% drew its text through its ' +
+          'Type0 font: embedding cannot be switched off after it', [Name]);
       // embedd true Type font into the PDF file (allow subset of used glyph)
       if IsEmbedded then
       begin
@@ -7584,12 +7595,10 @@ begin
         // subsetting (if any) is done: the bytes are final, so identical
         // data can now share a single stream object
         // /FontDescriptor is common to WinAnsi and Unicode fonts
-        if Type0Only then
+        if GetCff <> pcNone then
         begin
-          // /BaseFont and /FontName are the name of the program, behind the
-          // subset tag (tables 117 and 122) - not the family name: the
-          // CIDFontName of a bare CFF, the PostScript name of an OpenType
-          // font file, which may differ from its CFF name (OpenType 'CFF ')
+          // the name of the program behind the subset tag (tables 117, 122):
+          // the CIDFontName of a bare CFF, the PostScript name of OpenType
           cff := SfntTableOf(ttf, 'CFF ');
           if PdfCffParse(pointer(cff), length(cff), prog) <> pcCidKeyed then
           begin
@@ -7618,12 +7627,15 @@ begin
         end
         else if PdfIsCffFace(ttf) then
         begin
-          // a name-keyed CFF has no CIDs: the OpenType font file, whose
-          // glyph indexes are the codes (9.7.4.2) - PDF 1.6, checked again:
-          // EmbeddedTtf may have changed since the header was written
+          // a name-keyed CFF has no CIDs: the OpenType font file (PDF 1.6),
+          // checked again as EmbeddedTtf may have changed
           fDoc.CheckFontProgram(self);
           fFontDescriptor.AddItem('FontFile3',
             fDoc.GetOrCreateFontFile2(ttf, 'OpenType'));
+          if not fInternal then
+            // embedding set after the font was created: its simple font is
+            // written, a /Type1 for CFF outlines (9.6.2.1), not a /TrueType
+            TPdfName(Data.ValueByName('Subtype')).Value := 'Type1';
         end
         else
           fFontDescriptor.AddItem('FontFile2',
@@ -9318,27 +9330,44 @@ begin
     end;
 end;
 
+function TPdfDocument.FontEmbedded(aFontIndex: integer): boolean;
+begin
+  // PDF/UA (Tagged) needs every font embedded, as PDF/A does: EmbeddedTtf
+  // or EmbeddedTtfIgnore set after Tagged must not undo it
+  result := (fPdfA <> pdfaNone) or
+            fTagged or
+            (EmbeddedTtf and
+             ((fEmbeddedTtfIgnore = nil) or
+              (fEmbeddedTtfIgnore.IndexOf(fTrueTypeFonts[aFontIndex]) < 0)));
+end;
+
 procedure TPdfDocument.CheckFontProgram(aFont: TPdfFontTrueType);
+var
+  v: TPdfObject;
 begin
   // a CFF face without CIDs (name-keyed, or one the reader refused) is
   // embedded as an OpenType font file (ISO 32000-1 table 126: PDF 1.6)
   if aFont.Unicode or
-     not aFont.Type0Only or
-     (aFont.GetCff = pcCidKeyed) or
+     (aFont.GetCff in [pcNone, pcCidKeyed]) or
      not aFont.IsEmbedded then
     exit;
   if fPdfA in [pdfa1A, pdfa1B] then
     raise EPdfInvalidOperation.CreateUtf8('PDF/A-1 cannot embed %: a CFF ' +
       'face without CIDs needs an OpenType font file (PDF 1.6)', [aFont.Name]);
-  if fSaveToStreamWriter <> nil then
+  if fSaveToStreamWriter = nil then
   begin
-    if fHeaderFileFormat < pdf16 then
-      raise EPdfInvalidOperation.CreateUtf8('% needs PDF 1.6 (an OpenType ' +
-        'font file): set FileFormat before SaveToStreamDirectBegin',
-        [aFont.Name]);
+    if fFileFormat < pdf16 then
+      fFileFormat := pdf16;
   end
-  else if fFileFormat < pdf16 then
-    fFileFormat := pdf16;
+  else if fHeaderFileFormat < pdf16 then
+  begin
+    // the header is written (TPdfDocumentGdi, TGDIPages stream from the
+    // start): the catalog, written last, overrides its version (7.5.2)
+    v := fRoot.Data.ValueByName('Version');
+    if not (v is TPdfName) or
+       (TPdfName(v).Value < '1.6') then // never lower a version set before
+      fRoot.Data.AddItem('Version', '1.6');
+  end;
 end;
 
 procedure TPdfDocument.PrepareFontSubsets;
@@ -10239,6 +10268,7 @@ begin
   fLineWidth := 1;
   fGStateDepth := 0;
   fCTMDepth := 0;
+  fFontReselect := false;
   fPage := APage;
   fPageFontList := fPage.GetResources('Font');
   fContents := TPdfStream(fPage.ValueByName('Contents'));
@@ -10260,8 +10290,10 @@ begin
   // check if this font is already the current font
   if (AFont = nil) or
      ((fPage.Font = AFont) and
-      (fPage.FontSize = ASize)) then
+      (fPage.FontSize = ASize) and
+      not fFontReselect) then
     exit;
+  fFontReselect := false;
   // add this font to the resource array of the current page
   if fPageFontList.ValueByName(AFont.ShortCut) = nil then
     fPageFontList.AddItem(AFont.ShortCut, AFont.Data);
@@ -10941,6 +10973,10 @@ begin
       Font := fPage.fFont;
       FontSize := fPage.fFontSize;
       WordSpace := fPage.fWordSpace;
+      CharSpace := fPage.fCharSpace;
+      HorizontalScaling := fPage.fHorizontalScaling;
+      Leading := fPage.fLeading;
+      FontReselect := fFontReselect;
     end;
   end;
   inc(fGStateDepth);
@@ -10957,16 +10993,36 @@ begin
        (fGStateDepth < length(fTextStateSaved)) then
       with fTextStateSaved[fGStateDepth] do
       begin
-        // as Q restores Tf and Tw
-        fPage.fFont := Font;
-        fPage.fFontSize := FontSize;
+        // as Q restores Tf, Tw, Tc, Tz and TL - but no font: text drawn
+        // without one keeps the font of before, as it did
+        if Font <> nil then
+        begin
+          fPage.fFont := Font;
+          fPage.fFontSize := FontSize;
+          fFontReselect := FontReselect; // a Tf owed before the q is again
+        end
+        else
+          fFontReselect := fPage.fFont <> nil;
         fPage.fWordSpace := WordSpace;
+        fPage.fCharSpace := CharSpace;
+        fPage.fHorizontalScaling := HorizontalScaling;
+        fPage.fLeading := Leading;
       end;
   end;
   if fCTMDepth > fGStateDepth + 1 then
     fCTMDepth := 0; // the q which saved the untransformed CTM was restored
   if fContents <> nil then
     fContents.Writer.Add('Q'#10);
+end;
+
+procedure TPdfCanvas.ReselectFont;
+begin
+  // the q saved no font: text after Q needs one (ISO 32000-1 table 105) -
+  // the page still holds the last one selected
+  if fFontReselect and
+     (fPage <> nil) and
+     (fPage.fFont <> nil) then
+    SetPdfFont(fPage.fFont, fPage.fFontSize);
 end;
 
 procedure TPdfCanvas.ConcatToCTM(a, b, c, d, e, f: single; Decimals: cardinal);
@@ -11270,6 +11326,7 @@ end;
 
 procedure TPdfCanvas.ShowText(const text: PdfString; NextLine: boolean);
 begin
+  ReselectFont;
   if (fContents <> nil) and
      (text <> '') then
     if ((fDoc.fCharSet = ANSI_CHARSET) or
@@ -11297,12 +11354,14 @@ end;
 
 procedure TPdfCanvas.ShowText(PW: PWideChar; NextLine: boolean);
 begin
+  ReselectFont;
   if fContents <> nil then
     fContents.Writer.AddUnicodeHexText(PW, StrLenW(PW), NextLine, self);
 end;
 
 procedure TPdfCanvas.ShowGlyph(PW: PWord; Count: integer);
 begin
+  ReselectFont;
   if fContents <> nil then
     fContents.Writer.AddGlyphs(PW, Count, self);
 end;

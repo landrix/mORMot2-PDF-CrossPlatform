@@ -217,18 +217,19 @@ v0.10.0 (2026-09-30).
   `TGDIPages.DrawBitmap` came out with wrong colors. And a pf1bit, pf4bit or
   pf8bit bitmap - gray in the LCL - raised `EPdfInvalidValue`; it is written
   indexed with a gray ramp now, on Windows (FPC) too
-- **Fixed (macOS, Linux): text in a CFF face** (the CFF series of R-28) -
+- **Fixed: text in a CFF face** (the CFF series of R-28; the CJK faces of
+  macOS and Linux, installed OTF fonts on Windows) -
   the codes of a CID-keyed CFF face (the CJK faces of macOS and Linux) are
   its CIDs, not its glyph indexes: Hiragino Sans GB drew another glyph for
   92 BMP characters, e.g. U+9FA6. All text of a CFF face now goes through
   its Type0 font (the Latin text went through a simple `/Type1` font, which
   a CID-keyed CFF may not be); a CID-keyed face is embedded as its bare CFF
   (`/CIDFontType0C`, PDF 1.3, so also PDF/A-1) with its ROS and its own
-  font name, a name-keyed one as an OpenType font file - `FileFormat` is
-  raised to PDF 1.6 for it before the header is written; PDF/A-1 refuses it,
-  and so does `SaveToStreamDirectEnd` after a lower header was streamed
-  (`EPdfInvalidOperation` - set `FileFormat := pdf16` before
-  `SaveToStreamDirectBegin`). Word spacing reaches such text as `TJ`
+  font name, a name-keyed one as an OpenType font file - which needs PDF
+  1.6: `FileFormat` is raised before the header is written, or the catalog
+  gets `/Version /1.6` (`TPdfDocumentGdi`, `TGDIPages`), and PDF/A-1 refuses
+  it with `EPdfInvalidOperation`. An unembedded name-keyed face keeps its
+  Latin text in the simple font. Word spacing reaches such text as `TJ`
   adjustments
 - **Fixed: font fallback in the middle of a run** wrote the fallback face's
   codes without an opening `<`, breaking the content stream (also in the
@@ -237,8 +238,9 @@ v0.10.0 (2026-09-30).
   range (it is `<0000> <FFFF>` now), `/W` and `/ToUnicode` are sorted by
   code, one entry per code - of two characters drawn with one glyph, text
   extraction now gives the smaller one (it gave the last listed); `TextWidth` after Unicode text measured with the default width;
-  `GRestore` did not restore the font, size and word spacing the canvas
-  tracks, so a `Tf` could be skipped after `Q`; a space in a PDF name is
+  `GRestore` did not restore the font, size, spacing, scaling and leading
+  the canvas tracks, so a `Tf`, `Tw`, `Tc`, `Tz` or `TL` could be skipped
+  after `Q`; a space in a PDF name is
   written `#20`
 - **Coming with R-20** (announce when done): the preview and the GUI demos
   on Delphi
