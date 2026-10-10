@@ -187,6 +187,16 @@ v0.10.0 (2026-09-30).
   without VCL/LCL: `TPdfImagePixels` with `Doc.CreateOrGetImage(Pixels, ..)`
   (RGB, BGR, BGRx, indexed with palette; stride, color key) and
   `TPdfImage.CreateJpeg`, `Doc.RegisterImage`, `Doc.DrawImage`
+- **`mormot.ui.pdf` without VCL/LCL** (R-28 Phase 2): the engine unit builds
+  in a console program with no GUI framework, on every compiler; the VCL/LCL
+  parts are in `mormot.pdf.canvas` (`TBitmap`/`TGraphic` images,
+  `TPdfDocumentGdi`, `RenderMetaFile`, the `GdiComment*` procedures and
+  `CurrentPrinterPaperSize`/`CurrentPrinterRes` - add it to the `uses` of a
+  program that calls them). One consequence on Linux and macOS (FPC): a
+  system color (`clBtnFace` ...) given to the engine directly is resolved
+  from fixed Windows defaults, no longer from the LCL theme - as Delphi on
+  Linux did already; `TPdfVclCanvas` resolves its colors with `ColorToRGB`
+  first, as before
 - **Coming with R-20** (announce when done): the preview and the GUI demos
   on Delphi
 

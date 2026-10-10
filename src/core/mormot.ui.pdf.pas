@@ -26,7 +26,6 @@ interface
 uses
   {$ifdef OSWINDOWS}
   windows,
-  winspool,
   mormot.lib.uniscribe,  // registers the GDI services via RegisterFontPlatform()
   {$else}
   mormot.lib.freetype,   // registers the FreeType2 services via RegisterFontPlatform()
@@ -34,23 +33,6 @@ uses
   {$endif OSWINDOWS}
   mormot.lib.core,       // font interfaces, set by the backends above
   mormot.pdf.types,      // PDF types: file format, structure roles
-  {$ifdef USE_GRAPHICS_UNIT}
-    {$ifdef FPC}
-    lcltype,
-    lclproc,
-    lclintf,
-    rtlconsts,
-    {$ifdef USE_METAFILE}
-    mormot.ui.core, // for TMetaFile definition
-    {$endif USE_METAFILE}
-    {$else}
-    {$endif FPC}
-    {$ifdef NEEDVCLPREFIX}
-    vcl.graphics,
-    {$else}
-    graphics,
-    {$endif NEEDVCLPREFIX}
-  {$endif USE_GRAPHICS_UNIT}
   sysutils,
   types,
   classes,
@@ -60,13 +42,6 @@ uses
   mormot.crypt.core,
   mormot.crypt.other, // for deprecated RC4
   {$endif USE_PDFSECURITY}
-  {$ifdef USE_SYNGDIPLUS}
-  mormot.ui.gdiplus,
-  {$else}
-  {$ifdef OSWINDOWS}
-  jpeg,
-  {$endif OSWINDOWS}
-  {$endif USE_SYNGDIPLUS}
   mormot.core.base,
   mormot.core.os,
   mormot.lib.z,
@@ -3039,7 +3014,7 @@ type
   protected
     fPixelHeight: integer;
     fPixelWidth: integer;
-    fHash: THash128Rec; // 128-bit hash of the TBitmap raw content
+    fHash: THash128Rec; // the reuse key of GetXObjectImageName, zero for none
   public
     /// create the image from raw pixels
     // - raises EPdfInvalidValue if aPixels does not describe a valid buffer
@@ -3495,9 +3470,11 @@ const
     {$ifdef HASCODEPAGE} #$FEFF'" ' {$else} #$EF#$BB#$BF'" ' {$endif} +
     'id="W5M0MpCehiHzreSzNTczkc9d"?>';
 
-{$ifndef USE_GRAPHICS_UNIT}
-// no VCL/LCL (Delphi on Linux/Android): the few Windows API names used
-// outside the metafile code; system colors fall back to Windows defaults
+{$ifdef OSPOSIX}
+// no VCL/LCL: the few Windows API names used outside the metafile code;
+// system colors fall back to Windows defaults - on Windows they come from
+// the system as before (a framework color is resolved by its adapter, as
+// TPdfVclCanvas does with ColorToRGB)
 const
   MM_TEXT = 1;
 
@@ -3516,7 +3493,7 @@ begin
     result := 0;
   end;
 end;
-{$endif USE_GRAPHICS_UNIT}
+{$endif OSPOSIX}
 
 type
   /// the face of a font the backend could not resolve: every query fails,

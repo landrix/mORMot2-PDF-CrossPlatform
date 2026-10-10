@@ -3,6 +3,8 @@
 // so that both units see the same switches: USE_PDFSECURITY changes the
 // constructor of TPdfDocument and its descendants
 // - each can be switched off for a whole project with its NO_USE_* define
+// - the engine reads USE_PDFSECURITY, USE_UNISCRIBE and USE_METAFILE (its
+// EmfDC); USE_SYNGDIPLUS and USE_GRAPHICS_UNIT concern mormot.pdf.canvas only
 
 {$ifdef OSPOSIX}
   {$undef USE_METAFILE}
@@ -58,7 +60,7 @@
   {$undef USE_METAFILE}
 {$endif USE_METAFILE}
 
-{$define USE_GRAPHICS_UNIT} // VCL/LCL usage is mandatory by now at low level
+{$define USE_GRAPHICS_UNIT} // the VCL/LCL of mormot.pdf.canvas - not of the engine
 {$ifdef OSPOSIX}
   {$ifndef FPC}
     // Delphi has no VCL on Linux/Android: no TBitmap/TGraphic images there
