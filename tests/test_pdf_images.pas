@@ -46,6 +46,7 @@ type
     procedure PixelReuse;
     procedure PixelChecks;
     procedure JpegData;
+    procedure FormFonts;
   end;
 
 {$ifdef PDF_HASVCLCANVAS}
@@ -385,6 +386,58 @@ begin
   CheckEqual(CountOf('/ColorSpace/DeviceRGB', txt), 2, 'RGB');
   CheckEqual(CountOf(jpg, txt), 2, 'the data as it is');
   CheckGolden('images_jpegdata', pdf);
+end;
+
+type
+  // a form XObject that lists one font, as TPdfForm does once rendered
+  TFontListForm = class(TPdfFormXObject)
+  public
+    constructor Create(aDoc: TPdfDocument; aFont: TPdfFont);
+  end;
+
+constructor TFontListForm.Create(aDoc: TPdfDocument; aFont: TPdfFont);
+var
+  res: TPdfDictionary;
+begin
+  inherited Create(aDoc, true);
+  res := TPdfDictionary.Create(nil);
+  fFontList := TPdfDictionary.Create(nil);
+  fFontList.AddItem(aFont.ShortCut, aFont.Data);
+  res.AddItem('Font', fFontList);
+  fAttributes.AddItem('Type', 'XObject');
+  fAttributes.AddItem('Subtype', 'Form');
+  fAttributes.AddItem('BBox', TPdfArray.Create(nil, [0, 0, 100, 100]));
+  fAttributes.AddItem('Resources', res);
+end;
+
+// a page that draws a TPdfFormXObject lists the fonts of the form
+procedure TPdfImageRawTests.FormFonts;
+var
+  doc: TPdfDocument;
+  font: TPdfFont;
+  key: PdfString;
+  pdf: RawByteString;
+  txt, err: RawUtf8;
+begin
+  doc := TPdfDocument.Create;
+  try
+    doc.Info.CreationDate := GOLDEN_DATE;
+    doc.CompressionMethod := cmNone;
+    doc.StandardFontsReplace := true;
+    doc.AddPage;
+    font := doc.Canvas.SetFont('Courier', 10, []);
+    doc.AddXObject('FontForm', TFontListForm.Create(doc, font));
+    doc.AddPage; // no font yet
+    doc.Canvas.DrawXObject(40, 600, 100, 100, 'FontForm');
+    key := font.ShortCut;
+    pdf := SaveToString(doc);
+  finally
+    doc.Free; // the page and the form each own their reference to the font
+  end;
+  txt := NormalizePdf(pdf, err);
+  CheckEqual(err, '');
+  // the first page, the form, and the second page once it drew the form
+  CheckEqual(CountOf('/Font<</' + key + ' ', txt), 3, 'listed by both pages');
 end;
 
 {$ifdef PDF_HASVCLCANVAS}

@@ -3084,6 +3084,13 @@ type
       read fHash write fHash;
   end;
 
+  /// a form XObject whose fonts the page that draws it lists as well
+  // - the base of TPdfForm, the form of a TMetaFile
+  TPdfFormXObject = class(TPdfXObject)
+  protected
+    fFontList: TPdfDictionary;
+  end;
+
   /// a form XObject with a Canvas for drawing
   // - once created, you can create this XObject, then draw it anywhere on
   // any page - see sample
@@ -3450,9 +3457,7 @@ type
   // - A form XObject (see Section 4.9, of PDF reference 1.3) is a self-contained
   // description of an arbitrary sequence of graphics objects, defined as a
   // PDF content stream
-  TPdfForm = class(TPdfXObject)
-  private
-    fFontList: TPdfDictionary;
+  TPdfForm = class(TPdfFormXObject)
   public
     /// create a form XObject from a supplied TMetaFile
     constructor Create(aDoc: TPdfDocumentGdi; aMetaFile: TMetafile); reintroduce;
@@ -10499,9 +10504,7 @@ procedure TPdfCanvas.DrawXObjectPrepare(const AXObjectName: PdfString);
 var
   x: TPdfXObject;
   o: TPdfDictionary;
-  {$ifdef USE_METAFILE}
   i: integer;
-  {$endif USE_METAFILE}
 begin
   // drawing object must be registered. check object name
   x := fDoc.GetXObject(AXObjectName);
@@ -10512,14 +10515,12 @@ begin
     raise EPdfInvalidValue.Create('DrawXObject: no XObject');
   if o.ValueByName(AXObjectName) = nil then
     o.AddItem(AXObjectName, x);
-  {$ifdef USE_METAFILE}
-  if x.InheritsFrom(TPdfForm) then
-    with TPdfForm(x).fFontList do
+  if x.InheritsFrom(TPdfFormXObject) then
+    with TPdfFormXObject(x).fFontList do
       for i := 0 to ItemCount - 1 do
         with Items[i] do
           if fPageFontList.ValueByName(Key) = nil then
             fPageFontList.AddItem(Key, Value);
-  {$endif USE_METAFILE}
 end;
 
 procedure TPdfCanvas.DrawXObject(X, Y, AWidth, AHeight: single;

@@ -402,6 +402,13 @@ before Phase 2 moves the `TBitmap` conversion out of the engine):
   again and raises)
 - `TPdfForm.Create(DocGdi, MetaFile)` **raises an access violation**: its page
   is made without a document, and `SetPageHeight` writes a missing MediaBox.
+  And when it raises with no current page (`old = nil`), its `finally`
+  leaves the canvas on the temporary page it frees. Both for the bug-fix PR.
+  `TPdfCanvas.DrawXObjectPrepare` copies the fonts of a `TPdfFormXObject`
+  (the base of `TPdfForm` since Phase 2) into the font list of the page:
+  `AddItem` wraps an indirect font in a new `TPdfVirtualObject`, so nothing
+  is shared - a direct value would be (no form adds one).
+  `TPdfImageRawTests.FormFonts` covers the copy
   The original and the trunk have the same code. `RenderMetaFile` into a
   page works
 
