@@ -2674,7 +2674,10 @@ type
     fWinAnsiUsed: TSynAnsicharSet;
   public
     /// create the PDF font object instance
-    constructor Create(AXref: TPdfXref; const AName: PdfString);
+    // - ARegister = false keeps its dictionary out of the file: the font is
+    // internal, its owner frees the dictionary
+    constructor Create(AXref: TPdfXref; const AName: PdfString;
+      ARegister: boolean = true);
     /// mark some WinAnsi char as used
     procedure AddUsedWinAnsiChar(aChar: AnsiChar);
       {$ifdef HASINLINE}inline;{$endif}
@@ -2901,6 +2904,8 @@ type
     // the 'CFF ' table of the face, read on first use by GetCff
     fCff: TPdfCffInfo;
     fCffRead: boolean;
+    // the WinAnsi font of a CFF face: its dictionary is not in the file
+    fInternal: boolean;
     // below are some bigger structures
     fLogFont: TFontRequest;
     fM: TFontMetrics;
@@ -2958,6 +2963,8 @@ type
     // - the Unicode font has no WinAnsi widths of its own, and is the page
     // font after Unicode text or for all the text of a CFF face
     function GetAnsiCharWidth(const AText: PdfString; APos: integer): integer; override;
+    /// release the dictionary of an internal WinAnsi font
+    destructor Destroy; override;
     {$ifdef OSWINDOWS}
     /// create the TrueType font object instance from a Windows logical font
     // - the font is created from the whole LOGFONT (e.g. lfWidth), the rest
@@ -6032,12 +6039,14 @@ begin
   result := 0;
 end;
 
-constructor TPdfFont.Create(AXref: TPdfXref; const AName: PdfString);
+constructor TPdfFont.Create(AXref: TPdfXref; const AName: PdfString;
+  ARegister: boolean);
 begin
   inherited Create;
   FName := AName;
   Data := TPdfDictionary.Create(AXref);
-  AXref.AddObject(fData);
+  if ARegister then
+    AXref.AddObject(fData);
 end;
 
 procedure TPdfFont.AddUsedWinAnsiChar(aChar: AnsiChar);
@@ -6446,6 +6455,13 @@ begin
         result := 0; // no such glyph in the face: .notdef
 end;
 
+destructor TPdfFontTrueType.Destroy;
+begin
+  if fInternal then
+    FreeAndNil(fData); // never given to the xref
+  inherited Destroy;
+end;
+
 function TPdfFontTrueType.Type0Only: boolean;
 begin
   result := GetCff <> pcNone;
@@ -6589,8 +6605,14 @@ begin
   if AWinAnsiFont <> nil then // we use the Postscript Name here
     nam := AWinAnsiFont.fName
   else
+  begin
     nam := ADoc.TtfFontPostcriptName(AFontIndex, AStyle, self);
-  inherited Create(ADoc.fXRef, nam);
+    // a CFF face draws through its Type0 font only (Type0Only): its WinAnsi
+    // font is internal - metrics, descriptor, subset - and not written
+    fCffRead := true;
+    fInternal := PdfFaceCffInfo(fFace, fCff) <> pcNone;
+  end;
+  inherited Create(ADoc.fXRef, nam, not fInternal);
   fDoc := ADoc;
   fTrueTypeFontsIndex := AFontIndex + 1;
   fStyle := AStyle;
@@ -7477,7 +7499,8 @@ begin
       // extraction has no reliable round-trip
       if ((fDoc.fPdfA <> pdfaNone) or
           fDoc.fTagged) and
-         (fFirstChar <> 0) then
+         (fFirstChar <> 0) and
+         not fInternal then // a stream would be written for nothing
       begin
         tounicode := TPdfStream.Create(fDoc);
         tounicode.Writer.Add('/CIDInit/ProcSet findresource begin'#10 +

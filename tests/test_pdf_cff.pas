@@ -43,6 +43,7 @@ type
     procedure Type0CidPaths;
     procedure FallbackMidRun;
     procedure Type0Routing;
+    procedure WinAnsiFontNotWritten;
     procedure SystemFaceCids;
   end;
 
@@ -1383,6 +1384,22 @@ begin
     [1, 5, 6, 7, 2, 3, 7, 41], ''), '', nil, DrawUnicodeThenMeasure);
   CheckSame(RoutedWidth, (440 + 400 + 340 + 440 + 400) * 12 / 1000, 1E-4,
     'TextWidth on the Unicode font');
+end;
+
+procedure TPdfCffTests.WinAnsiFontNotWritten;
+var
+  s: RawUtf8;
+begin
+  // the WinAnsi font of a CFF face is internal: the Type0 font and its
+  // descendant are written, with the descriptor they share
+  s := FakeFacePdf(FakeRoutingFace, 'Wi Wi');
+  CheckEqual(CountOf('/Type/Font/', s), 2, 'Type0 and CIDFont only');
+  Check(PosEx('/Subtype/Type0', s) > 0, 'the Type0 font');
+  Check(PosEx('WinAnsiEncoding', s) = 0, 'no simple font');
+  CheckEqual(CountOf('/Type/FontDescriptor', s), 1, 'the shared descriptor');
+  // a glyf face keeps its WinAnsi font
+  s := FakeFacePdf(FakeFace([$20, $57, $69, $100], [1, 5, 6, 7], ''), 'Wi Wi');
+  Check(PosEx('WinAnsiEncoding', s) > 0, 'the simple font of a glyf face');
 end;
 
 end.
