@@ -940,7 +940,13 @@ var
   P: TPdfPageGdi;
   res: TPdfDictionary;
   w, h: integer;
-  old: TPdfPage;
+  c: TPdfCanvasAccess;
+  oldPage: TPdfPage;
+  oldFonts: TPdfDictionary;
+  oldContents: TPdfStream;
+  oldFactor, oldLineWidth: single;
+  oldGState, oldCTM: integer;
+  oldNewPath, oldArtifact, oldPathArtifact, oldRtl: boolean;
 begin
   inherited Create(aDoc, true);
   w := aMetaFile.Width;
@@ -952,26 +958,54 @@ begin
     res.AddItem('Font', fFontList);
     res.AddItem('ProcSet',
       TPdfArray.CreateNames(nil, ['PDF', 'Text', 'ImageC']));
-    with TPdfCanvasAccess(TPdfDocumentAccess(TPdfDocument(aDoc)).fCanvas) do
-    begin
-      old := fPage;
-      fPage := P;
-      try
-        fPageFontList := fFontList;
-        fContents := self;
-        fPage.PageHeight := h; // SetPageHeight, protected
-        fFactor := 1;
-        RenderMetaFile(TPdfDocumentAccess(TPdfDocument(aDoc)).fCanvas, aMetaFile);
-      finally
-        if old <> nil then
-          SetPage(old);
-      end;
-    end;
+    // owned by the form from now on, also if the rendering raises
     fAttributes.AddItem('Type', 'XObject');
     fAttributes.AddItem('Subtype', 'Form');
     fAttributes.AddItem('BBox', TPdfArray.Create(nil, [0, 0, w, h]));
     fAttributes.AddItem('Matrix', TPdfRawText.Create('[1 0 0 1 0 0]'));
     fAttributes.AddItem('Resources', res);
+    P.PageHeight := h; // the Y flip of the integer coordinates
+    TPdfDocumentAccess(TPdfDocument(aDoc)).ShareFormResources(res, P);
+    // the document's canvas draws into the form, then back where it was -
+    // field by field: there may be no current page (SetPage needs one)
+    c := TPdfCanvasAccess(TPdfDocumentAccess(TPdfDocument(aDoc)).fCanvas);
+    oldPage := c.fPage;
+    oldFonts := c.fPageFontList;
+    oldContents := c.fContents;
+    oldFactor := c.fFactor;
+    oldLineWidth := c.fLineWidth;
+    oldGState := c.fGStateDepth;
+    oldCTM := c.fCTMDepth;
+    oldNewPath := c.fNewPath;
+    oldArtifact := c.fArtifactOpen;
+    oldPathArtifact := c.fPathArtifact;
+    oldRtl := c.RightToLeftText;
+    try
+      c.fPage := P;
+      c.fPageFontList := fFontList;
+      c.fContents := self;
+      c.fFactor := 1;
+      c.fLineWidth := 1;
+      c.fGStateDepth := 0;
+      c.fCTMDepth := 0;
+      // a path or an artifact the page left open is not the form's to close
+      c.fNewPath := false;
+      c.fArtifactOpen := false;
+      c.fPathArtifact := false;
+      RenderMetaFile(c, aMetaFile);
+    finally
+      c.fPage := oldPage;
+      c.fPageFontList := oldFonts;
+      c.fContents := oldContents;
+      c.fFactor := oldFactor;
+      c.fLineWidth := oldLineWidth;
+      c.fGStateDepth := oldGState;
+      c.fCTMDepth := oldCTM;
+      c.fNewPath := oldNewPath;
+      c.fArtifactOpen := oldArtifact;
+      c.fPathArtifact := oldPathArtifact;
+      c.RightToLeftText := oldRtl; // the metafile's text sets it
+    end;
   finally
     P.Free;
   end;
@@ -2296,6 +2330,10 @@ var
   ImgName: PdfString;
   ImgRect: TPdfRect;
 begin
+  // a form is no page: its outlines, bookmarks and links have none to go to
+  if (Kind in [pgcOutline, pgcBookmark, pgcLink, pgcLinkNoBorder]) and
+     Canvas.fContents.InheritsFrom(TPdfFormXObject) then
+    exit;
   try
     case Kind of
       pgcOutline: // pgcOutline, @aLevel, 4, aTitle

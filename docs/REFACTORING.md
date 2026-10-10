@@ -601,7 +601,7 @@ the LCL measured by Fable on win32, GTK2 and Cocoa):
 - **`TPdfForm`:** a page without a document gets a MediaBox (in the engine:
   `TPdfFormWithCanvas` has the same fault), the form `/Resources` with
   `/XObject`, and the canvas state is saved and restored field by field, also
-  without a current page; bookmarks and links of the metafile are refused in
+  without a current page; outlines, bookmarks and links of the metafile are left out in
   a form
 - **`TPdfDocumentVcl`'s encryption parameter:** `mormot.ui.pdfcanvas`
   includes `mormot.pdf.defines.inc`. That `TGDIPages.ExportPDF` ignores

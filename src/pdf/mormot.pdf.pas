@@ -1531,6 +1531,11 @@ type
     // the fonts measure through their IFontFace
     function EmfDC: HDC;
     {$endif USE_METAFILE}
+    // give the page a form draws on the XObject, ExtGState and Properties
+    // dictionaries of the form's resources, so that images, transparency and
+    // optional content drawn on the page land in the form - TPdfFormWithCanvas,
+    // and TPdfForm of mormot.pdf.canvas
+    procedure ShareFormResources(FormResources: TPdfDictionary; Page: TPdfPage);
     /// build and write the Tagged PDF structure tree into the document
     // - called from SaveToStreamDirectEnd when Tagged=true
     procedure SerializeStructTree;
@@ -8929,6 +8934,27 @@ begin
   DrawImage(result, DrawAt, ClipRc);
 end;
 
+procedure TPdfDocument.ShareFormResources(FormResources: TPdfDictionary;
+  Page: TPdfPage);
+var
+  pres, d: TPdfDictionary;
+  i: PtrInt;
+const
+  SHARED: array[0..2] of PdfString = ('XObject', 'ExtGState', 'Properties');
+begin
+  // indirect, so that both dictionaries reference them: a direct object is
+  // owned by the one dictionary that holds it
+  pres := TPdfDictionary.Create(fXRef);
+  for i := 0 to high(SHARED) do
+  begin
+    d := TPdfDictionary.Create(fXRef);
+    fXRef.AddObject(d);
+    FormResources.AddItem(SHARED[i], d);
+    pres.AddItem(SHARED[i], d);
+  end;
+  Page.AddItem('Resources', pres);
+end;
+
 function TPdfDocument.RegisterImage(Image: TPdfImage): PdfString;
 var
   name: TPdfName;
@@ -9242,8 +9268,14 @@ end;
 
 constructor TPdfPage.Create(ADoc: TPdfDocument);
 begin
-  if ADoc = nil then // e.g. for TPdfForm.Create
-    inherited Create(nil)
+  if ADoc = nil then
+  begin
+    // the page a form draws on (TPdfForm, TPdfFormWithCanvas): never written,
+    // but the integer coordinates flip Y within its height
+    inherited Create(nil);
+    fMediaBox := TPdfArray.Create(nil, [0, 0, 0, 0]);
+    AddItem('MediaBox', fMediaBox);
+  end
   else
   begin
     inherited Create(ADoc.fXRef);
@@ -11542,6 +11574,8 @@ begin
   res.AddItem('ProcSet',
     TPdfArray.CreateNames(nil, ['PDF', 'Text', 'ImageC']));
   fPage := TPdfPage.Create(nil);
+  fPage.PageHeight := H;
+  aDoc.ShareFormResources(res, fPage);
   fCanvas := TPdfCanvas.Create(aDoc);
   fCanvas.fPage := fPage;
   fCanvas.fPageFontList := fFontList;

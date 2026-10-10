@@ -206,6 +206,11 @@ v0.10.0 (2026-09-30).
   first, as before. An empty `TBitmap` gives no image (`''`) and
   `CreateGraphicImage` raises `EPdfInvalidValue` for an empty graphic, where
   a 0 x 0 image was written before
+- **Fixed (EMF, Windows): `TPdfForm.Create(DocGdi, MetaFile)`** raised an
+  access violation in every version; it gives a form XObject now, with the
+  metafile's bitmaps and fonts (its outline, bookmark and link comments are
+  left out). `TPdfFormWithCanvas` can draw images and transparency now - its
+  `/Resources` gain an `/XObject` and an `/ExtGState` dictionary
 - **Coming with R-20** (announce when done): the preview and the GUI demos
   on Delphi
 

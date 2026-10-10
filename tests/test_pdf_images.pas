@@ -50,6 +50,7 @@ type
     procedure PixelChecks;
     procedure JpegData;
     procedure FormFonts;
+    procedure FormWithCanvasImage;
   end;
 
 {$ifdef PDF_HASVCLCANVAS}
@@ -64,6 +65,8 @@ type
     procedure BitmapJpeg;
     procedure MetaFileCanvas;
     procedure MetaFileRender;
+    procedure MetaFileForm;
+    procedure MetaFileFormState;
   end;
 
 {$endif PDF_HASVCLCANVAS}
@@ -453,6 +456,40 @@ begin
   CheckEqual(err, '');
   // the first page, the form, and the second page once it drew the form
   CheckEqual(CountOf('/Font<</' + key + ' ', txt), 3, 'listed by both pages');
+end;
+
+// TPdfFormWithCanvas: an image and a transparency drawn on its canvas need the
+// XObject and ExtGState resources of the form
+procedure TPdfImageRawTests.FormWithCanvasImage;
+var
+  doc: TPdfDocument;
+  form: TPdfFormWithCanvas;
+  buf: RawByteString;
+  img: PdfString;
+  pdf: RawByteString;
+  txt, err: RawUtf8;
+begin
+  doc := TPdfDocument.Create;
+  try
+    doc.Info.CreationDate := GOLDEN_DATE;
+    doc.CompressionMethod := cmNone;
+    doc.AddPage;
+    img := doc.CreateOrGetImage(RawPixels(ipfRgb24, buf));
+    form := TPdfFormWithCanvas.Create(doc, 200, 100);
+    form.Canvas.SetFillAlpha(0.5);
+    form.Canvas.DrawXObject(10, 10, 40, 30, img);
+    form.CloseCanvas;
+    doc.AddXObject('FormC', form);
+    doc.Canvas.DrawXObject(40, 600, 1, 1, 'FormC');
+    pdf := SaveToString(doc);
+  finally
+    doc.Free;
+  end;
+  txt := NormalizePdf(pdf, err);
+  CheckEqual(err, '');
+  Check(PosEx('/' + img + ' Do', txt) > 0, 'the image drawn in the form');
+  CheckEqual(CountOf('<</' + img + ' ', txt), 1, 'listed by the form');
+  CheckEqual(CountOf('/Fca50<<', txt), 1, 'the alpha of the form');
 end;
 
 {$ifdef PDF_HASVCLCANVAS}
@@ -869,8 +906,7 @@ begin
     doc.Info.CreationDate := GOLDEN_DATE;
     doc.EmbeddedTTF := false;
     doc.StandardFontsReplace := true;
-    // RenderMetaFile into the page, twice - TPdfForm.Create(metafile) is not
-    // covered: it raises an access violation (a page without a MediaBox)
+    // RenderMetaFile into the page, twice - TPdfForm: MetaFileForm
     doc.AddPage;
     RenderMetaFile(doc.Canvas, mf, 1, 1, 20, 0);
     doc.AddPage;
@@ -888,6 +924,172 @@ begin
   CheckGolden('emf_render', pdf);
 end;
 
+// TPdfForm of a metafile: before the first page (no canvas state to come back
+// to) and in the middle of one; the metafile's bitmap and fonts end in the
+// form, its bookmark comment is left out
+procedure TPdfImageGoldenTests.MetaFileForm;
+var
+  doc: TPdfDocumentGdi;
+  mf, mfb: TMetaFile;
+  mc: TMetaFileCanvas;
+  pdf: RawByteString;
+  txt, err: RawUtf8;
+  w, h: integer;
+begin
+  mf := TMetaFile.Create;
+  mfb := TMetaFile.Create;
+  doc := TPdfDocumentGdi.Create;
+  try
+    mf.Width := 400;
+    mf.Height := 320;
+    mc := TMetaFileCanvas.Create(mf, 0);
+    try
+      DrawSample(mc);
+    finally
+      mc.Free;
+    end;
+    mfb.Width := 200;
+    mfb.Height := 100;
+    mc := TMetaFileCanvas.Create(mfb, 0);
+    try
+      mc.Font.Name := 'Arial';
+      mc.Font.Size := 12;
+      mc.TextOut(10, 10, 'Form with a bookmark comment');
+      GdiCommentBookmark(mc.Handle, 'inform');
+    finally
+      mc.Free;
+    end;
+    w := mf.Width;
+    h := mf.Height;
+    doc.Info.CreationDate := GOLDEN_DATE;
+    doc.EmbeddedTTF := false;
+    doc.StandardFontsReplace := true;
+    doc.AddXObject('Frm1', TPdfForm.Create(doc, mf));
+    doc.AddPage; // used the freed page of the form before
+    doc.Canvas.DrawXObject(40, 400, 1, 1, 'Frm1');
+    doc.AddXObject('Frm2', TPdfForm.Create(doc, mfb));
+    doc.Canvas.DrawXObject(40, 300, 0.5, 0.5, 'Frm2');
+    doc.Canvas.SetFont('Helvetica', 10, []);
+    doc.Canvas.TextOut(40, 250, 'After the form');
+    doc.AddPage;
+    doc.Canvas.DrawXObject(40, 300, 0.5, 0.5, 'Frm1');
+    pdf := SaveDoc(doc);
+  finally
+    doc.Free;
+    mfb.Free;
+    mf.Free;
+  end;
+  txt := NormalizePdf(pdf, err);
+  CheckEqual(err, '');
+  CheckEqual(CountOf('/Type/Page/', txt) + CountOf('/Type/Page>>', txt), 2,
+    'two pages');
+  CheckEqual(CountOf('/Subtype/Form', txt), 2, 'two forms');
+  // the size TMetaFile reports, in pixels of the reference DC (its DPI)
+  CheckEqual(CountOf(FormatUtf8('/BBox[0 0 % %]', [w, h]), txt), 1,
+    'the size of the metafile');
+  CheckEqual(CountOf('/Subtype/Image', txt), 1, 'the bitmap, in the form');
+  Check(PosEx('(After the form)', txt) > 0, 'the page goes on after the form');
+  Check(PosEx('inform', txt) = 0, 'no bookmark from a form');
+  CheckGolden('emf_form', pdf);
+end;
+
+// the marked content of each stream - page or form - closed in that stream
+function BalancedStreams(const Txt: RawUtf8): boolean;
+var
+  i, j: PtrInt;
+  s: RawUtf8;
+begin
+  result := false;
+  i := PosEx('stream'#10, Txt);
+  while i > 0 do
+  begin
+    j := PosEx(#10'endstream', Txt, i);
+    if j = 0 then
+      exit;
+    s := copy(Txt, i + 7, j - i - 7);
+    if CountOf(' BMC', s) + CountOf(' BDC', s) <> CountOf('EMC', s) then
+      exit;
+    i := PosEx('stream'#10, Txt, j + 10);
+  end;
+  result := true;
+end;
+
+// what the document canvas was doing before a form is built goes on after it:
+// a path open on a tagged page, the right-to-left switch; and the optional
+// content of a form keeps its /Properties
+procedure TPdfImageGoldenTests.MetaFileFormState;
+var
+  doc: TPdfDocumentGdi;
+  mf: TMetaFile;
+  mc: TMetaFileCanvas;
+  grp: TPdfOptionalContentGroup;
+  pdf: RawByteString;
+  txt, err: RawUtf8;
+  rtl: boolean;
+begin
+  mf := TMetaFile.Create;
+  doc := TPdfDocumentGdi.Create;
+  try
+    mf.Width := 100;
+    mf.Height := 50;
+    mc := TMetaFileCanvas.Create(mf, 0);
+    try
+      mc.MoveTo(5, 5);
+      mc.LineTo(90, 40);
+      mc.Font.Name := 'Arial';
+      mc.TextOut(5, 20, 'Text sets the direction'); // RightToLeftText of the canvas
+    finally
+      mc.Free;
+    end;
+    doc.Tagged := true;
+    doc.AddPage;
+    doc.Canvas.MoveTo(10, 10);
+    doc.Canvas.RightToLeftText := true;
+    doc.AddXObject('FrmT', TPdfForm.Create(doc, mf));
+    rtl := doc.Canvas.RightToLeftText;
+    doc.Canvas.LineTo(100, 100);
+    doc.Canvas.Stroke;
+    doc.Canvas.RightToLeftText := false;
+    pdf := SaveDoc(doc);
+  finally
+    doc.Free;
+    mf.Free;
+  end;
+  Check(rtl, 'the right-to-left switch of the page kept');
+  txt := NormalizePdf(pdf, err);
+  CheckEqual(err, '');
+  Check(BalancedStreams(txt), 'each stream closes its own marked content');
+  mf := TMetaFile.Create;
+  doc := TPdfDocumentGdi.Create;
+  try
+    doc.UseOptionalContent := true;
+    doc.EmbeddedTTF := false;
+    doc.StandardFontsReplace := true;
+    doc.AddPage;
+    grp := doc.CreateOptionalContentGroup(nil, 'Layer', true);
+    mf.Width := 100;
+    mf.Height := 50;
+    mc := TMetaFileCanvas.Create(mf, 0);
+    try
+      GdiCommentBeginMarkContent(mc.Handle, grp);
+      mc.Rectangle(5, 5, 60, 30);
+      GdiCommentEndMarkContent(mc.Handle);
+    finally
+      mc.Free;
+    end;
+    doc.AddXObject('FrmL', TPdfForm.Create(doc, mf));
+    doc.Canvas.DrawXObject(40, 400, 1, 1, 'FrmL');
+    pdf := SaveDoc(doc);
+  finally
+    doc.Free;
+    mf.Free;
+  end;
+  txt := NormalizePdf(pdf, err);
+  CheckEqual(err, '');
+  Check(PosEx('/OC /oc', txt) > 0, 'the layer drawn in the form');
+  Check(PosEx('<</oc', txt) > 0, 'its /Properties kept with the form');
+end;
+
 {$else}
 
 procedure TPdfImageGoldenTests.MetaFileCanvas;
@@ -903,6 +1105,22 @@ var
   i: integer;
 begin
   for i := 1 to 5 do
+    Check(true, 'SKIP: metafiles are Windows only');
+end;
+
+procedure TPdfImageGoldenTests.MetaFileForm;
+var
+  i: integer;
+begin
+  for i := 1 to 9 do
+    Check(true, 'SKIP: metafiles are Windows only');
+end;
+
+procedure TPdfImageGoldenTests.MetaFileFormState;
+var
+  i: integer;
+begin
+  for i := 1 to 6 do
     Check(true, 'SKIP: metafiles are Windows only');
 end;
 

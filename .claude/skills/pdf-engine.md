@@ -403,10 +403,18 @@ before Phase 2 moves the `TBitmap` conversion out of the engine):
   `CreateJpegDirect(.., false)` are already in the xref: register them with
   `RegisterImage` or `RegisterXObject`, not `AddXObject` (which adds them
   again and raises)
-- `TPdfForm.Create(DocGdi, MetaFile)` **raises an access violation**: its page
-  is made without a document, and `SetPageHeight` writes a missing MediaBox.
-  And when it raises with no current page (`old = nil`), its `finally`
-  leaves the canvas on the temporary page it frees. Both for the bug-fix PR.
+- `TPdfForm.Create(DocGdi, MetaFile)` raised an access violation in the
+  original, the trunk and here until Phase 2's bug-fix PR: its page had no
+  MediaBox for `SetPageHeight`, no `/Resources` for the metafile's bitmaps,
+  and with no current page its `finally` left the canvas on the page it
+  freed. Now: `TPdfPage.Create(nil)` makes a MediaBox, the form shares its
+  `/XObject` and `/ExtGState` dictionaries with that page (indirect objects,
+  `TPdfDocument.ShareFormResources` - `TPdfFormWithCanvas` too), and the
+  document canvas is saved and restored field by field; the form's `/BBox`
+  is the metafile's `Width`/`Height`, which follow the reference DC's DPI.
+  Outline, bookmark and link comments of the metafile are left out in a
+  form (`TPdfEnum.HandleComment`): it has no page to point to.
+  `MetaFileForm` and `FormWithCanvasImage` test it.
   `TPdfCanvas.DrawXObjectPrepare` copies the fonts of a `TPdfFormXObject`
   (the base of `TPdfForm` since Phase 2) into the font list of the page:
   `AddItem` wraps an indirect font in a new `TPdfVirtualObject`, so nothing
