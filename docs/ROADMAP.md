@@ -211,6 +211,12 @@ v0.10.0 (2026-09-30).
   metafile's bitmaps and fonts (its outline, bookmark and link comments are
   left out). `TPdfFormWithCanvas` can draw images and transparency now - its
   `/Resources` gain an `/XObject` and an `/ExtGState` dictionary
+- **Fixed (Linux, macOS): the pixels of a `TBitmap`** - the adapter read
+  every LCL bitmap as Windows' B,G,R, where GTK2 and Cocoa hold 32 bits per
+  pixel in other orders: images drawn through `TPdfVclCanvas` or
+  `TGDIPages.DrawBitmap` came out with wrong colors. And a pf1bit, pf4bit or
+  pf8bit bitmap - gray in the LCL - raised `EPdfInvalidValue`; it is written
+  indexed with a gray ramp now, on Windows (FPC) too
 - **Coming with R-20** (announce when done): the preview and the GUI demos
   on Delphi
 

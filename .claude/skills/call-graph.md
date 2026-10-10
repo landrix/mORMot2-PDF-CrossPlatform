@@ -550,8 +550,12 @@ CreateOrGetBitmapImage(Doc, Bitmap, DrawAt, ClipRc)   (VCL/LCL, Phase 2: adapter
 │  Doc.GetXObjectImageName(hash, W, H) - existing image: reuse its name
 │  else  ForceJPEGCompression = 0:
 │          CreateGraphicImage(Doc, Bitmap, true)
-│            ScanLine[] → TPdfImagePixels (ipfBgr24 / ipfBgrx32 / ipfIndexed8
-│            with its palette; pf1/pf4 drawn to pf8; color key of tmFixed)
+│            VCL: ScanLine[] → TPdfImagePixels (ipfBgr24 / ipfBgrx32 /
+│            ipfIndexed8 with its palette; pf1/pf4 drawn to pf8)
+│            LCL: LclPixels - RawImage.Description: a DIB layout as it is,
+│            gray as ipfIndexed8 with a gray ramp, others repacked to
+│            ipfRgb24 through TLazIntfImage.Colors
+│            color key of a pf24bit tmFixed bitmap → /Mask
 │            → TPdfImage.CreatePixels
 │        else: TJpegImage.Assign(Bitmap) → CreateGraphicImage(Doc, jpg, false)
 │            SaveToStream at the quality → TPdfImage.CreateJpeg (in the xref)

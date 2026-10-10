@@ -395,10 +395,21 @@ before Phase 2 moves the `TBitmap` conversion out of the engine):
 - `CreateOrGetBitmapImage`: pf24bit and pf32bit become `/DeviceRGB` (alpha
   dropped); a fixed transparent color writes `/Mask`. The same pixels give the
   same image (a hash over the padded rows and the palette), across pages too
-- pf1bit/pf4bit/pf8bit: indexed (`/Indexed /DeviceRGB 255`) with the VCL;
-  **with the LCL they raise `EPdfInvalidValue('TPdfImage')`** - the LCL
-  bitmap has no 256 palette entries for `GetPaletteEntries`. Measured on
-  LCL win32, GTK2 and Cocoa
+- pf1bit/pf4bit/pf8bit: indexed (`/Indexed /DeviceRGB 255`) with the VCL,
+  from the bitmap's palette. The LCL keeps no palette (`GetPaletteEntries`
+  returns 0 on win32, GTK2 and Cocoa): such a bitmap is 8-bit gray (pf4bit,
+  pf8bit) or 1-bit mono, and the adapter writes it indexed with a gray ramp
+  (`<000000 010101 ...>`) - until Phase 2's bug-fix PR it raised
+  `EPdfInvalidValue('TPdfImage')`
+- **The LCL's layouts** (`LclPixels`, from `RawImage.Description`, measured by
+  Fable): pf24bit is 24-bit B,G,R on win32 but 32 bits B,G,R,x on GTK2 and
+  A,R,G,B on Cocoa; pf32bit is B,G,R,A on win32, R,G,B,A on GTK2, A,R,G,B on
+  Cocoa. A Windows DIB layout (B,G,R or B,G,R,x little-endian) goes through
+  as `ipfBgr24`/`ipfBgrx32`, gray 8-bit as `ipfIndexed8`; every other layout
+  is repacked to `ipfRgb24` through `TLazIntfImage.Colors`. Before the
+  bug-fix PR the adapter read every layout as B,G,R: the pixels of a Linux or
+  macOS PDF were misread. The tests compare with `TLazIntfImage.Colors`, not
+  with an assumed layout
 - `CreateGraphicImage(Doc, Graphic, false)`, `CreateJpeg(.., false)` and
   `CreateJpegDirect(.., false)` are already in the xref: register them with
   `RegisterImage` or `RegisterXObject`, not `AddXObject` (which adds them

@@ -20,6 +20,9 @@ uses
   {$endif OSWINDOWS}
   Types,                // Point, Rect of the canvas, not the engine's
   Graphics,             // TBitmap, TPixelFormat
+  {$ifdef FPC}
+  intfgraphics,         // TLazIntfImage: what the LCL says the pixels are
+  {$endif FPC}
   {$ifdef OSWINDOWS}
   {$ifdef FPC}
   mormot.ui.core,       // TMetaFile, TMetaFileCanvas for FPC
@@ -559,14 +562,40 @@ begin
   end;
 end;
 
-// the rows of B as the image stream must hold them, read from ScanLine[]:
-// R, G, B of each pixel of Bytes bytes (B, G, R first), or the index bytes
+// the rows of B as the image stream must hold them: R, G, B of each pixel -
+// on the LCL as its own reader TLazIntfImage sees them, whatever the layout
+// (GTK2 and Cocoa hold 32 bits per pixel, Cocoa A,R,G,B), on the VCL read
+// from ScanLine[], Bytes bytes per pixel, B, G, R first
 function ScanRgb(B: TBitmap; Bytes: integer): RawByteString;
 var
   x, y: integer;
+  {$ifdef FPC}
+  img: TLazIntfImage;
+  {$else}
   p: PByteArray;
+  {$endif FPC}
   d: PAnsiChar;
 begin
+  {$ifdef FPC}
+  SetLength(result, B.Width * B.Height * 3);
+  d := pointer(result);
+  img := TLazIntfImage.Create(B.RawImage, {DataOwner=}false);
+  try
+    for y := 0 to B.Height - 1 do
+      for x := 0 to B.Width - 1 do
+        with img.Colors[x, y] do
+        begin
+          d[0] := AnsiChar(red shr 8);
+          d[1] := AnsiChar(green shr 8);
+          d[2] := AnsiChar(blue shr 8);
+          inc(d, 3);
+        end;
+  finally
+    img.Free;
+  end;
+  exit;
+  {$endif FPC}
+  {$ifndef FPC}
   SetLength(result, B.Width * B.Height * 3);
   d := pointer(result);
   for y := 0 to B.Height - 1 do
@@ -580,6 +609,18 @@ begin
       inc(d, 3);
     end;
   end;
+  {$endif FPC}
+end;
+
+// true when S is not empty and holds the two byte values A and B only
+function OnlyBytes(const S: RawByteString; A, B: byte): boolean;
+var
+  i: PtrInt;
+begin
+  result := S <> '';
+  for i := 1 to length(S) do
+    if not (ord(S[i]) in [A, B]) then
+      result := false;
 end;
 
 function ScanIndexes(B: TBitmap): RawByteString;
@@ -627,7 +668,6 @@ begin
       try
         names[i] := CreateOrGetBitmapImage(doc, bmp[i], @b);
       except
-        // the LCL gives a palette bitmap no 256 palette entries
         on EPdfInvalidValue do
           inc(raised);
       end;
@@ -660,22 +700,20 @@ begin
   Check((names[0] <> names[1]) and (names[1] <> names[5]), 'one image per bitmap');
   txt := NormalizePdf(pdf, err);
   CheckEqual(err, '');
-  {$ifdef FPC}
-  CheckEqual(raised, 3, 'pf1bit, pf4bit, pf8bit raise with the LCL');
-  CheckEqual(CountOf('/Subtype/Image', txt), 3, 'three images');
-  CheckEqual(CountOf('/Indexed', txt), 0, 'no palette image');
-  {$else}
-  CheckEqual(raised, 0, 'every format embedded with the VCL');
+  // the LCL: gray bitmaps, indexed with a gray ramp; the VCL: their palette
+  CheckEqual(raised, 0, 'every format embedded');
   CheckEqual(CountOf('/Subtype/Image', txt), 6, 'six images');
-  CheckEqual(CountOf('/Indexed', txt), 3, 'palette formats stay indexed');
-  {$endif FPC}
+  CheckEqual(CountOf('/Indexed', txt), 3, 'the 1, 4 and 8 bit formats indexed');
   CheckEqual(CountOf('/Mask', txt), 1, 'the color key');
   Check(ImageData(txt, names[0]) = rgb24, 'pf24bit: the rows, RGB');
   Check(ImageData(txt, names[1]) = rgb32, 'pf32bit: the rows, RGB, x skipped');
-  {$ifdef FPC}
-  Check(idx8 <> '', 'SKIP: no palette image with the LCL');
-  {$else}
   Check(ImageData(txt, names[2]) = idx8, 'pf8bit: the index bytes');
+  {$ifdef FPC}
+  CheckEqual(CountOf('<000000 010101 020202 ', txt), 3, 'a gray ramp each');
+  Check(OnlyBytes(ImageData(txt, names[4]), 0, 255), 'pf1bit: black or white');
+  {$else}
+  Check(true, 'SKIP: the VCL writes the palette of the bitmap');
+  Check(true, 'SKIP: the VCL indexes pf1bit by its palette');
   {$endif FPC}
   CheckGolden('images_bitmap', pdf);
 end;
