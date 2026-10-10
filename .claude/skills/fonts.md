@@ -92,13 +92,28 @@ The grep only works on a file without object streams. Tagged output deflates
 its font dictionaries, so it returns nothing there — which reads like "no fonts
 embedded". Inflate every stream with `python3` and search the result instead.
 
-veraPDF logs `WARNUNG`/`WARNING: The Top DICT does not begin with ROS
-operator` for Hiragino: its CFF is name-keyed, not CID-keyed. That is legal
-for a `CIDFontType0` — the CID is taken as the glyph index (ISO 32000-1
-9.7.4.2), which holds because the subset keeps the original GIDs under
-Identity-H. A log line, not a rule: the file passes `ua1`, and it renders the
-same characters as the Linux file (checked 2026-09-29). Do not convert the
-face to CID-keyed CFF to silence it.
+**The CJK CFF faces are CID-keyed** (measured 2026-10-10 with
+`PdfFaceCffInfo`, `TPdfCffTests.SystemFaces`): Hiragino Sans GB is
+Adobe-GB1 with 288 glyphs whose CID is not their glyph index; Noto Sans CJK
+is Adobe-Identity, every CID its index. hb-subset keeps the ROS, the
+FDArray and the charset: the subset in the Mac `cjk_subset` baseline is
+Adobe-GB1-6, 3416 glyphs (`--retain-gids`). The codes of a `CIDFontType0`
+are CIDs (ISO 32000-1 9.7.4.2), not glyph indexes, so writing glyph indexes
+under Identity-H draws the wrong glyph for those 288 - what the CFF series
+after R-28 Phase 2 fixes. An earlier note here called Hiragino name-keyed
+after a veraPDF log line (`The Top DICT does not begin with ROS operator`);
+the measurement contradicts it.
+
+`PdfCffParse` (`mormot.pdf`) reads a bare `CFF ` table bounded - every INDEX
+offset, the Top DICT operands, the charset formats 0/1/2 - and refuses
+(`pcInvalid`) rather than guesses: duplicate CIDs, a predefined charset in a
+CIDFont (TN #5176 13), a ROS string that is a CFF standard string (no real
+face does that; the 391 names are not carried), CFF2 (variable OpenType:
+no PDF 1.x font program). `PdfFaceCffInfo` reads the table raw through
+`GetFontData` - `GetTtfData` swaps 16-bit words. A name-keyed face (a Latin
+OTF such as Nimbus Sans of `fonts-urw-base35`) has no ROS; its code is the
+glyph index. None is installed on the test machines: Windows 11 has no CFF
+face at all, WSL Ubuntu only Noto CJK.
 
 **Every `.ttc` face hinges on `TFreeTypeFont.SfntChecked`.** `GetFontData(0)`
 extracts the loaded face once and caches it in `Sfnt`; with `SfntChecked` set

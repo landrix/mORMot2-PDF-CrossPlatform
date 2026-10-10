@@ -578,6 +578,48 @@ function PdfCoord(MM: single): integer;
 // a glyph keep list on Windows; elsewhere the whole face is embedded
 function PdfCanSubsetRetainingGids: boolean;
 
+type
+  /// how the outlines of a font face are programmed, as PdfCffParse reads it
+  // - pcNone: no 'CFF ' table - a glyf face, or no face at all
+  // - pcNameKeyed: a CFF font of named glyphs, e.g. a Latin OTF
+  // - pcCidKeyed: a CFF CIDFont, whose Top DICT begins with ROS - the CJK OTF
+  // faces of macOS and Linux
+  // - pcInvalid: a 'CFF ' table this reader refuses: malformed, or a feature
+  // it does not handle, e.g. a ROS string that is a CFF standard string
+  TPdfCffKind = (
+    pcNone,
+    pcNameKeyed,
+    pcCidKeyed,
+    pcInvalid);
+
+  /// what PdfCffParse reads from a 'CFF ' table
+  TPdfCffInfo = record
+    /// the kind of the table
+    Kind: TPdfCffKind;
+    /// the number of glyphs, from the CharStrings INDEX
+    GlyphCount: integer;
+    /// the Registry and Ordering strings of the ROS - CID-keyed only
+    Registry, Ordering: RawUtf8;
+    /// the Supplement of the ROS - CID-keyed only
+    Supplement: integer;
+    /// the CID of each glyph index, GlyphCount entries - CID-keyed only
+    // - the codes of a CIDFontType0 are CIDs (ISO 32000-1 9.7.4.2), which
+    // differ from the glyph indexes the shaper, the metrics and the
+    // subsetter use: Hiragino Sans GB has 288 such glyphs
+    Cid: TWordDynArray;
+  end;
+
+/// read the kind, the ROS and the charset of a bare 'CFF ' table
+// - bounded: each offset and count is checked against Len, so a malformed
+// table gives pcInvalid and nothing outside Data is read
+// - returns Info.Kind; Len = 0 gives pcNone
+function PdfCffParse(Data: PAnsiChar; Len: PtrInt;
+  out Info: TPdfCffInfo): TPdfCffKind;
+
+/// read the 'CFF ' table of a face with PdfCffParse
+// - pcNone when the face has no such table
+function PdfFaceCffInfo(const Face: IFontFace; out Info: TPdfCffInfo): TPdfCffKind;
+
 
 
 {************ Internal classes mapping PDF objects }
@@ -6717,6 +6759,364 @@ begin
     result := 'FontFile3'
   else
     result := 'FontFile2';
+end;
+
+
+{ PdfCffParse - the CFF of Adobe Technical Note #5176 }
+
+type
+  // an INDEX of a CFF table, its offsets checked
+  TCffIndex = record
+    Count: integer;
+    OffSize: integer;
+    OffsetPos: PtrInt; // the offset array
+    DataBase: PtrInt;  // the byte before the data: the offsets are 1-based
+    Next: PtrInt;      // the byte after the INDEX
+  end;
+
+function CffCard(P: PByteArray; Pos, Size: PtrInt): cardinal;
+var
+  i: PtrInt;
+begin
+  result := 0;
+  for i := Pos to Pos + Size - 1 do
+    result := result shl 8 + P[i];
+end;
+
+function CffReadIndex(P: PByteArray; Len, Pos: PtrInt; out Ndx: TCffIndex): boolean;
+var
+  i: integer;
+  prev, o: cardinal;
+begin
+  result := false;
+  if (Pos < 0) or
+     (Pos > Len - 2) then
+    exit;
+  Ndx.Count := P[Pos] shl 8 + P[Pos + 1];
+  if Ndx.Count = 0 then
+  begin
+    Ndx.OffSize := 0;
+    Ndx.OffsetPos := Pos + 2;
+    Ndx.DataBase := Pos + 1;
+    Ndx.Next := Pos + 2;
+    result := true;
+    exit;
+  end;
+  if Pos > Len - 3 then
+    exit;
+  Ndx.OffSize := P[Pos + 2];
+  if (Ndx.OffSize < 1) or
+     (Ndx.OffSize > 4) then
+    exit;
+  Ndx.OffsetPos := Pos + 3;
+  if PtrInt(Ndx.Count + 1) * Ndx.OffSize > Len - Ndx.OffsetPos then
+    exit; // the offset array does not fit - checked before adding to Pos
+  Ndx.DataBase := Ndx.OffsetPos + PtrInt(Ndx.Count + 1) * Ndx.OffSize - 1;
+  prev := 1;
+  for i := 0 to Ndx.Count do
+  begin
+    o := CffCard(P, Ndx.OffsetPos + PtrInt(i) * Ndx.OffSize, Ndx.OffSize);
+    if ((i = 0) and
+        (o <> 1)) or
+       (o < prev) then
+      exit;
+    prev := o;
+  end;
+  if prev > cardinal(Len - Ndx.DataBase) then
+    exit; // the data does not fit
+  Ndx.Next := Ndx.DataBase + PtrInt(prev);
+  result := true;
+end;
+
+// the bytes of entry Index of a checked INDEX
+procedure CffIndexItem(P: PByteArray; const Ndx: TCffIndex; Index: integer;
+  out Start, Stop: PtrInt);
+begin
+  Start := Ndx.DataBase + PtrInt(CffCard(P,
+    Ndx.OffsetPos + PtrInt(Index) * Ndx.OffSize, Ndx.OffSize));
+  Stop := Ndx.DataBase + PtrInt(CffCard(P,
+    Ndx.OffsetPos + PtrInt(Index + 1) * Ndx.OffSize, Ndx.OffSize));
+end;
+
+// the string of a ROS SID, from the String INDEX
+// - a SID below 391 is a standard string, which no CIDFont uses for its ROS:
+// refused rather than carrying the table of 391 names for it
+function CffSidString(P: PByteArray; const Strings: TCffIndex; Sid: integer;
+  out Value: RawUtf8): boolean;
+var
+  start, stop: PtrInt;
+begin
+  result := (Sid >= 391) and
+            (Sid - 391 < Strings.Count);
+  if not result then
+    exit;
+  CffIndexItem(P, Strings, Sid - 391, start, stop);
+  FastSetString(Value, @P[start], stop - start);
+end;
+
+// PdfCffParse of a table that is there: false if it is refused
+function CffParse(P: PByteArray; Len: PtrInt; var Info: TPdfCffInfo): boolean;
+const
+  CFF_MAXSTACK = 48; // the operand limit of a DICT
+var
+  names, tops, strings, glyphs: TCffIndex;
+  pos, stop, gid, q: PtrInt;
+  stack: array[0..CFF_MAXSTACK - 1] of integer;
+  isreal: array[0..CFF_MAXSTACK - 1] of boolean;
+  n, op, b, first, left, k, cid: integer;
+  ros: array[0..2] of integer;
+  hasros, firstop: boolean;
+  charset, charstrings: integer;
+  seen: array of byte;
+begin
+  result := false;
+  // header, Name INDEX, Top DICT INDEX, String INDEX
+  if (Len < 4) or
+     (P[0] <> 1) or
+     (P[2] < 4) or
+     not CffReadIndex(P, Len, P[2], names) or
+     (names.Count < 1) or
+     not CffReadIndex(P, Len, names.Next, tops) or
+     (tops.Count < 1) or
+     not CffReadIndex(P, Len, tops.Next, strings) then
+    exit;
+  // the Top DICT of the first font: ROS, charset, CharStrings
+  CffIndexItem(P, tops, 0, pos, stop);
+  n := 0;
+  hasros := false;
+  firstop := true;
+  charset := 0;
+  charstrings := 0;
+  while pos < stop do
+  begin
+    b := P[pos];
+    inc(pos);
+    if b <= 21 then
+    begin
+      // an operator
+      op := b;
+      if b = 12 then
+      begin
+        if pos >= stop then
+          exit;
+        op := 1200 + P[pos];
+        inc(pos);
+      end;
+      case op of
+        1230: // ROS: the first operator of a CIDFont Top DICT
+          begin
+            if not firstop or
+               (n <> 3) or
+               isreal[0] or isreal[1] or isreal[2] then
+              exit;
+            ros[0] := stack[0];
+            ros[1] := stack[1];
+            ros[2] := stack[2];
+            hasros := true;
+          end;
+        15: // charset
+          begin
+            if (n <> 1) or
+               isreal[0] then
+              exit;
+            charset := stack[0];
+          end;
+        17: // CharStrings
+          begin
+            if (n <> 1) or
+               isreal[0] then
+              exit;
+            charstrings := stack[0];
+          end;
+      end;
+      firstop := false;
+      n := 0;
+      continue;
+    end;
+    // an operand
+    if n = CFF_MAXSTACK then
+      exit;
+    isreal[n] := false;
+    case b of
+      28:
+        begin
+          if pos > stop - 2 then
+            exit;
+          stack[n] := smallint(P[pos] shl 8 + P[pos + 1]);
+          inc(pos, 2);
+        end;
+      29:
+        begin
+          if pos > stop - 4 then
+            exit;
+          stack[n] := integer(CffCard(P, pos, 4));
+          inc(pos, 4);
+        end;
+      30: // a real: skipped up to its end nibble, only flagged
+        begin
+          repeat
+            if pos >= stop then
+              exit;
+            k := P[pos];
+            inc(pos);
+          until (k and 15 = 15) or
+                (k shr 4 = 15);
+          stack[n] := 0;
+          isreal[n] := true;
+        end;
+      32..246:
+        stack[n] := b - 139;
+      247..250:
+        begin
+          if pos >= stop then
+            exit;
+          stack[n] := (b - 247) * 256 + P[pos] + 108;
+          inc(pos);
+        end;
+      251..254:
+        begin
+          if pos >= stop then
+            exit;
+          stack[n] := -(b - 251) * 256 - P[pos] - 108;
+          inc(pos);
+        end;
+    else
+      exit; // reserved
+    end;
+    inc(n);
+  end;
+  if (n <> 0) or
+     (charstrings <= 0) or
+     not CffReadIndex(P, Len, charstrings, glyphs) or
+     (glyphs.Count < 1) then
+    exit;
+  Info.GlyphCount := glyphs.Count;
+  if not hasros then
+  begin
+    // name-keyed: the glyph index is the code (9.7.4.2), its charset of
+    // glyph names is not needed
+    Info.Kind := pcNameKeyed;
+    result := true;
+    exit;
+  end;
+  if not CffSidString(P, strings, ros[0], Info.Registry) or
+     not CffSidString(P, strings, ros[1], Info.Ordering) then
+    exit;
+  Info.Supplement := ros[2];
+  // the charset: GID -> CID - a CIDFont has no predefined one (TN #5176 13)
+  if (charset <= 2) or
+     (charset >= Len) then
+    exit;
+  SetLength(Info.Cid, Info.GlyphCount);
+  SetLength(seen, 8192);
+  seen[0] := 1; // CID 0 is .notdef, at glyph 0 only
+  q := charset + 1;
+  gid := 1;
+  case P[charset] of
+    0:
+      begin
+        if q > Len - PtrInt(Info.GlyphCount - 1) * 2 then
+          exit;
+        while gid < Info.GlyphCount do
+        begin
+          Info.Cid[gid] := P[q] shl 8 + P[q + 1];
+          inc(q, 2);
+          inc(gid);
+        end;
+      end;
+    1, 2:
+      while gid < Info.GlyphCount do
+      begin
+        if q > Len - 2 - P[charset] then
+          exit; // 3 bytes per range in format 1, 4 in format 2
+        first := P[q] shl 8 + P[q + 1];
+        if P[charset] = 1 then
+        begin
+          left := P[q + 2];
+          inc(q, 3);
+        end
+        else
+        begin
+          left := P[q + 2] shl 8 + P[q + 3];
+          inc(q, 4);
+        end;
+        if first + left > 65535 then
+          exit;
+        for k := 0 to left do
+        begin
+          if gid >= Info.GlyphCount then
+            break; // a last range beyond the glyphs
+          Info.Cid[gid] := first + k;
+          inc(gid);
+        end;
+      end;
+  else
+    exit;
+  end;
+  for gid := 1 to Info.GlyphCount - 1 do
+  begin
+    cid := Info.Cid[gid];
+    if seen[cid shr 3] and (1 shl (cid and 7)) <> 0 then
+      exit; // two glyphs of one CID could not be told apart
+    seen[cid shr 3] := seen[cid shr 3] or (1 shl (cid and 7));
+  end;
+  Info.Kind := pcCidKeyed;
+  result := true;
+end;
+
+function PdfCffParse(Data: PAnsiChar; Len: PtrInt;
+  out Info: TPdfCffInfo): TPdfCffKind;
+begin
+  Finalize(Info);
+  FillCharFast(Info, SizeOf(Info), 0);
+  if (Data <> nil) and
+     (Len > 0) and
+     not CffParse(pointer(Data), Len, Info) then
+  begin
+    Finalize(Info); // nothing of a refused table
+    FillCharFast(Info, SizeOf(Info), 0);
+    Info.Kind := pcInvalid;
+  end;
+  result := Info.Kind;
+end;
+
+function PdfFaceCffInfo(const Face: IFontFace; out Info: TPdfCffInfo): TPdfCffKind;
+const
+  TAG_CFF = ord('C') + ord('F') shl 8 + ord('F') shl 16 + ord(' ') shl 24;
+  TAG_CFF2 = ord('C') + ord('F') shl 8 + ord('F') shl 16 + ord('2') shl 24;
+var
+  L: cardinal;
+  cff: RawByteString;
+begin
+  // the raw bytes: GetTtfData() would swap them as 16-bit words
+  L := FONT_DATA_ERROR;
+  if Face <> nil then
+    L := Face.GetFontData(TAG_CFF, 0, nil, 0);
+  if (L = FONT_DATA_ERROR) or
+     (L = 0) then
+  begin
+    result := PdfCffParse(nil, 0, Info);
+    // CFF2 (variable OpenType) is a table of its own, which no PDF 1.x font
+    // program allows: not to be taken for a glyf face
+    if (Face <> nil) and
+       (Face.GetFontData(TAG_CFF2, 0, nil, 0) <> FONT_DATA_ERROR) then
+    begin
+      Info.Kind := pcInvalid;
+      result := pcInvalid;
+    end;
+  end
+  else
+  begin
+    FastNewRawByteString(cff, L);
+    if Face.GetFontData(TAG_CFF, 0, pointer(cff), L) <> L then
+      cff := '';
+    result := PdfCffParse(pointer(cff), length(cff), Info);
+    if cff = '' then
+    begin
+      Info.Kind := pcInvalid; // the table is there but could not be read
+      result := pcInvalid;
+    end;
+  end;
 end;
 
 procedure TPdfFontTrueType.RaiseNotEmbeddable;
