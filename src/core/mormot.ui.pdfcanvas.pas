@@ -664,7 +664,7 @@ begin
   else
     bmp := TBitmap(AGraphic);
   try
-    xObj := fPdfDoc.CreateOrGetImage(bmp);
+    xObj := CreateOrGetBitmapImage(fPdfDoc, bmp);
     if xObj = '' then
       exit;
     fPdfCanvas.DrawXObject(
@@ -698,7 +698,7 @@ begin
   else
     bmp := TBitmap(AGraphic);
   try
-    xObj := fPdfDoc.CreateOrGetImage(bmp);
+    xObj := CreateOrGetBitmapImage(fPdfDoc, bmp);
     if xObj = '' then
       exit;
     fPdfCanvas.DrawXObject(

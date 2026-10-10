@@ -180,6 +180,13 @@ v0.10.0 (2026-09-30).
   and `pdfcheck compare` (as the golden-file tests) names up to ten changed,
   added or removed objects, paired by number and also inside object streams,
   and counts the rest - instead of only the first differing byte
+- **Changed API: images from a `TBitmap`/`TGraphic`** (R-28 Phase 2, so that
+  the engine needs no VCL/LCL): `Doc.CreateOrGetImage(Bitmap, ..)` becomes
+  `CreateOrGetBitmapImage(Doc, Bitmap, ..)`, `TPdfImage.Create(Doc, Graphic,
+  ..)` becomes `CreateGraphicImage(Doc, Graphic, ..)` - same output. New,
+  without VCL/LCL: `TPdfImagePixels` with `Doc.CreateOrGetImage(Pixels, ..)`
+  (RGB, BGR, BGRx, indexed with palette; stride, color key) and
+  `TPdfImage.CreateJpeg`, `Doc.RegisterImage`, `Doc.DrawImage`
 - **Coming with R-20** (announce when done): the preview and the GUI demos
   on Delphi
 

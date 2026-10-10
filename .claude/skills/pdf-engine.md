@@ -178,7 +178,8 @@ Doc.CreateHyperLink(Rect, 'http://', ...)  // external link
 Doc.CreateAnnotation(Type, Rect, Border)   // free annotation
 
 // Images
-Doc.CreateOrGetImage(Bitmap, ...)          // embed image, deduplicated; returns XObject name
+Doc.CreateOrGetImage(Pixels, ...)          // raw pixels (TPdfImagePixels), deduplicated; returns XObject name
+CreateOrGetBitmapImage(Doc, Bitmap, ...)   // a VCL/LCL TBitmap, the same way (was Doc.CreateOrGetImage(Bitmap))
 Doc.AddTrueTypeFont('Calibri')             // pre-register font explicitly; returns true on success
 
 // Optional content (layers)
@@ -348,7 +349,7 @@ C.ConcatToCTM(a, b, c, d, e, f: single); // multiply current transform matrix
 ### XObjects (Images & Forms)
 
 ```pascal
-// Embed and draw an image registered with Doc.CreateOrGetImage:
+// Draw an image registered with Doc.CreateOrGetImage / CreateOrGetBitmapImage:
 C.DrawXObject(X, Y, Width, Height, 'ImageName');
 C.DrawXObjectEx(X, Y, Width, Height, 'ImageName', ClipRect, Angle);
 C.ExecuteXObject('ImageName');  // raw Do operator
@@ -379,23 +380,26 @@ apply to raw pixels (no encoder in the engine). The reuse key of raw pixels
 (CRC32C lanes over the row bytes, after the palette, the format and the
 color key, one lane seeded apart) does not equal the key of
 a `TBitmap` (padded DIB rows, after its `TPaletteEntry` array) - the same
-picture added both ways gives two images. `TPdfImage.Create(TGraphic)` and
-`CreateOrGetImage(TBitmap)` fill a `TPdfImagePixels` from `ScanLine[]` and
-call the same code.
+picture added both ways gives two images. `CreateGraphicImage(Doc, Graphic,
+..)` and `CreateOrGetBitmapImage(Doc, Bitmap, ..)` - functions since Phase 2,
+the former `TPdfImage.Create(TGraphic)` and `TPdfDocument.CreateOrGetImage
+(TBitmap)` - fill a `TPdfImagePixels` from `ScanLine[]` and call the same
+code.
 
 How the image paths behave today (measured by `tests/test_pdf_images.pas`,
 before Phase 2 moves the `TBitmap` conversion out of the engine):
 
-- `CreateOrGetImage(TBitmap)`: pf24bit and pf32bit become `/DeviceRGB` (alpha
+- `CreateOrGetBitmapImage`: pf24bit and pf32bit become `/DeviceRGB` (alpha
   dropped); a fixed transparent color writes `/Mask`. The same pixels give the
   same image (a hash over the padded rows and the palette), across pages too
 - pf1bit/pf4bit/pf8bit: indexed (`/Indexed /DeviceRGB 255`) with the VCL;
   **with the LCL they raise `EPdfInvalidValue('TPdfImage')`** - the LCL
   bitmap has no 256 palette entries for `GetPaletteEntries`. Measured on
   LCL win32, GTK2 and Cocoa
-- `TPdfImage.Create(Doc, Graphic, false)` and `CreateJpegDirect(.., false)`
-  are already in the xref: register them with `RegisterXObject`, not
-  `AddXObject` (which adds them again and raises)
+- `CreateGraphicImage(Doc, Graphic, false)`, `CreateJpeg(.., false)` and
+  `CreateJpegDirect(.., false)` are already in the xref: register them with
+  `RegisterImage` or `RegisterXObject`, not `AddXObject` (which adds them
+  again and raises)
 - `TPdfForm.Create(DocGdi, MetaFile)` **raises an access violation**: its page
   is made without a document, and `SetPageHeight` writes a missing MediaBox.
   The original and the trunk have the same code. `RenderMetaFile` into a
@@ -712,10 +716,13 @@ the cmap — see `fonts.md` §10. The tests use `PDF_DEFAULT_CHARSET` from
 
 ## FPImage Bitmap Adapter (mormot.pdf.fpimage)
 
-Used on non-Windows platforms to embed PNG/JPEG images. Not needed on Windows (GDI handles bitmaps).
+Loads PNG/JPEG files with FPC's FPImage (non-Windows guard, FPC-only units).
+**Nothing calls it** - neither the engine nor the bridge: it is a standalone
+helper. Phase 2 keeps it as an optional FPC adapter whose `GetRawRGB` feeds a
+`TPdfImagePixels` (`ipfRgb24`, top-down); `GetJpegBytes` re-encodes, it does
+not pass a JPEG through.
 
 ```pascal
-// Only needed when calling TPdfDocument.CreateOrGetImage on Unix/macOS:
 uses mormot.pdf.fpimage;
 
 var Adapter: IPdfBitmapAdapter;
@@ -726,12 +733,10 @@ W := Adapter.GetWidth;
 H := Adapter.GetHeight;
 Raw := Adapter.GetRawRGB;              // RGB24 bytes
 Jpg := Adapter.GetJpegBytes(85);      // JPEG-encoded at quality 85
-
-// In practice, the adapter is used internally by TPdfDocument.CreateOrGetImage.
-// Application code calls CreateOrGetImage directly and does not need IPdfBitmapAdapter.
 ```
 
-`CreatePdfBitmapAdapter` is registered automatically by the unit's `initialization` section.
+`CreatePdfBitmapAdapter` is a plain factory: it returns a new
+`TPdfFPImageAdapter`; nothing is registered.
 
 ---
 

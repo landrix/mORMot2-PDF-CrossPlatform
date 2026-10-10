@@ -1698,18 +1698,6 @@ type
     // - a dtXYZ destination with the corresponding TopPosition Y value is defined
     // - the associated bookmark name must be unique, otherwise an exception is raised
     procedure CreateBookMark(TopPosition: single; const aBookmarkName: RawUtf8);
-    /// create an image from a supplied bitmap
-    // - returns the internal XObject name of the resulting TPdfImage
-    // - if you specify a PPdfBox to draw the image at the given position/size
-    // - if the same bitmap content is sent more than once, the TPdfImage will
-    // be reused (it will therefore spare resulting pdf file space) - if the
-    // ForceNoBitmapReuse is false
-    // - if ForceCompression property is set, the picture will be stored as a JPEG
-    // - you can specify a clipping rectangle region as ClipRc parameter
-    {$ifdef USE_GRAPHICS_UNIT}
-    function CreateOrGetImage(B: TBitmap; DrawAt: PPdfBox = nil;
-      ClipRc: PPdfBox = nil): PdfString; overload;
-    {$endif USE_GRAPHICS_UNIT}
     /// create an image from raw pixels, or reuse the same pixels added before
     // - returns the internal XObject name of the resulting TPdfImage, and
     // draws it at DrawAt if given, clipped to ClipRc if given
@@ -1717,8 +1705,9 @@ type
     // ForceNoBitmapReuse is set
     // - ForceJPEGCompression does not apply: the engine has no JPEG encoder;
     // encode the pixels first and use TPdfImage.CreateJpeg and RegisterImage
+    // - a VCL/LCL TBitmap goes through CreateOrGetBitmapImage()
     function CreateOrGetImage(const Pixels: TPdfImagePixels; DrawAt: PPdfBox = nil;
-      ClipRc: PPdfBox = nil): PdfString; overload;
+      ClipRc: PPdfBox = nil): PdfString;
     /// add a new TPdfImage to the XObjects of this document, named SynImg<n>
     // - returns the name; an image already in the xref (created with
     // DontAddToFXref = false) is registered as it is
@@ -3138,16 +3127,6 @@ type
     // - raises EPdfInvalidValue for no data or no size
     constructor CreateJpeg(aDoc: TPdfDocument; aJpeg: pointer; aJpegLen: PtrInt;
       aWidth, aHeight: integer; DontAddToFXref: boolean);
-    /// create the image from a supplied VCL/LCL TGraphic instance
-    // - handle TBitmap and SynGdiPlus picture types, i.e. TJpegImage
-    // (stored as jpeg), and TGifImage/TPngImage (stored as bitmap)
-    // - use TPdfForm to handle TMetafile in vectorial format
-    // - an optional DontAddToFXref is available, if you don't want to add
-    // this object to the main XRef list of the PDF file
-    {$ifdef USE_GRAPHICS_UNIT}
-    constructor Create(aDoc: TPdfDocument; aImage: TGraphic;
-      DontAddToFXref: boolean); reintroduce;
-    {$endif USE_GRAPHICS_UNIT}
     /// create an image from a supplied JPEG file name
     // - will raise an EFOpenError exception if the file doesn't exist
     // - an optional DontAddToFXref is available, if you don't want to add
@@ -3355,6 +3334,34 @@ type
     property Current: TPdfFaceMetrics
       read fCurrent;
   end;
+
+
+{$ifdef USE_GRAPHICS_UNIT}
+
+/// create an image from a VCL/LCL bitmap, or reuse the same bitmap added before
+// - returns the internal XObject name of the resulting TPdfImage
+// - if you specify a PPdfBox to draw the image at the given position/size
+// - if the same bitmap content is sent more than once, the TPdfImage will
+// be reused (it will therefore spare resulting pdf file space) - if the
+// Doc.ForceNoBitmapReuse is false
+// - if Doc.ForceJPEGCompression is set, the picture will be stored as a JPEG
+// - you can specify a clipping rectangle region as ClipRc parameter
+// - replaces TPdfDocument.CreateOrGetImage(TBitmap); raw pixels go through
+// TPdfDocument.CreateOrGetImage(TPdfImagePixels)
+function CreateOrGetBitmapImage(Doc: TPdfDocument; B: TBitmap;
+  DrawAt: PPdfBox = nil; ClipRc: PPdfBox = nil): PdfString;
+
+/// create the image of a VCL/LCL TGraphic instance
+// - handle TBitmap and SynGdiPlus picture types, i.e. TJpegImage
+// (stored as jpeg), and TGifImage/TPngImage (stored as bitmap)
+// - use TPdfForm to handle TMetafile in vectorial format
+// - an optional DontAddToFXref is available, if you don't want to add
+// this object to the main XRef list of the PDF file
+// - replaces the TPdfImage.Create(TGraphic) constructor
+function CreateGraphicImage(Doc: TPdfDocument; Graphic: TGraphic;
+  DontAddToFXref: boolean): TPdfImage;
+
+{$endif USE_GRAPHICS_UNIT}
 
 
 {************ TPdfDocumentGdi for GDI/TCanvas rendering support }
@@ -9293,42 +9300,42 @@ begin
     result.c[y and 3] := crc32c(result.c[y and 3], B.{%H-}ScanLine[y], row);
 end;
 
-function TPdfDocument.CreateOrGetImage(
-  B: TBitmap; DrawAt, ClipRc: PPdfBox): PdfString;
+function CreateOrGetBitmapImage(Doc: TPdfDocument; B: TBitmap;
+  DrawAt, ClipRc: PPdfBox): PdfString;
 var
   jpg: TJpegImage;
   img: TPdfImage;
   hash: THash128Rec; // no DefaultHasher128() because AesNiHash128() makes GPF
 begin
   result := '';
-  if (self = nil) or
+  if (Doc = nil) or
      (B = nil) then
     exit;
   FillZero(hash.b);
-  if not ForceNoBitmapReuse then
+  if not Doc.ForceNoBitmapReuse then
   begin
     hash := BitmapHash(B);
-    result := GetXObjectImageName(hash, B.Width, B.Height); // search for matching image
+    result := Doc.GetXObjectImageName(hash, B.Width, B.Height); // search for matching image
   end;
   if result = '' then
   begin
      // create new if no existing TPdfImage match
-    if ForceJPEGCompression = 0 then
-      img := TPdfImage.Create(self, B, true)
+    if Doc.ForceJPEGCompression = 0 then
+      img := CreateGraphicImage(Doc, B, true)
     else
     begin
       jpg := TJpegImage.Create;
       try
         jpg.Assign(B);
-        img := TPdfImage.Create(self, jpg, false);
+        img := CreateGraphicImage(Doc, jpg, false);
       finally
         jpg.Free;
       end;
     end;
     img.Hash := hash;
-    result := RegisterImage(img);
+    result := Doc.RegisterImage(img);
   end;
-  DrawImage(result, DrawAt, ClipRc);
+  Doc.DrawImage(result, DrawAt, ClipRc);
 end;
 {$endif USE_GRAPHICS_UNIT}
 
@@ -11879,8 +11886,8 @@ end;
 { TPdfImage }
 
 {$ifdef USE_GRAPHICS_UNIT}
-constructor TPdfImage.Create(aDoc: TPdfDocument; aImage: TGraphic;
-  DontAddToFXref: boolean);
+function CreateGraphicImage(Doc: TPdfDocument; Graphic: TGraphic;
+  DontAddToFXref: boolean): TPdfImage;
 var
   bmp: TBitmap;
   ms: TMemoryStream;
@@ -11893,36 +11900,36 @@ var
   begin
     bmp := TBitmap.Create; // create a temp bitmap (pixelformat may change)
     bmp.PixelFormat := PF;
-    bmp.Width := aImage.Width;
-    bmp.Height := aImage.Height;
-    bmp.Canvas.Draw(0, 0, aImage);
+    bmp.Width := Graphic.Width;
+    bmp.Height := Graphic.Height;
+    bmp.Canvas.Draw(0, 0, Graphic);
   end;
 
 begin
-  if aImage.InheritsFrom(TJpegImage) then
+  if Graphic.InheritsFrom(TJpegImage) then
   begin
     ms := TMemoryStream.Create;
     try
-      with TJpegImage(aImage) do
+      with TJpegImage(Graphic) do
       begin
-        if aDoc.ForceJPEGCompression <> 0 then
-          CompressionQuality := aDoc.ForceJPEGCompression;
+        if Doc.ForceJPEGCompression <> 0 then
+          CompressionQuality := Doc.ForceJPEGCompression;
         {$ifdef USE_SYNGDIPLUS}
-        if aDoc.ForceJPEGCompression = 0 then // recompression only if necessary
+        if Doc.ForceJPEGCompression = 0 then // recompression only if necessary
           SaveInternalToStream(ms)
         else
         {$endif USE_SYNGDIPLUS}
           SaveToStream(ms); // with CompressionQuality recompress
       end;
-      CreateJpeg(aDoc, ms.Memory, ms.Size, aImage.Width, aImage.Height,
-        DontAddToFXref);
+      result := TPdfImage.CreateJpeg(Doc, ms.Memory, ms.Size, Graphic.Width,
+        Graphic.Height, DontAddToFXref);
     finally
       ms.Free;
     end;
     exit;
   end;
-  if aImage.InheritsFrom(TBitmap) then
-    bmp := TBitmap(aImage)
+  if Graphic.InheritsFrom(TBitmap) then
+    bmp := TBitmap(Graphic)
   else
     NeedBitmap(pf24bit);
   try
@@ -11982,9 +11989,9 @@ begin
       px.Stride := PAnsiChar(bmp.{%H-}ScanLine[1]) - PAnsiChar(px.Data);
       px.Size := PtrInt(px.Height - 1) * Abs(px.Stride) + px.Size;
     end;
-    CreatePixels(aDoc, px, DontAddToFXref);
+    result := TPdfImage.CreatePixels(Doc, px, DontAddToFXref);
   finally
-    if bmp <> aImage then
+    if bmp <> Graphic then
       bmp.Free;
   end;
 end;
@@ -13821,10 +13828,10 @@ begin
       clp := GetClipRect;
       if (clp.Width > 0) and
          (clp.Height > 0) then
-        Doc.CreateOrGetImage(bmp, @box, @clp) // use cliping
+        CreateOrGetBitmapImage(Doc, bmp, @box, @clp) // use cliping
       else
-        Doc.CreateOrGetImage(bmp, @box, nil);
-      // Doc.CreateOrGetImage() will reuse any matching TPdfImage
+        CreateOrGetBitmapImage(Doc, bmp, @box, nil);
+      // CreateOrGetBitmapImage() will reuse any matching TPdfImage
       // don't send bmi and bits parameters here, because of StretchDIBits above
     end;
   finally

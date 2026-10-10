@@ -484,7 +484,7 @@ begin
     begin
       b := Box(40, 700 - i * 60, IMG_W * 4, IMG_H * 8);
       try
-        names[i] := doc.CreateOrGetImage(bmp[i], @b);
+        names[i] := CreateOrGetBitmapImage(doc, bmp[i], @b);
       except
         // the LCL gives a palette bitmap no 256 palette entries
         on EPdfInvalidValue do
@@ -494,7 +494,7 @@ begin
     // the same pixels again, drawn clipped: one image, two draws
     b := Box(300, 700, IMG_W * 4, IMG_H * 8);
     c := Box(310, 700, IMG_W * 2, IMG_H * 8);
-    names[6] := doc.CreateOrGetImage(bmp[0], @b, @c);
+    names[6] := CreateOrGetBitmapImage(doc, bmp[0], @b, @c);
     pdf := SaveDoc(doc);
   finally
     doc.Free;
@@ -576,7 +576,7 @@ begin
     bmp[4] := NewBitmap(pf24bit, 12, 30);
     PByteArray(bmp[4].ScanLine[0])[90] := $55;
     for i := 0 to 4 do
-      names[i] := doc.CreateOrGetImage(bmp[i]);
+      names[i] := CreateOrGetBitmapImage(doc, bmp[i]);
   finally
     doc.Free;
     for i := 0 to 4 do
@@ -615,18 +615,18 @@ begin
     doc.Info.CreationDate := GOLDEN_DATE;
     doc.StandardFontsReplace := true;
     doc.AddPage;
-    // CreateOrGetImage with ForceJPEGCompression: the bitmap recompressed,
+    // CreateOrGetBitmapImage with ForceJPEGCompression: the bitmap recompressed,
     // with a quality other than TJpegImage's default of 80
     doc.ForceJPEGCompression := 37;
     b := Box(40, 700, IMG_W * 4, IMG_H * 8);
-    doc.CreateOrGetImage(bmp, @b);
+    CreateOrGetBitmapImage(doc, bmp, @b);
     // a TJpegImage without ForceJPEGCompression: its bytes as they are
     doc.ForceJPEGCompression := 0;
     ms.Position := 0;
     jpg := TJpegImage.Create;
     try
       jpg.LoadFromStream(ms);
-      img := TPdfImage.Create(doc, jpg, false);
+      img := CreateGraphicImage(doc, jpg, false);
     finally
       jpg.Free;
     end;
