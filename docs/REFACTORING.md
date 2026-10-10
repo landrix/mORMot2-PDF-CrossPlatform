@@ -450,6 +450,11 @@ Qt `QRawFont`):
   adjustments (`Tw` does not reach two-byte codes), the routing, then
   veraPDF/PAC and the Mac golden files
 
+**Checked** (#28, #29): `test_runner` 506/506 on Windows (FPC 3.3.1 aarch64
+and 3.2.2 x64, Delphi 7, Delphi 13 Win32/Win64, Delphi 2010), 477/477 on
+macOS M2, 453/453 on Linux aarch64; golden files unchanged; `pdfcheck
+compare`: only `report_demo` and `mormot_demo`, by the printed date
+
 ### Phase 2 — Raw PDF Without VCL/LCL
 
 Gist §7–§10. `uses mormot.pdf` builds in a console program without a GUI
@@ -571,6 +576,10 @@ cairo):
   library). Reviewed by Codex commit by commit and by Fable on the whole
   branch. Open: Delphi 2010 (Martin), PAC/veraPDF at the end of the phase,
   Delphi 13 Linux64/Android64 (the community)
+
+**Bug fixes** (Phase 2's bug-fix PR): the CFF series (see Phase 1b); the
+message of a face that cannot be embedded names its style, the cause and,
+for plain `EmbeddedTtf`, the way out (Martin on #29)
 
 ### Phase 3 — Canvas Adapter
 

@@ -2843,6 +2843,8 @@ type
     fM: TFontMetrics;
     fOTM: TFontOutlineMetrics;
     procedure CreateAssociatedUnicodeFont;
+    // raise the error of a face that cannot be embedded, with its way out
+    procedure RaiseNotEmbeddable;
     // update font description from used chars
     procedure PrepareForSaving;
     // true if this font file is to be embedded into the PDF
@@ -6712,6 +6714,32 @@ begin
     result := 'FontFile2';
 end;
 
+procedure TPdfFontTrueType.RaiseNotEmbeddable;
+var
+  style, hint: RawUtf8;
+begin
+  // the family, the style (a file of its own), the cause, and the way out -
+  // EmbeddedTtfIgnore, which PDF/A and Tagged ignore
+  style := '';
+  if pfsBold in fStyle then
+    style := 'bold';
+  if pfsItalic in fStyle then
+    if style = '' then
+      style := 'italic'
+    else
+      style := style + ' italic';
+  if style <> '' then
+    style := ' (' + style + ')';
+  if (fDoc.fPdfA = pdfaNone) and
+     not fDoc.fTagged then
+    hint := ' - add it to EmbeddedTtfIgnore to write it without embedding'
+  else
+    hint := '';
+  raise EPdfInvalidOperation.CreateUtf8(
+    'Font "%"% must be embedded, but neither a subset nor its font file ' +
+    'can be read%', [fDoc.fTrueTypeFonts[fTrueTypeFontsIndex - 1], style, hint]);
+end;
+
 procedure TPdfFontTrueType.PrepareForSaving;
 var
   c: AnsiChar;
@@ -6882,9 +6910,7 @@ begin
         // embedding was asked for (PDF/A and PDF/UA need it): a face that
         // cannot be found fails the save, never leaves the font unembedded
         if ttf = '' then
-          raise EPdfInvalidOperation.CreateUtf8(
-            'TPdfFontTrueType: the face of % cannot be embedded',
-            [fDoc.fTrueTypeFonts[fTrueTypeFontsIndex - 1]]);
+          RaiseNotEmbeddable;
         // subsetting (if any) is done: the bytes are final, so identical
         // data can now share a single stream object
         // /FontDescriptor is common to WinAnsi and Unicode fonts

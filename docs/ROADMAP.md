@@ -164,7 +164,10 @@ v0.10.0 (2026-09-30).
 - **Fixed: a font asked to be embedded is never left out silently:** when
   embedding is on (`EmbeddedTtf`, `Tagged`, PDF/A) and neither a subset nor
   the whole face of a font can be read, saving raises `EPdfInvalidOperation`
-  naming the font. Before, the font was written without a font file - a
+  naming the font, its style and the cause. With plain `EmbeddedTtf` the
+  message names the way out: put the font in `EmbeddedTtfIgnore` to write
+  it without embedding (PDF/A and `Tagged` ignore that list, there is none
+  there). Before, the font was written without a font file - a
   PDF/A or PDF/UA file that fails validation, without a word. And `Tagged`
   embeds every font now even when `EmbeddedTtf` is switched off or the font
   is put in `EmbeddedTtfIgnore` afterwards, as PDF/A always did
