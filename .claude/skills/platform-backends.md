@@ -36,12 +36,14 @@ What stays Windows-only in `mormot.ui.pdf`:
   whose `.res` carries the Lazarus DPI-aware manifest gets the real DPI (144
   at 150 % scaling), and `TGDIPages` lays its pages out with it - compare
   demo PDFs only between builds with the same `.res`
-- the EMF code (`USE_METAFILE`): `TPdfDocument.EmfDC`, a compatible DC made
-  when first needed, for `TMetaFileCanvas`, `EnumEnhMetaFile`, `TPdfEnum`'s
-  own fonts and `GetTextExtentPoint32W`, which selects the face's HFONT for
-  that one measure
-- `AddGlyphs` with `TScriptVisAttr`; the printer and GDI+ code; the code page
-  helpers (`LCIDToCodePage`, `CharNextA`), which are no font matter
+- `TPdfDocument.EmfDC` (`USE_METAFILE`), a compatible DC made when first
+  needed - it stays in the engine, protected; the EMF renderer that uses it
+  for `TMetaFileCanvas`, `EnumEnhMetaFile`, `TPdfEnum`'s own fonts and
+  `GetTextExtentPoint32W` (which selects the face's HFONT for that one
+  measure) moved to `mormot.pdf.canvas` in R-28 Phase 2, with the printer
+  helpers and the `TBitmap`/`TGraphic` conversion (GDI+ JPEG)
+- `AddGlyphs` with `TScriptVisAttr`; the code page helpers
+  (`LCIDToCodePage`, `CharNextA`), which are no font matter
 
 Before W3, under `{$ifdef OSWINDOWS}` the core called GDI directly:
 `CreateCompatibleDC`/`GetDeviceCaps` in the constructor,

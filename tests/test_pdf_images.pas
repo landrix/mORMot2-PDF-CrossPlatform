@@ -35,6 +35,9 @@ uses
   mormot.core.text,
   mormot.core.unicode,
   mormot.ui.pdf,
+  {$ifdef PDF_HASVCLCANVAS}
+  mormot.pdf.canvas,
+  {$endif PDF_HASVCLCANVAS}
   pdf_inspect,
   test_pdf_golden;
 

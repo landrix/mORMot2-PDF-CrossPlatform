@@ -47,6 +47,7 @@ All files under `src/` require justification and user approval before reading.
 | `src/core/mormot.ui.report.pas` | Report engine (`TGDIPages`) | Production |
 | `src/core/mormot.ui.reportpreview.pas` | Preview window and printing for `TGDIPages` (LCL) | Production |
 | `src/core/mormot.ui.pdfcanvas.pas` | TCanvas bridge (`TPdfDocumentVcl`) | Production |
+| `src/core/mormot.pdf.canvas.pas` | VCL/LCL adapter: `TBitmap`/`TGraphic` images; `TPdfDocumentGdi`, `RenderMetaFile`, printer helpers (Windows) - R-28 Phase 2 | Production |
 | `src/core/mormot.pdf.types.pas` | PDF types; former font type names as aliases of mormot.lib.core | Production |
 | mORMot2 `src/lib/mormot.lib.uniscribe.pas` | GDI backend (Windows), Uniscribe shaper and FontSub subsetter, beside their bindings | Production |
 | mORMot2 `src/lib/mormot.lib.freetype.pas` | FreeType2 backend (POSIX) | Production |
@@ -62,6 +63,8 @@ src/
     mormot.ui.report.pas        TGDIPages — layout engine, no forms or printer
     mormot.ui.reportpreview.pas ShowReportPreview, PrintReport (LCL)
     mormot.ui.pdfcanvas.pas     TPdfDocumentVcl, TPdfVclCanvas
+    mormot.pdf.canvas.pas       TBitmap/TGraphic images, TPdfDocumentGdi and EMF (Windows)
+    mormot.pdf.defines.inc      the USE_* switches of mormot.ui.pdf and mormot.pdf.canvas
     mormot.pdf.types.pas        PDF types, aliases of the mormot.lib.core font types
     mormot.pdf.fpimage.pas      Bitmap embedding (FPImage)
     mormot.ui.core.pas          UI helper functions   } the trunk's units of mORMot2 src/ui (only the include path differs),
@@ -361,7 +364,7 @@ itself is in each demo's `uReport.pas`; the form only passes its options.
 - **RTL / Arabic text**: one switch, `UseUniscribe` — HarfBuzz delivers correct ligatures on Linux/macOS, Windows uses Uniscribe; `RightToLeftText` is the direction only — see `.claude/skills/fonts.md` §10
 - **Testing RTL**: Linux fonts (Noto Naskh Arabic) resolve shaped glyphs through the CMAP, so they never exercise the shaper's own advance path. Validate RTL work against a font without Arabic presentation forms — see `.claude/skills/fonts.md` §10
 - **TTC collections**: only face index 0 is reachable; `TFontFileMap` (`mormot.lib.freetype`) has no face index, so the other faces of a `.ttc` cannot be selected by name
-- **EMF/MetaFile**: Windows-only (`TPdfDocumentGdi`), not portable
+- **EMF/MetaFile**: Windows-only (`TPdfDocumentGdi`, `mormot.pdf.canvas`), not portable
 - **GDI+/gradient fills**: Windows-only via EMF
 - **Table pagination**: no row break within a cell (roadmap R-10)
 - **Symbol fonts on POSIX**: excluded from subsetting, the whole face is embedded (roadmap R-15b); `TestSubsetSymbolFont` covers both sides where Wingdings, Webdings or Symbol is installed (Windows: subset by FontSub; macOS: Symbol embedded whole), no demo

@@ -46,7 +46,8 @@ uses
   mormot.core.base,
   mormot.core.unicode,
   mormot.pdf.types,  // TPdfStructRole (Tagged PDF)
-  mormot.ui.pdf;     // TPdfDocument, TPdfCanvas, TPdfPage
+  mormot.ui.pdf,     // TPdfDocument, TPdfCanvas, TPdfPage
+  mormot.pdf.canvas; // CreateOrGetBitmapImage
 
 type
   /// Re-export TPdfALevel from mormot.ui.pdf to allow importing only mormot.pdf.vclcanvas

@@ -10,7 +10,10 @@ FPImage adapter: `src/core/mormot.pdf.fpimage.pas`
 | `TPdfDocument` | PDF points (72 DPI), Y=0 bottom | mORMot2-Core + the LCL/VCL `Graphics` unit | Server/CLI, no TCanvas |
 | `TPdfDocumentVcl` | pixels (96 DPI), Y=0 top | + TCanvas bridge; LCL, and the VCL on Delphi 7 (R-20) | TCanvas-compatible code, GUI apps |
 
-`TPdfDocumentGdi` (Windows-only, Delphi) uses EMF/GDI — not ported.
+`TPdfDocumentGdi` (Windows-only) uses EMF/GDI — not ported; since R-28 Phase 2 it lives
+in `mormot.pdf.canvas` with `RenderMetaFile`, the `GdiComment*` procedures, the printer
+helpers and the `TBitmap`/`TGraphic` image functions. The adapter reaches the engine's
+protected state through implementation-local access classes (`TPdfCanvasAccess` ...).
 
 **Compilers.** `TPdfDocument`/`TPdfCanvas` build with FPC everywhere and with
 Delphi 7 for Win32 (R-19, `tests\build_delphi7.bat`), and so does
