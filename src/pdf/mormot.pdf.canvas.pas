@@ -79,6 +79,13 @@ uses
 function CreateOrGetBitmapImage(Doc: TPdfDocument; B: TBitmap;
   DrawAt: PPdfBox = nil; ClipRc: PPdfBox = nil): PdfString;
 
+/// the key CreateOrGetBitmapImage reuses an image by: four CRC32C lanes over
+// the rows of B - as a DIB pads them on the VCL, BytesPerLine of its raw image
+// on the LCL - after its palette entries and the color key of a pf24bit
+// bitmap with TransparentMode = tmFixed, which writes a /Mask
+// - a device or custom PixelFormat is converted to pf24bit first
+function BitmapHash(B: TBitmap): THash128Rec;
+
 /// create the image of a VCL/LCL TGraphic instance
 // - handle TBitmap and SynGdiPlus picture types, i.e. TJpegImage
 // (stored as jpeg), and TGifImage/TPngImage (stored as bitmap)
@@ -512,13 +519,12 @@ begin
 end;
 
 {$ifdef USE_GRAPHICS_UNIT}
-// the reuse key of a bitmap: four CRC32C lanes over its rows as a DIB pads
-// them, after its palette entries
 function BitmapHash(B: TBitmap): THash128Rec;
 var
   y, w, h, row: integer;
   palcount: cardinal;
   pal: array of TPaletteEntry;
+  key: integer;
 const
   PERROW: array[TPixelFormat] of byte = (0, 1, 4, 8, 15, 16, 24, 32, 0);
 begin
@@ -542,7 +548,19 @@ begin
         result.c0 := crc32c(result.c0, pointer(pal), palcount * SizeOf(pal[0]));
     end;
   end;
+  if (B.PixelFormat = pf24bit) and
+     (B.TransparentMode = tmFixed) then
+  begin
+    key := B.TransparentColor;
+    result.c1 := crc32c(result.c1, @key, SizeOf(key));
+  end;
+  {$ifdef FPC}
+  // the LCL's own row length, by which ScanLine[] steps: a DIB row may be
+  // longer (a pf1bit row is byte- or word-aligned), the last one read past
+  row := B.RawImage.Description.BytesPerLine;
+  {$else}
   row := (((w * row) + 31) and (not 31)) shr 3; // inlined BytesPerScanLine
+  {$endif FPC}
   for y := 0 to h - 1 do
     result.c[y and 3] := crc32c(result.c[y and 3], B.{%H-}ScanLine[y], row);
 end;

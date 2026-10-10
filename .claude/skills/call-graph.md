@@ -543,8 +543,10 @@ Tag mapping: see `fonts.md §12a`.
 
 ```
 CreateOrGetBitmapImage(Doc, Bitmap, DrawAt, ClipRc)   (VCL/LCL, Phase 2: adapter)
-│  hash := BitmapHash(Bitmap)  4 CRC32C lanes over the padded ScanLine[] rows,
-│                              after the TPaletteEntry array
+│  hash := BitmapHash(Bitmap)  4 CRC32C lanes over the ScanLine[] rows (DIB
+│                              rows on the VCL, BytesPerLine on the LCL),
+│                              after the TPaletteEntry array and the color
+│                              key of a pf24bit bitmap
 │  Doc.GetXObjectImageName(hash, W, H) - existing image: reuse its name
 │  else  ForceJPEGCompression = 0:
 │          CreateGraphicImage(Doc, Bitmap, true)

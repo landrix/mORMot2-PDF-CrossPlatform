@@ -421,13 +421,15 @@ before Phase 2 moves the `TBitmap` conversion out of the engine):
   is shared - a direct value would be (no form adds one).
   `TPdfImageRawTests.FormFonts` covers the copy. The original and the trunk
   have the same code. `RenderMetaFile` into a page works
-- Found by the Fable review of Phase 2, for the bug-fix PR (both older than
-  it): `TPdfDocumentVcl.Create` never has its `AEncryption` parameter -
-  `mormot.ui.pdfcanvas` does not include `mormot.pdf.defines.inc`, so
-  `USE_PDFSECURITY` is undefined there; `BitmapHash` reads each row as a DIB
-  pads it ((w * bits + 31) and not 31) shr 3), which on the LCL can pass the
-  end of the last row when the widgetset aligns rows less - the tests use a
-  width of 32 pixels to stay clear of it
+- Found by the Fable review of Phase 2, fixed in its bug-fix PR (both older
+  than it): `TPdfDocumentVcl.Create` had no `AEncryption` parameter -
+  `mormot.ui.pdfcanvas` did not include `mormot.pdf.defines.inc`, so
+  `USE_PDFSECURITY` was undefined there (`TestVclCanvasEncryption`); and
+  `BitmapHash` read each row as a DIB pads it, past the end of the last row
+  on an LCL that aligns rows less (a pf1bit row of 10 pixels: 2 bytes on
+  LCL win32, 4 read). `BitmapHash` (public, `mormot.pdf.canvas`) reads
+  `RawImage.Description.BytesPerLine` on the LCL, the DIB row on the VCL, and
+  takes the color key of a pf24bit bitmap in (`BitmapKeys`)
 - An empty `TBitmap` (no width or no height) gives no image since Phase 2
   (`CreateOrGetBitmapImage` returns ''), where the engine wrote a 0 x 0
   image before; `CreateGraphicImage` raises `EPdfInvalidValue` for it

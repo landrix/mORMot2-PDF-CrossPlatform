@@ -62,6 +62,7 @@ type
   published
     procedure BitmapFormats;
     procedure BitmapReuse;
+    procedure BitmapKeys;
     procedure BitmapJpeg;
     procedure MetaFileCanvas;
     procedure MetaFileRender;
@@ -748,6 +749,91 @@ begin
   Check(names[3] <> '', 'padded rows');
   Check(names[4] <> names[3], 'the padding is hashed');
   {$endif FPC}
+end;
+
+// BitmapHash reads each row as long as the framework holds it: a DIB row on the
+// VCL, BytesPerLine on the LCL - a pf1bit row of 10 pixels is 2 bytes there,
+// where the DIB formula reads 4, past the end of the last row
+function RowHash(B: TBitmap): THash128Rec;
+var
+  y, row: integer;
+begin
+  FillZero(result.b);
+  {$ifdef FPC}
+  row := B.RawImage.Description.BytesPerLine;
+  {$else}
+  case B.PixelFormat of
+    pf1bit:
+      row := ((B.Width + 31) and not 31) shr 3;
+  else
+    row := ((B.Width * 8 + 31) and not 31) shr 3;
+  end;
+  {$endif FPC}
+  for y := 0 to B.Height - 1 do
+    result.c[y and 3] := crc32c(result.c[y and 3], B.ScanLine[y], row);
+end;
+
+// the reuse key: the same pixels with a color key are another image, unless
+// the key writes no /Mask; a width whose rows the LCL does not pad to four
+// bytes is hashed as the LCL holds it
+procedure TPdfImageGoldenTests.BitmapKeys;
+var
+  doc: TPdfDocument;
+  b1, b2, b3, b4: TBitmap;
+  n1, n2, n3, n4, n5, n6, n7: PdfString;
+  pf: TPixelFormat;
+  h1, h2: THash128Rec;
+begin
+  b1 := NewBitmap(pf24bit, 21);
+  b2 := NewBitmap(pf24bit, 21);
+  b3 := NewBitmap(pf24bit, 22, 10);
+  b4 := NewBitmap(pf32bit, 23);
+  doc := TPdfDocument.Create;
+  try
+    doc.AddPage;
+    n1 := CreateOrGetBitmapImage(doc, b1);
+    b2.TransparentColor := $0000FF;
+    b2.TransparentMode := tmFixed;
+    n2 := CreateOrGetBitmapImage(doc, b2);
+    n3 := CreateOrGetBitmapImage(doc, b3);
+    n4 := CreateOrGetBitmapImage(doc, b3);
+    b3.Free;
+    b3 := NewBitmap(pf24bit, 22, 10);
+    n5 := CreateOrGetBitmapImage(doc, b3);
+    // pf32bit writes no /Mask: its color key is no reason for another image
+    n6 := CreateOrGetBitmapImage(doc, b4);
+    b4.TransparentColor := $0000FF;
+    b4.TransparentMode := tmFixed;
+    n7 := CreateOrGetBitmapImage(doc, b4);
+  finally
+    doc.Free;
+    b1.Free;
+    b2.Free;
+    b3.Free;
+    b4.Free;
+  end;
+  Check(n2 <> n1, 'the same pixels with a color key: another image');
+  CheckEqual(n4, n3, 'a width of 10 pixels: the same bitmap, one image');
+  CheckEqual(n5, n3, 'the same pixels in another bitmap: one image');
+  CheckEqual(n7, n6, 'pf32bit: the color key changes nothing');
+  // four rows of 10 pixels, 1 and 8 bits: the row length of the framework -
+  // lanes 1 to 3 hold rows only (lane 0 the palette of the VCL first)
+  for pf := pf1bit to pf8bit do
+    if pf <> pf4bit then
+    begin
+      b1 := TBitmap.Create;
+      try
+        b1.PixelFormat := pf;
+        b1.Width := 10;
+        b1.Height := 4;
+        h1 := BitmapHash(b1);
+        h2 := RowHash(b1);
+        Check((h1.c1 = h2.c1) and (h1.c2 = h2.c2) and (h1.c3 = h2.c3),
+          'the rows of the framework, no more');
+      finally
+        b1.Free;
+      end;
+    end;
 end;
 
 procedure TPdfImageGoldenTests.BitmapJpeg;
