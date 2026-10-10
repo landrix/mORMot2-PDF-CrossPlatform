@@ -31,6 +31,7 @@ uses
   test_pdf_pdfa,
   test_pdf_golden
   {$ifdef PDF_HASVCLCANVAS},
+  test_pdf_images,
   test_report_crossplatform,
   test_report_golden,
   test_coordinates,
@@ -51,6 +52,9 @@ procedure TIntegrationTests.TestPDF;
 begin
   AddCase([TPdfCrossPlatTests, TPdfSmokeTests, TPdfSubsetTests,
     TPdfSubsetEngineTests, TPdfATests, TPdfGoldenTests]);
+  {$ifdef PDF_HASVCLCANVAS}
+  AddCase([TPdfImageGoldenTests]);
+  {$endif PDF_HASVCLCANVAS}
 end;
 
 {$ifdef PDF_HASVCLCANVAS}

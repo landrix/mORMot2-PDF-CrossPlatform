@@ -354,6 +354,24 @@ C.DrawXObjectEx(X, Y, Width, Height, 'ImageName', ClipRect, Angle);
 C.ExecuteXObject('ImageName');  // raw Do operator
 ```
 
+How the image paths behave today (measured by `tests/test_pdf_images.pas`,
+before Phase 2 moves the `TBitmap` conversion out of the engine):
+
+- `CreateOrGetImage(TBitmap)`: pf24bit and pf32bit become `/DeviceRGB` (alpha
+  dropped); a fixed transparent color writes `/Mask`. The same pixels give the
+  same image (a hash over the padded rows and the palette), across pages too
+- pf1bit/pf4bit/pf8bit: indexed (`/Indexed /DeviceRGB 255`) with the VCL;
+  **with the LCL they raise `EPdfInvalidValue('TPdfImage')`** - the LCL
+  bitmap has no 256 palette entries for `GetPaletteEntries`. Measured on
+  LCL win32, GTK2 and Cocoa
+- `TPdfImage.Create(Doc, Graphic, false)` and `CreateJpegDirect(.., false)`
+  are already in the xref: register them with `RegisterXObject`, not
+  `AddXObject` (which adds them again and raises)
+- `TPdfForm.Create(DocGdi, MetaFile)` **raises an access violation**: its page
+  is made without a document, and `SetPageHeight` writes a missing MediaBox.
+  The original and the trunk have the same code. `RenderMetaFile` into a
+  page works
+
 ### Optional Content (Layers)
 
 ```pascal
