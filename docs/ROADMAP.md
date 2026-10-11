@@ -165,7 +165,10 @@ v0.10.0 (2026-09-30).
 - **Fixed: a font asked to be embedded is never left out silently:** when
   embedding is on (`EmbeddedTtf`, `Tagged`, PDF/A) and neither a subset nor
   the whole face of a font can be read, saving raises `EPdfInvalidOperation`
-  naming the font. Before, the font was written without a font file - a
+  naming the font, its style and the cause. With plain `EmbeddedTtf` the
+  message names the way out: put the font in `EmbeddedTtfIgnore` to write
+  it without embedding (PDF/A and `Tagged` ignore that list, there is none
+  there). Before, the font was written without a font file - a
   PDF/A or PDF/UA file that fails validation, without a word. And `Tagged`
   embeds every font now even when `EmbeddedTtf` is switched off or the font
   is put in `EmbeddedTtfIgnore` afterwards, as PDF/A always did
@@ -204,6 +207,17 @@ v0.10.0 (2026-09-30).
   first, as before. An empty `TBitmap` gives no image (`''`) and
   `CreateGraphicImage` raises `EPdfInvalidValue` for an empty graphic, where
   a 0 x 0 image was written before
+- **Fixed (EMF, Windows): `TPdfForm.Create(DocGdi, MetaFile)`** raised an
+  access violation in every version; it gives a form XObject now, with the
+  metafile's bitmaps and fonts (its outline, bookmark and link comments are
+  left out). `TPdfFormWithCanvas` can draw images and transparency now - its
+  `/Resources` gain an `/XObject` and an `/ExtGState` dictionary
+- **Fixed (Linux, macOS): the pixels of a `TBitmap`** - the adapter read
+  every LCL bitmap as Windows' B,G,R, where GTK2 and Cocoa hold 32 bits per
+  pixel in other orders: images drawn through `TPdfVclCanvas` or
+  `TGDIPages.DrawBitmap` came out with wrong colors. And a pf1bit, pf4bit or
+  pf8bit bitmap - gray in the LCL - raised `EPdfInvalidValue`; it is written
+  indexed with a gray ramp now, on Windows (FPC) too
 - **Coming with R-20** (announce when done): the preview and the GUI demos
   on Delphi
 
@@ -858,8 +872,8 @@ shown, and leave an unused peer out of the page resources and the file. That
 touches the font lifecycle on every platform — see `fonts.md` §4 on the
 dual-instance model. Whether the `/Type1` peer of a CFF face needs the same
 stopgap (it too lacks `/Widths`) is to be checked with it. For CFF faces the
-peer goes anyway with the CFF series of R-28 (Phase 2's bug-fix PR,
-`docs/REFACTORING.md`): a CID-keyed CFF may not be a simple `/Type1` at all.
+peer goes anyway with the CFF series of R-28 (a PR of its own after
+Phase 2's bug-fix PR, `docs/REFACTORING.md`): a CID-keyed CFF may not be a simple `/Type1` at all.
 
 ### R-15b — Symbolic Fonts Are Not Subset on POSIX — unprioritised
 
@@ -889,6 +903,18 @@ on Windows. POSIX subsets CFF since R-15c; every face in the demos is
 `glyf`-based, so the Windows CFF path has never run. Whether PDF/A or tagged
 output impose extra `/FontFile3` conditions is likewise unchecked —
 `chinese_demo`, the only CFF case, is neither.
+
+### `TGDIPages.ExportPDF` Ignores `Protect` and `Encrypt` — R-28 Phase 4
+
+`ExportPDF(FileName, Protect, Encrypt, ..)` takes both flags and passes
+neither on; `ExportPdfStream` creates its `TPdfDocumentVcl` without a
+`TPdfEncryption` (`src/core/mormot.ui.report.pas`, found by Codex while
+deciding the bug fixes of Phase 2). The trunk's `TGdiPages` has
+`ExportPdfEncryptionLevel`, `ExportPdfEncryptionUserPassword`,
+`ExportPdfEncryptionOwnerPassword` and `ExportPdfEncryptionPermissions` and passes
+`TPdfEncryption.New(..)`. Needs a password and permission policy; until
+then a requested protection should be refused rather than ignored. The
+bridge's own encryption parameter is scheduled for Phase 2's bug-fix PR.
 
 ### R-10 — Table Row Pagination — unprioritised
 

@@ -429,8 +429,8 @@ Qt `QRawFont`):
   date of `SOURCE_DATE_EPOCH`, which `pdfcheck run` sets, and `pdfcheck
   compare` names up to ten changed, added or removed objects - paired by
   number, also inside object streams - and counts the rest
-- **CFF - moved to the bug-fix PR of Phase 2** (decided with Sven
-  2026-10-09: eight commits that change the output on macOS and Linux, too
+- **CFF - moved to a PR of its own after Phase 2's bug-fix PR** (decided
+  with Sven 2026-10-09, separated 2026-10-10: eight commits that change the output on macOS and Linux, too
   much for this PR). A CID-keyed CFF face (all CJK CFF faces measured: Noto
   Sans CJK, Hiragino Sans GB) may not be a simple `/Type1` font (ISO 32000-1
   table 126), and the codes of a `CIDFontType0` are CIDs, not glyph IDs -
@@ -449,6 +449,11 @@ Qt `QRawFont`):
   `/ToUnicode`, word spacing as `TJ`
   adjustments (`Tw` does not reach two-byte codes), the routing, then
   veraPDF/PAC and the Mac golden files
+
+**Checked** (#28, #29): `test_runner` 506/506 on Windows (FPC 3.3.1 aarch64
+and 3.2.2 x64, Delphi 7, Delphi 13 Win32/Win64, Delphi 2010), 477/477 on
+macOS M2, 453/453 on Linux aarch64; golden files unchanged; `pdfcheck
+compare`: only `report_demo` and `mormot_demo`, by the printed date
 
 ### Phase 2 — Raw PDF Without VCL/LCL
 
@@ -571,6 +576,40 @@ cairo):
   library). Reviewed by Codex commit by commit and by Fable on the whole
   branch. Open: Delphi 2010 (Martin), PAC/veraPDF at the end of the phase,
   Delphi 13 Linux64/Android64 (the community)
+
+**Bug fixes** (Phase 2's bug-fix PR; the CFF series (see Phase 1b) follows
+as a PR of its own - decided with Sven 2026-10-10, so that Martin gets the
+smaller fixes first): the
+message of a face that cannot be embedded names its style, the cause and,
+for plain `EmbeddedTtf`, the way out (Martin on #29)
+
+Decided for them (2026-10-10, with Sven; discussed with Fable and Codex,
+the LCL measured by Fable on win32, GTK2 and Cocoa):
+
+- **LCL bitmaps of 1, 4 and 8 bits:** on the measured win32, GTK2 and
+  Cocoa paths a bitmap set to pf4bit or pf8bit is 8-bit gray, pf1bit 1-bit
+  mono, and `GetPaletteEntries` returns 0 - no palette to read. The adapter writes the gray bytes as `ipfIndexed8` with a
+  gray ramp (pf1bit expanded to 0/255): the structure the VCL writes, no
+  engine change. `/DeviceGray`, as PDFium, cairo, Qt and Skia write it, is a
+  feature for later
+- **LCL colors:** GTK2 and Cocoa hold pf24bit in 32 bits and pf32bit as
+  R,G,B,A (GTK2) or A,R,G,B (Cocoa), where the adapter reads Windows' B,G,R -
+  the pixels of such bitmaps in a Linux or macOS PDF are misread (JPEG
+  passthrough is not affected); older than Phase 2.
+  The adapter reads `RawImage.Description`: the layouts of a Windows DIB go
+  through as they are, the others are repacked to RGB through
+  `TLazIntfImage`; to be tested against `TLazIntfImage.Colors`, not against
+  the adapter's own assumption
+- **`TPdfForm`:** a page without a document gets a MediaBox (in the engine:
+  `TPdfFormWithCanvas` has the same fault), the form `/Resources` with
+  `/XObject`, and the canvas state is saved and restored field by field, also
+  without a current page; outlines, bookmarks and links of the metafile are left out in
+  a form
+- **`TPdfDocumentVcl`'s encryption parameter:** `mormot.ui.pdfcanvas`
+  includes `mormot.pdf.defines.inc`. That `TGDIPages.ExportPDF` ignores
+  `Protect` and `Encrypt` is a missing feature (ROADMAP, Phase 4)
+- **The bitmap reuse key:** on the LCL over `RawImage.Description.BytesPerLine`
+  bytes per row (the VCL unchanged), and it includes the color key
 
 ### Phase 3 — Canvas Adapter
 

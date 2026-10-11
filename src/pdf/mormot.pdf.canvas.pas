@@ -34,6 +34,9 @@ uses
   lcltype,
   lclproc,
   lclintf,
+  graphtype,    // TRawImageDescription
+  intfgraphics, // TLazIntfImage: the LCL's reader of any raw image layout
+  fpimage,      // TFPColor
   {$ifdef USE_METAFILE}
   mormot.ui.core, // for TMetaFile definition
   {$endif USE_METAFILE}
@@ -78,6 +81,13 @@ uses
 // TPdfDocument.CreateOrGetImage(TPdfImagePixels)
 function CreateOrGetBitmapImage(Doc: TPdfDocument; B: TBitmap;
   DrawAt: PPdfBox = nil; ClipRc: PPdfBox = nil): PdfString;
+
+/// the key CreateOrGetBitmapImage reuses an image by: four CRC32C lanes over
+// the rows of B - as a DIB pads them on the VCL, BytesPerLine of its raw image
+// on the LCL - after its palette entries and the color key of a pf24bit
+// bitmap with TransparentMode = tmFixed, which writes a /Mask
+// - a device or custom PixelFormat is converted to pf24bit first
+function BitmapHash(B: TBitmap): THash128Rec;
 
 /// create the image of a VCL/LCL TGraphic instance
 // - handle TBitmap and SynGdiPlus picture types, i.e. TJpegImage
@@ -512,13 +522,12 @@ begin
 end;
 
 {$ifdef USE_GRAPHICS_UNIT}
-// the reuse key of a bitmap: four CRC32C lanes over its rows as a DIB pads
-// them, after its palette entries
 function BitmapHash(B: TBitmap): THash128Rec;
 var
   y, w, h, row: integer;
   palcount: cardinal;
   pal: array of TPaletteEntry;
+  key: integer;
 const
   PERROW: array[TPixelFormat] of byte = (0, 1, 4, 8, 15, 16, 24, 32, 0);
 begin
@@ -542,7 +551,19 @@ begin
         result.c0 := crc32c(result.c0, pointer(pal), palcount * SizeOf(pal[0]));
     end;
   end;
+  if (B.PixelFormat = pf24bit) and
+     (B.TransparentMode = tmFixed) then
+  begin
+    key := B.TransparentColor;
+    result.c1 := crc32c(result.c1, @key, SizeOf(key));
+  end;
+  {$ifdef FPC}
+  // the LCL's own row length, by which ScanLine[] steps: a DIB row may be
+  // longer (a pf1bit row is byte- or word-aligned), the last one read past
+  row := B.RawImage.Description.BytesPerLine;
+  {$else}
   row := (((w * row) + 31) and (not 31)) shr 3; // inlined BytesPerScanLine
+  {$endif FPC}
   for y := 0 to h - 1 do
     result.c[y and 3] := crc32c(result.c[y and 3], B.{%H-}ScanLine[y], row);
 end;
@@ -590,15 +611,134 @@ end;
 {$endif USE_GRAPHICS_UNIT}
 
 {$ifdef USE_GRAPHICS_UNIT}
+{$ifdef FPC}
+// the rows of B, top first, Bytes bytes per pixel: Data, Stride, Size - the
+// LCL's ScanLine[y] is Data + y * BytesPerLine whatever the LineOrder, so a
+// bottom-up raw image starts at its last line
+procedure ScanRows(B: TBitmap; Bytes: integer; var P: TPdfImagePixels);
+var
+  d: TRawImageDescription;
+begin
+  d := B.RawImage.Description;
+  if d.LineOrder = riloBottomToTop then
+  begin
+    P.Data := B.{%H-}ScanLine[B.Height - 1];
+    P.Stride := -PtrInt(d.BytesPerLine);
+  end
+  else
+  begin
+    P.Data := B.{%H-}ScanLine[0];
+    P.Stride := d.BytesPerLine;
+  end;
+  P.Size := PtrInt(B.Height - 1) * PtrInt(d.BytesPerLine) +
+            PtrInt(B.Width) * Bytes;
+end;
+
+// the pixels of an LCL bitmap as its raw image describes them - the LCL keeps
+// no palette, a pf1bit/pf4bit/pf8bit bitmap is gray, and pf24bit/pf32bit are
+// 32-bit B,G,R,x on GTK2, A,R,G,B on Cocoa: the layouts of a Windows DIB go
+// through as they are, gray as the indexes of a gray ramp, any other layout
+// is repacked to RGB through TLazIntfImage, the LCL's own reader
+procedure LclPixels(B: TBitmap; var P: TPdfImagePixels; var Buf: RawByteString);
+var
+  d: TRawImageDescription;
+  img: TLazIntfImage;
+  x, y, i: integer;
+  c: TFPColor;
+  dst: PAnsiChar;
+begin
+  d := B.RawImage.Description;
+  P.Width := B.Width;
+  P.Height := B.Height;
+  if d.Format = ricfGray then
+  begin
+    SetLength(P.Palette, 768);
+    for i := 0 to 255 do
+      FillCharFast(PByteArray(P.Palette)[i * 3], 3, i);
+    P.Format := ipfIndexed8;
+    if (d.BitsPerPixel = 8) and
+       (d.Depth = 8) then
+    begin
+      ScanRows(B, 1, P);
+      exit;
+    end;
+    // 1-bit: one gray level per pixel, read by the LCL from the raw image
+    SetLength(Buf, P.Width * P.Height);
+    dst := pointer(Buf);
+    img := TLazIntfImage.Create(B.RawImage, {DataOwner=}false);
+    try
+      for y := 0 to P.Height - 1 do
+        for x := 0 to P.Width - 1 do
+        begin
+          dst^ := AnsiChar(img.Colors[x, y].red shr 8);
+          inc(dst);
+        end;
+    finally
+      img.Free;
+    end;
+  end
+  else if (d.Format = ricfRGBA) and
+          (d.ByteOrder = riboLSBFirst) and
+          (d.BitsPerPixel in [24, 32]) and
+          (d.RedPrec = 8) and (d.RedShift = 16) and
+          (d.GreenPrec = 8) and (d.GreenShift = 8) and
+          (d.BluePrec = 8) and (d.BlueShift = 0) then
+  begin
+    // B, G, R (, x): a Windows DIB row
+    if d.BitsPerPixel = 24 then
+    begin
+      P.Format := ipfBgr24;
+      ScanRows(B, 3, P);
+    end
+    else
+    begin
+      P.Format := ipfBgrx32;
+      ScanRows(B, 4, P);
+    end;
+    exit;
+  end
+  else
+  begin
+    SetLength(Buf, P.Width * P.Height * 3);
+    dst := pointer(Buf);
+    img := TLazIntfImage.Create(B.RawImage, {DataOwner=}false);
+    try
+      for y := 0 to P.Height - 1 do
+        for x := 0 to P.Width - 1 do
+        begin
+          c := img.Colors[x, y];
+          dst[0] := AnsiChar(c.red shr 8);
+          dst[1] := AnsiChar(c.green shr 8);
+          dst[2] := AnsiChar(c.blue shr 8);
+          inc(dst, 3);
+        end;
+    finally
+      img.Free;
+    end;
+    P.Format := ipfRgb24;
+  end;
+  P.Data := pointer(Buf);
+  if P.Format = ipfRgb24 then
+    P.Stride := P.Width * 3
+  else
+    P.Stride := P.Width;
+  P.Size := length(Buf);
+end;
+{$endif FPC}
+
 function CreateGraphicImage(Doc: TPdfDocument; Graphic: TGraphic;
   DontAddToFXref: boolean): TPdfImage;
 var
   bmp: TBitmap;
   ms: TMemoryStream;
   px: TPdfImagePixels;
+  {$ifdef FPC}
+  buf: RawByteString;
+  {$else}
   entry: array of TPaletteEntry;
   i: integer;
   p: PAnsiChar;
+  {$endif FPC}
 
   procedure NeedBitmap(PF: TPixelFormat);
   begin
@@ -642,6 +782,17 @@ begin
     NeedBitmap(pf24bit);
   try
     FillCharFast(px, SizeOf(px), 0);
+    {$ifdef FPC}
+    if not (bmp.PixelFormat in [pf1bit, pf4bit, pf8bit, pf24bit, pf32bit]) then
+      NeedBitmap(pf24bit);
+    LclPixels(bmp, px, buf);
+    // [ min1 max1 ... minn maxn ]: the color key of a pf24bit bitmap, as on
+    // the VCL - whatever layout holds its pixels
+    px.HasColorKey := (bmp.PixelFormat = pf24bit) and
+                      (bmp.TransparentMode = tmFixed);
+    if px.HasColorKey then
+      px.ColorKey := bmp.TransparentColor;
+    {$else}
     case bmp.PixelFormat of
       pf1bit,
       pf4bit,
@@ -697,6 +848,7 @@ begin
       px.Stride := PAnsiChar(bmp.{%H-}ScanLine[1]) - PAnsiChar(px.Data);
       px.Size := PtrInt(px.Height - 1) * Abs(px.Stride) + px.Size;
     end;
+    {$endif FPC}
     result := TPdfImage.CreatePixels(Doc, px, DontAddToFXref);
   finally
     if bmp <> Graphic then
@@ -940,7 +1092,13 @@ var
   P: TPdfPageGdi;
   res: TPdfDictionary;
   w, h: integer;
-  old: TPdfPage;
+  c: TPdfCanvasAccess;
+  oldPage: TPdfPage;
+  oldFonts: TPdfDictionary;
+  oldContents: TPdfStream;
+  oldFactor, oldLineWidth: single;
+  oldGState, oldCTM: integer;
+  oldNewPath, oldArtifact, oldPathArtifact, oldRtl: boolean;
 begin
   inherited Create(aDoc, true);
   w := aMetaFile.Width;
@@ -952,26 +1110,54 @@ begin
     res.AddItem('Font', fFontList);
     res.AddItem('ProcSet',
       TPdfArray.CreateNames(nil, ['PDF', 'Text', 'ImageC']));
-    with TPdfCanvasAccess(TPdfDocumentAccess(TPdfDocument(aDoc)).fCanvas) do
-    begin
-      old := fPage;
-      fPage := P;
-      try
-        fPageFontList := fFontList;
-        fContents := self;
-        fPage.PageHeight := h; // SetPageHeight, protected
-        fFactor := 1;
-        RenderMetaFile(TPdfDocumentAccess(TPdfDocument(aDoc)).fCanvas, aMetaFile);
-      finally
-        if old <> nil then
-          SetPage(old);
-      end;
-    end;
+    // owned by the form from now on, also if the rendering raises
     fAttributes.AddItem('Type', 'XObject');
     fAttributes.AddItem('Subtype', 'Form');
     fAttributes.AddItem('BBox', TPdfArray.Create(nil, [0, 0, w, h]));
     fAttributes.AddItem('Matrix', TPdfRawText.Create('[1 0 0 1 0 0]'));
     fAttributes.AddItem('Resources', res);
+    P.PageHeight := h; // the Y flip of the integer coordinates
+    TPdfDocumentAccess(TPdfDocument(aDoc)).ShareFormResources(res, P);
+    // the document's canvas draws into the form, then back where it was -
+    // field by field: there may be no current page (SetPage needs one)
+    c := TPdfCanvasAccess(TPdfDocumentAccess(TPdfDocument(aDoc)).fCanvas);
+    oldPage := c.fPage;
+    oldFonts := c.fPageFontList;
+    oldContents := c.fContents;
+    oldFactor := c.fFactor;
+    oldLineWidth := c.fLineWidth;
+    oldGState := c.fGStateDepth;
+    oldCTM := c.fCTMDepth;
+    oldNewPath := c.fNewPath;
+    oldArtifact := c.fArtifactOpen;
+    oldPathArtifact := c.fPathArtifact;
+    oldRtl := c.RightToLeftText;
+    try
+      c.fPage := P;
+      c.fPageFontList := fFontList;
+      c.fContents := self;
+      c.fFactor := 1;
+      c.fLineWidth := 1;
+      c.fGStateDepth := 0;
+      c.fCTMDepth := 0;
+      // a path or an artifact the page left open is not the form's to close
+      c.fNewPath := false;
+      c.fArtifactOpen := false;
+      c.fPathArtifact := false;
+      RenderMetaFile(c, aMetaFile);
+    finally
+      c.fPage := oldPage;
+      c.fPageFontList := oldFonts;
+      c.fContents := oldContents;
+      c.fFactor := oldFactor;
+      c.fLineWidth := oldLineWidth;
+      c.fGStateDepth := oldGState;
+      c.fCTMDepth := oldCTM;
+      c.fNewPath := oldNewPath;
+      c.fArtifactOpen := oldArtifact;
+      c.fPathArtifact := oldPathArtifact;
+      c.RightToLeftText := oldRtl; // the metafile's text sets it
+    end;
   finally
     P.Free;
   end;
@@ -2296,6 +2482,10 @@ var
   ImgName: PdfString;
   ImgRect: TPdfRect;
 begin
+  // a form is no page: its outlines, bookmarks and links have none to go to
+  if (Kind in [pgcOutline, pgcBookmark, pgcLink, pgcLinkNoBorder]) and
+     Canvas.fContents.InheritsFrom(TPdfFormXObject) then
+    exit;
   try
     case Kind of
       pgcOutline: // pgcOutline, @aLevel, 4, aTitle

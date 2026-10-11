@@ -543,13 +543,19 @@ Tag mapping: see `fonts.md §12a`.
 
 ```
 CreateOrGetBitmapImage(Doc, Bitmap, DrawAt, ClipRc)   (VCL/LCL, Phase 2: adapter)
-│  hash := BitmapHash(Bitmap)  4 CRC32C lanes over the padded ScanLine[] rows,
-│                              after the TPaletteEntry array
+│  hash := BitmapHash(Bitmap)  4 CRC32C lanes over the ScanLine[] rows (DIB
+│                              rows on the VCL, BytesPerLine on the LCL),
+│                              after the TPaletteEntry array and the color
+│                              key of a pf24bit bitmap
 │  Doc.GetXObjectImageName(hash, W, H) - existing image: reuse its name
 │  else  ForceJPEGCompression = 0:
 │          CreateGraphicImage(Doc, Bitmap, true)
-│            ScanLine[] → TPdfImagePixels (ipfBgr24 / ipfBgrx32 / ipfIndexed8
-│            with its palette; pf1/pf4 drawn to pf8; color key of tmFixed)
+│            VCL: ScanLine[] → TPdfImagePixels (ipfBgr24 / ipfBgrx32 /
+│            ipfIndexed8 with its palette; pf1/pf4 drawn to pf8)
+│            LCL: LclPixels - RawImage.Description: a DIB layout as it is,
+│            gray as ipfIndexed8 with a gray ramp, others repacked to
+│            ipfRgb24 through TLazIntfImage.Colors
+│            color key of a pf24bit tmFixed bitmap → /Mask
 │            → TPdfImage.CreatePixels
 │        else: TJpegImage.Assign(Bitmap) → CreateGraphicImage(Doc, jpg, false)
 │            SaveToStream at the quality → TPdfImage.CreateJpeg (in the xref)
