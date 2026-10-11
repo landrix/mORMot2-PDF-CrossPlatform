@@ -310,6 +310,14 @@ var
     result := ComparePdfText(a, b, oa, ob, diff);
   end;
 
+  // an object stream of N members as Body gives them
+  function RawObjStm(N, First: integer; const Body: RawUtf8): RawUtf8;
+  begin
+    result := '<</Type/ObjStm/N ' + Int32ToUtf8(N) + '/First ' +
+      Int32ToUtf8(First) + '/Length ' + Int32ToUtf8(length(Body)) +
+      '>>stream'#10 + Body + #10'endstream';
+  end;
+
 begin
   // a string that looks like an object header is no object
   Check(not Compare(MiniPdf([1], ['(x'#10'99 0 obj'#10'y)']),
@@ -321,6 +329,20 @@ begin
                     MiniPdf([1], [ObjStm(['(A) ', '(B) '], '')])), 'object stream');
   Check((PosEx('object 10 0', diff) > 0) and (PosEx('object 11 0', diff) > 0),
     'both members named');
+  // a member that grows moves the offsets after it, and /First with their
+  // digits: only the member is named
+  Check(not Compare(MiniPdf([1], [ObjStm(['(a) ', '(b) '], '')]),
+    MiniPdf([1], [ObjStm(['(aaaaaaaaa) ', '(b) '], '')])), 'a member grown');
+  Check(PosEx('object 10 0', diff) > 0, 'the grown member named');
+  Check(PosEx('object 11 0', diff) = 0, 'not the member after it');
+  Check(PosEx('outside the objects', diff) = 0, 'not the offsets, not /First');
+  // a /First that is no member boundary: the stream as it is, and /First
+  Check(not Compare(MiniPdf([1], [RawObjStm(1, 5, '10 0 (a) ')]),
+    MiniPdf([1], [RawObjStm(1, 6, '10 0 (a) ')])), 'a /First off the members');
+  // the same bytes cut into other members, the offsets blanked
+  Check(not Compare(MiniPdf([1], [RawObjStm(2, 10, '10 0 11 4 (a) (b) ')]),
+    MiniPdf([1], [RawObjStm(2, 10, '10 0 11 0 (a) (b) ')])), 'other bounds');
+  Check(PosEx('object 10 0', diff) > 0, 'the member of other bounds named');
   // bytes before the first member are no member: the stream is compared
   // as one piece, and they are not lost
   Check(not Compare(MiniPdf([1], [ObjStm(['(z)'], '(A) ')]),

@@ -17,8 +17,8 @@ function InflatePdf(const s: RawUtf8): RawUtf8;
 /// the form in which two PDFs are compared
 // - parsed token by token: streams decoded (FlateDecode inflated, XRef streams
 // as one text line per object, JPEG kept as it is), the /ID, '/ABCDEF+' subset tags, the
-// /CreationDate and /ModDate values, XMP dates, stream lengths and file offsets
-// replaced by placeholders
+// /CreationDate and /ModDate values, XMP dates, stream lengths, file offsets
+// and the offsets of object streams replaced by placeholders
 // - the structure is checked before anything is blanked: each /Length has to
 // end at endstream, each offset has to point to its object; Error tells the
 // first violation
@@ -238,6 +238,23 @@ begin
       inc(result);
 end;
 
+// the first index at which the objects are not the same or not cut alike,
+// -1 if they are
+function OtherSpan(const A, B: TPdfObjectSpans): integer;
+begin
+  for result := 0 to high(A) do
+    if (result > high(B)) or
+       (A[result].Num <> B[result].Num) or
+       (A[result].Gen <> B[result].Gen) or
+       (A[result].Start <> B[result].Start) or
+       (A[result].Stop <> B[result].Stop) then
+      exit;
+  if length(B) > length(A) then
+    result := length(A)
+  else
+    result := -1;
+end;
+
 // the text outside the objects: header, xref, trailer
 function OutsideSpans(const s: RawUtf8; const Spans: TPdfObjectSpans): RawUtf8;
 var
@@ -286,7 +303,19 @@ begin
   Diff := '';
   result := a = b;
   if result then
+  begin
+    // the same text cut otherwise: the members of an object stream, whose
+    // offsets are blanked
+    k := OtherSpan(ObjA, ObjB);
+    if k < 0 then
+      exit;
+    result := false;
+    if k <= high(ObjA) then
+      Diff := '  ' + Name(ObjA[k]) + ': other bounds'
+    else
+      Diff := '  ' + Name(ObjB[k]) + ': other bounds';
     exit;
+  end;
   count := 0;
   // removed and added first: a new object usually renumbers the others
   for k := 0 to high(ObjA) do
@@ -894,12 +923,19 @@ begin
               break;
             end;
           end;
+          // nothing else in the header, as it is not emitted
+          SkipWhite(result, k);
+          if k <= first then
+            SetLength(nums, 0);
         end;
         if nums = nil then
           sub.Syntax(result, {TopLevel=}false)
         else
         begin
-          sub.Syntax(copy(result, 1, first), false);
+          // the header with each offset as 0: they follow the size of the
+          // members before, checked above, as the offsets of an xref
+          for m := 0 to n - 1 do
+            sub.Emit(FormatUtf8('% 0 ', [nums[m]]));
           for m := 0 to n - 1 do
           begin
             if m < n - 1 then
@@ -935,7 +971,7 @@ var
   inStm: boolean;
   k: integer;
   found: boolean;
-  tok, lastKey, dict, data, head: RawByteString;
+  tok, lastKey, dict, data, head, typ: RawByteString;
   inId: boolean;
 begin
   i := 1;
@@ -1129,20 +1165,34 @@ begin
             end;
             after := b + 9; // after endstream
             data := Stream(dict, copy(s, i, len), objNum);
-            if DictValue(dict, '/Type') = '/XRef' then
-            begin
+            typ := DictValue(dict, '/Type');
+            if typ = '/XRef' then
               AddInt64(fXRefOffsets, objPos);
-              // /W follows the file size: written in its canonical form, as
-              // the rows are written as text
+            if (typ = '/XRef') or
+               (typ = '/ObjStm') then
+            begin
+              // /W follows the file size, /First the digits of the offsets
+              // before it: written in a canonical form, as the rows and the
+              // offsets are written as text - /First only when Stream() wrote
+              // the offsets so (its members as spans), not the bytes as they are
               head := copy(fOut.DataString, objOut + 1, maxInt);
               fOut.Size := objOut;
               fOut.Position := objOut;
               // the pieces are emitted, not concatenated: FPC 3.2.2 i386 lost
               // a RawByteString of code page CP_RAWBYTESTRING in a concatenation
-              if DictValuePos(head, '/W', b, j) then
+              if (typ = '/XRef') and
+                 DictValuePos(head, '/W', b, j) then
               begin
                 Emit(head, 1, b);
                 Emit('[*]');
+                Emit(head, j, length(head) + 1);
+              end
+              else if (typ = '/ObjStm') and
+                      (fStreamSpans <> nil) and
+                      DictValuePos(head, '/First', b, j) then
+              begin
+                Emit(head, 1, b);
+                Emit('0 ');
                 Emit(head, j, length(head) + 1);
               end
               else
