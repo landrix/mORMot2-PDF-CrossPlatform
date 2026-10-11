@@ -49,7 +49,8 @@ werden ganz eingebettet.
 **Shaping** von arabischem, hebräischem, indischem oder thailändischem Text
 ist auf jeder Plattform ein Schalter, `UseUniscribe := True` — der Name stammt
 aus der Original-API; unter Linux und macOS formt HarfBuzz. Lateinischer Text
-bleibt in beiden Fällen in der einfachen Schrift. `RightToLeftText := True`
+bleibt in beiden Fällen in der einfachen Schrift - außer bei einer CFF-Schrift,
+die ihren ganzen Text als Glyphen schreibt. `RightToLeftText := True`
 auf dem Canvas setzt die Absatzrichtung; ohne ihn ergibt sich die Richtung aus
 der Schrift. Den Schalter ohne Bedingung setzen — siehe
 [rtl_demo](examples/rtl_demo/).
@@ -220,11 +221,12 @@ unter Linux/macOS. Textextraktion und Kopieren sind in beiden Fällen
 unverändert.
 
 Beide Umriss-Varianten werden gesubsettet. Eine `glyf`-Schrift landet in
-`/FontFile2`, eine CFF-OpenType-Schrift in `/FontFile3` mit
-`/Subtype /OpenType` als `CIDFontType0`. Das ist unter macOS relevant, dessen
-CJK-Systemschriften CFF sind: `chinese_demo` schrumpfte dort von 10 MB auf
-23 KB, nachdem dies korrekt behandelt wurde (siehe R-15c in
-[docs/ROADMAP.md](docs/ROADMAP.md)).
+`/FontFile2`. Eine CFF-Schrift (die CJK-Systemschriften von macOS und Linux)
+schreibt ihren ganzen Text als `CIDFontType0` und landet in `/FontFile3`:
+eine CID-basierte als nacktes CFF (`/Subtype /CIDFontType0C`, PDF 1.3, auch
+PDF/A-1), eine namensbasierte als OpenType-Datei (PDF 1.6). Unter macOS
+schrumpfte `chinese_demo` von 10 MB auf 23 KB, seit CFF gesubsettet wird
+(siehe R-15c in [docs/ROADMAP.md](docs/ROADMAP.md)).
 
 ## PDF/A und E-Rechnungen (ZUGFeRD / Factur-X)
 

@@ -754,6 +754,18 @@ the cmap — see `fonts.md` §10. The tests use `PDF_DEFAULT_CHARSET` from
 
 `FontFallBackName` (TPdfDocument property): font substituted when a requested TrueType font is not found on the system.
 
+**CFF faces** (the CJK faces of macOS and Linux): all their text goes
+through the Type0 font (an unembedded name-keyed face keeps its Latin text in
+the simple font), a CID-keyed one is embedded as its bare CFF
+(`/CIDFontType0C`, PDF 1.3), a name-keyed one as an OpenType font file -
+`FileFormat` is raised to `pdf16` for it, or the catalog gets `/Version
+/1.6` once a lower header was streamed (`HeaderFileFormat`);
+`EPdfInvalidOperation` under PDF/A-1. The CFF
+reader is public: `PdfCffParse(Data, Len, Info)` / `PdfFaceCffInfo(Face,
+Info)` give `TPdfCffInfo` (`Kind` pcNone/pcNameKeyed/pcCidKeyed/pcInvalid,
+`GlyphCount`, `FontName`, `Registry`/`Ordering`/`Supplement`, `Cid[]`).
+Details: `fonts.md` "CFF Faces: Type0 Only"
+
 ---
 
 ## FPImage Bitmap Adapter (mormot.pdf.fpimage)

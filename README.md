@@ -47,7 +47,7 @@ library is missing, text is drawn unshaped and fonts are embedded whole.
 **Shaping** Arabic, Hebrew, Indic or Thai text is one switch on every
 platform, `UseUniscribe := True` — the name comes from the original API; on
 Linux and macOS it shapes with HarfBuzz. Latin text stays in the simple font
-either way. `RightToLeftText := True` on the canvas sets the paragraph
+either way - except in a CFF face, which draws all its text as glyphs. `RightToLeftText := True` on the canvas sets the paragraph
 direction; without it the direction comes from the script. Set the switch
 without a conditional — see [rtl_demo](examples/rtl_demo/).
 
@@ -209,10 +209,11 @@ The whole face is embedded instead without `libharfbuzz-subset`, for PDF/A-1
 extraction and copy/paste are unaffected either way.
 
 Both outline flavours are subset. A `glyf` face goes to `/FontFile2`; a
-CFF-flavoured OpenType face goes to `/FontFile3` with `/Subtype /OpenType`, as
-a `CIDFontType0`. That matters on macOS, whose CJK system faces are CFF —
-`chinese_demo` there went from 10 MB to 23 KB once this was handled correctly
-(see R-15c in [docs/ROADMAP.md](docs/ROADMAP.md)).
+CFF face (the CJK system faces of macOS and Linux) draws all its text as a
+`CIDFontType0` and goes to `/FontFile3`: a CID-keyed one as its bare CFF
+(`/Subtype /CIDFontType0C`, PDF 1.3, also PDF/A-1), a name-keyed one as an
+OpenType font file (PDF 1.6). On macOS `chinese_demo` went from 10 MB to
+23 KB once CFF was subset (see R-15c in [docs/ROADMAP.md](docs/ROADMAP.md)).
 
 ## PDF/A and e-invoices (ZUGFeRD / Factur-X)
 

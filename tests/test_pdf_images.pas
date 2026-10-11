@@ -37,7 +37,9 @@ uses
   mormot.core.test,
   mormot.core.text,
   mormot.core.unicode,
+  mormot.lib.core,      // FontProvider
   mormot.pdf,
+  test_pdf_cff,         // the synthetic CFF face
   {$ifdef PDF_HASVCLCANVAS}
   mormot.pdf.canvas,
   {$endif PDF_HASVCLCANVAS}
@@ -77,6 +79,10 @@ type
 
 
 implementation
+
+type
+  // reads the text states GSave keeps
+  TPdfCanvasPeek = class(TPdfCanvas);
 
 function CountOf(const Sub, Text: RawUtf8): integer;
 var
@@ -1150,6 +1156,11 @@ var
   pdf: RawByteString;
   txt, err: RawUtf8;
   rtl: boolean;
+  previous: IFontProvider;
+  text: PdfString;
+  saved: TPdfTextStateSavedDynArray;
+  depth, i: integer;
+  kept: boolean;
 begin
   mf := TMetaFile.Create;
   doc := TPdfDocumentGdi.Create;
@@ -1212,6 +1223,51 @@ begin
   CheckEqual(err, '');
   Check(PosEx('/OC /oc', txt) > 0, 'the layer drawn in the form');
   Check(PosEx('<</oc', txt) > 0, 'its /Properties kept with the form');
+  // a form drawn between a q and its Q of the page keeps the text state the
+  // q saved: the word spacing of the CFF text after the Q
+  previous := SwapInFakeFace(FakeRoutingFace);
+  mf := TMetaFile.Create;
+  doc := TPdfDocumentGdi.Create;
+  try
+    doc.AddTrueTypeFont(FAKE_FACE);
+    doc.AddPage;
+    mf.Width := 100;
+    mf.Height := 50;
+    mc := TMetaFileCanvas.Create(mf, 0);
+    try
+      mc.Rectangle(5, 5, 60, 30);
+    finally
+      mc.Free;
+    end;
+    doc.Canvas.SetFont(FAKE_FACE, 12, [], 1);
+    doc.Canvas.SetWordSpace(6);
+    doc.Canvas.GSave;
+    saved := Copy(TPdfCanvasPeek(doc.Canvas).fTextStateSaved);
+    depth := TPdfCanvasPeek(doc.Canvas).fGStateDepth;
+    doc.AddXObject('FrmW', TPdfForm.Create(doc, mf));
+    kept := length(TPdfCanvasPeek(doc.Canvas).fTextStateSaved) >= depth;
+    for i := 0 to depth - 1 do
+      with TPdfCanvasPeek(doc.Canvas).fTextStateSaved[i] do
+        if kept and
+           ((Font <> saved[i].Font) or
+            (FontSize <> saved[i].FontSize) or
+            (WordSpace <> saved[i].WordSpace)) then
+          kept := false;
+    doc.Canvas.GRestore;
+    doc.Canvas.BeginText;
+    doc.Canvas.MoveTextPoint(40, 700);
+    text := 'Wi Wi';
+    doc.Canvas.ShowText(text);
+    doc.Canvas.EndText;
+    pdf := SaveDoc(doc);
+  finally
+    doc.Free;
+    mf.Free;
+    FontProvider := previous;
+  end;
+  Check(kept, 'the text states the q of the page saved, untouched by the form');
+  Check(PosEx('[<00880087008C> -500 <00880087>] TJ', InflatePdf(pdf)) > 0,
+    'the word spacing of the page after the form');
 end;
 
 {$else}
@@ -1244,7 +1300,7 @@ procedure TPdfImageGoldenTests.MetaFileFormState;
 var
   i: integer;
 begin
-  for i := 1 to 6 do
+  for i := 1 to 8 do
     Check(true, 'SKIP: metafiles are Windows only');
 end;
 
