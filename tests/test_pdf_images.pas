@@ -80,6 +80,11 @@ type
 
 implementation
 
+{$ifdef FPC}
+  // ScanLine[] is the pixel access of TBitmap on the VCL and the LCL alike
+  {$WARN 5044 off : Symbol "$1" is not portable }
+{$endif FPC}
+
 type
   // reads the text states GSave keeps
   TPdfCanvasPeek = class(TPdfCanvas);
@@ -514,9 +519,17 @@ const
 // VCL may apply by remapping the pixels already there
 procedure FillBitmap(B: TBitmap; Seed: byte);
 var
-  x, y, n, W: integer;
+  x, y, n: integer;
+  {$ifndef FPC}
+  W: integer;
+  {$endif FPC}
   p: PByteArray;
 begin
+  {$ifdef FPC}
+  // the row as the widgetset holds it: pf24bit is 32-bit on GTK2 and Cocoa
+  n := B.RawImage.Description.BytesPerLine;
+  B.BeginUpdate(true);
+  {$else}
   W := B.Width;
   case B.PixelFormat of
     pf1bit:
@@ -530,8 +543,6 @@ begin
   else
     n := W * 4;
   end;
-  {$ifdef FPC}
-  B.BeginUpdate(true);
   {$endif FPC}
   for y := 0 to B.Height - 1 do
   begin

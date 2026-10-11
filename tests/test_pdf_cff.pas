@@ -97,11 +97,31 @@ begin
             AnsiChar((v shr 8) and 255) + AnsiChar(v and 255);
 end;
 
+// bytes of a table: a literal above #127 is a character of the code page
+// on Unicode Delphi, converted again - $8B is a lead byte on cp932
+function Bytes(const B: array of byte): RawByteString;
+begin
+  SetString(result, PAnsiChar(@B[0]), length(B));
+end;
+
+function Zeros(Count: integer): RawByteString;
+begin
+  SetLength(result, Count);
+  FillCharFast(pointer(result)^, Count, 0);
+end;
+
+// FontMatrix 0.001 0 0 0.001 0 0: two reals, four integers, the operator
+function FontMatrixOps: RawByteString;
+begin
+  result := Bytes([30, $0a, $00, $1f, $8b, $8b, 30, $0a, $00, $1f, $8b, $8b,
+    12, 7]);
+end;
+
 // a DICT integer of 5 bytes, so that the size of the DICT is known before
 // the offsets it holds
 function DictInt(v: integer): RawByteString;
 begin
-  result := #29 + AnsiChar(v shr 24) + AnsiChar((v shr 16) and 255) +
+  result := AnsiChar(29) + AnsiChar(v shr 24) + AnsiChar((v shr 16) and 255) +
             AnsiChar((v shr 8) and 255) + AnsiChar(v and 255);
 end;
 
@@ -395,7 +415,7 @@ const
 function FakeHead: RawByteString;
 begin
   result := Card32($00010000) + Card32($00010000) + Card32(0) +
-    Card32($5F0F3CF5) + Card16(0) + Card16(1000) + StringOfChar(#0, 16) +
+    Card32($5F0F3CF5) + Card16(0) + Card16(1000) + Zeros(16) +
     Card16(0) + Card16(65336) + Card16(1000) + Card16(800) +
     Card16(0) + Card16(3) + Card16(2) + Card16(0) + Card16(0);
 end;
@@ -404,7 +424,7 @@ end;
 function FakeHhea: RawByteString;
 begin
   result := Card32($00010000) + Card16(800) + Card16(65336) + Card16(0) +
-    Card16(510) + StringOfChar(#0, 22) + Card16(FAKE_GLYPHS);
+    Card16(510) + Zeros(22) + Card16(FAKE_GLYPHS);
 end;
 
 // 'hmtx': glyph g advances 100 + 10 * g units
@@ -583,9 +603,8 @@ begin
     4), info) = pcCidKeyed, 'offSize 4');
   CheckCids(info, [0, 7, 2, 41], 'offSize 4 CIDs');
   // reals and other operators after the ROS are skipped: FontMatrix
-  Check(Parse(CffTable(true, 4, CffCharset0([7, 2, 41]),
-    391, 392, #30#$0a#$00#$1f#$8b#$8b#30#$0a#$00#$1f#$8b#$8b#12#7), info) =
-    pcCidKeyed, 'FontMatrix');
+  Check(Parse(CffTable(true, 4, CffCharset0([7, 2, 41]), 391, 392,
+    FontMatrixOps), info) = pcCidKeyed, 'FontMatrix');
   CheckCids(info, [0, 7, 2, 41], 'FontMatrix CIDs');
 end;
 
@@ -593,10 +612,9 @@ procedure TPdfCffTests.NameKeyed;
 var
   info: TPdfCffInfo;
 begin
-  // FontMatrix 0.001 0 0 0.001 0 0, its reals skipped
+  // its FontMatrix skipped
   Check(Parse(CffTable(false, 3, CffCharset0([5, 6]), 0, 0,
-    #30#$0a#$00#$1f#$8b#$8b#30#$0a#$00#$1f#$8b#$8b#12#7), info) =
-    pcNameKeyed, 'name-keyed');
+    FontMatrixOps), info) = pcNameKeyed, 'name-keyed');
   CheckEqual(info.GlyphCount, 3);
   Check(info.Cid = nil, 'no CIDs: the glyph index is the code');
   CheckEqual(info.Registry, '');
@@ -630,12 +648,12 @@ begin
   Check(Parse(CffTable(true, 3, CffCharset0([1, 2]), 391, 393), info) =
     pcInvalid, 'SID out of the String INDEX');
   // ROS after another operator: version SID 0
-  Check(Parse(CffTable(true, 3, CffCharset0([1, 2]), 391, 392, #$8b#0, false),
+  Check(Parse(CffTable(true, 3, CffCharset0([1, 2]), 391, 392, Bytes([$8b, 0]), false),
     info) = pcInvalid, 'ROS not first');
   // an operand too many, a reserved byte
-  Check(Parse(CffTable(false, 3, '', 0, 0, #$8b), info) = pcInvalid,
+  Check(Parse(CffTable(false, 3, '', 0, 0, Bytes([$8b])), info) = pcInvalid,
     'CharStrings with two operands');
-  Check(Parse(CffTable(false, 3, '', 0, 0, #255#0), info) = pcInvalid,
+  Check(Parse(CffTable(false, 3, '', 0, 0, Bytes([255, 0])), info) = pcInvalid,
     'reserved byte');
   // the header and the INDEX structure
   t := CffTable(true, 4, CffCharset0([7, 2, 41]));
@@ -648,7 +666,7 @@ begin
   t[8] := #2; // its first offset
   Check(Parse(t, info) = pcInvalid, 'first offset not 1');
   t := CffTable(true, 4, CffCharset0([7, 2, 41]));
-  t[9] := #$ff; // its last offset
+  t[9] := AnsiChar($ff); // its last offset
   Check(Parse(t, info) = pcInvalid, 'offset beyond the table');
 end;
 
