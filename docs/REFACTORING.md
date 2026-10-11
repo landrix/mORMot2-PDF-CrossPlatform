@@ -612,6 +612,29 @@ the LCL measured by Fable on win32, GTK2 and Cocoa):
 - **The bitmap reuse key:** on the LCL over `RawImage.Description.BytesPerLine`
   bytes per row (the VCL unchanged), and it includes the color key
 
+**Checked by Martin** (#31, #32 and #33 merged 2026-10-11; the check session
+of the phase): `test_runner` 779 on Windows (FPC 3.2.2 x64, Delphi 7, Delphi
+2010), 728 on Debian 13 aarch64, 755 on macOS M2; golden files and demo PDFs
+against `b2f58fa` as announced; veraPDF 1.30.2 `ua1` and `3u` pass on all
+five systems, PAC 2024 OK.
+
+**Follow-ups** (his five points on #33, one PR): Delphi 2010's W1035 on
+`CreateGraphicImage` (a `raise` inside `try..finally`: Delphi 7 and 2010 lose
+`result` there, a `RaiseU` call does not); the CFF test bytes built as
+`RawByteString`, not through `string` literals (W1057/W1058; `$8B` is a lead
+byte on cp932); `FillBitmap` fills `BytesPerLine` on the LCL, so the 32-bit
+pf24bit rows of GTK2 and Cocoa are filled to the end (`images_bitmap` and
+`images_jpeg` change there); FPC's "ScanLine is not portable" off in the
+adapter and the image tests; `pdf_inspect` writes the offsets of an object
+stream and its `/First` as 0, like those of an xref, so a grown member no
+longer shows as a change of the stream header - `/First` only where the
+header was read, and `ComparePdfText` compares the members' bounds when the
+text is equal (two findings of Codex). Checked: `test_runner` 792/792 on
+Windows (FPC 3.3.1 aarch64, Delphi 7, Delphi 13 Win32/Win64; golden files
+unchanged, no warning of Delphi 7 or 13 in our files), 741 on Linux
+aarch64 and 768 on macOS M2, both with `images_bitmap` and `images_jpeg`
+changed
+
 ### Phase 3 — Canvas Adapter
 
 Gist §11. `mormot.pdf.canvas`: `TPdfDocumentVcl`, `TPdfVclCanvas` - joining
