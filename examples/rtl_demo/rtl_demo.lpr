@@ -37,7 +37,7 @@ uses
   mormot.core.os,
   mormot.core.unicode,
   mormot.pdf,         // TPdfDocument, GetPdfFonts
-  mormot.ui.pdfcanvas;
+  mormot.pdf.canvas;  // TPdfDocumentVcl, TPdfVclCanvas
 
 {$R *.res}
 

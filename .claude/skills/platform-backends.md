@@ -30,9 +30,10 @@ What stays Windows-only in `mormot.pdf`:
   selection, which `TFontRequest` does not carry - decided with Sven,
   2026-10-09; cairo's LOGFONT constructor ignores `lfWidth`, a candidate for
   Phase 5; `TestLogFontWidth`)
-- `ScreenLogPixels`: `GdiScreenLogPixels` (`GetDeviceCaps(LOGPIXELSY)` of a
-  compatible DC) on Windows, 96 on POSIX - no font service; Phase 3 moves it
-  to the canvas adapter. It follows the process's DPI awareness: a program
+- `ScreenLogPixels`: 96 in the engine on every platform since R-28 Phase 3;
+  `TPdfDocumentVcl` and `TPdfDocumentGdi` set `GdiScreenLogPixels`
+  (`GetDeviceCaps(LOGPIXELSY)` of a compatible DC) on Windows - no font
+  service. It follows the process's DPI awareness: a program
   whose `.res` carries the Lazarus DPI-aware manifest gets the real DPI (144
   at 150 % scaling), and `TGDIPages` lays its pages out with it - compare
   demo PDFs only between builds with the same `.res`
@@ -514,8 +515,8 @@ Every unit starts with `{$I mormot.defines.inc}` after `interface` (by name, no 
 
 - **Enum size does not reach the C libraries.** `mormot.defines.inc` sets `{$MINENUMSIZE 1}` and `{$PACKSET 1}`, but the bindings in `mormot.lib.freetype` and `mormot.lib.harfbuzz` declare every C enum as `integer` and hold no set. Keep it that way in new bindings.
 - **The `{$ifdef FPC}` branches that remain are real differences.** Those of `mormot.pdf` and `mormot.pdf.canvas` (six in one unit before R-28 Phase 2) all come from the original (`reference/`): LCL against VCL units, the compatibility types, and three Windows API calls FPC declares differently — `EnumPrinters` (pointers), `GdiComment` (`var`), `EnumEnhMetaFile` (`RECT`); the fourth, `CreateFontIndirectW` on a `const` parameter in the `TPdfFontTrueType` constructor, went with W3: the `TLogFontW` constructor passes a local copy, a `var` that fits both declarations. No mORMot2 function wraps them. The GDI services in `mormot.lib.uniscribe` need no branch: a local `var` fits both. The branches in `mormot.ui.core` and `mormot.ui.gdiplus` come with the mORMot2 originals. The one around all of `mormot.ui.report` is gone since R-20.
-- **LCL against VCL units** (R-20): `mormot.ui.pdfcanvas` and `mormot.ui.report` take `LCLIntf`/`LCLType` under FPC and `Windows` under Delphi — `Windows` *before* `Graphics`, or its record `TBitmap` hides the class (dozens of errors on every `TBitmap.Create`).
-- **`PDF_CANVASVIRTUAL`** (`mormot.ui.pdfcanvas`, defined under FPC): the LCL's `TCanvas` drawing methods are virtual, Delphi 7's are static. The bridge declares `TextOut`, `TextExtent`, `TextWidth`, `TextHeight`, `Rectangle`, `Ellipse`, `RoundRect`, `Draw` with `override` or `reintroduce` by this switch, and has `DoMoveTo`/`DoLineTo` (LCL) or reintroduced `MoveTo`/`LineTo` (Delphi). `DoLineTo` checks `psClear` itself: `TFPCustomCanvas.LineTo` skips it then, our Delphi `LineTo` does not.
+- **LCL against VCL units** (R-20): `mormot.pdf.canvas` and `mormot.ui.report` take `LCLIntf`/`LCLType` under FPC and `Windows` under Delphi — `Windows` *before* `Graphics`, or its record `TBitmap` hides the class (dozens of errors on every `TBitmap.Create`).
+- **`PDF_CANVASVIRTUAL`** (`mormot.pdf.canvas`, defined under FPC): the LCL's `TCanvas` drawing methods are virtual, Delphi 7's are static. The bridge declares `TextOut`, `TextExtent`, `TextWidth`, `TextHeight`, `Rectangle`, `Ellipse`, `RoundRect`, `Draw` with `override` or `reintroduce` by this switch, and has `DoMoveTo`/`DoLineTo` (LCL) or reintroduced `MoveTo`/`LineTo` (Delphi). `DoLineTo` checks `psClear` itself: `TFPCustomCanvas.LineTo` skips it then, our Delphi `LineTo` does not.
 - **Delphi on Linux/Android** (R-27): the POSIX backends load their libraries through `TSynLibrary` of `mormot.core.os` (before Phase 1: `LibraryOpen`/`LibraryResolve`) — FPC's `dynlibs` does not exist there, and `TLibHandle` comes from `System` under FPC, from `mormot.core.os` under Delphi. There is no VCL there: `mormot.pdf.canvas` (the `TBitmap`/`TGraphic` image functions, EMF) is not for these targets, and `mormot.pdf` - which needs no VCL/LCL since R-28 Phase 2 - takes `GetSysColor` and `MM_TEXT` from its fallback block on every POSIX target, FPC included. Android: `/system/fonts` is scanned, Roboto is the last fallback face; the app has to ship an NDK-built `libfreetype.so` (a glibc build does not load), and a program without a configured `TSynLog` family crashed in `TSynLog.FillInfo` on the first raised exception — configure it as `TSynTests.RunAsConsole` does.
 - **Delphi 7 syntax** met in R-20: every declaration of an overloaded method needs `overload` (FPC accepts it on one); no `Default(T)` — `mormot.ui.report` has `NewCommand` (`Finalize` + `FillChar`); no typed constants with dynamic-array fields — build a `TTableLayout` in a function, zeroed first like a constant's omitted fields.
 

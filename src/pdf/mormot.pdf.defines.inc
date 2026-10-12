@@ -7,8 +7,7 @@
 // EmfDC); USE_SYNGDIPLUS and USE_GRAPHICS_UNIT concern mormot.pdf.canvas only,
 // which needs the VCL or the LCL anyway
 // - a unit that declares a descendant of TPdfDocument with the AEncryption
-// parameter must include this file too (mormot.ui.pdfcanvas does not yet:
-// its TPdfDocumentVcl.Create never has the parameter - for the bug-fix PR)
+// parameter must include this file too, as mormot.pdf.canvas does
 
 {$ifdef OSPOSIX}
   {$undef USE_METAFILE}
