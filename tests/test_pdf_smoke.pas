@@ -15,6 +15,7 @@ uses
   SysUtils,
   mormot.core.base,
   {$ifdef PDF_HASVCLCANVAS}
+  Types,                // TSize
   Graphics,             // TCanvas.Font
   mormot.ui.pdfcanvas,  // TPdfDocumentVcl, TPdfVclCanvas
   {$endif PDF_HASVCLCANVAS}
@@ -24,6 +25,7 @@ uses
   mormot.lib.core,      // FontShaper
   mormot.pdf.types,     // TPdfStructRole, GetPdfFonts
   mormot.pdf,        // TPdfDocument, TPdfCanvas
+  test_pdf_cff,         // SwapInFakeFace
   test_pdf_subset;      // DrawUtf8Text
 
 type
@@ -37,6 +39,8 @@ type
     {$ifdef PDF_HASVCLCANVAS}
     procedure TestVclCanvasTextMetrics;
     procedure TestVclCanvasUtf8Text;
+    procedure TestVclCanvasUnknownFace;
+    procedure TestVclCanvasThroughTCanvas;
     {$ifndef NO_USE_PDFSECURITY}
     procedure TestVclCanvasEncryption;
     {$endif NO_USE_PDFSECURITY}
@@ -174,6 +178,79 @@ begin
     p := PosEx(RawByteString(' m'#10), s, p + 1);
   end;
 end;
+
+{$ifdef PDF_HASVCLCANVAS}
+// a face no backend resolves: the bridge measures through its own DC - a
+// provider without the face, as a name alone may be substituted
+procedure TPdfSmokeTests.TestVclCanvasUnknownFace;
+var
+  PDF: TPdfDocumentVcl;
+  previous: IFontProvider;
+  e: TSize;
+begin
+  previous := SwapInFakeFace(nil);
+  PDF := nil;
+  try
+    PDF := TPdfDocumentVcl.Create(false, 0, pdfaNone);
+    PDF.EmbeddedTTF := true;
+    PDF.AddPage;
+    PDF.VclCanvas.Font.Name := FAKE_FACE;
+    PDF.VclCanvas.Font.Size := 12;
+    e := PDF.VclCanvas.TextExtent('Hello');
+    Check(e.cx > 0, 'a width');
+    Check(e.cy > 0, 'a height');
+    CheckEqual(PDF.VclCanvas.TextWidth('Hello'), e.cx, 'TextWidth');
+    CheckEqual(PDF.VclCanvas.TextHeight('Hello'), e.cy, 'TextHeight');
+  finally
+    PDF.Free;
+    FontProvider := previous;
+  end;
+end;
+
+// FPC's TCanvas has virtual drawing methods, which the bridge overrides;
+// Delphi 7's are static, so only a TPdfVclCanvas reference reaches it
+procedure TPdfSmokeTests.TestVclCanvasThroughTCanvas;
+var
+  PDF: TPdfDocumentVcl;
+  c: TCanvas;
+  Stream: TMemoryStream;
+  s: RawByteString;
+begin
+  Stream := TMemoryStream.Create;
+  try
+    PDF := TPdfDocumentVcl.Create(false, 0, pdfaNone);
+    try
+      PDF.CompressionMethod := cmNone;
+      PDF.StandardFontsReplace := true;
+      PDF.AddPage;
+      {$ifdef FPC}
+      c := PDF.VclCanvas;
+      {$else}
+      c := nil;
+      {$endif FPC}
+      PDF.VclCanvas.Font.Name := 'Helvetica';
+      if c <> nil then
+      begin
+        c.TextOut(40, 40, 'Through TCanvas');
+        c.Rectangle(40, 80, 140, 120);
+      end
+      else
+      begin
+        PDF.VclCanvas.TextOut(40, 40, 'Through TCanvas');
+        PDF.VclCanvas.Rectangle(40, 80, 140, 120);
+      end;
+      PDF.SaveToStream(Stream);
+    finally
+      PDF.Free;
+    end;
+    s := StreamToRaw(Stream);
+    Check(PosEx('(Through TCanvas) Tj', s) > 0, 'the text');
+    CheckEqual(CountOf(' re'#10, s), 1, 'the rectangle');
+  finally
+    Stream.Free;
+  end;
+end;
+{$endif PDF_HASVCLCANVAS}
 
 {$ifdef PDF_HASVCLCANVAS}
 {$ifndef NO_USE_PDFSECURITY}

@@ -42,6 +42,7 @@ uses
   test_pdf_cff,         // the synthetic CFF face
   {$ifdef PDF_HASVCLCANVAS}
   mormot.pdf.canvas,
+  mormot.ui.pdfcanvas,  // TPdfDocumentVcl
   {$endif PDF_HASVCLCANVAS}
   pdf_inspect,
   test_pdf_golden;
@@ -69,6 +70,7 @@ type
     procedure BitmapReuse;
     procedure BitmapKeys;
     procedure BitmapJpeg;
+    procedure BitmapBridge;
     procedure MetaFileCanvas;
     procedure MetaFileRender;
     procedure MetaFileForm;
@@ -889,6 +891,98 @@ begin
         b1.Free;
       end;
     end;
+end;
+
+// a "W 0 0 H X Y cm" operator in Text, the numbers compared as numbers: their
+// digits differ between the 32-bit and the 64-bit compilers
+function HasMatrix(const Text: RawUtf8; W, H, X, Y: double): boolean;
+var
+  p, e, b, i: PtrInt;
+  v: array[0..5] of double;
+  line: RawUtf8;
+  P2: PUtf8Char;
+begin
+  result := true;
+  p := PosEx(' cm', Text);
+  while p > 0 do
+  begin
+    b := p;
+    while (b > 1) and not (Text[b - 1] in [#10, #13]) do
+      dec(b);
+    line := copy(Text, b, p - b);
+    P2 := pointer(line);
+    for i := 0 to 5 do
+      v[i] := GetExtended(pointer(GetNextItem(P2, ' ')));
+    if (Abs(v[0] - W) < 0.01) and (v[1] = 0) and (v[2] = 0) and
+       (Abs(v[3] - H) < 0.01) and (Abs(v[4] - X) < 0.01) and
+       (Abs(v[5] - Y) < 0.01) then
+      exit;
+    e := p + 3;
+    p := PosEx(' cm', Text, e);
+  end;
+  result := false;
+end;
+
+// TPdfVclCanvas.Draw and StretchDraw: placement, reuse, a graphic that is no
+// TBitmap, and the graphics that draw nothing
+procedure TPdfImageGoldenTests.BitmapBridge;
+var
+  doc: TPdfDocumentVcl;
+  c: TPdfVclCanvas;
+  bmp, empty: TBitmap;
+  jpg: TJpegImage;
+  r: TRect; // as the bridge declares it: mormot.pdf's on FPC
+  ms: TMemoryStream;
+  pdf: RawByteString;
+  txt, err: RawUtf8;
+begin
+  bmp := NewBitmap(pf24bit, 9);
+  empty := TBitmap.Create;
+  ms := TMemoryStream.Create;
+  jpg := TJpegImage.Create;
+  doc := TPdfDocumentVcl.Create;
+  try
+    // decoded from its bytes: other pixels than the bitmap's
+    jpg.Assign(bmp);
+    jpg.SaveToStream(ms);
+    jpg.Free;
+    jpg := TJpegImage.Create;
+    ms.Position := 0;
+    jpg.LoadFromStream(ms);
+    doc.Info.CreationDate := GOLDEN_DATE;
+    doc.StandardFontsReplace := true;
+    doc.ScreenLogPixels := 96; // 3/4 pt per pixel
+    doc.AddPage;
+    c := doc.VclCanvas;
+    c.Draw(40, 40, bmp);
+    c.Draw(200, 40, bmp); // the same bitmap: one image drawn twice
+    r.Left := 40;
+    r.Top := 120;
+    r.Right := 40 + IMG_W * 4;
+    r.Bottom := 120 + IMG_H * 8;
+    c.StretchDraw(r, bmp);
+    c.Draw(40, 200, nil);
+    c.Draw(40, 200, empty);
+    c.StretchDraw(r, nil);
+    c.StretchDraw(r, empty);
+    c.Draw(40, 260, jpg); // converted to a bitmap of its own
+    pdf := SaveDoc(doc);
+  finally
+    doc.Free;
+    jpg.Free;
+    ms.Free;
+    empty.Free;
+    bmp.Free;
+  end;
+  txt := NormalizePdf(pdf, err);
+  CheckEqual(err, '');
+  CheckEqual(CountOf('/Subtype/Image', txt), 2, 'the bitmap once, the JPEG once');
+  CheckEqual(CountOf(' Do', txt), 4, 'four drawn');
+  // 3/4 pt per pixel, Y from the top of the 842 pt page
+  Check(HasMatrix(txt, 24, 3, 30, 809), 'Draw: 32 x 4 px at 40, 40');
+  Check(HasMatrix(txt, 24, 3, 150, 809), 'Draw: at 200, 40');
+  Check(HasMatrix(txt, 96, 24, 30, 728), 'StretchDraw: 128 x 32 px at 40, 120');
+  CheckGolden('images_bridge', pdf);
 end;
 
 procedure TPdfImageGoldenTests.BitmapJpeg;
