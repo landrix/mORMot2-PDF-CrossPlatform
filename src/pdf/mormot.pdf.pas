@@ -1522,6 +1522,7 @@ type
     procedure SetDefaultPaperSize(Value: TPdfPaperSize);
     procedure SetDefaultPageHeight(Value: cardinal);
     procedure SetDefaultPageWidth(Value: cardinal);
+    procedure SetScreenLogPixels(Value: integer);
     procedure SetUseOptionalContent(Value: boolean);
     procedure SetPdfA(Value: TPdfALevel);
     function GetDefaultPageLandscape: boolean;
@@ -1913,19 +1914,15 @@ type
     // - can be useful in inherited classe
     property RawPages: TSynList
       read fRawPages;
-    /// the resolution used for pixel to PDF coordinates conversion
-    // - by default, contains the Number of pixels per logical inch
-    // along the screen width
-    // - you can override this value if you really need additional resolution
-    // for your bitmaps and such - this is useful only with TPdfDocumentGdi and
-    // its associated TCanvas: all TPdfDocument native TPdfCanvas methods use
-    /// the native resolution of the PDF in DPI (default: 96)
-    // - used for coordinate conversion between screen/report units (1/100 mm) and PDF points
-    // - typically set to GetDeviceCaps(hdc, LOGPIXELSY) on Windows
-    // - PDF always uses 72 points per inch internally, but this value determines the scaling factor
-    // - CRITICAL: RenderPageToCanvas uses this value to ensure PDF export matches screen preview
+    /// the resolution in DPI that pixel coordinates are mapped with
+    // - 96 on every platform; TPdfDocumentVcl and TPdfDocumentGdi set the
+    // screen's on Windows
+    // - the TCanvas bridge takes its scale at the first page: set it before
+    // - the pixel methods of TPdfCanvas (MoveToI ...), RenderMetaFile and
+    // TGDIPages.ExportPdf map with it; PDF itself is 72 points per inch
+    // - a value of 0 or less raises EPdfInvalidValue
     property ScreenLogPixels: integer
-      read fScreenLogPixels write fScreenLogPixels;
+      read fScreenLogPixels write SetScreenLogPixels;
     /// is pdfaXXX if the file was created in order to be PDF/A compliant
     // - set PdfA parameter to a level for Create constructor in order to use it
     // - warning: setting a value to this propery after creation will call the
@@ -7944,13 +7941,8 @@ begin
     raise ESynException.Create(
       'TPdfDocument: no platform backend registered - ' +
       'ensure libfreetype is installed and mormot.lib.freetype is used');
-  // the resolution of the screen, as before: Windows asks GDI (96 unless the
-  // process is DPI-aware), POSIX has none - the canvas adapter in Phase 3
-  {$ifdef OSWINDOWS}
-  fScreenLogPixels := GdiScreenLogPixels;
-  {$else}
+  // no screen here: the canvas adapters set the screen's resolution
   fScreenLogPixels := 96;
-  {$endif OSWINDOWS}
   fCanvas := TPdfCanvas.Create(Self); // need fScreenLogPixels
   // retrieve true type fonts available for all charsets (via platform backend)
   FontEnumerator.EnumTrueTypeFonts(fTrueTypeFonts);
@@ -9515,6 +9507,19 @@ procedure TPdfDocument.SetDefaultPageWidth(Value: cardinal);
 begin
   fDefaultPageWidth := Value;
   fDefaultPaperSize := psUserDefined;
+end;
+
+procedure TPdfDocument.SetScreenLogPixels(Value: integer);
+begin
+  if Value <= 0 then
+    EPdfInvalidValue.RaiseUtf8('TPdfDocument.ScreenLogPixels := %', [Value]);
+  fScreenLogPixels := Value;
+  if fCanvas = nil then
+    exit;
+  // the factors TPdfCanvas.Create took from it
+  fCanvas.fFactor := 72 / Value;
+  fCanvas.fFactorX := fCanvas.fFactor;
+  fCanvas.fFactorY := fCanvas.fFactor;
 end;
 
 function TPdfDocument.GetDefaultPageLandscape: boolean;

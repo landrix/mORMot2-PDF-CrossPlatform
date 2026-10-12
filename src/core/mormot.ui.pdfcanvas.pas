@@ -46,6 +46,9 @@ uses
   LCLIntf, // CreateCompatibleDC / DeleteDC for font metrics
   LCLType, // HDC type
   {$endif FPC}
+  {$ifdef OSWINDOWS}
+  mormot.lib.uniscribe, // GdiScreenLogPixels
+  {$endif OSWINDOWS}
   mormot.core.base,
   mormot.core.unicode,
   mormot.pdf.types, // TPdfStructRole (Tagged PDF)
@@ -727,6 +730,9 @@ constructor TPdfDocumentVcl.Create(AUseOutlines: boolean; ACodePage: integer;
 begin
   inherited Create(AUseOutlines, ACodePage, APdfA
     {$ifdef USE_PDFSECURITY}, AEncryption{$endif});
+  {$ifdef OSWINDOWS}
+  ScreenLogPixels := GdiScreenLogPixels; // the screen this canvas stands for
+  {$endif OSWINDOWS}
   // fVclCanvas is created on first AddPage call
 end;
 

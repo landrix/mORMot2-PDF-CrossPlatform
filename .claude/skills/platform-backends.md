@@ -30,9 +30,10 @@ What stays Windows-only in `mormot.pdf`:
   selection, which `TFontRequest` does not carry - decided with Sven,
   2026-10-09; cairo's LOGFONT constructor ignores `lfWidth`, a candidate for
   Phase 5; `TestLogFontWidth`)
-- `ScreenLogPixels`: `GdiScreenLogPixels` (`GetDeviceCaps(LOGPIXELSY)` of a
-  compatible DC) on Windows, 96 on POSIX - no font service; Phase 3 moves it
-  to the canvas adapter. It follows the process's DPI awareness: a program
+- `ScreenLogPixels`: 96 in the engine on every platform since R-28 Phase 3;
+  `TPdfDocumentVcl` and `TPdfDocumentGdi` set `GdiScreenLogPixels`
+  (`GetDeviceCaps(LOGPIXELSY)` of a compatible DC) on Windows - no font
+  service. It follows the process's DPI awareness: a program
   whose `.res` carries the Lazarus DPI-aware manifest gets the real DPI (144
   at 150 % scaling), and `TGDIPages` lays its pages out with it - compare
   demo PDFs only between builds with the same `.res`

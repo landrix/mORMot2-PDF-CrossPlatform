@@ -15,6 +15,9 @@ uses
   SysUtils,
   mormot.core.base,
   {$ifdef PDF_HASVCLCANVAS}
+  {$ifdef OSWINDOWS}
+  mormot.lib.uniscribe, // GdiScreenLogPixels
+  {$endif OSWINDOWS}
   Types,                // TSize
   Graphics,             // TCanvas.Font
   mormot.ui.pdfcanvas,  // TPdfDocumentVcl, TPdfVclCanvas
@@ -41,6 +44,7 @@ type
     procedure TestVclCanvasUtf8Text;
     procedure TestVclCanvasUnknownFace;
     procedure TestVclCanvasThroughTCanvas;
+    procedure TestVclCanvasScreenLogPixels;
     {$ifndef NO_USE_PDFSECURITY}
     procedure TestVclCanvasEncryption;
     {$endif NO_USE_PDFSECURITY}
@@ -204,6 +208,23 @@ begin
   finally
     PDF.Free;
     FontProvider := previous;
+  end;
+end;
+
+// the bridge stands for the screen: its resolution on Windows, 96 elsewhere
+procedure TPdfSmokeTests.TestVclCanvasScreenLogPixels;
+var
+  PDF: TPdfDocumentVcl;
+begin
+  PDF := TPdfDocumentVcl.Create(false, 0, pdfaNone);
+  try
+    {$ifdef OSWINDOWS}
+    CheckEqual(PDF.ScreenLogPixels, GdiScreenLogPixels, 'the screen');
+    {$else}
+    CheckEqual(PDF.ScreenLogPixels, 96, '96');
+    {$endif OSWINDOWS}
+  finally
+    PDF.Free;
   end;
 end;
 

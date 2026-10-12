@@ -28,6 +28,7 @@ uses
   mormot.ui.core,       // TMetaFile, TMetaFileCanvas for FPC
   {$endif FPC}
   mormot.ui.gdiplus,    // TJpegImage, as the engine uses it on Windows
+  mormot.lib.uniscribe, // GdiScreenLogPixels
   {$endif OSWINDOWS}
   {$endif PDF_HASVCLCANVAS}
   Classes,
@@ -1095,6 +1096,7 @@ var
 begin
   doc := TPdfDocumentGdi.Create(true);
   try
+    CheckEqual(doc.ScreenLogPixels, GdiScreenLogPixels, 'the screen');
     doc.Info.CreationDate := GOLDEN_DATE;
     doc.EmbeddedTTF := false;
     doc.StandardFontsReplace := true;

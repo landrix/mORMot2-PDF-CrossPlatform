@@ -26,9 +26,9 @@ uses
   windows,
   winspool,
   {$endif OSWINDOWS}
-  {$ifdef USE_UNISCRIBE}
-  mormot.lib.uniscribe,
-  {$endif USE_UNISCRIBE}
+  {$ifdef OSWINDOWS}
+  mormot.lib.uniscribe, // GdiScreenLogPixels; the engine uses it as well
+  {$endif OSWINDOWS}
   mormot.lib.core,
   {$ifdef FPC}
   lcltype,
@@ -938,6 +938,7 @@ constructor TPdfDocumentGdi.Create(AUseOutlines: boolean; ACodePage: integer;
   {$ifdef USE_PDFSECURITY}; AEncryption: TPdfEncryption{$endif});
 begin
   inherited;
+  ScreenLogPixels := GdiScreenLogPixels; // the screen this canvas stands for
   fTPdfPageClass := TPdfPageGdi;
   fUseMetaFileTextPositioning := tpSetTextJustification;
   fKerningHScaleBottom := 99.0;
