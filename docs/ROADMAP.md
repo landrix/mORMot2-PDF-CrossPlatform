@@ -20,8 +20,8 @@ the invoice XML) also veraPDF `3u` and Mustang. **Next:** R-28, the
 integration into the mORMot2 trunk, under a feature freeze. Alongside it only
 what stays out of `src/`: R-24 (CI) and the open checks in V. The rest of
 R-26, R-20 steps 7–8, R-22, the Windows subset size, thinner table
-borders, the undrawn underline and strike-out and the richer structure of
-R-29 wait until R-28 is done.
+borders, the undrawn underline and strike-out, the richer structure of
+R-29 and the accessibility references of R-30 wait until R-28 is done.
 
 ---
 
@@ -352,6 +352,7 @@ forbids it:
 | Windows font subsets | `CreateFontPackage` moves behind the subsetter interface in `mormot.lib.uniscribe` in Phase 1 |
 | Thinner table borders | a feature |
 | R-29 | features in `mormot.ui.report.pas`, which Phase 4 rebuilds |
+| R-30 | builds on R-29; its engine gaps are features in the tagging code |
 
 ### R-26 — `zugferd_demo` on `TGDIPages`, Its Text From the XML — done; the other demos after R-28
 
@@ -976,6 +977,38 @@ Only face index 0 of a `.ttc` is reachable, because `TFontFileMap` carries no
 face index. Add one so the remaining faces can be selected by name. The
 FreeType backend already extracts a single face as a standalone sfnt
 (`ExtractSfntFromTtc`), so the embedding side needs no change.
+
+### R-30 — Rebuild the Published Accessibility References — after R-28 and the merge of R-29
+
+**Why.** The tagged output is checked by validators, not against examples
+others published as correct. `docs/ACCESSIBILITY_REFERENCES.md` (2026-10-10,
+branch `feature/accessibility-reference-rebuild`) maps the PDF Association's
+Techniques for Accessible PDF, its PDF/UA-1 Reference Suite (both CC BY
+4.0) and the BITV-PDF-Test onto the engine. It lists each case as tested,
+shown in a demo only, solved by R-29, a gap, or to be checked.
+
+**Work, in this order:**
+
+1. After the merge of R-29: update the R-29 rows of that file, measure the
+   rows marked "Check" (columns, multiline heading, image as heading,
+   nested lists, lists across pages, internal links in tagged output)
+2. Tests for the rows marked "Demo": one test per Technique rebuilt from its
+   PASS file, the Technique's ID and the licence in the test; veraPDF `ua1`
+   and PAC on the files. Golden files recorded before the first new test
+3. `invoice_demo`: its README gets the test steps of the BITV-PDF-Test that
+   concern a PDF engine, each marked as met by the engine, the content's part,
+   or not applicable
+4. Engine gaps, each its own fix: lists — `Lbl`, `/ListNumbering`, nested
+   lists, a list `Caption` (extends R-29 item 6); `Caption` and `BlockQuote`
+   from `DrawCaption` and `DrawQuote`, which write `P` today; `/Lang` on a
+   structure element (BITV-PDF-Test 3.1.2, reported by no validator);
+   `/Summary` on a table; `/ActualText` on a structure element; a `/RoleMap`
+   for `Title` and heading levels beyond 6 (lowest priority)
+5. A demo after the Reference Suite where a file shows a real gap in the
+   demos: file 05 (German book chapter: English parts, row headers, spans),
+   file 02 (invoice) against `invoice_demo`. CC BY 4.0: structure and texts
+   may be taken over with the source named; the files stay outside the
+   repository. Forms and scans stay out of scope
 
 ### Charts — out of scope; an example only on explicit request
 
