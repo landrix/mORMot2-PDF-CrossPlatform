@@ -281,6 +281,11 @@ procedure RenderMetaFile(C: TPdfCanvas; MF: TMetaFile; ScaleX: single = 1.0;
 
 implementation
 
+{$ifdef FPC}
+  // ScanLine[] is the pixel access of TBitmap on the VCL and the LCL alike
+  {$WARN 5044 off : Symbol "$1" is not portable }
+{$endif FPC}
+
 type
   // reach the protected state of the engine classes, as TORHook does in
   // mormot.core.json: no field, no override - only a cast of an instance
@@ -565,7 +570,7 @@ begin
   row := (((w * row) + 31) and (not 31)) shr 3; // inlined BytesPerScanLine
   {$endif FPC}
   for y := 0 to h - 1 do
-    result.c[y and 3] := crc32c(result.c[y and 3], B.{%H-}ScanLine[y], row);
+    result.c[y and 3] := crc32c(result.c[y and 3], B.ScanLine[y], row);
 end;
 
 function CreateOrGetBitmapImage(Doc: TPdfDocument; B: TBitmap;
@@ -622,12 +627,12 @@ begin
   d := B.RawImage.Description;
   if d.LineOrder = riloBottomToTop then
   begin
-    P.Data := B.{%H-}ScanLine[B.Height - 1];
+    P.Data := B.ScanLine[B.Height - 1];
     P.Stride := -PtrInt(d.BytesPerLine);
   end
   else
   begin
-    P.Data := B.{%H-}ScanLine[0];
+    P.Data := B.ScanLine[0];
     P.Stride := d.BytesPerLine;
   end;
   P.Size := PtrInt(B.Height - 1) * PtrInt(d.BytesPerLine) +
@@ -802,7 +807,8 @@ begin
             NeedBitmap(pf8bit);
           SetLength(entry, 256);
           if GetPaletteEntries(bmp.Palette, 0, 256, entry[0]) <> 256 then
-            raise EPdfInvalidValue.Create('TPdfImage');
+            // a call, not raise: Delphi 7/2010 then see result set (W1035)
+            EPdfInvalidValue.RaiseU('CreateGraphicImage: no 256-color palette');
           SetLength(px.Palette, 768);
           p := pointer(px.Palette);
           for i := 0 to 255 do
@@ -833,7 +839,7 @@ begin
     // the rows as ScanLine[] gives them: a DIB is bottom-up
     px.Width := bmp.Width;
     px.Height := bmp.Height;
-    px.Data := bmp.{%H-}ScanLine[0];
+    px.Data := bmp.ScanLine[0];
     case px.Format of
       ipfIndexed8:
         px.Stride := px.Width;
@@ -845,7 +851,7 @@ begin
     px.Size := px.Stride;
     if px.Height > 1 then
     begin
-      px.Stride := PAnsiChar(bmp.{%H-}ScanLine[1]) - PAnsiChar(px.Data);
+      px.Stride := PAnsiChar(bmp.ScanLine[1]) - PAnsiChar(px.Data);
       px.Size := PtrInt(px.Height - 1) * Abs(px.Stride) + px.Size;
     end;
     {$endif FPC}

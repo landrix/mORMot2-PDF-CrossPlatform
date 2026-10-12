@@ -85,7 +85,7 @@ examples/
   (each demo folder carries a short README.md; the source header of its .lpr
    (`layer1_demo`: .dpr) says the same thing in two sentences)
 tests/
-  test_runner.lpr              runs every suite below (green: 779 assertions on Windows with FPC, Delphi 13 and Delphi 7, with the CJK and symbol faces of Windows 11 - Delphi 2010 last measured at 506 (#29); 755 on macOS with Geeza Pro, Hiragino Sans GB and Helvetica, 728 on Linux with fonts-noto-cjk — the rest are skips; the golden files add two per case with or without a baseline. Delphi 13, measured before the golden files: 259 on Windows, 171 on Linux64, 129 on Android64, layer 1 only)
+  test_runner.lpr              runs every suite below (green: 792 assertions on Windows with FPC, Delphi 13 and Delphi 7, with the CJK and symbol faces of Windows 11 - Delphi 2010 last measured at 779 (#33); 768 on macOS with Geeza Pro, Hiragino Sans GB and Helvetica, 741 on Linux with fonts-noto-cjk — the rest are skips; the golden files add two per case with or without a baseline. Delphi 13, measured before the golden files: 259 on Windows, 171 on Linux64, 129 on Android64, layer 1 only)
   test_defines.inc             PDF_HASVCLCANVAS: the TCanvas bridge suites (all compilers since R-20)
   build_delphi7.bat            dcc32 build of one project (R-19)
   build_delphi2010.bat         the same with Delphi 2010, warnings on (R-25, Unicode Delphi)
@@ -252,6 +252,10 @@ Details on interfaces and registration: `.claude/skills/platform-backends.md`
     the compiler: `PDF_HASVCLCANVAS` (tests/test_defines.inc), not `FPC`.
     Compiler switches come from `{$I mormot.defines.inc}`, never from a bare
     `{$mode delphi}` (roadmap R-21)
+  - a `raise` inside `try..finally` of a function makes Delphi 7 and 2010
+    warn W1035 (result undefined) though every path sets it: raise through
+    `ESynException.RaiseU`/`RaiseUtf8`, a call, rather than add a
+    `result := nil` that Delphi 13 reports as H2077
 - `RawUtf8` instead of `string` for internal strings
 - **No non-ASCII in string literals** — in `src/`, demos and tests: FPC
   converts such a literal under `{$CODEPAGE UTF8}` (R-21: a default parameter
@@ -264,7 +268,8 @@ Details on interfaces and registration: `.claude/skills/platform-backends.md`
   ANSI code page and encodes it again. Code points with four digits
   (`#$00E4`, not `#$E4`) — only those are independent of the code page. On
   Delphi 2010 a single such character outside cp1252 draws W1062; the bytes
-  are right
+  are right. Binary data (a font table in a test) is no text: build it from
+  numbers as `RawByteString`, never from `#$8B` literals or `StringOfChar`
 - No blank lines between `begin`/`end` blocks
 - Interfaces with reference counting (`TInterfacedObject`)
 - Error handling via `ESynException`
@@ -380,7 +385,7 @@ itself is in each demo's `uReport.pas`; the form only passes its options.
 - **Delphi** (R-19, R-21, R-23, R-25, R-27 done; R-20 steps 1–6 done): layer 1,
   the TCanvas bridge and the `TGDIPages` core build on Delphi 7 and Delphi
   2010 (Unicode Delphi), Win32; `test_runner` green on Delphi 7 (counts: the
-  test list above; Delphi 2010 last measured at 506/506, #29). All six console
+  test list above; Delphi 2010 last measured at 779/779, #33). All six console
   demos and the `--export` of the two GUI demos build and give the same PDF as
   FPC (the GUI demos build their report in `uReport.pas`, without a form);
   PAC 2024 and veraPDF pass the files of both compilers. Open: the preview and
