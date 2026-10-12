@@ -685,6 +685,23 @@ Codex and Fable; Fable's probes built with Delphi 7 and FPC/LCL):
   added ones) - docs. The two changes of meaning come before the move, so
   that the move stays a move
 
+**Done** (2026-10-12, branch `pr/phase3` on PR #34, one commit per step,
+each Codex-reviewed): the tests first (four golden cases, `images_bridge`
+with its matrices compared as numbers - their digits differ between the
+32-bit and the 64-bit compilers - and smoke tests; their baselines
+recorded on `3b56824`, the commit of the tests, on all five systems); the
+bridge formatted in place; the
+report's PDF types from `mormot.pdf`; `ScreenLogPixels`; the move - 714
+lines verbatim, the old unit deleted. Checked: `test_runner` 827/827 on
+Windows (FPC 3.3.1 aarch64, Delphi 7, Delphi 13 Win32/Win64), 774 on Linux
+aarch64, 801 on macOS M2, golden files unchanged after the new cases were
+recorded; the 7 demo PDFs of Windows FPC equal the state before Phase 3
+(`pdfcheck compare`; `mormot_demo` needs an aarch64 sqlite3). Found for the
+bug-fix PR: `TGDIPages` draws bitmaps past the bridge (`report-engine.md`).
+Open: Delphi 2010, Delphi 13
+Linux64/Android64 (engine only, the adapter is not for them), PAC/veraPDF
+at the end of the phase
+
 ### Phase 4 — Reporting
 
 Gist §12, §13. `mormot.pdf.report` and `mormot.pdf.report.preview`.

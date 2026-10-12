@@ -83,7 +83,7 @@ examples/
   (each demo folder carries a short README.md; the source header of its .lpr
    (`layer1_demo`: .dpr) says the same thing in two sentences)
 tests/
-  test_runner.lpr              runs every suite below (green: 792 assertions on Windows with FPC, Delphi 13 and Delphi 7, with the CJK and symbol faces of Windows 11 - Delphi 2010 last measured at 779 (#33); 768 on macOS with Geeza Pro, Hiragino Sans GB and Helvetica, 741 on Linux with fonts-noto-cjk — the rest are skips; the golden files add two per case with or without a baseline. Delphi 13, measured before the golden files: 259 on Windows, 171 on Linux64, 129 on Android64, layer 1 only)
+  test_runner.lpr              runs every suite below (green: 827 assertions on Windows with FPC, Delphi 13 and Delphi 7, with the CJK and symbol faces of Windows 11 - Delphi 2010 last measured at 779 (#33); 801 on macOS with Geeza Pro, Hiragino Sans GB and Helvetica, 774 on Linux with fonts-noto-cjk — the rest are skips; the golden files add two per case with or without a baseline. Delphi 13, measured before the golden files: 259 on Windows, 171 on Linux64, 129 on Android64, layer 1 only)
   test_defines.inc             PDF_HASVCLCANVAS: the TCanvas bridge suites (all compilers since R-20)
   build_delphi7.bat            dcc32 build of one project (R-19)
   build_delphi2010.bat         the same with Delphi 2010, warnings on (R-25, Unicode Delphi)
@@ -98,7 +98,7 @@ tests/
   test_report_crossplatform.pas report engine, tables, tagged export
   test_pdf_subset.pas          font subsetting: IFontSubsetter and TPdfDocument
   test_pdf_pdfa.pas            PDF/A-3: associated files, XMP schemas, PdfMetadataFacturX, level U
-  test_pdf_golden.pas          golden files: generated PDFs against this machine's baseline (layers 1-2)
+  test_pdf_golden.pas          golden files: generated PDFs against this machine's baseline (layers 1-2, the TCanvas bridge's shapes, pages and tagging calls)
   test_pdf_cff.pas             the CFF reader on tables built in code, and every CFF path through a synthetic face swapped into FontProvider (codes, /W, /ToUnicode, routing, word spacing, programs, names)
   test_pdf_images.pas          golden files of the image paths (raw pixels on every compiler; TBitmap formats, reuse, color key, JPEG) and of EMF (TPdfDocumentGdi, RenderMetaFile; Windows)
   test_report_golden.pas       the same for TGDIPages (layer 3)

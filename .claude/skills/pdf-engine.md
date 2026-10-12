@@ -494,7 +494,24 @@ C.TextOut(40, 40, 'Text');
 Doc.SaveToFile('out.pdf');
 ```
 
-`VclCanvas` must be retrieved after each `AddPage` — a new instance is created per page.
+`VclCanvas` is created at the first `AddPage` and reused: each later
+`AddPage` resets its cached pen/font state (the `Pen` and `Font` keep their
+values), so the next draw writes them again.
+
+- **Its scale is taken at the first page** from `ScreenLogPixels` (96 in the
+  engine, the screen's on Windows - set by `TPdfDocumentVcl.Create`): set
+  another value before the first `AddPage`; later it only reaches the engine
+  (`canvas_bridge_pages` pins 144)
+- **`TPoint`/`TRect` of `Polyline`, `Polygon`, `FillRect`, `StretchDraw`** are
+  the ones `mormot.pdf.canvas` sees: `mormot.pdf`'s packed types on FPC (it
+  comes last in the `uses`), those of `Types` on Delphi. A caller resolves
+  them the same way when `mormot.pdf` comes after `Types` in its `uses`
+- **`FillRect`, `StretchDraw`, `Polyline`, `Polygon` are reintroduced on
+  every compiler:** through a plain `TCanvas` reference they reach the
+  LCL/VCL, not the PDF (`TGDIPages` and its bitmaps: `report-engine.md`)
+- `Draw`/`StretchDraw` of a graphic that is no `TBitmap` draw it on a
+  bitmap of their own first; the same bitmap drawn twice is one image
+  (`images_bridge`)
 
 ### Text Metrics (ROADMAP B-4)
 

@@ -243,6 +243,11 @@ v0.10.0 (2026-09-30).
   the canvas tracks, so a `Tf`, `Tw`, `Tc`, `Tz` or `TL` could be skipped
   after `Q`; a space in a PDF name is
   written `#20`
+- **`mormot.ui.pdfcanvas` is now part of `mormot.pdf.canvas`** (R-28 Phase
+  3): `TPdfDocumentVcl` and `TPdfVclCanvas` are unchanged, change the `uses`
+  (no compatibility unit). The PDF/A levels, page modes, `/AFRelationship`
+  values and `PdfMetadataFacturX` come from `mormot.pdf` (layer 2) or
+  `mormot.ui.report` (layer 3), no longer from the canvas unit
 - **Changed: `TPdfDocument.ScreenLogPixels` is 96** on every platform
   (R-28 Phase 3); `TPdfDocumentVcl` and `TPdfDocumentGdi` set the screen's
   resolution on Windows, as the engine did for every document before. Only a
