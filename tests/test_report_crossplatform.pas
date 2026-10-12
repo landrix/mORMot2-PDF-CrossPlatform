@@ -17,6 +17,7 @@ uses
   Graphics,
   mormot.core.base,
   mormot.core.text,
+  mormot.core.unicode, // CountOccurrences
   mormot.core.test,
   pdf_inspect,       // InflatePdf
   mormot.ui.report;  // re-exports what the ExportPdf* options take
@@ -785,20 +786,6 @@ begin
   end;
 end;
 
-// how often Sub occurs in s
-function CountOf(const s, Sub: RawUtf8): Integer;
-var
-  p: PtrInt;
-begin
-  result := 0;
-  p := PosEx(Sub, s);
-  while p > 0 do
-  begin
-    inc(result);
-    p := PosEx(Sub, s, p + length(Sub));
-  end;
-end;
-
 procedure TReportTests.TestTableFooterRowHeader;
 
   // the inflated tagged PDF of a table with two footer rows
@@ -852,12 +839,12 @@ begin
   { opt-in: the first cell of each footer row heads its row (PDF/UA-1 7.5) }
   s := MakePdf(true, Marked);
   CheckEqual(2, Marked, 'the first cell of both footer rows is recorded as a row header');
-  CheckEqual(2, CountOf(s, '/Scope/Row'), 'two TH with /Scope /Row');
-  CheckEqual(2, CountOf(s, '/Scope/Column'), 'the header row keeps /Scope /Column');
+  CheckEqual(2, CountOccurrences('/Scope/Row', s), 'two TH with /Scope /Row');
+  CheckEqual(2, CountOccurrences('/Scope/Column', s), 'the header row keeps /Scope /Column');
   { off by default: footer cells stay TD }
   s := MakePdf(false, Marked);
   CheckEqual(0, Marked, 'no row header without the option');
-  CheckEqual(0, CountOf(s, '/Scope/Row'), 'no /Scope /Row without the option');
+  CheckEqual(0, CountOccurrences('/Scope/Row', s), 'no /Scope /Row without the option');
 end;
 
 procedure TReportTests.TestExportPdfPageMode;
