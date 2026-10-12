@@ -75,19 +75,33 @@ begin
   Check(FontEnumerator  <> nil, 'FontEnumerator is nil');
 end;
 
+type
+  // reads the factors the canvas took from ScreenLogPixels
+  TPdfCanvasPeek = class(TPdfCanvas);
+
 procedure TPdfCrossPlatTests.TestScreenLogPixels;
 var
   PDF: TPdfDocument;
+  raised: boolean;
 begin
-  // GDI's LOGPIXELSY on Windows (96 unless the process is DPI-aware), 96 on
-  // POSIX: no font service any more, since Phase 1b
+  // 96 on every platform: the screen's is set by the canvas adapters
   PDF := TPdfDocument.Create;
   try
-    Check(PDF.ScreenLogPixels > 0, 'ScreenLogPixels must be > 0');
-    Check(PDF.ScreenLogPixels <= 600, 'ScreenLogPixels must be <= 600 (sanity)');
-    {$ifndef OSWINDOWS}
-    CheckEqual(PDF.ScreenLogPixels, 96, 'POSIX: 96');
-    {$endif OSWINDOWS}
+    CheckEqual(PDF.ScreenLogPixels, 96, '96 by default');
+    PDF.ScreenLogPixels := 144;
+    CheckEqual(PDF.ScreenLogPixels, 144, 'set');
+    CheckSame(TPdfCanvasPeek(PDF.Canvas).fFactor, 0.5, 1e-6, 'fFactor');
+    CheckSame(TPdfCanvasPeek(PDF.Canvas).fFactorX, 0.5, 1e-6, 'fFactorX');
+    CheckSame(TPdfCanvasPeek(PDF.Canvas).fFactorY, 0.5, 1e-6, 'fFactorY');
+    raised := false;
+    try
+      PDF.ScreenLogPixels := 0;
+    except
+      on EPdfInvalidValue do
+        raised := true;
+    end;
+    Check(raised, 'no resolution of 0');
+    CheckEqual(PDF.ScreenLogPixels, 144, 'kept');
   finally
     PDF.Free;
   end;

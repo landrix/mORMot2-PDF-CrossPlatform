@@ -491,7 +491,7 @@ Applies to: Chinese, Japanese, Korean, and any non-Latin non-RTL script.
 CJK needs no GSUB shaping — `UseUniscribe=false` is sufficient and correct.
 
 ```
-TPdfVclCanvas.SyncFont                              (pdfcanvas.pas:232)
+TPdfVclCanvas.SyncFont                              (mormot.pdf.canvas)
 │  fPdfCanvas.SetFont(Font.Name, Abs(Font.Size), style, Font.Charset)
 │  Font.Charset = DEFAULT_CHARSET (1) by default
 │
@@ -501,7 +501,7 @@ TPdfCanvas.SetFont(name, size, style, DEFAULT_CHARSET)   (pdf.pas:8749)
 │  CreateFontIndirectW(@lf)   ← HFONT with DEFAULT_CHARSET
 │  → WinAnsi font registered
 
-C.TextOut(40, 80, CJK_CHAR_ZHONG)                   (pdfcanvas.pas:279)
+C.TextOut(40, 80, CJK_CHAR_ZHONG)                   (mormot.pdf.canvas)
 │  StringToSynUnicode → [U+4E2D]
 │  → TPdfCanvas.TextOutW → TPdfWrite.ShowText
 │     → AddUnicodeHexTextNoUniScribe                  (pdf.pas:5484)

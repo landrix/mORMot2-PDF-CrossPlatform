@@ -20,6 +20,9 @@ interface
 {$I mormot.defines.inc}
 
 uses
+  // first: the units after it win for its TRect, TPoint, Rect and Point (on
+  // FPC), and the own psA4 of this unit wins over any used unit's
+  mormot.pdf,
   {$ifndef FPC}
   Windows,       // MulDiv - before Graphics: its record TBitmap would hide the class
   {$endif FPC}
@@ -34,42 +37,41 @@ uses
   mormot.core.text,     // ESynException
   mormot.core.unicode,
   mormot.pdf.types,     // PDF_FONT_STD_* + TPdfStructRole (Tagged PDF)
-  mormot.ui.pdfcanvas;  // cross-platform PDF engine (uses FreeType2 on POSIX)
-              // also re-exports TPdfFontMeasurer (layout metrics)
+  mormot.pdf.canvas;    // TPdfDocumentVcl, TPdfVclCanvas
 
 { what the ExportPdf* options take, re-exported: a report program uses this
   unit only - mormot.pdf beside it hides psA4 or TRect, depending on the
   order of the uses clause }
 type
-  TPdfALevel = mormot.ui.pdfcanvas.TPdfALevel;
+  TPdfALevel = mormot.pdf.TPdfALevel;
   TPdfFileFormat = mormot.pdf.types.TPdfFileFormat;
-  TPdfAFRelationship = mormot.ui.pdfcanvas.TPdfAFRelationship;
-  TPdfPageMode = mormot.ui.pdfcanvas.TPdfPageMode;
+  TPdfAFRelationship = mormot.pdf.TPdfAFRelationship;
+  TPdfPageMode = mormot.pdf.TPdfPageMode;
 
 const
-  pdfaNone = mormot.ui.pdfcanvas.pdfaNone;
-  pdfa1A = mormot.ui.pdfcanvas.pdfa1A;
-  pdfa1B = mormot.ui.pdfcanvas.pdfa1B;
-  pdfa2A = mormot.ui.pdfcanvas.pdfa2A;
-  pdfa2B = mormot.ui.pdfcanvas.pdfa2B;
-  pdfa3A = mormot.ui.pdfcanvas.pdfa3A;
-  pdfa3B = mormot.ui.pdfcanvas.pdfa3B;
-  pdfa3U = mormot.ui.pdfcanvas.pdfa3U;
+  pdfaNone = mormot.pdf.pdfaNone;
+  pdfa1A = mormot.pdf.pdfa1A;
+  pdfa1B = mormot.pdf.pdfa1B;
+  pdfa2A = mormot.pdf.pdfa2A;
+  pdfa2B = mormot.pdf.pdfa2B;
+  pdfa3A = mormot.pdf.pdfa3A;
+  pdfa3B = mormot.pdf.pdfa3B;
+  pdfa3U = mormot.pdf.pdfa3U;
   pdf13 = mormot.pdf.types.pdf13;
   pdf14 = mormot.pdf.types.pdf14;
   pdf15 = mormot.pdf.types.pdf15;
   pdf16 = mormot.pdf.types.pdf16;
   pdf17 = mormot.pdf.types.pdf17;
-  afrUnspecified = mormot.ui.pdfcanvas.afrUnspecified;
-  afrSource = mormot.ui.pdfcanvas.afrSource;
-  afrData = mormot.ui.pdfcanvas.afrData;
-  afrAlternative = mormot.ui.pdfcanvas.afrAlternative;
-  afrSupplement = mormot.ui.pdfcanvas.afrSupplement;
-  pmUseNone = mormot.ui.pdfcanvas.pmUseNone;
-  pmUseOutlines = mormot.ui.pdfcanvas.pmUseOutlines;
-  pmUseThumbs = mormot.ui.pdfcanvas.pmUseThumbs;
-  pmFullScreen = mormot.ui.pdfcanvas.pmFullScreen;
-  pmUseAttachments = mormot.ui.pdfcanvas.pmUseAttachments;
+  afrUnspecified = mormot.pdf.afrUnspecified;
+  afrSource = mormot.pdf.afrSource;
+  afrData = mormot.pdf.afrData;
+  afrAlternative = mormot.pdf.afrAlternative;
+  afrSupplement = mormot.pdf.afrSupplement;
+  pmUseNone = mormot.pdf.pmUseNone;
+  pmUseOutlines = mormot.pdf.pmUseOutlines;
+  pmUseThumbs = mormot.pdf.pmUseThumbs;
+  pmFullScreen = mormot.pdf.pmFullScreen;
+  pmUseAttachments = mormot.pdf.pmUseAttachments;
 
 { =========================================================================
   Phase 1 - Types and structure
@@ -803,7 +805,7 @@ end;
 function PdfMetadataFacturX(const ConformanceLevel, DocumentFileName,
   Version, DocumentType: RawUtf8): RawUtf8;
 begin
-  Result := mormot.ui.pdfcanvas.PdfMetadataFacturX(ConformanceLevel,
+  Result := mormot.pdf.PdfMetadataFacturX(ConformanceLevel,
     DocumentFileName, Version, DocumentType);
 end;
 

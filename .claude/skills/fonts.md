@@ -383,7 +383,7 @@ After `TPdfTtf.Create`:
 ## 6. Text Rendering Chain — WinAnsi (Latin) Path (`pdf.pas:5484–5548`)
 
 ```
-TPdfVclCanvas.TextOut(X, Y, S)              pdfcanvas.pas:273
+TPdfVclCanvas.TextOut(X, Y, S)              mormot.pdf.canvas
   StringToSynUnicode(S) → W: SynUnicode   (TextOutUtf8: Utf8ToSynUnicode)
   → TPdfCanvas.TextOutW(X, Y, W)            pdf.pas:8992
       → TPdfWrite.ShowText(PW)              pdf.pas:9463
@@ -773,7 +773,7 @@ How `lfCharSet` is determined when rendering via `TPdfVclCanvas`:
 LCL TFont.Charset                        (graphics.pp:122)
   default = DEFAULT_CHARSET (1)
 
-TPdfVclCanvas.SyncFont                   (pdfcanvas.pas:256)
+TPdfVclCanvas.SyncFont                   (mormot.pdf.canvas)
   fPdfCanvas.SetFont(Font.Name, Abs(Font.Size), style, Font.Charset)
   ← Font.Charset passed explicitly → DEFAULT_CHARSET (1) by default
   ← user sets Font.Charset := SYMBOL_CHARSET (2) for symbol fonts
