@@ -716,7 +716,35 @@ settled on `feature/invoice-demo`, whose `TGDIPages` draws them through
 ### Phase 4 — Reporting
 
 Gist §12, §13. `mormot.pdf.report` and `mormot.pdf.report.preview`.
-Needs the decision on the trunk's existing `TGdiPages` first.
+
+**Decided** (2026-10-12, with Sven, three alternatives each, discussed with
+Codex and Fable; Fable's trial merges in a scratch worktree):
+
+- **A clean break with the trunk's `TGdiPages`:** our engine becomes
+  `mormot.pdf.report` and keeps its class name; the trunk's
+  `mormot.ui.report` goes at the 2.5 merge, as Arnaud announced, with a
+  migration note. No wrapper: the trunk's unit is Delphi and Windows only (an
+  empty unit on FPC and POSIX), no unit, example or test of the trunk uses
+  it, and of the ~130 names of its public methods and properties ~113 have
+  no counterpart here - the column model, header/footer lists, groups,
+  metafile pages - while shared names such as `DrawTextAt`, `PaperSize`,
+  `Orientation` and `ExportPdf` differ in signature or units (millimetres
+  against 1/100 mm). A wrapper would be a port. mORMot 1 to 2
+  renamed `mORMotReport` the same way, without a compatibility unit;
+  FastReport ships VCL and FMX as separate products
+- **Moved, not formatted:** Phase 4 is `git mv` plus unit names and the
+  references, the code verbatim; Martin's `feature/invoice-demo`, which
+  adds ~390 lines to the report, merges cleanly over the move (git follows
+  the rename; trial merge). Formatting conflicts with it (a stand-in pass:
+  9 conflict hunks), and Martin starts Markdown on the same file, so it comes
+  right after his branch has landed, at the latest before the 2.5 merge,
+  like `mormot.pdf` and `mormot.pdf.canvas`
+- **Scope as it is:** `mormot.pdf.report` keeps `Graphics` (`TColor`,
+  `TFontStyles`, `RenderPageToCanvas`); the gist's boundary for the first
+  merge is no `Forms` and no `Printers` (§12, §23). The preview stays
+  LCL-only, a Delphi preview stays R-20 steps 7 and 8. The trunk's folder
+  rule (`FOLDER-DEPENDENCIES.md`) and the Lazarus package for `src/pdf` come
+  with the 2.5 merge
 
 ### Phase 5 — Cleanup
 
@@ -750,8 +778,9 @@ Process, agreed in the forum:
     backends got it as they became `mormot.lib.core` and the library units
     in Phase 1; Phase 2 moved `mormot.ui.pdf` verbatim. Now: the bridge in place
     before Phase 3 moves it, `mormot.pdf` and `mormot.pdf.canvas` in one PR
-    before the 2.5 merge (Arnaud expects more formatting), `mormot.ui.report`
-    before Phase 4
+    before the 2.5 merge (Arnaud expects more formatting), the report
+    (`mormot.pdf.report` since Phase 4) after `feature/invoice-demo` has
+    landed, at the latest before the 2.5 merge (decided for Phase 4)
 - **Into the trunk after mORMot 2.5** (Arnaud, gist, 2026-10-11): the trunk
   is in its 2.5 release cycle, so the work stays in the branches until 2.5
   is out and merges then; the trunk's old `mormot.ui.pdf` and
@@ -769,8 +798,6 @@ Process, agreed in the forum:
 
 ## Open Decisions
 
-- The trunk's existing `TGdiPages` (`TScrollBox`, preview built in) — before
-  Phase 4
 - Golden files in `mormot2tests`: here they are per machine and not
   versioned (Phase 0 step 2) — how a baseline without files in the
   repository serves the trunk's tests
