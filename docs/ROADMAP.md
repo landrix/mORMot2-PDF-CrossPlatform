@@ -20,8 +20,8 @@ the invoice XML) also veraPDF `3u` and Mustang. **Next:** R-28, the
 integration into the mORMot2 trunk, under a feature freeze. Alongside it only
 what stays out of `src/`: R-24 (CI) and the open checks in V. The rest of
 R-26, R-20 steps 7–8, R-22, the Windows subset size, thinner table
-borders, the undrawn underline and strike-out and the richer structure of
-R-29 wait until R-28 is done.
+borders, the undrawn underline and strike-out, the richer structure of
+R-29 and the accessibility references of R-30 wait until R-28 is done.
 
 ---
 
@@ -352,6 +352,7 @@ forbids it:
 | Windows font subsets | `CreateFontPackage` moves behind the subsetter interface in `mormot.lib.uniscribe` in Phase 1 |
 | Thinner table borders | a feature |
 | R-29 | features in `mormot.ui.report.pas`, which Phase 4 rebuilds |
+| R-30 | builds on R-29; its engine gaps are features in the tagging code |
 
 ### R-26 — `zugferd_demo` on `TGDIPages`, Its Text From the XML — done; the other demos after R-28
 
