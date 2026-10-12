@@ -958,7 +958,7 @@ The CFF series of R-28 tests the CFF programs, the PDF/A-1 refusal of a
 name-keyed face and the routing with a synthetic face (`test_pdf_cff`, not
 tagged); veraPDF and PAC on real CFF output (macOS) are still to run.
 
-### `TGDIPages.ExportPDF` Ignores `Protect` and `Encrypt` — R-28 Phase 4
+### `TGDIPages.ExportPDF` Ignores `Protect` and `Encrypt` — the refusal in Phase 4's bug-fix PR, the feature after R-28
 
 `ExportPDF(FileName, Protect, Encrypt, ..)` takes both flags and passes
 neither on; `ExportPdfStream` creates its `TPdfDocumentVcl` without a

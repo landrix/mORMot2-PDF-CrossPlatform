@@ -608,7 +608,8 @@ the LCL measured by Fable on win32, GTK2 and Cocoa):
   a form
 - **`TPdfDocumentVcl`'s encryption parameter:** `mormot.ui.pdfcanvas`
   includes `mormot.pdf.defines.inc`. That `TGDIPages.ExportPDF` ignores
-  `Protect` and `Encrypt` is a missing feature (ROADMAP, Phase 4)
+  `Protect` and `Encrypt` is a missing feature (ROADMAP: refused in Phase
+  4's bug-fix PR, implemented after the freeze)
 - **The bitmap reuse key:** on the LCL over `RawImage.Description.BytesPerLine`
   bytes per row (the VCL unchanged), and it includes the color key
 
@@ -659,7 +660,7 @@ Codex and Fable; Fable's probes built with Delphi 7 and FPC/LCL):
   and its re-exports point at the engine; the adapter exports no PDF/A
   levels, page modes or Factur-X metadata (gist §14: the report depends on
   `mormot.pdf`; Phase 4 needs it anyway). A program still never puts
-  `mormot.pdf` beside `mormot.ui.report`
+  `mormot.pdf` beside `mormot.ui.report` (now `mormot.pdf.report`)
 - **`ScreenLogPixels` leaves the engine's platform code** (the Phase 1b
   promise): `TPdfDocument` starts at 96 on every platform, a setter keeps
   the canvas factors in step, and `TPdfDocumentVcl` and `TPdfDocumentGdi`

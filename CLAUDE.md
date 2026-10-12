@@ -399,8 +399,9 @@ itself is in each demo's `uReport.pas`; the form only passes its options.
   ANSI. A console program needs `{$APPTYPE CONSOLE}` after the
   `mormot.defines.inc` include: FPC's project makes a console executable,
   dcc32 a GUI one without it, where `WriteLn` raises I/O error 105. Never put
-  `mORMot2/src/ui` on a Delphi search path: its `mormot.ui.core` has the
-  name of ours, and it holds the original `mormot.ui.pdf`/`report`
+  `mORMot2/src/ui` on a Delphi search path: its `mormot.ui.core` and
+  `mormot.ui.gdiplus` have the names of our copies in `src/core`, and it
+  holds the original `mormot.ui.pdf`/`report`
 
 Current verification status per platform, and the open items in detail:
 `docs/ROADMAP.md`
