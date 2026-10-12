@@ -352,6 +352,8 @@ Shows `TGDIPages` with `TTableLayout` (the same as Demo 3), but the data comes f
 **What you learn:**
 - mORMot ORM models (`TOrm` classes) as data source for reports
 - `TRestClientDB` + `TRestServerDB` for local SQLite database
+- Sample data added on the first run through a `TRestBatch`, in the virtual
+  `TRestServerDB` constructor that `TRestClientDB` calls
 - Service method (`GetInvoiceData`) to fetch data as DTO array
 - `TTableLayout` with 5 columns: row#, order number, customer, date, amount
 - Automatic page break and table header repetition via `DrawTableRow`
@@ -365,6 +367,7 @@ Shows `TGDIPages` with `TTableLayout` (the same as Demo 3), but the data comes f
 ```
 data.pas        TOrmEmployee, TOrmCustomer, TOrmCustomerOrder
 server.pas      TDemoServer with GetInvoiceData() -> TDtoInvoiceRowDynArray,
+                AddSampleData() for a fresh database,
                 ReadInvoiceData() opening the database
 uReport.pas     BuildReport -> DrawInvoiceTable -> TTableLayout rendering
 uMainForm.pas   the form, passes the options its controls show
