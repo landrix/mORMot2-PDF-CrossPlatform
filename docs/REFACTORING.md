@@ -640,6 +640,51 @@ changed
 Gist §11. `mormot.pdf.canvas`: `TPdfDocumentVcl`, `TPdfVclCanvas` - joining
 the bitmap conversion and EMF that Phase 2 moved there.
 
+**Decided** (2026-10-12, with Sven, three alternatives each, discussed with
+Codex and Fable; Fable's probes built with Delphi 7 and FPC/LCL):
+
+- **One adapter unit:** the bridge joins `mormot.pdf.canvas` as its first
+  section (bridge, bitmaps, EMF), under `USE_GRAPHICS_UNIT` like the
+  bitmaps; `PDF_CANVASVIRTUAL` stays a local define of the unit (a compiler
+  fact, not a project switch). Skia keeps canvas-to-PDF and bitmaps in one
+  module; PDFBox-Graphics2D is an adapter apart from the engine - the cut
+  this project has. EMF as a unit of its own is a Phase 5 question
+- **`mormot.ui.pdfcanvas` is deleted, no wrapper:** it was never in the
+  trunk, and a wrapper would have to go again before the 2.5 merge; class
+  names stay, callers change their `uses` (mORMot 1 to 2 renamed units the
+  same way)
+- **The report takes its PDF types from `mormot.pdf`:** `mormot.ui.report`
+  puts `mormot.pdf` first in its interface `uses` - later units win for
+  `TRect`/`TPoint`/`Rect`/`Point`, its own `psA4` wins over any used unit -
+  and its re-exports point at the engine; the adapter exports no PDF/A
+  levels, page modes or Factur-X metadata (gist §14: the report depends on
+  `mormot.pdf`; Phase 4 needs it anyway). A program still never puts
+  `mormot.pdf` beside `mormot.ui.report`
+- **`ScreenLogPixels` leaves the engine's platform code** (the Phase 1b
+  promise): `TPdfDocument` starts at 96 on every platform, a setter keeps
+  the canvas factors in step, and `TPdfDocumentVcl` and `TPdfDocumentGdi`
+  set the screen's value (`GdiScreenLogPixels`) on Windows. The bridge reads
+  it at the first page and keeps its scale: set it before the first page.
+  Accepted difference: in a DPI-aware Windows
+  process a plain `TPdfDocument` reads 96 instead of the screen's 120 or 144;
+  output through the adapters, the golden files (96) and the demos unchanged
+- **Moved as it is:** the bridge's measuring DC (the fallback for a face no
+  backend resolves, Delphi's `PenPos`) and `PDF_CANVASVIRTUAL` are
+  behaviour; changing them is a Phase 5 item
+- **Formatting:** the bridge to the trunk's style in place before it moves
+  (column alignment only, `git diff -w` empty); `mormot.pdf` and
+  `mormot.pdf.canvas` in one formatting PR before the 2.5 merge, with
+  Arnaud's list
+- **Tests first,** on the unchanged bridge: golden cases for `Polyline`,
+  `Polygon`, `FillRect`, fractional text and rectangles, two pages with a
+  DPI set before the first, `Draw`/`StretchDraw` with reuse, the tagging
+  calls and the alpha setters of `TPdfDocumentVcl`; smoke tests for the
+  integer rounding of the metrics and the measuring-DC fallback
+- **Order of the commits:** decisions - tests - formatting - the report's
+  `uses` - `ScreenLogPixels` - the move, mechanical (removed blocks against
+  added ones) - docs. The two changes of meaning come before the move, so
+  that the move stays a move
+
 ### Phase 4 — Reporting
 
 Gist §12, §13. `mormot.pdf.report` and `mormot.pdf.report.preview`.
@@ -673,12 +718,26 @@ Process, agreed in the forum:
   - **the defines include** by relative path (`..\mormot.defines.inc`)
     once the units sit in the trunk's `src/pdf`; by name until then
   - **formatting** to the trunk's style (`result`/`exit`/`integer`, no
-    column alignment, `begin`/`else` layout) as a PR of its own right
-    before the phase that moves the unit: `mormot.ui.pdf` and
-    `mormot.ui.pdfcanvas` before Phase 2, `mormot.ui.report` before
-    Phase 4. `mormot.pdf.types` and the backends get it as they become
-    `mormot.lib.core` and the library units in Phase 1 - no work on code
-    about to be replaced
+    column alignment, `begin`/`else` layout): `mormot.pdf.types` and the
+    backends got it as they became `mormot.lib.core` and the library units
+    in Phase 1; Phase 2 moved `mormot.ui.pdf` verbatim. Now: the bridge in place
+    before Phase 3 moves it, `mormot.pdf` and `mormot.pdf.canvas` in one PR
+    before the 2.5 merge (Arnaud expects more formatting), `mormot.ui.report`
+    before Phase 4
+- **Into the trunk after mORMot 2.5** (Arnaud, gist, 2026-10-11): the trunk
+  is in its 2.5 release cycle, so the work stays in the branches until 2.5
+  is out and merges then; the trunk's old `mormot.ui.pdf` and
+  `mormot.ui.report` are removed at that point
+- **Test fonts, then a subsetter of our own** (proposed to Arnaud
+  2026-10-12, discussed with Codex and Fable): before the merge, faces
+  loaded from a file or from memory (`FT_New_Memory_Face`,
+  `AddFontMemResourceEx`) and small open-licensed or synthetic test fonts,
+  so that the font tests run alike everywhere. After the merge, as the
+  first follow-up: a pure-pascal `glyf` subsetter that keeps glyph IDs and
+  copies glyphs verbatim (as iText does, and Skia through HarfBuzz), the
+  default on every platform; hb-subset stays for CFF. FPC's
+  `fpttfsubsetter` does not fit: FPC-only, `glyf` only, code points in and
+  renumbered glyphs out
 
 ## Open Decisions
 
