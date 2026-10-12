@@ -20,7 +20,7 @@ uses
   mormot.core.unicode, // CountOccurrences
   mormot.core.test,
   pdf_inspect,       // InflatePdf
-  mormot.ui.report;  // re-exports what the ExportPdf* options take
+  mormot.pdf.report; // re-exports what the ExportPdf* options take
 
 type
   /// TGDIPages report engine test cases

@@ -24,7 +24,7 @@ can so share one folder for checking. The GUI demos write it with `--export`
 and no file name.
 
 **One unit per layer.** Each demo uses the units of its layer only: Demos 2–4
-and 7 `mormot.ui.report` (the GUI forms add `mormot.ui.reportpreview`), Demos
+and 7 `mormot.pdf.report` (the GUI forms add `mormot.pdf.report.preview`), Demos
 1, 5 and 6 `mormot.pdf.canvas` with `mormot.pdf`, Demo 8 `mormot.pdf`. A
 layer re-exports what its API takes from below, so a report never needs
 `mormot.pdf` — and must not have it: both units declare `psA4`, and the
@@ -180,13 +180,13 @@ Shows `TGDIPages` with a Lazarus GUI: WYSIWYG preview, print and PDF export via 
   on the continuation pages that table pagination creates, and marks them as
   artifacts in the tagged export
 - Tagged PDF/UA export (`ExportPdfTagged`), verified with PAC 2024
-- GUI preview with `ShowReportPreview` (`mormot.ui.reportpreview`)
+- GUI preview with `ShowReportPreview` (`mormot.pdf.report.preview`)
 - PDF export with metadata, from the GUI or in batch mode
 
 **Core pattern:**
 
 ```pascal
-uses mormot.ui.report;
+uses mormot.pdf.report;
 
 var Report: TGDIPages; SansFont, SerifFont, MonoFont: RawUtf8;
 begin
@@ -649,7 +649,7 @@ billing period, a due date and two bank accounts, each drawn on the page.
 
 ```pascal
 uses
-  mormot.ui.report;   // re-exports pdfa3U, afrAlternative, PdfMetadataFacturX
+  mormot.pdf.report;   // re-exports pdfa3U, afrAlternative, PdfMetadataFacturX
 
 var Report: TGDIPages; Xml: RawUtf8; Invoice: TInvoice;
 begin

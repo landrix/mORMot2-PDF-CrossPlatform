@@ -81,7 +81,7 @@ session (Windows: per compiler) does exactly this:
    `.o` in the projects' `lib/<cpu-os>/`, `.dcu` in `bin/d7|d2010/*/dcu/`):
    `-B` keeps them, and a stale one can be linked instead of the new unit.
    `lazbuild` warns `Duplicate unit ... orphaned ppu` then. Never compile
-   the `mormot2ui` package while `src/core` holds our own `mormot.ui.*`: no
+   the `mormot2ui` package while `src/core` holds copies of `mormot.ui.*`: no
    project needs it, and it writes `mormot.ui.pdf`, `.core` and `.gdiplus`
    into the output folder it shares with `mormot2`
 3. `test_runner`: the expected count, no failure. At a baseline also

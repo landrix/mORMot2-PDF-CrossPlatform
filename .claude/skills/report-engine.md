@@ -1,6 +1,6 @@
 # Report Engine — TGDIPages
 
-Source: `src/core/mormot.ui.report.pas`
+Source: `src/pdf/mormot.pdf.report.pas`
 
 `TGDIPages` is a high-level layout engine for multi-page documents. All drawing commands are recorded as a `TDrawCommand` array; actual rendering to canvas or PDF only happens when `RenderPageToCanvas()` is called.
 
@@ -56,7 +56,7 @@ try
   // 4. Export / preview
   Report.ExportPdfStream(Stream);
   // or
-  ShowReportPreview(Report);   // mormot.ui.reportpreview
+  ShowReportPreview(Report);   // mormot.pdf.report.preview
 finally
   Report.Free;
 end;
@@ -323,7 +323,7 @@ Report.Columns2(Gap, Text1, Text2);               // two-column text
 ## Export & Preview
 
 `TGDIPages` is a non-visual `TComponent` (R-20): the unit needs no forms and
-no printer. Preview and printing live in `mormot.ui.reportpreview` and use
+no printer. Preview and printing live in `mormot.pdf.report.preview` and use
 only the public API (`PageCount`, `Pages[]`, margins, `Title`,
 `RenderPageToCanvas`):
 
@@ -366,7 +366,7 @@ there; the attachments are created after the outlines, before
 `SaveToStreamDirectEnd`, which works in the direct streaming mode
 (`TestExportPdfAttachment`).
 
-**A report program uses `mormot.ui.report` only.** It re-exports what the
+**A report program uses `mormot.pdf.report` only.** It re-exports what the
 `ExportPdf*` options take — `TPdfALevel`/`pdfa*`, `TPdfFileFormat`/`pdf1x`,
 `TPdfAFRelationship`/`afr*`, `TPdfPageMode`/`pm*`, `PdfMetadataFacturX` — from
 `mormot.pdf`, the first unit of its `uses`, so that the units after it win

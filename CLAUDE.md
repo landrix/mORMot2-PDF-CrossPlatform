@@ -9,7 +9,7 @@ The original document (`reference/mormot.ui.pdf.pas`) was Windows/GDI-only; this
 
 **RULE: Read the relevant skill file(s) BEFORE doing anything else — before reading source files, before searching, before planning.**
 
-Skills contain complete, distilled API and architectural knowledge. The main source files are very large (mormot.pdf.pas is 11,800+ lines, mormot.pdf.canvas.pas 3,000+, mormot.ui.report.pas 2,900+); reading them without necessity wastes context and time.
+Skills contain complete, distilled API and architectural knowledge. The main source files are very large (mormot.pdf.pas is 11,800+ lines, mormot.pdf.canvas.pas 3,000+, mormot.pdf.report.pas 2,900+); reading them without necessity wastes context and time.
 
 | Skill | When to use |
 |---|---|
@@ -44,8 +44,8 @@ All files under `src/` require justification and user approval before reading.
 | File | Purpose | Status |
 |---|---|---|
 | `src/pdf/mormot.pdf.pas` | PDF engine (cross-platform) | Production |
-| `src/core/mormot.ui.report.pas` | Report engine (`TGDIPages`) | Production |
-| `src/core/mormot.ui.reportpreview.pas` | Preview window and printing for `TGDIPages` (LCL) | Production |
+| `src/pdf/mormot.pdf.report.pas` | Report engine (`TGDIPages`) - R-28 Phase 4 | Production |
+| `src/pdf/mormot.pdf.report.preview.pas` | Preview window and printing for `TGDIPages` (LCL) | Production |
 | `src/pdf/mormot.pdf.canvas.pas` | VCL/LCL adapter: the TCanvas bridge (`TPdfDocumentVcl`, `TPdfVclCanvas`), `TBitmap`/`TGraphic` images; `TPdfDocumentGdi`, `RenderMetaFile`, printer helpers (Windows) - R-28 Phase 2 | Production |
 | `src/pdf/mormot.pdf.types.pas` | PDF types; former font type names as aliases of mormot.lib.core | Production |
 | mORMot2 `src/lib/mormot.lib.uniscribe.pas` | GDI backend (Windows), Uniscribe shaper and FontSub subsetter, beside their bindings | Production |
@@ -63,9 +63,9 @@ src/
     mormot.pdf.defines.inc      the USE_* switches of mormot.pdf and mormot.pdf.canvas
     mormot.pdf.types.pas        PDF types, aliases of the mormot.lib.core font types
     mormot.pdf.fpimage.pas      Bitmap embedding (FPImage)
-  core/                         the units of the later phases
-    mormot.ui.report.pas        TGDIPages — layout engine, no forms or printer
-    mormot.ui.reportpreview.pas ShowReportPreview, PrintReport (LCL)
+    mormot.pdf.report.pas       TGDIPages — layout engine, no forms or printer
+    mormot.pdf.report.preview.pas ShowReportPreview, PrintReport (LCL)
+  core/                         copies of trunk units
     mormot.ui.core.pas          UI helper functions   } the trunk's units of mORMot2 src/ui (only the include path differs),
     mormot.ui.gdiplus.pas       GDI+ support (Windows) } which is not on the search path
   (the backends are mORMot2 units in src/lib: mormot.lib.uniscribe on Windows
@@ -126,7 +126,7 @@ CHANGELOG.md          Released versions; a release's entry is written from ROADM
 3 layers + platform abstraction layer:
 
 ```
-TGDIPages (mormot.ui.report)          <- High-level layout
+TGDIPages (mormot.pdf.report)         <- High-level layout
     | RenderPageToCanvas()
 TPdfDocumentVcl / TPdfVclCanvas       <- TCanvas bridge
     | automatic coordinate conversion
@@ -209,11 +209,11 @@ Details: `.claude/skills/report-engine.md` (Tables), `.claude/skills/call-graph.
 
 ### One Unit per Layer
 
-A program uses the unit of its layer: `mormot.ui.report` (layer 3),
+A program uses the unit of its layer: `mormot.pdf.report` (layer 3),
 `mormot.pdf.canvas` with `mormot.pdf` (layer 2), `mormot.pdf`
 (layer 1). What a layer's API takes from below is re-exported by that layer —
-`mormot.ui.report` re-exports the PDF/A levels, `TPdfFileFormat`, `afr*` and
-`PdfMetadataFacturX`. Never put `mormot.pdf` beside `mormot.ui.report`:
+`mormot.pdf.report` re-exports the PDF/A levels, `TPdfFileFormat`, `afr*` and
+`PdfMetadataFacturX`. Never put `mormot.pdf` beside `mormot.pdf.report`:
 both declare `psA4`, and `TRect` differs from the LCL's, so the uses order
 decides which one a name means. Details: `.claude/skills/report-engine.md`
 
@@ -399,8 +399,8 @@ itself is in each demo's `uReport.pas`; the form only passes its options.
   ANSI. A console program needs `{$APPTYPE CONSOLE}` after the
   `mormot.defines.inc` include: FPC's project makes a console executable,
   dcc32 a GUI one without it, where `WriteLn` raises I/O error 105. Never put
-  `mORMot2/src/ui` on a Delphi search path: it holds the original
-  `mormot.ui.pdf`/`report`/`core` - the last two have the names of ours
+  `mORMot2/src/ui` on a Delphi search path: its `mormot.ui.core` has the
+  name of ours, and it holds the original `mormot.ui.pdf`/`report`
 
 Current verification status per platform, and the open items in detail:
 `docs/ROADMAP.md`

@@ -14,9 +14,9 @@ rem
 rem Warnings stay on, unlike build_delphi7.bat: the implicit string casts
 rem (W1057/W1058) are what R-25 looks for.
 rem
-rem mORMot2\src\ui is deliberately NOT on the search path: it holds the original
-rem mormot.ui.pdf, mormot.ui.report and mormot.ui.core, which the compiler would
-rem take instead of ours without a word.
+rem mORMot2\src\ui is deliberately NOT on the search path: its mormot.ui.core
+rem has the name of ours (src\core), and the compiler would take it without a
+rem word; it also holds the original mormot.ui.pdf and mormot.ui.report.
 setlocal
 
 if "%~1"=="" (

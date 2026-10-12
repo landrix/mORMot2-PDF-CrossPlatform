@@ -2,8 +2,8 @@
 
 Demo 4 of the [learning path](../../docs/DEMOS.md#demo-4--mormot_demo).
 
-**Layer 3.** `uses mormot.ui.report` — nothing else of this library; the form
-adds `mormot.ui.reportpreview` for the preview window and printing.
+**Layer 3.** `uses mormot.pdf.report` — nothing else of this library; the form
+adds `mormot.pdf.report.preview` for the preview window and printing.
 
 A Lazarus GUI report whose rows come from a live SQLite database through the
 mORMot ORM.
