@@ -21,7 +21,7 @@ veraPDF und PAC 2024 auf allen drei Plattformen geprüft.
 
 ```
 TGDIPages           mormot.ui.report     Dokument-Layout, Tabellen, H1-H6
-TPdfDocumentVcl     mormot.ui.pdfcanvas  TCanvas-kompatibler Wrapper
+TPdfDocumentVcl     mormot.pdf.canvas    TCanvas-kompatibler Wrapper
 TPdfDocument        mormot.pdf           Direkte PDF-API, ohne TCanvas, ohne VCL/LCL
 ```
 
@@ -34,7 +34,7 @@ selbst weiter:
 | Ebene | `uses` | Re-Exporte |
 |---|---|---|
 | 3 — `TGDIPages` | `mormot.ui.report`; eine GUI nimmt `mormot.ui.reportpreview` für Vorschau und Druck dazu | was die `ExportPdf*`-Optionen erwarten: `TPdfALevel` (`pdfaNone` … `pdfa3U`), `TPdfFileFormat` (`pdf13` … `pdf17`), `TPdfAFRelationship` (`afr*`), `PdfMetadataFacturX` |
-| 2 — `TPdfDocumentVcl` | `mormot.ui.pdfcanvas`, `mormot.pdf` | `TPdfALevel`, `TPdfAFRelationship`, `PdfMetadataFacturX`; der Rest der Dokument-API kommt aus `mormot.pdf` |
+| 2 — `TPdfDocumentVcl` | `mormot.pdf.canvas`, `mormot.pdf` | — die Dokument-API kommt aus `mormot.pdf` |
 | 1 — `TPdfDocument` | `mormot.pdf` | — |
 
 Die Strukturrollen (`psrH1`, `psrP`, …) und `GetPdfFonts` kommen mit
@@ -89,7 +89,7 @@ Koordinaten in PDF-Points (72 DPI), Y=0 unten-links.
 ### Ebene 2 — TCanvas-API
 
 ```pascal
-uses mormot.pdf, mormot.ui.pdfcanvas;
+uses mormot.pdf, mormot.pdf.canvas;
 
 Doc := TPdfDocumentVcl.Create;
 Doc.EmbeddedTTF := False;

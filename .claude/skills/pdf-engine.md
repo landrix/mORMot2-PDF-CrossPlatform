@@ -1,6 +1,6 @@
 # PDF Engine — TPdfDocument / TPdfDocumentVcl
 
-Source: `src/pdf/mormot.pdf.pas`, canvas bridge: `src/core/mormot.ui.pdfcanvas.pas`
+Source: `src/pdf/mormot.pdf.pas`, canvas bridge: `src/pdf/mormot.pdf.canvas.pas`
 FPImage adapter: `src/pdf/mormot.pdf.fpimage.pas`
 
 ## Two Entry Points
@@ -480,7 +480,7 @@ N := C.MeasureText('Long', MaxWidth);  // chars fitting within MaxWidth
 ## TPdfDocumentVcl — TCanvas-Compatible Wrapper
 
 ```pascal
-uses mormot.pdf, mormot.ui.pdfcanvas;
+uses mormot.pdf, mormot.pdf.canvas;
 
 Doc := TPdfDocumentVcl.Create;
 Doc.DefaultPaperSize := psA4;

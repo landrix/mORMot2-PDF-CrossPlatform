@@ -25,7 +25,7 @@ and no file name.
 
 **One unit per layer.** Each demo uses the units of its layer only: Demos 2–4
 and 7 `mormot.ui.report` (the GUI forms add `mormot.ui.reportpreview`), Demos
-1, 5 and 6 `mormot.ui.pdfcanvas` with `mormot.pdf`, Demo 8 `mormot.pdf`. A
+1, 5 and 6 `mormot.pdf.canvas` with `mormot.pdf`, Demo 8 `mormot.pdf`. A
 layer re-exports what its API takes from below, so a report never needs
 `mormot.pdf` — and must not have it: both units declare `psA4`, and the
 order of the `uses` clause would decide which one is meant. See the main
@@ -62,7 +62,7 @@ Shows how to produce a 3-page PDF from TCanvas commands using `TPdfDocumentVcl` 
 **Core pattern:**
 
 ```pascal
-uses mormot.pdf, mormot.ui.pdfcanvas;
+uses mormot.pdf, mormot.pdf.canvas;
 
 var Doc: TPdfDocumentVcl; C: TPdfVclCanvas;
 begin
@@ -468,7 +468,7 @@ Shows how to render Chinese (CJK) text with `TPdfDocumentVcl`. CJK ideographs re
 **Core pattern:**
 
 ```pascal
-uses mormot.pdf, mormot.ui.pdfcanvas;
+uses mormot.pdf, mormot.pdf.canvas;
 
 const CJK_FONT = 'Microsoft YaHei'; // Windows example
 
@@ -545,7 +545,7 @@ Shows Arabic right-to-left text in two sections: an unshared isolated-letter bas
 
 ```pascal
 uses
-  mormot.pdf, mormot.ui.pdfcanvas;  // mormot.pdf brings backend and shaper
+  mormot.pdf, mormot.pdf.canvas;  // mormot.pdf brings backend and shaper
 
 var Doc: TPdfDocumentVcl; C: TPdfVclCanvas; PdfC: TPdfCanvas;
 begin

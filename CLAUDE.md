@@ -46,8 +46,7 @@ All files under `src/` require justification and user approval before reading.
 | `src/pdf/mormot.pdf.pas` | PDF engine (cross-platform) | Production |
 | `src/core/mormot.ui.report.pas` | Report engine (`TGDIPages`) | Production |
 | `src/core/mormot.ui.reportpreview.pas` | Preview window and printing for `TGDIPages` (LCL) | Production |
-| `src/core/mormot.ui.pdfcanvas.pas` | TCanvas bridge (`TPdfDocumentVcl`) | Production |
-| `src/pdf/mormot.pdf.canvas.pas` | VCL/LCL adapter: `TBitmap`/`TGraphic` images; `TPdfDocumentGdi`, `RenderMetaFile`, printer helpers (Windows) - R-28 Phase 2 | Production |
+| `src/pdf/mormot.pdf.canvas.pas` | VCL/LCL adapter: the TCanvas bridge (`TPdfDocumentVcl`, `TPdfVclCanvas`), `TBitmap`/`TGraphic` images; `TPdfDocumentGdi`, `RenderMetaFile`, printer helpers (Windows) - R-28 Phase 2 | Production |
 | `src/pdf/mormot.pdf.types.pas` | PDF types; former font type names as aliases of mormot.lib.core | Production |
 | mORMot2 `src/lib/mormot.lib.uniscribe.pas` | GDI backend (Windows), Uniscribe shaper and FontSub subsetter, beside their bindings | Production |
 | mORMot2 `src/lib/mormot.lib.freetype.pas` | FreeType2 backend (POSIX) | Production |
@@ -60,14 +59,13 @@ All files under `src/` require justification and user approval before reading.
 src/
   pdf/                          the units under their trunk names (R-28)
     mormot.pdf.pas              PDF objects, TPdfDocument, TPdfCanvas - no VCL/LCL
-    mormot.pdf.canvas.pas       TBitmap/TGraphic images, TPdfDocumentGdi and EMF (Windows)
+    mormot.pdf.canvas.pas       TCanvas bridge (TPdfDocumentVcl), TBitmap/TGraphic images, TPdfDocumentGdi and EMF (Windows)
     mormot.pdf.defines.inc      the USE_* switches of mormot.pdf and mormot.pdf.canvas
     mormot.pdf.types.pas        PDF types, aliases of the mormot.lib.core font types
     mormot.pdf.fpimage.pas      Bitmap embedding (FPImage)
   core/                         the units of the later phases
     mormot.ui.report.pas        TGDIPages — layout engine, no forms or printer
     mormot.ui.reportpreview.pas ShowReportPreview, PrintReport (LCL)
-    mormot.ui.pdfcanvas.pas     TPdfDocumentVcl, TPdfVclCanvas
     mormot.ui.core.pas          UI helper functions   } the trunk's units of mORMot2 src/ui (only the include path differs),
     mormot.ui.gdiplus.pas       GDI+ support (Windows) } which is not on the search path
   (the backends are mORMot2 units in src/lib: mormot.lib.uniscribe on Windows
@@ -212,7 +210,7 @@ Details: `.claude/skills/report-engine.md` (Tables), `.claude/skills/call-graph.
 ### One Unit per Layer
 
 A program uses the unit of its layer: `mormot.ui.report` (layer 3),
-`mormot.ui.pdfcanvas` with `mormot.pdf` (layer 2), `mormot.pdf`
+`mormot.pdf.canvas` with `mormot.pdf` (layer 2), `mormot.pdf`
 (layer 1). What a layer's API takes from below is re-exported by that layer —
 `mormot.ui.report` re-exports the PDF/A levels, `TPdfFileFormat`, `afr*` and
 `PdfMetadataFacturX`. Never put `mormot.pdf` beside `mormot.ui.report`:

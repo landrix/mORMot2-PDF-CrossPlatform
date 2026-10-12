@@ -37,7 +37,7 @@ uses
   mormot.core.text,     // ESynException
   mormot.core.unicode,
   mormot.pdf.types,     // PDF_FONT_STD_* + TPdfStructRole (Tagged PDF)
-  mormot.ui.pdfcanvas;  // TPdfDocumentVcl, TPdfVclCanvas
+  mormot.pdf.canvas;    // TPdfDocumentVcl, TPdfVclCanvas
 
 { what the ExportPdf* options take, re-exported: a report program uses this
   unit only - mormot.pdf beside it hides psA4 or TRect, depending on the

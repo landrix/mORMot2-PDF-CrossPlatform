@@ -21,7 +21,7 @@ uses
   {$ifdef PDF_HASVCLCANVAS}
   Types,                // TPoint, TRect on Delphi; mormot.pdf's win on FPC, as in the bridge
   Graphics,             // TCanvas.Font, colors
-  mormot.ui.pdfcanvas,  // TPdfDocumentVcl, TPdfVclCanvas
+  mormot.pdf.canvas,    // TPdfDocumentVcl, TPdfVclCanvas
   {$endif PDF_HASVCLCANVAS}
   mormot.core.base,
   mormot.core.os,

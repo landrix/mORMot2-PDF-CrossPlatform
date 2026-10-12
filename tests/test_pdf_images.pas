@@ -43,7 +43,6 @@ uses
   test_pdf_cff,         // the synthetic CFF face
   {$ifdef PDF_HASVCLCANVAS}
   mormot.pdf.canvas,
-  mormot.ui.pdfcanvas,  // TPdfDocumentVcl
   {$endif PDF_HASVCLCANVAS}
   pdf_inspect,
   test_pdf_golden;

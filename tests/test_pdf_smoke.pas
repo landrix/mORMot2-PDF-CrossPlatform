@@ -20,7 +20,7 @@ uses
   {$endif OSWINDOWS}
   Types,                // TSize
   Graphics,             // TCanvas.Font
-  mormot.ui.pdfcanvas,  // TPdfDocumentVcl, TPdfVclCanvas
+  mormot.pdf.canvas,    // TPdfDocumentVcl, TPdfVclCanvas
   {$endif PDF_HASVCLCANVAS}
   mormot.core.os,       // FileFromString
   mormot.core.test,
