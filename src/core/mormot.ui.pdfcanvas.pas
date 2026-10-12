@@ -36,20 +36,20 @@ interface
 
 uses
   {$ifndef FPC}
-  Windows,        // before Graphics: its record TBitmap would hide the class
+  Windows, // before Graphics: its record TBitmap would hide the class
   {$endif FPC}
   SysUtils,
   Classes,
   Types,
-  Graphics,       // TCanvas, TColor, TFont, TPen, TBrush, TRect, TPoint
+  Graphics, // TCanvas, TColor, TFont, TPen, TBrush, TRect, TPoint
   {$ifdef FPC}
-  LCLIntf,        // CreateCompatibleDC / DeleteDC for font metrics
-  LCLType,        // HDC type
+  LCLIntf, // CreateCompatibleDC / DeleteDC for font metrics
+  LCLType, // HDC type
   {$endif FPC}
   mormot.core.base,
   mormot.core.unicode,
-  mormot.pdf.types,  // TPdfStructRole (Tagged PDF)
-  mormot.pdf,     // TPdfDocument, TPdfCanvas, TPdfPage
+  mormot.pdf.types, // TPdfStructRole (Tagged PDF)
+  mormot.pdf, // TPdfDocument, TPdfCanvas, TPdfPage
   mormot.pdf.canvas; // CreateOrGetBitmapImage
 
 type
@@ -83,19 +83,19 @@ type
   // - synchronizes Pen/Brush/Font state to PDF graphics state before each draw
   TPdfVclCanvas = class(TCanvas)
   private
-    fPdfCanvas:  TPdfCanvas;
-    fPdfDoc:     TPdfDocumentVcl;
-    fScale:      TPdfVclScale;
-    fMeasureDC:  HDC;   // dummy DC so the LCL fallback works without a widget
-    fMeasurer:   TPdfFontMeasurer; // metrics of the font the PDF really uses
+    fPdfCanvas: TPdfCanvas;
+    fPdfDoc: TPdfDocumentVcl;
+    fScale: TPdfVclScale;
+    fMeasureDC: HDC; // dummy DC so the LCL fallback works without a widget
+    fMeasurer: TPdfFontMeasurer; // metrics of the font the PDF really uses
     // cached state for SetFont (expensive) and SetRGBStrokeColor
-    fLastPenColor:  TColor;
-    fLastPenWidth:  integer;
-    fLastFontName:  string;
-    fLastFontSize:  integer;
+    fLastPenColor: TColor;
+    fLastPenWidth: integer;
+    fLastFontName: string;
+    fLastFontSize: integer;
     fLastFontStyle: TFontStyles;
     fLastFontColor: TColor;
-    fStateValid:    boolean;
+    fStateValid: boolean;
     /// convert pixel X coordinate to PDF point
     function PxToPtX(AX: integer): single;
     /// convert pixel Y coordinate to PDF point (flips Y axis)
@@ -114,8 +114,8 @@ type
     procedure TextOutDecoded(X, Y: single; const AText: SynUnicode);
   protected
     {$ifdef PDF_CANVASVIRTUAL}
-    procedure DoMoveTo(X, Y: integer); override;  // TCanvas.MoveTo calls this
-    procedure DoLineTo(X, Y: integer); override;  // TCanvas.LineTo calls this
+    procedure DoMoveTo(X, Y: integer); override; // TCanvas.MoveTo calls this
+    procedure DoLineTo(X, Y: integer); override; // TCanvas.LineTo calls this
     {$else}
     procedure DoLineTo(X, Y: integer);
   public
@@ -287,7 +287,7 @@ constructor TPdfVclCanvas.Create(APdfDoc: TPdfDocumentVcl;
   APdfCanvas: TPdfCanvas);
 begin
   inherited Create;
-  fPdfDoc    := APdfDoc;
+  fPdfDoc := APdfDoc;
   fPdfCanvas := APdfCanvas;
   // default coordinate scale: 1 pixel = 1 point (approx for screen at 72 DPI)
   // For a proper mapping: scale = 72 / screen_dpi
@@ -326,13 +326,13 @@ end;
 
 procedure TPdfVclCanvas.ResetState;
 begin
-  fLastPenColor   := clBlack;
-  fLastPenWidth  := 1;
-  fLastFontName  := 'Helvetica';
-  fLastFontSize   := 10;
-  fLastFontStyle  := [];
-  fLastFontColor  := clBlack;
-  fStateValid     := false;
+  fLastPenColor := clBlack;
+  fLastPenWidth := 1;
+  fLastFontName := 'Helvetica';
+  fLastFontSize := 10;
+  fLastFontStyle := [];
+  fLastFontColor := clBlack;
+  fStateValid := false;
 end;
 
 function TPdfVclCanvas.PxToPtX(AX: integer): single;
@@ -384,13 +384,13 @@ begin
     fPdfCanvas.SetRGBFillColor(ColorToRGB(Font.Color));
     exit;
   end;
-  fLastFontName  := Font.Name;
-  fLastFontSize  := Font.Size;
+  fLastFontName := Font.Name;
+  fLastFontSize := Font.Size;
   fLastFontStyle := Font.Style;
   fLastFontColor := Font.Color;
   byte(style) := 0;
-  if fsBold      in Font.Style then include(style, pfsBold);
-  if fsItalic    in Font.Style then include(style, pfsItalic);
+  if fsBold in Font.Style then include(style, pfsBold);
+  if fsItalic in Font.Style then include(style, pfsItalic);
   if fsUnderline in Font.Style then include(style, pfsUnderline);
   if fsStrikeOut in Font.Style then include(style, pfsStrikeOut);
   fPdfCanvas.SetFont(StringToUtf8(Font.Name), Abs(Font.Size), style, Font.Charset);
@@ -511,7 +511,7 @@ begin
   SyncPen;
   SyncBrush;
   x := PxToPtX(X1);
-  y := PxToPtY(Y2);   // bottom in PDF coords
+  y := PxToPtY(Y2); // bottom in PDF coords
   w := (X2 - X1) * fScale.ScaleX;
   h := (Y2 - Y1) * fScale.ScaleY;
   fPdfCanvas.Rectangle(x, y, w, h);
@@ -552,7 +552,7 @@ end;
 procedure TPdfVclCanvas.FillRect(const ARect: TRect);
 begin
   Brush.Style := bsSolid;
-  Pen.Style   := psClear;
+  Pen.Style := psClear;
   Rectangle(ARect.Left, ARect.Top, ARect.Right, ARect.Bottom);
   Pen.Style := psSolid;
 end;
@@ -642,7 +642,7 @@ begin
   if Brush.Style = bsClear then
     fPdfCanvas.ClosePathStroke
   else if Pen.Style = psClear then
-    fPdfCanvas.Fill    // Fill implicitly closes the path per PDF spec
+    fPdfCanvas.Fill // Fill implicitly closes the path per PDF spec
   else
     fPdfCanvas.ClosepathFillStroke;
 end;
@@ -651,9 +651,9 @@ end;
 
 procedure TPdfVclCanvas.Draw(X, Y: integer; AGraphic: TGraphic);
 var
-  bmp:   TBitmap;
+  bmp: TBitmap;
   owned: boolean;
-  xObj:  PdfString;
+  xObj: PdfString;
 begin
   if (AGraphic = nil) or AGraphic.Empty then
     exit;
@@ -661,7 +661,7 @@ begin
   if owned then
   begin
     bmp := TBitmap.Create;
-    bmp.Width  := AGraphic.Width;
+    bmp.Width := AGraphic.Width;
     bmp.Height := AGraphic.Height;
     bmp.Canvas.Draw(0, 0, AGraphic);
   end
@@ -673,8 +673,8 @@ begin
       exit;
     fPdfCanvas.DrawXObject(
       PxToPtX(X),
-      PxToPtY(Y + AGraphic.Height),   // bottom-left in PDF coords
-      AGraphic.Width  * fScale.ScaleX,
+      PxToPtY(Y + AGraphic.Height), // bottom-left in PDF coords
+      AGraphic.Width * fScale.ScaleX,
       AGraphic.Height * fScale.ScaleY,
       xObj);
   finally
@@ -685,9 +685,9 @@ end;
 
 procedure TPdfVclCanvas.StretchDraw(const ARect: TRect; AGraphic: TGraphic);
 var
-  bmp:   TBitmap;
+  bmp: TBitmap;
   owned: boolean;
-  xObj:  PdfString;
+  xObj: PdfString;
 begin
   if (AGraphic = nil) or AGraphic.Empty then
     exit;
@@ -695,7 +695,7 @@ begin
   if owned then
   begin
     bmp := TBitmap.Create;
-    bmp.Width  := AGraphic.Width;
+    bmp.Width := AGraphic.Width;
     bmp.Height := AGraphic.Height;
     bmp.Canvas.Draw(0, 0, AGraphic);
   end
@@ -707,9 +707,9 @@ begin
       exit;
     fPdfCanvas.DrawXObject(
       PxToPtX(ARect.Left),
-      PxToPtY(ARect.Bottom),           // bottom-left in PDF coords
-      (ARect.Right  - ARect.Left) * fScale.ScaleX,
-      (ARect.Bottom - ARect.Top)  * fScale.ScaleY,
+      PxToPtY(ARect.Bottom), // bottom-left in PDF coords
+      (ARect.Right - ARect.Left) * fScale.ScaleX,
+      (ARect.Bottom - ARect.Top) * fScale.ScaleY,
       xObj);
   finally
     if owned then
