@@ -977,6 +977,38 @@ face index. Add one so the remaining faces can be selected by name. The
 FreeType backend already extracts a single face as a standalone sfnt
 (`ExtractSfntFromTtc`), so the embedding side needs no change.
 
+### R-30 — Rebuild the Published Accessibility References — after R-28 and the merge of R-29
+
+**Why.** The tagged output is checked by validators, not against examples
+others published as correct. `docs/ACCESSIBILITY_REFERENCES.md` (2026-10-10,
+branch `feature/accessibility-reference-rebuild`) maps the PDF Association's
+Techniques for Accessible PDF, its PDF/UA-1 Reference Suite (both CC BY
+4.0) and the BITV-PDF-Test onto the engine. It lists each case as tested,
+shown in a demo only, solved by R-29, a gap, or to be checked.
+
+**Work, in this order:**
+
+1. After the merge of R-29: update the R-29 rows of that file, measure the
+   rows marked "Check" (columns, multiline heading, image as heading,
+   nested lists, lists across pages, internal links in tagged output)
+2. Tests for the rows marked "Demo": one test per Technique rebuilt from its
+   PASS file, the Technique's ID and the licence in the test; veraPDF `ua1`
+   and PAC on the files. Golden files recorded before the first new test
+3. `invoice_demo`: its README gets the test steps of the BITV-PDF-Test that
+   concern a PDF engine, each marked as met by the engine, the content's part,
+   or not applicable
+4. Engine gaps, each its own fix: lists — `Lbl`, `/ListNumbering`, nested
+   lists, a list `Caption` (extends R-29 item 6); `Caption` and `BlockQuote`
+   from `DrawCaption` and `DrawQuote`, which write `P` today; `/Lang` on a
+   structure element (BITV-PDF-Test 3.1.2, reported by no validator);
+   `/Summary` on a table; `/ActualText` on a structure element; a `/RoleMap`
+   for `Title` and heading levels beyond 6 (lowest priority)
+5. A demo after the Reference Suite where a file shows a real gap in the
+   demos: file 05 (German book chapter: English parts, row headers, spans),
+   file 02 (invoice) against `invoice_demo`. CC BY 4.0: structure and texts
+   may be taken over with the source named; the files stay outside the
+   repository. Forms and scans stay out of scope
+
 ### Charts — out of scope; an example only on explicit request
 
 The project has no chart engine and will not get one, as it generates no
