@@ -8,6 +8,7 @@ uses
   SysUtils,
   mormot.core.base,
   mormot.core.os,
+  mormot.core.unicode,
   mormot.core.datetime,
   mormot.core.rtti,
   mormot.orm.core,
@@ -98,7 +99,7 @@ begin
     dir := 'data';
   // SQLite does not create the folder: without it the demo fails on open
   result := EnsureDirectoryExists(dir, EOSException) +
-    Executable.ProgramName + '.db';
+    Utf8ToString(Executable.ProgramName) + '.db';
 end;
 
 function ReadInvoiceData(out Items: TDtoInvoiceRowDynArray): integer;
