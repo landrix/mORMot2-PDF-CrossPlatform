@@ -702,6 +702,17 @@ Open: Delphi 2010, Delphi 13
 Linux64/Android64 (engine only, the adapter is not for them), PAC/veraPDF
 at the end of the phase
 
+**Bug fixes** (Phase 3's bug-fix PR, branch `pr/phase3-fixes`, each
+Codex-reviewed): `TPdfVclCanvas.Create` without the stale comment and the
+dead branch the verbatim move kept; the tests count with mORMot's
+`CountOccurrences` instead of five copies of `CountOf`; Martin's two points
+on #35 - `mormot_demo` without W1057, and with sample data of its own on a
+fresh database (decided with Codex and Fable: computed in `server.pas`, no
+binary and no DBDEMOS data in git; on the way, its server constructor was
+found never called by `TRestClientDB`). The bitmaps past the bridge are
+settled on `feature/invoice-demo`, whose `TGDIPages` draws them through
+`Bridge.StretchDrawBounds`; they reach `main` with that branch
+
 ### Phase 4 — Reporting
 
 Gist §12, §13. `mormot.pdf.report` and `mormot.pdf.report.preview`.
