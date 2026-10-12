@@ -746,6 +746,19 @@ Codex and Fable; Fable's trial merges in a scratch worktree):
   rule (`FOLDER-DEPENDENCIES.md`) and the Lazarus package for `src/pdf` come
   with the 2.5 merge
 
+**Done** (2026-10-12, branch `pr/phase4`, stacked on Phase 3's bug-fix PR,
+each commit Codex-reviewed): the decisions; the move - both units verbatim
+but for their names, callers, docs and skills renamed, ROADMAP "To
+Announce". Checked: `test_runner` 827/827 on Windows (FPC 3.3.1 aarch64,
+Delphi 7, Delphi 13 Win32/Win64), 774 on Linux aarch64, 801 on macOS M2,
+golden files unchanged; `pdfcheck compare` against the state before: the 7
+demo PDFs of Windows FPC (`mormot_demo` needs an aarch64 sqlite3), the 8
+of Linux and the four report demos of Delphi 7 unchanged. Open: Delphi 2010, PAC/veraPDF at
+the end of the phase. `src/core` now holds only the copies of the trunk's
+`mormot.ui.core` and `mormot.ui.gdiplus`; since no other unit of ours
+shares a name with the trunk's `src/ui` any more, whether `src/ui` on the
+search path can replace the copies is a Phase 5 question
+
 ### Phase 5 — Cleanup
 
 Gist §20. Transitional names and aliases removed, unit splits reviewed.
