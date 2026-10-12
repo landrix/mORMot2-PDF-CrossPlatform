@@ -19,8 +19,9 @@ uses
   Classes,
   SysUtils,
   {$ifdef PDF_HASVCLCANVAS}
+  Types,                // TPoint, TRect on Delphi; mormot.pdf's win on FPC, as in the bridge
   Graphics,             // TCanvas.Font, colors
-  mormot.ui.pdfcanvas,  // TPdfDocumentVcl, TPdfVclCanvas
+  mormot.pdf.canvas,    // TPdfDocumentVcl, TPdfVclCanvas
   {$endif PDF_HASVCLCANVAS}
   mormot.core.base,
   mormot.core.os,
@@ -65,6 +66,9 @@ type
     procedure ArabicShaped;
     {$ifdef PDF_HASVCLCANVAS}
     procedure CanvasBridge;
+    procedure CanvasBridgeShapes;
+    procedure CanvasBridgePages;
+    procedure CanvasBridgeTagged;
     {$endif PDF_HASVCLCANVAS}
   end;
 
@@ -606,6 +610,7 @@ begin
     doc.CompressionMethod := cmNone;
     doc.EmbeddedTTF := false;
     doc.StandardFontsReplace := true;
+    doc.ScreenLogPixels := 96;
     doc.AddPage;
     c := doc.VclCanvas;
     c.Font.Name := 'Helvetica';
@@ -635,6 +640,213 @@ begin
     doc.Free;
     ms.Free;
   end;
+end;
+
+function CountOf(const Sub, s: RawByteString): integer;
+var
+  p: PtrInt;
+begin
+  result := 0;
+  p := PosEx(Sub, s);
+  while p > 0 do
+  begin
+    inc(result);
+    p := PosEx(Sub, s, p + length(Sub));
+  end;
+end;
+
+// a bridge document as the golden cases draw it: standard fonts, uncompressed
+function NewBridgeDoc: TPdfDocumentVcl;
+begin
+  result := TPdfDocumentVcl.Create;
+  result.Info.CreationDate := GOLDEN_DATE;
+  result.CompressionMethod := cmNone;
+  result.EmbeddedTTF := false;
+  result.StandardFontsReplace := true;
+  result.ScreenLogPixels := 96; // not the screen's: the baseline is fixed
+end;
+
+function BridgePoint(X, Y: integer): TPoint;
+begin
+  result.X := X;
+  result.Y := Y;
+end;
+
+// the TCanvas calls the first case leaves out, and the state they share
+procedure TPdfGoldenTests.CanvasBridgeShapes;
+var
+  doc: TPdfDocumentVcl;
+  c: TPdfVclCanvas;
+  r: TRect; // as the bridge declares it: mormot.pdf's on FPC
+  pts: array[0..3] of TPoint;
+  pdf: RawByteString;
+begin
+  doc := NewBridgeDoc;
+  try
+    doc.AddPage;
+    c := doc.VclCanvas;
+    pts[0] := BridgePoint(40, 60);
+    pts[1] := BridgePoint(120, 20);
+    pts[2] := BridgePoint(200, 60);
+    pts[3] := BridgePoint(280, 20);
+    c.Pen.Color := clGreen;
+    c.Polyline(pts);
+    c.Polyline(Slice(pts, 1)); // one point: nothing drawn
+    // a polygon with brush and pen, without brush, without pen
+    pts[0] := BridgePoint(40, 100);
+    pts[1] := BridgePoint(100, 160);
+    pts[2] := BridgePoint(40, 160);
+    c.Brush.Color := clYellow;
+    c.Polygon(Slice(pts, 3));
+    c.Brush.Style := bsClear;
+    pts[0].X := 140;
+    pts[1].X := 200;
+    pts[2].X := 140;
+    c.Polygon(Slice(pts, 3));
+    c.Brush.Style := bsSolid;
+    c.Pen.Style := psClear;
+    pts[0].X := 240;
+    pts[1].X := 300;
+    pts[2].X := 240;
+    c.Polygon(Slice(pts, 3));
+    c.Polygon(Slice(pts, 1)); // one point: nothing drawn
+    c.Pen.Style := psSolid;
+    // FillRect: brush only, the pen restored after it
+    r.Left := 40;
+    r.Top := 200;
+    r.Right := 140;
+    r.Bottom := 240;
+    c.Brush.Color := clSilver;
+    c.FillRect(r);
+    c.Rectangle(160, 200, 260, 240);
+    // fractions of a pixel
+    c.RectangleFrac(40.5, 260.25, 140.75, 300.5);
+    c.Font.Name := 'Helvetica';
+    c.Font.Size := -12; // a negative size is the height as well
+    c.Font.Color := clMaroon;
+    c.TextOutFrac(40.5, 320.5, 'Fractional text');
+    // a shape between two texts of one font: the text color is set again
+    c.Brush.Color := clBlue;
+    c.Ellipse(40, 350, 100, 380);
+    c.TextOutFrac(120, 350, 'After the shape');
+    // the tagging calls write nothing in an untagged document
+    doc.BeginStructContent(psrP);
+    c.TextOut(40, 400, 'Untagged');
+    doc.EndStructContent;
+    pdf := SaveDoc(doc);
+  finally
+    doc.Free;
+  end;
+  Check(PosEx('/StructTreeRoot', pdf) = 0, 'no structure tree');
+  Check(PosEx('BDC', pdf) = 0, 'no marked content');
+  CheckGolden('canvas_bridge_shapes', pdf);
+end;
+
+// two pages of different heights, at a DPI set before the first page
+procedure TPdfGoldenTests.CanvasBridgePages;
+var
+  doc: TPdfDocumentVcl;
+  c: TPdfVclCanvas;
+  pdf: RawByteString;
+begin
+  doc := NewBridgeDoc;
+  try
+    // the bridge takes its scale at the first page: 144 px are 72 pt
+    doc.ScreenLogPixels := 144;
+    doc.AddPage;
+    c := doc.VclCanvas;
+    c.Font.Name := 'Helvetica';
+    c.Font.Size := 12;
+    c.TextOut(144, 144, 'Page one');
+    c.Brush.Color := clYellow;
+    c.Pen.Color := clRed;
+    c.Pen.Width := 3;
+    c.Rectangle(144, 288, 288, 432);
+    doc.DefaultPageHeight := 600;
+    doc.AddPage;
+    // the same font and pen again: the new page sets them
+    c.TextOut(144, 144, 'Page two');
+    c.Rectangle(144, 288, 288, 432);
+    pdf := SaveDoc(doc);
+  finally
+    doc.Free;
+  end;
+  Check(PosEx(' 72 72 re', pdf) > 0, 'a 144 px square is 72 pt');
+  CheckEqual(CountOf(' Tf', pdf), 2, 'the font set on each page');
+  CheckGolden('canvas_bridge_pages', pdf);
+end;
+
+// the tagging calls and the alpha setters of TPdfDocumentVcl
+procedure TPdfGoldenTests.CanvasBridgeTagged;
+var
+  doc: TPdfDocumentVcl;
+  c: TPdfVclCanvas;
+  sans, serif, mono: string;
+  para: integer;
+  pdf: RawByteString;
+begin
+  doc := TPdfDocumentVcl.Create;
+  try
+    doc.Info.CreationDate := GOLDEN_DATE;
+    doc.CompressionMethod := cmNone;
+    doc.Tagged := true;
+    doc.DefaultLanguage := 'en';
+    doc.Info.Title := 'Golden bridge tagged';
+    doc.ScreenLogPixels := 96;
+    GetPdfFonts(doc.EmbeddedTTF, sans, serif, mono);
+    doc.AddPage;
+    c := doc.VclCanvas;
+    c.Font.Name := sans;
+    c.Font.Size := 16;
+    doc.BeginStructContent(psrH1);
+    c.TextOut(40, 40, 'Bridge tagged');
+    doc.EndStructContent;
+    // an inline paragraph: plain runs as regions, a styled one as a Span
+    c.Font.Size := 11;
+    doc.BeginStructGroup(psrP);
+    doc.ContinueStructContent;
+    c.TextOut(40, 80, 'Plain,');
+    doc.SuspendStructContent;
+    doc.BeginStructContent(psrSpan);
+    c.TextOut(90, 80, 'styled,');
+    doc.EndStructContent;
+    doc.ContinueStructContent;
+    c.TextOut(150, 80, 'plain again.');
+    doc.EndStructContent;
+    doc.BeginStructContent(psrFigure, 'A filled square');
+    doc.SetFillAlpha(0.5);
+    doc.SetStrokeAlpha(0.25);
+    c.Brush.Color := clAqua;
+    c.Rectangle(40, 120, 120, 200);
+    doc.SetFillAlpha(1);
+    doc.SetStrokeAlpha(1);
+    doc.EndStructContent;
+    // a paragraph continued on the next page as the same element
+    doc.BeginStructContent(psrP);
+    para := doc.LastStructContent;
+    c.TextOut(40, 240, 'A paragraph that goes on');
+    doc.EndStructContent;
+    doc.BeginArtifact;
+    c.Pen.Color := clGray;
+    c.MoveTo(40, 1000);
+    c.LineTo(500, 1000);
+    doc.EndArtifact;
+    doc.AddPage;
+    c.Font.Name := sans;
+    c.Font.Size := 11;
+    doc.ResumeStructContent(para);
+    c.TextOut(40, 40, 'on the second page.');
+    doc.EndStructContent;
+    pdf := SaveDoc(doc);
+  finally
+    doc.Free;
+  end;
+  Check(para >= 0, 'LastStructContent');
+  CheckEqual(PdfStructRoles(pdf), 'Document 1'#10'Figure 1'#10'H1 1'#10 +
+    'P 2'#10'Span 1'#10, 'the roles');
+  Check(PosEx('/ca 0.5', pdf) > 0, 'fill alpha');
+  Check(PosEx('/CA 0.25', pdf) > 0, 'stroke alpha');
+  CheckGolden('canvas_bridge_tagged', pdf);
 end;
 {$endif PDF_HASVCLCANVAS}
 

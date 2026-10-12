@@ -46,8 +46,7 @@ All files under `src/` require justification and user approval before reading.
 | `src/pdf/mormot.pdf.pas` | PDF engine (cross-platform) | Production |
 | `src/core/mormot.ui.report.pas` | Report engine (`TGDIPages`) | Production |
 | `src/core/mormot.ui.reportpreview.pas` | Preview window and printing for `TGDIPages` (LCL) | Production |
-| `src/core/mormot.ui.pdfcanvas.pas` | TCanvas bridge (`TPdfDocumentVcl`) | Production |
-| `src/pdf/mormot.pdf.canvas.pas` | VCL/LCL adapter: `TBitmap`/`TGraphic` images; `TPdfDocumentGdi`, `RenderMetaFile`, printer helpers (Windows) - R-28 Phase 2 | Production |
+| `src/pdf/mormot.pdf.canvas.pas` | VCL/LCL adapter: the TCanvas bridge (`TPdfDocumentVcl`, `TPdfVclCanvas`), `TBitmap`/`TGraphic` images; `TPdfDocumentGdi`, `RenderMetaFile`, printer helpers (Windows) - R-28 Phase 2 | Production |
 | `src/pdf/mormot.pdf.types.pas` | PDF types; former font type names as aliases of mormot.lib.core | Production |
 | mORMot2 `src/lib/mormot.lib.uniscribe.pas` | GDI backend (Windows), Uniscribe shaper and FontSub subsetter, beside their bindings | Production |
 | mORMot2 `src/lib/mormot.lib.freetype.pas` | FreeType2 backend (POSIX) | Production |
@@ -60,14 +59,13 @@ All files under `src/` require justification and user approval before reading.
 src/
   pdf/                          the units under their trunk names (R-28)
     mormot.pdf.pas              PDF objects, TPdfDocument, TPdfCanvas - no VCL/LCL
-    mormot.pdf.canvas.pas       TBitmap/TGraphic images, TPdfDocumentGdi and EMF (Windows)
+    mormot.pdf.canvas.pas       TCanvas bridge (TPdfDocumentVcl), TBitmap/TGraphic images, TPdfDocumentGdi and EMF (Windows)
     mormot.pdf.defines.inc      the USE_* switches of mormot.pdf and mormot.pdf.canvas
     mormot.pdf.types.pas        PDF types, aliases of the mormot.lib.core font types
     mormot.pdf.fpimage.pas      Bitmap embedding (FPImage)
   core/                         the units of the later phases
     mormot.ui.report.pas        TGDIPages — layout engine, no forms or printer
     mormot.ui.reportpreview.pas ShowReportPreview, PrintReport (LCL)
-    mormot.ui.pdfcanvas.pas     TPdfDocumentVcl, TPdfVclCanvas
     mormot.ui.core.pas          UI helper functions   } the trunk's units of mORMot2 src/ui (only the include path differs),
     mormot.ui.gdiplus.pas       GDI+ support (Windows) } which is not on the search path
   (the backends are mORMot2 units in src/lib: mormot.lib.uniscribe on Windows
@@ -85,7 +83,7 @@ examples/
   (each demo folder carries a short README.md; the source header of its .lpr
    (`layer1_demo`: .dpr) says the same thing in two sentences)
 tests/
-  test_runner.lpr              runs every suite below (green: 792 assertions on Windows with FPC, Delphi 13 and Delphi 7, with the CJK and symbol faces of Windows 11 - Delphi 2010 last measured at 779 (#33); 768 on macOS with Geeza Pro, Hiragino Sans GB and Helvetica, 741 on Linux with fonts-noto-cjk — the rest are skips; the golden files add two per case with or without a baseline. Delphi 13, measured before the golden files: 259 on Windows, 171 on Linux64, 129 on Android64, layer 1 only)
+  test_runner.lpr              runs every suite below (green: 827 assertions on Windows with FPC, Delphi 13 and Delphi 7, with the CJK and symbol faces of Windows 11 - Delphi 2010 last measured at 779 (#33); 801 on macOS with Geeza Pro, Hiragino Sans GB and Helvetica, 774 on Linux with fonts-noto-cjk — the rest are skips; the golden files add two per case with or without a baseline. Delphi 13, measured before the golden files: 259 on Windows, 171 on Linux64, 129 on Android64, layer 1 only)
   test_defines.inc             PDF_HASVCLCANVAS: the TCanvas bridge suites (all compilers since R-20)
   build_delphi7.bat            dcc32 build of one project (R-19)
   build_delphi2010.bat         the same with Delphi 2010, warnings on (R-25, Unicode Delphi)
@@ -100,7 +98,7 @@ tests/
   test_report_crossplatform.pas report engine, tables, tagged export
   test_pdf_subset.pas          font subsetting: IFontSubsetter and TPdfDocument
   test_pdf_pdfa.pas            PDF/A-3: associated files, XMP schemas, PdfMetadataFacturX, level U
-  test_pdf_golden.pas          golden files: generated PDFs against this machine's baseline (layers 1-2)
+  test_pdf_golden.pas          golden files: generated PDFs against this machine's baseline (layers 1-2, the TCanvas bridge's shapes, pages and tagging calls)
   test_pdf_cff.pas             the CFF reader on tables built in code, and every CFF path through a synthetic face swapped into FontProvider (codes, /W, /ToUnicode, routing, word spacing, programs, names)
   test_pdf_images.pas          golden files of the image paths (raw pixels on every compiler; TBitmap formats, reuse, color key, JPEG) and of EMF (TPdfDocumentGdi, RenderMetaFile; Windows)
   test_report_golden.pas       the same for TGDIPages (layer 3)
@@ -212,7 +210,7 @@ Details: `.claude/skills/report-engine.md` (Tables), `.claude/skills/call-graph.
 ### One Unit per Layer
 
 A program uses the unit of its layer: `mormot.ui.report` (layer 3),
-`mormot.ui.pdfcanvas` with `mormot.pdf` (layer 2), `mormot.pdf`
+`mormot.pdf.canvas` with `mormot.pdf` (layer 2), `mormot.pdf`
 (layer 1). What a layer's API takes from below is re-exported by that layer —
 `mormot.ui.report` re-exports the PDF/A levels, `TPdfFileFormat`, `afr*` and
 `PdfMetadataFacturX`. Never put `mormot.pdf` beside `mormot.ui.report`:

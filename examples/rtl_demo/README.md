@@ -2,7 +2,7 @@
 
 Demo 6 of the [learning path](../../docs/DEMOS.md#demo-6--rtl_demo).
 
-**Layer 2.** `uses mormot.ui.pdfcanvas, mormot.pdf` — the latter also for
+**Layer 2.** `uses mormot.pdf.canvas, mormot.pdf` — the latter also for
 `TPdfCanvas.RightToLeftText`, one layer below the bridge, and for
 `GetPdfFonts`. The shaper — Uniscribe, or HarfBuzz on
 Linux/macOS — comes with `mormot.pdf`.

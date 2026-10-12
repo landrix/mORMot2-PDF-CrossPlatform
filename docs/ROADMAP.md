@@ -243,6 +243,19 @@ v0.10.0 (2026-09-30).
   the canvas tracks, so a `Tf`, `Tw`, `Tc`, `Tz` or `TL` could be skipped
   after `Q`; a space in a PDF name is
   written `#20`
+- **`mormot.ui.pdfcanvas` is now part of `mormot.pdf.canvas`** (R-28 Phase
+  3): `TPdfDocumentVcl` and `TPdfVclCanvas` are unchanged, change the `uses`
+  (no compatibility unit). The PDF/A levels, page modes, `/AFRelationship`
+  values and `PdfMetadataFacturX` come from `mormot.pdf` (layer 2) or
+  `mormot.ui.report` (layer 3), no longer from the canvas unit
+- **Changed: `TPdfDocument.ScreenLogPixels` is 96** on every platform
+  (R-28 Phase 3); `TPdfDocumentVcl` and `TPdfDocumentGdi` set the screen's
+  resolution on Windows, as the engine did for every document before. Only a
+  program that uses a plain `TPdfDocument` in a DPI-aware Windows process
+  and reads the value, draws with the pixel methods (`MoveToI` ...) or calls
+  `RenderMetaFile` on it, sees 96 instead of 120 or 144. Set it before the first page; a value of 0 or
+  less raises `EPdfInvalidValue` - also when Windows gives no screen
+  resolution, where a division by zero followed before
 - **Coming with R-20** (announce when done): the preview and the GUI demos
   on Delphi
 
@@ -386,7 +399,7 @@ Report.AddExportPdfAttachment(Xml, 'factur-x.xml', 'Factur-X invoice data',
   'text/xml', afrAlternative);
 Report.ExportPdfMetadataExtension := PdfMetadataFacturX('EN 16931', 'factur-x.xml');
 ```
-`TPdfAFRelationship` re-exported through `mormot.ui.pdfcanvas`, as
+`TPdfAFRelationship` re-exported by `mormot.ui.report`, as
 `TPdfALevel` is. **Rejected:** an event `OnExportPdfDocument(Sender, Doc)` —
 it hands out the document in the middle of the stream (an `AddPage` there
 breaks the file), and `of object` needs a helper class in a console program.

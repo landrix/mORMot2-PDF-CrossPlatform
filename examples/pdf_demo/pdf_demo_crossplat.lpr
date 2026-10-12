@@ -28,7 +28,7 @@ uses
   mormot.core.os,
   mormot.core.unicode,
   mormot.pdf,         // TPdfStructRole: psrH1, psrP, psrFigure, psrTable, ...
-  mormot.ui.pdfcanvas;
+  mormot.pdf.canvas;  // TPdfDocumentVcl, TPdfVclCanvas
 
 { <demo>_<os>_<cpu>_<compiler>.pdf next to the executable, e.g.
   pdf_demo_windows_x64_free-pascal-3.2.2.pdf or ..._x86_delphi-7.pdf: the runs
