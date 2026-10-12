@@ -84,9 +84,8 @@ var
   batch: TRestBatch;
   customer: TOrmCustomer;
   order: TOrmCustomerOrder;
-  i: integer;
+  i, cents: integer;
   day: TDateTime;
-  amount: currency;
 begin
   batch := TRestBatch.Create(Orm, nil);
   customer := TOrmCustomer.Create;
@@ -106,12 +105,12 @@ begin
       order.SaleDate := TimeLogFromDateTime(day);
       order.ShipDate := TimeLogFromDateTime(day + 3);
       order.Customer := TOrmCustomer(PtrInt((i * 7 + i div 10) mod 10 + 1));
-      amount := 5000 + (i * 7919) mod 495000; // in cents
-      order.ItemsTotal := amount * 0.01;
+      cents := 5000 + (i * 7919) mod 495000;
+      order.ItemsTotal := cents * 0.01;
       batch.Add(order, {SendData=}true);
     end;
     if Orm.BatchSend(batch) <> HTTP_SUCCESS then
-      raise EOrmException.Create('mormot_demo: the sample data was not stored');
+      EOrmException.RaiseUtf8('%: the sample data was not stored', [self]);
   finally
     order.Free;
     customer.Free;
