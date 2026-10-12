@@ -229,7 +229,7 @@ begin
 end;
 
 // FPC's TCanvas has virtual drawing methods, which the bridge overrides;
-// Delphi 7's are static, so only a TPdfVclCanvas reference reaches it
+// Delphi's are static or reintroduced: a TCanvas reference writes nothing
 procedure TPdfSmokeTests.TestVclCanvasThroughTCanvas;
 var
   PDF: TPdfDocumentVcl;
@@ -244,29 +244,22 @@ begin
       PDF.CompressionMethod := cmNone;
       PDF.StandardFontsReplace := true;
       PDF.AddPage;
-      {$ifdef FPC}
       c := PDF.VclCanvas;
-      {$else}
-      c := nil;
-      {$endif FPC}
       PDF.VclCanvas.Font.Name := 'Helvetica';
-      if c <> nil then
-      begin
-        c.TextOut(40, 40, 'Through TCanvas');
-        c.Rectangle(40, 80, 140, 120);
-      end
-      else
-      begin
-        PDF.VclCanvas.TextOut(40, 40, 'Through TCanvas');
-        PDF.VclCanvas.Rectangle(40, 80, 140, 120);
-      end;
+      c.TextOut(40, 40, 'Through TCanvas');
+      c.Rectangle(40, 80, 140, 120);
       PDF.SaveToStream(Stream);
     finally
       PDF.Free;
     end;
     s := StreamToRaw(Stream);
+    {$ifdef FPC}
     Check(PosEx('(Through TCanvas) Tj', s) > 0, 'the text');
     CheckEqual(CountOf(' re'#10, s), 1, 'the rectangle');
+    {$else}
+    Check(PosEx('Through TCanvas', s) = 0, 'no text: the measuring DC got it');
+    CheckEqual(CountOf(' re'#10, s), 0, 'no rectangle');
+    {$endif FPC}
   finally
     Stream.Free;
   end;
@@ -773,7 +766,7 @@ begin
       PDF.Info.Title := 'Test Document';
       PDF.Info.Author := 'mORMot2 Test Suite';
       PDF.Info.Subject := 'PDF Export Smoke Test';
-      PDF.Info.Creator := 'mormot.ui.pdfcanvas';
+      PDF.Info.Creator := 'mormot.pdf';
 
       // Create empty PDF (minimum valid structure)
       PDF.DefaultPageWidth  := 595;   // A4 width in points (210 mm)

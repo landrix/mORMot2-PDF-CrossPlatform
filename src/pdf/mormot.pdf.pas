@@ -1918,8 +1918,8 @@ type
     // - 96 on every platform; TPdfDocumentVcl and TPdfDocumentGdi set the
     // screen's on Windows
     // - the TCanvas bridge takes its scale at the first page: set it before
-    // - the pixel methods of TPdfCanvas (MoveToI ...), RenderMetaFile and
-    // TGDIPages.ExportPdf map with it; PDF itself is 72 points per inch
+    // - the pixel methods of TPdfCanvas (MoveToI ...) and RenderMetaFile map
+    // with it; PDF itself is 72 points per inch
     // - a value of 0 or less raises EPdfInvalidValue
     property ScreenLogPixels: integer
       read fScreenLogPixels write SetScreenLogPixels;

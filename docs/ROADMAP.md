@@ -254,7 +254,8 @@ v0.10.0 (2026-09-30).
   program that uses a plain `TPdfDocument` in a DPI-aware Windows process
   and reads the value, draws with the pixel methods (`MoveToI` ...) or calls
   `RenderMetaFile` on it, sees 96 instead of 120 or 144. Set it before the first page; a value of 0 or
-  less raises `EPdfInvalidValue`
+  less raises `EPdfInvalidValue` - also when Windows gives no screen
+  resolution, where a division by zero followed before
 - **Coming with R-20** (announce when done): the preview and the GUI demos
   on Delphi
 

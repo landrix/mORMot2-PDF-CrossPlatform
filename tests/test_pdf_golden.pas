@@ -610,6 +610,7 @@ begin
     doc.CompressionMethod := cmNone;
     doc.EmbeddedTTF := false;
     doc.StandardFontsReplace := true;
+    doc.ScreenLogPixels := 96;
     doc.AddPage;
     c := doc.VclCanvas;
     c.Font.Name := 'Helvetica';
@@ -662,6 +663,7 @@ begin
   result.CompressionMethod := cmNone;
   result.EmbeddedTTF := false;
   result.StandardFontsReplace := true;
+  result.ScreenLogPixels := 96; // not the screen's: the baseline is fixed
 end;
 
 function BridgePoint(X, Y: integer): TPoint;
@@ -790,6 +792,7 @@ begin
     doc.Tagged := true;
     doc.DefaultLanguage := 'en';
     doc.Info.Title := 'Golden bridge tagged';
+    doc.ScreenLogPixels := 96;
     GetPdfFonts(doc.EmbeddedTTF, sans, serif, mono);
     doc.AddPage;
     c := doc.VclCanvas;
