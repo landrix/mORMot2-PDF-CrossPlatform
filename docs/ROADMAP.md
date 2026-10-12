@@ -46,6 +46,12 @@ v0.10.0 (2026-09-30).
   `mormot.lib.uniscribe` is gone - the `mormot2` package ships the unit and
   hid the copy; `mormot.ui.core` and `mormot.ui.gdiplus` are the trunk
   units again (R-28, refactoring Phase 0 step 5)
+- **`mormot_demo` with sample data of its own:** a fresh clone printed one
+  page with "No orders available" - the database is not versioned, and
+  `TDemoServer` declared a constructor `TRestClientDB` never calls, so not even
+  the tables were created. The server now overrides the virtual constructor
+  and fills an empty database with 10 invented customers and 200 orders of
+  Q1/2026, computed, not random; a downloaded `Project10.db` is kept as it is
 - **`zugferd_demo` with new invoice data:** the KoSIT test case (Apache-2.0,
   which does not fit the GPL option of mORMot's licence) is replaced by the
   sample `Gesamtbeispiel` of XRechnung for Delphi, contributed by Landrix

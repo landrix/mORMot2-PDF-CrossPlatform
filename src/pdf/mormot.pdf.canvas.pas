@@ -508,19 +508,9 @@ begin
   inherited Create;
   fPdfDoc := APdfDoc;
   fPdfCanvas := APdfCanvas;
-  // default coordinate scale: 1 pixel = 1 point (approx for screen at 72 DPI)
-  // For a proper mapping: scale = 72 / screen_dpi
-  // TPdfDocument.fScreenLogPixels is set in Create (GetDeviceCaps/96 on POSIX)
-  if APdfDoc.fScreenLogPixels > 0 then
-  begin
-    fScale.ScaleX := 72.0 / APdfDoc.fScreenLogPixels;
-    fScale.ScaleY := 72.0 / APdfDoc.fScreenLogPixels;
-  end
-  else
-  begin
-    fScale.ScaleX := 1.0;
-    fScale.ScaleY := 1.0;
-  end;
+  // one canvas pixel in PDF points; ScreenLogPixels is never 0, its setter raises
+  fScale.ScaleX := 72.0 / APdfDoc.ScreenLogPixels;
+  fScale.ScaleY := 72.0 / APdfDoc.ScreenLogPixels;
   fScale.OriginX := 0;
   fScale.OriginY := 0;
   // Create a memory DC so that TCanvas.TextWidth/TextHeight (which call
