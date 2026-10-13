@@ -20,6 +20,7 @@ uses
   mormot.lib.core,
   mormot.pdf,
   test_pdf_subset,      // DrawUtf8Text, PDF_DEFAULT_CHARSET
+  test_pdf_crossplatform, // TestFontFile, PdfTextShows
   pdf_inspect;          // InflatePdf
 
 type
@@ -48,6 +49,7 @@ type
     procedure UnembeddedNameKeyed;
     procedure TextStateAcrossQ;
     procedure SystemFaceCids;
+    procedure RegisteredFaceCids;
   end;
 
 /// a bare 'CFF ' table of Glyphs glyphs
@@ -1134,6 +1136,80 @@ begin
   Check(true, 'SKIP: Hiragino Sans GB is a macOS face');
 end;
 {$endif OSDARWIN}
+
+procedure TPdfCffTests.RegisteredFaceCids;
+const
+  FAMILY = 'mORMot Test CJK';
+  // U+5B57: glyph 257 of the test font, CID 15364 ($3C04) - fontTools
+  CHAR_5B57: RawUtf8 = {$ifdef HASCODEPAGE} #$5B57 {$else} #$E5#$AD#$97 {$endif};
+var
+  data: RawByteString;
+  req: TFontRequest;
+  f: IFontFace;
+  info: TPdfCffInfo;
+  pdf: TPdfDocument;
+  stream: TMemoryStream;
+  s: RawUtf8;
+  i, diff: PtrInt;
+begin
+  { the CID-keyed face of SystemFaceCids on every machine: a subset of Noto
+    Sans CJK, whose glyph indexes no longer are their CIDs }
+  data := StringFromFile(TestFontFile('mORMotTestCJK-Regular.otf'));
+  Check(data <> '', 'tests/fonts/mORMotTestCJK-Regular.otf found');
+  if data = '' then
+    exit;
+  try
+    CheckEqual(RegisterFontData(data), FAMILY, 'the family of the name table');
+    FillChar(req, SizeOf(req), 0);
+    req.FaceName := FAMILY;
+    req.Height := -1000;
+    req.Weight := 400;
+    req.CharSet := PDF_DEFAULT_CHARSET; // platform-backends.md: GDI substitutes
+    f := FontProvider.CreateFace(req);
+    Check(f <> nil, 'face created');
+    if f = nil then
+      exit;
+    Check(PdfFaceCffInfo(f, info) = pcCidKeyed, 'CID-keyed');
+    f := nil;
+    CheckEqual(info.Registry, 'Adobe');
+    CheckEqual(info.Ordering, 'Identity');
+    CheckEqual(info.GlyphCount, 550, 'glyphs');
+    diff := 0;
+    for i := 0 to high(info.Cid) do
+      if info.Cid[i] <> i then
+        inc(diff);
+    CheckEqual(diff, 454, 'glyphs whose CID is not their index');
+    if length(info.Cid) > 257 then
+      CheckEqual(info.Cid[257], 15364, 'the CID of U+5B57');
+    stream := TMemoryStream.Create;
+    try
+      pdf := TPdfDocument.Create(false, 0, pdfaNone);
+      try
+        pdf.CompressionMethod := cmNone;
+        pdf.EmbeddedTTF := true;
+        pdf.AddPage;
+        pdf.Canvas.SetFont(FAMILY, 12, [], PDF_DEFAULT_CHARSET);
+        DrawUtf8Text(pdf, 40, 700, CHAR_5B57);
+        pdf.SaveToStream(stream);
+      finally
+        pdf.Free;
+      end;
+      SetLength(s, stream.Size);
+      stream.Position := 0;
+      stream.Read(pointer(s)^, stream.Size);
+    finally
+      stream.Free;
+    end;
+    s := InflatePdf(s);
+    Check(PdfTextShows(s, '3C04'), 'U+5B57 drawn as CID 15364');
+    Check(not PdfTextShows(s, '0101'), 'not as glyph 257');
+    Check(PosEx('/W [15364[', s) > 0, '/W keyed by the CID');
+    Check(PosEx('<3C04> <5B57>', s) > 0, '/ToUnicode keyed by the CID');
+    Check(PosEx('/CIDFontType0C', s) > 0, 'embedded as a bare CFF');
+  finally
+    UnregisterFontData;
+  end;
+end;
 
 type
   // Shape gives one shaped run of the glyphs 41, 7, 2 - with the advances of

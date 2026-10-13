@@ -46,12 +46,20 @@ type
     procedure TestPdfDocumentCreate;
     procedure TestPdfMultiPage;
     procedure TestRegisteredFont;
+    procedure TestRegisteredArabic;
   end;
 
 /// the full name of a font of tests/fonts, '' if it is not found
 // - searched upwards from the executable: tests/bin/<cpu-os>, bin/d7/<project>
 // and the copies of the remote runs reach it
 function TestFontFile(const Name: TFileName): TFileName;
+
+/// is Code one of the 4-digit codes of the hex strings of the first text
+// object of an uncompressed PDF? A shaped run is one Tj when the shaper's
+// advances equal /W and it gives no offsets, a TJ otherwise
+// - the first 'BT' of the file: no stream may come before the page contents,
+// e.g. the XMP of a tagged or PDF/A document
+function PdfTextShows(const Pdf: RawByteString; const Code: RawUtf8): boolean;
 
 implementation
 
@@ -72,6 +80,106 @@ begin
     dir := dir + '..' + PathDelim;
   end;
   result := '';
+end;
+
+function PdfTextShows(const Pdf: RawByteString; const Code: RawUtf8): boolean;
+var
+  b, e, last, k: PtrInt;
+begin
+  result := false;
+  b := PosEx('BT', Pdf);
+  last := PosEx('ET', Pdf, b);
+  if (b = 0) or
+     (last = 0) then
+    exit;
+  repeat
+    b := PosEx('<', Pdf, b);
+    if (b = 0) or
+       (b > last) then
+      exit;
+    e := PosEx('>', Pdf, b);
+    if (e = 0) or
+       (e > last) then
+      exit; // no hex string closed inside the text object
+    k := b + 1;
+    while k + 4 <= e do
+    begin
+      if CompareMem(@Pdf[k], pointer(Code), 4) then
+      begin
+        result := true;
+        exit;
+      end;
+      inc(k, 4);
+    end;
+    b := e;
+  until false;
+end;
+
+// the /W entry this PDF states for aGlyph, or -1 if it is not found.
+// /W is written as "<cid>[<w1> <w2> ...]" runs, so a glyph's width is the
+// n-th number of the run whose first cid is <= aGlyph
+function PdfWidthOf(const aPdf: RawByteString; aGlyph: word): integer;
+var
+  p, e, runStart, cid, n: PtrInt;
+  v: integer;
+begin
+  result := -1;
+  p := PosEx('/W [', aPdf);
+  if p = 0 then
+    exit;
+  inc(p, 4);
+  e := PosEx(']/', aPdf, p); // the /W array ends before the next key
+  if e = 0 then
+    e := length(aPdf);
+  while p < e do
+  begin
+    while (p < e) and
+          (aPdf[p] = ' ') do
+      inc(p);
+    cid := 0;
+    runStart := p;
+    while (p < e) and
+          (aPdf[p] >= '0') and
+          (aPdf[p] <= '9') do
+    begin
+      cid := cid * 10 + ord(aPdf[p]) - 48;
+      inc(p);
+    end;
+    if p = runStart then
+      break; // not a number: end of the array
+    if (p >= e) or
+       (aPdf[p] <> '[') then
+      continue;
+    inc(p);
+    n := cid;
+    while (p < e) and
+          (aPdf[p] <> ']') do
+    begin
+      while (p < e) and
+            (aPdf[p] = ' ') do
+        inc(p);
+      v := 0;
+      runStart := p;
+      while (p < e) and
+            (aPdf[p] >= '0') and
+            (aPdf[p] <= '9') do
+      begin
+        v := v * 10 + ord(aPdf[p]) - 48;
+        inc(p);
+      end;
+      if p = runStart then
+        break;
+      if n = aGlyph then
+      begin
+        result := v;
+        exit;
+      end;
+      inc(n);
+    end;
+    if (p < e) and
+       (aPdf[p] = ']') then
+      inc(p);
+  end;
 end;
 
 // a text of one script comes back as one shaped run, from HarfBuzz as from
@@ -282,73 +390,6 @@ var
     result := (w shr 8) or (w shl 8);
   end;
 
-  // the /W entry this PDF states for aGlyph, or -1 if it is not found.
-  // /W is written as "<cid>[<w1> <w2> ...]" runs, so a glyph's width is the
-  // n-th number of the run whose first cid is <= aGlyph
-  function WFor(const aPdf: RawByteString; aGlyph: word): integer;
-  var
-    p, e, runStart, cid, n: PtrInt;
-    v: integer;
-  begin
-    result := -1;
-    p := PosEx('/W [', aPdf);
-    if p = 0 then
-      exit;
-    inc(p, 4);
-    e := PosEx(']/', aPdf, p); // the /W array ends before the next key
-    if e = 0 then
-      e := length(aPdf);
-    while p < e do
-    begin
-      while (p < e) and
-            (aPdf[p] = ' ') do
-        inc(p);
-      cid := 0;
-      runStart := p;
-      while (p < e) and
-            (aPdf[p] >= '0') and
-            (aPdf[p] <= '9') do
-      begin
-        cid := cid * 10 + ord(aPdf[p]) - 48;
-        inc(p);
-      end;
-      if p = runStart then
-        break; // not a number: end of the array
-      if (p >= e) or
-         (aPdf[p] <> '[') then
-        continue;
-      inc(p);
-      n := cid;
-      while (p < e) and
-            (aPdf[p] <> ']') do
-      begin
-        while (p < e) and
-              (aPdf[p] = ' ') do
-          inc(p);
-        v := 0;
-        runStart := p;
-        while (p < e) and
-              (aPdf[p] >= '0') and
-              (aPdf[p] <= '9') do
-        begin
-          v := v * 10 + ord(aPdf[p]) - 48;
-          inc(p);
-        end;
-        if p = runStart then
-          break;
-        if n = aGlyph then
-        begin
-          result := v;
-          exit;
-        end;
-        inc(n);
-      end;
-      if (p < e) and
-         (aPdf[p] = ']') then
-        inc(p);
-    end;
-  end;
-
   function ReadTable(const aTag: RawUtf8; out aWords: TWordDynArray): boolean;
   var
     n: cardinal;
@@ -468,8 +509,8 @@ begin
       Check(Abs((hmtxAdv - advances[i]) - Abs(offsets[i])) <= 2,
         'the advance difference must match the GPOS offset');
       // and this is the regression itself: /W must state the hmtx value.
-      // WFor(g) finds "<glyph>[<width>]" in the /W array of the CID font.
-      wEntry := WFor(pdf, glyphs[i]);
+      // PdfWidthOf(g) finds "<glyph>[<width>]" in the /W array of the CID font.
+      wEntry := PdfWidthOf(pdf, glyphs[i]);
       if wEntry < 0 then
         Check(true, 'SKIP: /W entry not found (deflated object stream)')
       else
@@ -963,6 +1004,95 @@ begin
   end;
   req.Weight := 400;
   Check(not FindRegisteredFont(req, face, index), 'forgotten');
+end;
+
+procedure TPdfCrossPlatTests.TestRegisteredArabic;
+const
+  FAMILY = 'mORMot Test Arabic';
+  // 'marhaba', terminated for TextOutW
+  MARHABA: array[0..5] of WideChar = (
+    #$0645, #$0631, #$062D, #$0628, #$0627, #0);
+  // the glyphs of the word in the test font, read with fontTools: the joined
+  // forms GSUB gives, their hmtx advances (unitsPerEm is 1000) and their
+  // codes, and the codes of the isolated forms of the cmap
+  JOINED: array[0..4] of word = (316, 404, 163, 48, 23);
+  JOINED_ADVANCE: array[0..4] of integer = (525, 396, 589, 343, 291);
+  JOINED_HEX: array[0..4] of RawUtf8 = ('013C', '0194', '00A3', '0030', '0017');
+  NOMINAL_HEX: array[0..4] of RawUtf8 = ('013A', '0193', '00A1', '002D', '0016');
+var
+  data, face, pdf: RawByteString;
+  req: TFontRequest;
+  f: IFontFace;
+  glyphs: TWordDynArray;
+  advances, offsets, clusters: TIntegerDynArray;
+  i, j: PtrInt;
+  found: boolean;
+  doc: TPdfDocument;
+  ms: TMemoryStream;
+begin
+  { the font has no presentation forms in its cmap, as fonts.md asks for RTL
+    work: only a shaper reaches the joined forms, and their widths come from
+    nowhere but the font's hmtx }
+  data := StringFromFile(TestFontFile('mORMotTestArabic-Regular.ttf'));
+  Check(data <> '', 'tests/fonts/mORMotTestArabic-Regular.ttf found');
+  if data = '' then
+    exit;
+  try
+    CheckEqual(RegisterFontData(data), FAMILY, 'the family of the name table');
+    FillChar(req, SizeOf(req), 0);
+    req.FaceName := FAMILY;
+    req.Height := -1000;
+    req.Weight := 400;
+    req.CharSet := 1; // DEFAULT_CHARSET: GDI substitutes for ANSI_CHARSET
+    f := FontProvider.CreateFace(req);
+    Check(f <> nil, 'face created');
+    if f = nil then
+      exit;
+    Check(f.GetFaceFile(face) and (face = data), 'the registered font');
+    if FontShaper = nil then
+    begin
+      Check(true, 'SKIP: no IFontShaper registered (libharfbuzz absent)');
+      exit;
+    end;
+    Check(ShapeSingleRun(@MARHABA[0], 5, f.Handle, glyphs, advances, offsets,
+      clusters), 'shaped');
+    CheckEqual(length(glyphs), 5, 'one glyph per letter');
+    for i := 0 to high(JOINED) do
+    begin
+      found := false;
+      for j := 0 to high(glyphs) do
+        if glyphs[j] = JOINED[i] then
+          found := true;
+      Check(found, 'the joined form from GSUB');
+    end;
+    f := nil;
+    // the document draws the joined forms with their own widths
+    doc := TPdfDocument.Create;
+    ms := TMemoryStream.Create;
+    try
+      doc.EmbeddedTTF := true;
+      doc.CompressionMethod := cmNone;
+      doc.UseUniscribe := true;
+      doc.AddPage;
+      doc.Canvas.RightToLeftText := true;
+      doc.Canvas.SetFont(FAMILY, 24, [], 1);
+      doc.Canvas.TextOutW(40, 700, @MARHABA[0]);
+      doc.SaveToStream(ms);
+      FastSetRawByteString(pdf, ms.Memory, ms.Size);
+    finally
+      ms.Free;
+      doc.Free;
+    end;
+    for i := 0 to high(JOINED) do
+    begin
+      Check(PdfTextShows(pdf, JOINED_HEX[i]), 'the joined form drawn');
+      Check(not PdfTextShows(pdf, NOMINAL_HEX[i]), 'not the isolated form');
+      CheckEqual(PdfWidthOf(pdf, JOINED[i]), JOINED_ADVANCE[i],
+        'the /W of a joined form is its hmtx advance');
+    end;
+  finally
+    UnregisterFontData;
+  end;
 end;
 
 end.

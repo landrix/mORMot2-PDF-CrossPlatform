@@ -874,6 +874,21 @@ Process, agreed in the forum:
   Linux, 842 on macOS. Next: the
   Arabic and the CJK test font, then the font tests moved onto them
 
+  **Step 2** (branch `pr/test-fonts-2`, on step 1): `mORMot Test Arabic`
+  (Noto Sans Arabic without the presentation forms, so the joined forms
+  are reached through GSUB only) and `mORMot Test CJK` (face 0 of Noto Sans
+  CJK, CID-keyed CFF; after the subset 454 of its 550 glyph indexes differ
+  from their CIDs), the generator now byte-reproducible. `TestRegisteredArabic`
+  shapes 'marhaba' into the joined forms and finds them drawn with their
+  `hmtx` widths; `RegisteredFaceCids` draws U+5B57 as CID 15364, not glyph
+  257 - both on every platform, where before only macOS had a face with CIDs
+  that differ. Found: a registered font without Latin must be asked for
+  with `DEFAULT_CHARSET` on Windows, or GDI substitutes (platform-backends
+  skill); the characters of a shaped run stay in `/W` and the subset under
+  their unused cmap glyphs (fonts skill). `test_runner` 908/908 on Windows
+  (FPC 3.3.1 aarch64, Delphi 7, Delphi 13 Win32/Win64), 855 on Linux,
+  882 on macOS. Next: the font tests moved onto the test fonts
+
 ## Open Decisions
 
 - ~~Golden files in `mormot2tests`~~ decided 2026-10-13: compared by
