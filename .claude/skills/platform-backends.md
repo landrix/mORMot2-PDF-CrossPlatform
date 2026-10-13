@@ -299,7 +299,11 @@ before a document exists: `TPdfDocument` reads the enumerator's list once
   mapper - give test fonts names of their own. `UnregisterFontData` leaves
   the font installed for GDI - a document created before still draws with
   it; a new one no longer lists the family, so its `SetFont` falls back -
-  while FreeType forgets it
+  while FreeType forgets it. **Ask with `DEFAULT_CHARSET` (1)** for a font
+  without Latin: with `ANSI_CHARSET` (0, the request's default) GDI's mapper
+  takes an installed font that has the code page over the registered one
+  that lacks it - measured with `mORMot Test Arabic`, whose OS/2 code pages
+  are Arabic only (`TestRegisteredArabic`; `SetFont(.., 1)` likewise)
 - **When:** after the unit initializations - `RegisterUniscribe` sets the
   hook, a font registered before it is never installed for GDI - and
   before the document; for a document that exists already,
@@ -314,6 +318,14 @@ before a document exists: `TPdfDocument` reads the enumerator's list once
 
 The test fonts in `tests/fonts` (renamed OFL subsets, `README.md` there) are
 registered this way; `TestFontFile` finds the folder from the executable.
+Each has a test of its own on every platform: `TestRegisteredFont` (Latin
+`glyf`), `TestRegisteredArabic` (the joined forms reached through GSUB only,
+their `/W` from `hmtx`; skipped without a shaper) and `RegisteredFaceCids`
+(`test_pdf_cff`: a CID-keyed CFF face whose glyph indexes are not its CIDs -
+the case `SystemFaceCids` covers with Hiragino Sans GB on macOS only). Their
+glyph IDs, CIDs and advances in the tests are read from the files with
+fontTools, so a rebuilt font must give the same bytes (`make_test_fonts.py`
+keeps the source's `head` dates).
 
 ## Data Types (mormot.lib.core)
 

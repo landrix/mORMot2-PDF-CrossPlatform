@@ -879,7 +879,10 @@ sorted by code anyway). The subset may still change on POSIX:
 hb-subset no longer gets the synthetic keys as code points.
 
 **Still open:** `/ToUnicode` maps these shaped glyphs to the PUA values instead
-of their source text. Text extraction / copy-paste is thus incorrect for shaped
+of their source text, and the characters of a shaped run also stay in `/W`,
+`/ToUnicode` and the subset under their cmap glyphs, which are never drawn
+(measured with `mORMot Test Arabic`: the isolated forms of 'marhaba' listed
+beside the drawn joined forms). Text extraction / copy-paste is thus incorrect for shaped
 Arabic, but rendering is correct. The fix needs the source text per glyph
 (shaper clusters) and `/ActualText` where one glyph stands for different text
 - a PR of its own
