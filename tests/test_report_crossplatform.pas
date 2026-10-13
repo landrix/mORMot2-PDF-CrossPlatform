@@ -16,6 +16,7 @@ uses
   SysUtils,
   Graphics,
   mormot.core.base,
+  mormot.core.os,      // StringFromFile, FileFromString, FileSetHidden
   mormot.core.text,
   mormot.core.unicode, // CountOccurrences
   mormot.core.test,
@@ -49,6 +50,7 @@ type
     procedure TestExportPdfAttachment;
     procedure TestTableFooterRowHeader;
     procedure TestExportPdfPageMode;
+    procedure TestExportPdfFile;
   end;
 
 implementation
@@ -902,6 +904,122 @@ begin
   finally
     MS.Free;
     Report.Free;
+  end;
+end;
+
+procedure TReportTests.TestExportPdfFile;
+var
+  fn, dir: TFileName;
+
+  function NewReport(Level: TPdfALevel): TGDIPages;
+  begin
+    result := TGDIPages.Create(nil);
+    result.ExportPdfLevel := Level;
+    result.NewPage;
+    result.DrawHeading(1, 'Invoice');
+    result.EndDoc;
+  end;
+
+  // a file beside Target named Target.*: ExportPDF writes no temporary one
+  // - compared by name: on Windows the mask 'Target.*' matches Target itself
+  function LeftOver(const Target: TFileName): boolean;
+  var
+    sr: TSearchRec;
+    prefix: TFileName;
+  begin
+    result := false;
+    prefix := ExtractFileName(Target) + '.';
+    if FindFirst(ExtractFilePath(Target) + '*', faAnyFile, sr) = 0 then
+    try
+      repeat
+        if Copy(sr.Name, 1, Length(prefix)) = prefix then
+          result := true;
+      until result or (FindNext(sr) <> 0);
+    finally
+      FindClose(sr);
+    end;
+  end;
+
+  function Raised(Report: TGDIPages; const Target: TFileName;
+    Protect, Encrypt: boolean): boolean;
+  begin
+    result := false;
+    try
+      Report.ExportPDF(Target, Protect, Encrypt, 'Title', 'Company');
+    except
+      result := true;
+    end;
+  end;
+
+  // ExportPDF raised, and fn holds what it held before
+  procedure CheckRefused(Report: TGDIPages; Protect, Encrypt: boolean;
+    const Msg: string);
+  begin
+    Check(Raised(Report, fn, Protect, Encrypt), Msg);
+    CheckEqual(StringFromFile(fn), 'old', 'the old file is kept');
+    Check(not LeftOver(fn), 'no temporary file is left');
+  end;
+
+var
+  Report: TGDIPages;
+  MS: TMemoryStream;
+  thrown: boolean;
+begin
+  fn := WorkDir + 'report_exportpdf.pdf';
+  dir := WorkDir + 'report_exportpdf_dir.pdf';
+  try
+    FileFromString('old', fn);
+    Report := NewReport(pdfaNone);
+    try
+      // a protection that would not be applied is refused, not ignored
+      CheckRefused(Report, true, false, 'Protect refused');
+      CheckRefused(Report, false, true, 'Encrypt refused');
+      CheckRefused(Report, true, true, 'both refused');
+      Report.ExportPDF(fn, false, false, 'Title', 'Company');
+      Check(PosEx('%PDF-', StringFromFile(fn)) = 1, 'the old file is replaced');
+      Check(not LeftOver(fn), 'nothing left beside it after success');
+      // a read-only file is refused, as fmCreate refused it
+      FileFromString('old', fn);
+      FileSetHidden(fn, {ReadOnly=}true);
+      CheckRefused(Report, false, false, 'a read-only file raises');
+      FileSetHidden(fn, false);
+      // a target the PDF cannot take the place of
+      ForceDirectories(dir);
+      Check(Raised(Report, dir, false, false), 'a folder as target raises');
+      Check(DirectoryExists(dir), 'the folder is kept');
+      Check(not LeftOver(dir), 'no temporary file beside the folder');
+    finally
+      Report.Free;
+    end;
+    // an export the engine refuses: PDF/A-1 cannot hold /PageMode /UseAttachments
+    FileFromString('old', fn);
+    Report := NewReport(pdfa1B);
+    MS := TMemoryStream.Create;
+    try
+      Report.ExportPdfPageMode := pmUseAttachments;
+      CheckRefused(Report, false, false, 'a failed export raises');
+      Check(not Report.ExportPdfStream(MS), 'the stream export still returns false');
+      thrown := false;
+      try
+        Report.ExportPdfStream(MS, {aRaiseException=}true);
+      except
+        thrown := true;
+      end;
+      Check(thrown, 'or raises when asked to');
+    finally
+      MS.Free;
+      Report.Free;
+    end;
+    // no page: nothing to write
+    Report := TGDIPages.Create(nil);
+    try
+      CheckRefused(Report, false, false, 'no page raises');
+    finally
+      Report.Free;
+    end;
+  finally
+    DeleteFile(fn);
+    RemoveDir(dir);
   end;
 end;
 
