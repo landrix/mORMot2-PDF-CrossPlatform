@@ -55,7 +55,10 @@ type
 function TestFontFile(const Name: TFileName): TFileName;
 
 /// is Code one of the 4-digit codes of the hex strings of the first text
-// object of an uncompressed PDF? Uniscribe writes one Tj, HarfBuzz a TJ
+// object of an uncompressed PDF? A shaped run is one Tj when the shaper's
+// advances equal /W and it gives no offsets, a TJ otherwise
+// - the first 'BT' of the file: no stream may come before the page contents,
+// e.g. the XMP of a tagged or PDF/A document
 function PdfTextShows(const Pdf: RawByteString; const Code: RawUtf8): boolean;
 
 implementation
@@ -101,7 +104,7 @@ begin
     k := b + 1;
     while k + 4 <= e do
     begin
-      if copy(Pdf, k, 4) = Code then
+      if CompareMem(@Pdf[k], pointer(Code), 4) then
       begin
         result := true;
         exit;

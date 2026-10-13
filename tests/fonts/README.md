@@ -20,8 +20,10 @@ this repository.
 | `mORMotTestCJK-Regular.otf` | 66,920 | `952173c26fbe5d702554386dcc1e0320727520478291da036618c01b9df78642` | CID-keyed CFF (Adobe-Identity-0): Basic Latin, a few ideographs and kana; after the subset most glyph indexes differ from their CIDs (U+5B57: glyph 257, CID 15364) |
 
 All three keep their layout tables (GSUB and GPOS; GDEF in the two `glyf`
-faces, BASE and VORG in the CJK face) and drop the hinting; name IDs 1-4, 6, 16 and 17 are renamed, 18-25
-dropped, and the CFF names follow name ID 6.
+faces, BASE and VORG in the CJK face) and drop the hinting; name IDs 1-4 and 6 are renamed (16 and 17 likewise
+and 18-25 dropped if a source has them - these three have none), and the
+CFF names follow name ID 6. The copyright (0), trademark (7) and URL (11)
+records of the sources are kept.
 
 Rebuilt with fontTools (4.65 here), the same bytes every time (the `head`
 dates are those of the source, the bounds those of the subset):

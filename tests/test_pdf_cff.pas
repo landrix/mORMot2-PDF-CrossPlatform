@@ -1164,6 +1164,7 @@ begin
     req.FaceName := FAMILY;
     req.Height := -1000;
     req.Weight := 400;
+    req.CharSet := PDF_DEFAULT_CHARSET; // platform-backends.md: GDI substitutes
     f := FontProvider.CreateFace(req);
     Check(f <> nil, 'face created');
     if f = nil then

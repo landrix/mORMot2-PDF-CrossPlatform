@@ -68,14 +68,13 @@ for f in FONTS:
     sub.populate(unicodes=f["unicodes"])
     sub.subset(font)
     # the names: family, unique, full, PostScript, typographic family/style;
-    # the other names that would still identify the original go
+    # the alternate and WWS names 18-25 go
     family = f["family"]
     names = {1: family, 2: "Regular",
              3: family + " Regular; subset of " + font["name"].getDebugName(4),
              4: family + " Regular", 6: f["ps"], 16: family, 17: "Regular"}
     table = font["name"]
-    table.names = [r for r in table.names
-                   if not (18 <= r.nameID <= 25) or r.nameID in names]
+    table.names = [r for r in table.names if not 18 <= r.nameID <= 25]
     for rec in table.names:
         if rec.nameID in names:
             rec.string = names[rec.nameID]
