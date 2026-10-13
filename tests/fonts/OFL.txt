@@ -1,6 +1,12 @@
+mORMotTestSans-Regular.ttf, a subset of Noto Sans:
 Copyright 2015 Google LLC. All Rights Reserved.
-(Noto Sans, the source of mORMotTestSans-Regular.ttf;
- Copyright 2010, 2012-2020 Google Inc., 2015-2020 Google LLC)
+(Copyright 2010, 2012-2020 Google Inc., 2015-2020 Google LLC)
+
+mORMotTestArabic-Regular.ttf, a subset of Noto Sans Arabic:
+Copyright 2015-2020 Google LLC. All Rights Reserved.
+
+mORMotTestCJK-Regular.otf, a subset of Noto Sans CJK JP:
+Copyright 2014-2021 Adobe (http://www.adobe.com/).
 
 This Font Software is licensed under the SIL Open Font License, Version 1.1.
 This license is copied below, and is also available with a FAQ at:
