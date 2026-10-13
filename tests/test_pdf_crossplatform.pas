@@ -45,9 +45,34 @@ type
     procedure TestFacesKeepTheirState;
     procedure TestPdfDocumentCreate;
     procedure TestPdfMultiPage;
+    procedure TestRegisteredFont;
   end;
 
+/// the full name of a font of tests/fonts, '' if it is not found
+// - searched upwards from the executable: tests/bin/<cpu-os>, bin/d7/<project>
+// and the copies of the remote runs reach it
+function TestFontFile(const Name: TFileName): TFileName;
+
 implementation
+
+function TestFontFile(const Name: TFileName): TFileName;
+var
+  dir: TFileName;
+  i: integer;
+begin
+  dir := Executable.ProgramFilePath;
+  for i := 0 to 5 do
+  begin
+    result := dir + 'tests' + PathDelim + 'fonts' + PathDelim + Name;
+    if FileExists(result) then
+      exit;
+    result := dir + 'fonts' + PathDelim + Name;
+    if FileExists(result) then
+      exit;
+    dir := dir + '..' + PathDelim;
+  end;
+  result := '';
+end;
 
 // a text of one script comes back as one shaped run, from HarfBuzz as from
 // Uniscribe: give its arrays to the checks
@@ -862,6 +887,82 @@ begin
   finally
     doc.Free;
   end;
+end;
+
+procedure TPdfCrossPlatTests.TestRegisteredFont;
+const
+  FAMILY = 'mORMot Test Sans';
+var
+  data, face, pdf, broken: RawByteString;
+  list: TRawUtf8DynArray;
+  req: TFontRequest;
+  f: IFontFace;
+  m: TFontMetrics;
+  i, index: integer;
+  found: boolean;
+  doc: TPdfDocument;
+  ms: TMemoryStream;
+begin
+  data := StringFromFile(TestFontFile('mORMotTestSans-Regular.ttf'));
+  Check(data <> '', 'tests/fonts/mORMotTestSans-Regular.ttf found');
+  if data = '' then
+    exit;
+  CheckEqual(RegisterFontData('not a font'), '', 'no font, no family');
+  CheckEqual(RegisterFontData(data, 1), '', 'no collection, no face 1');
+  // truncated or broken data: refused, read within its bounds
+  CheckEqual(RegisterFontData(copy(data, 1, 12)), '', 'the header only');
+  CheckEqual(RegisterFontData(copy(data, 1, 300)), '', 'the table directory only');
+  broken := data;
+  broken[5] := AnsiChar($ff); // numTables far beyond the data
+  broken[6] := AnsiChar($ff);
+  CheckEqual(RegisterFontData(broken), '', 'a table count past the end');
+  try
+    CheckEqual(RegisterFontData(data), FAMILY, 'the family of the name table');
+    // the enumerators list it: a document reads that list once
+    FontEnumerator.EnumTrueTypeFonts(list);
+    found := false;
+    for i := 0 to high(list) do
+      if list[i] = FAMILY then
+        found := true;
+    Check(found, 'enumerated');
+    // the provider creates the face from the registered bytes
+    FillChar(req, SizeOf(req), 0);
+    req.FaceName := FAMILY;
+    req.Height := -1000;
+    req.Weight := 400;
+    f := FontProvider.CreateFace(req);
+    Check(f <> nil, 'face created');
+    if f = nil then
+      exit;
+    Check(f.GetFaceFile(face), 'GetFaceFile');
+    Check(face = data, 'the face is the registered font, not a substitute');
+    Check(f.GetTextMetrics(m) and (m.tmAscent > 0), 'metrics');
+    f := nil;
+    req.Weight := 700;
+    Check(FindRegisteredFont(req, face, index), 'bold asks for the regular face');
+    // a document draws and embeds it
+    doc := TPdfDocument.Create;
+    ms := TMemoryStream.Create;
+    try
+      doc.EmbeddedTTF := true;
+      doc.CompressionMethod := cmNone;
+      doc.AddPage;
+      doc.Canvas.SetFont(FAMILY, 12, []);
+      doc.Canvas.TextOut(40, 700, 'Registered font');
+      doc.SaveToStream(ms);
+      FastSetRawByteString(pdf, ms.Memory, ms.Size);
+      Check(PosEx('/FontName/', pdf) > 0, 'a font descriptor');
+      Check(PosEx('mORMotTestSans', pdf) > 0, 'named after the registered face');
+      Check(PosEx('/FontFile2', pdf) > 0, 'embedded');
+    finally
+      ms.Free;
+      doc.Free;
+    end;
+  finally
+    UnregisterFontData;
+  end;
+  req.Weight := 400;
+  Check(not FindRegisteredFont(req, face, index), 'forgotten');
 end;
 
 end.

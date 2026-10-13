@@ -212,7 +212,8 @@ checked against that record:
    for `IFontProvider` and `IFontSubsetter`), then `84012287b` (2026-10-09, step
    W3: `IFontProvider.GetGlyphAdvance`), then `2f0e02243` (2026-10-09, the
    bounds of `ExtractSfntFromTtc`), then `681bbe2a1` (2026-10-09, Phase 1b:
-   `IFontFace` replaces the device context).
+   `IFontFace` replaces the device context), then `9cf8add51` (2026-10-13,
+   fonts from memory: `RegisterFontData`, the test fonts' first step).
    **Checked:** against `d60cc6e80`, today's `main`,
    `test_runner` 259/259 on Windows (FPC Win64, Delphi 7, Delphi 2010),
    298/298 on Linux, 317/317 on macOS (fpcupdeluxe, FPC 3.2.3). Against
@@ -822,8 +823,58 @@ Process, agreed in the forum:
   `fpttfsubsetter` does not fit: FPC-only, `glyf` only, code points in and
   renumbered glyphs out
 
+  **Decided** (2026-10-13, with Sven, three alternatives each, discussed
+  with Codex and Fable):
+  - **Registration in `mormot.lib.core`:** `RegisterFontData(Data,
+    FaceIndex)` keeps the bytes and reads family and style from the face's
+    `name` and `OS/2` tables, and the enumerators list the registered names.
+    FreeType's `CreateFace` asks the registry first and opens a registered
+    face with `FT_New_Memory_Face`, the bytes kept alive with the face. GDI
+    installs the face when it is registered (`AddFontMemResourceEx`,
+    through a hook `mormot.lib.uniscribe` sets): Uniscribe and FontSub need
+    a real GDI font, and `GdiCreateFace` reaches `CreateFontIndirectW`
+    without the provider. System fonts stay the default; in the backends a
+    registered name comes first (a test provider such as `TFakeProvider`
+    answers its own names before it). Register before a document exists:
+    the document reads the font list once. No decorator swapped into the
+    `FontProvider` global - `UnregisterFreeType` clears only its own
+    provider, so a wrapper would stay there after FreeType is unloaded, and
+    it would miss `GdiCreateFace`; no method added to `IFontProvider`, which
+    every provider, the test fakes too, would have to implement; not per
+    document, since `TGDIPages` measures before export. As QuestPDF's `FontManager.RegisterFont`, ReportLab's
+    `registerFont`, Skia's `makeFromData`. A file is read by the caller
+    (`StringFromFile`): `mormot.lib.core` keeps to `mormot.core.base`
+  - **Test fonts, a mix:** synthetic faces built in code, as the CFF tests
+    do, for cmap formats, symbol, `.ttc`, CFF and broken input; real
+    OFL fonts only where layout tables matter - a Latin `glyf` face, an
+    Arabic face without presentation forms, a CID-keyed CFF CJK subset -
+    renamed subsets of Noto (OFL allows bundling with software of any
+    licence; a subset is a Modified Version, renamed so that it is never
+    taken for the original), the licence, the
+    source and its sha256 beside them, some hundred KB in all. Arnaud
+    decides between committed files and a download with sha256, as the
+    trunk's tests fetch their data
+  - **Golden files compared by structure:** with the test fonts the skips
+    for missing fonts go (those for a missing shaper or subsetter library
+    stay), the baselines stay per machine; the
+    trunk's tests check normalized structure, text, roles and font mapping,
+    not bytes. Byte-equal, versioned golden files only with a face read in
+    pascal (head, hhea, OS/2, hmtx) and with shaping and subsetting alike:
+    GDI and FreeType give different `/Ascent`, `/FontBBox` and `/Widths`
+    for the same file today; that reader is also the base of the own
+    subsetter, after the merge
+
+  **Step 1** (branch `pr/test-fonts`, mORMot2 `pdf-font-layer` at `9cf8add51`):
+  `RegisterFontData` with both backends, the first test font (`mORMot Test
+  Sans`, a Latin subset of Noto Sans) and `TestRegisteredFont`: family and
+  style from the bytes, enumerated, the face created from the registered
+  bytes (`GetFaceFile` returns them - no substitute), embedded in a PDF,
+  forgotten again; truncated and broken data refused. `test_runner` 868/868
+  on Windows (FPC 3.3.1 aarch64, Delphi 7, Delphi 13 Win32/Win64), 815 on
+  Linux, 842 on macOS. Next: the
+  Arabic and the CJK test font, then the font tests moved onto them
+
 ## Open Decisions
 
-- Golden files in `mormot2tests`: here they are per machine and not
-  versioned (Phase 0 step 2) — how a baseline without files in the
-  repository serves the trunk's tests
+- ~~Golden files in `mormot2tests`~~ decided 2026-10-13: compared by
+  structure, see "Test fonts, then a subsetter of our own"
