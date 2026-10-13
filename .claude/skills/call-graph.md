@@ -220,7 +220,7 @@ ShowReportPreview(Report)                       (mormot.pdf.report.preview)
 ### 3c — PDF Export Path
 
 ```
-TGDIPages.ExportPdfStream(aDest: TStream)
+TGDIPages.ExportPdfStream(aDest: TStream; aRaiseException = false)
   │
   │  Doc := TPdfDocumentVcl.Create(UseOutlines, 0, ExportPdfLevel)
   │  Doc.FileFormat            := ExportPdfFileFormat   (default pdf13; set pdf17 for ISO 32000-1)

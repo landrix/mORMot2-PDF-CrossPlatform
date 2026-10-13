@@ -336,8 +336,9 @@ PrintReport(Report);
 PrintReport(Report, 0, 2);
 
 // Export PDF:
-Report.ExportPdfStream(AStream): boolean;
-Report.ExportPDF(FileName, UsePassword, Encrypt, Title, Author);
+Report.ExportPdfStream(AStream): boolean;   // false on error (or no page)
+Report.ExportPdfStream(AStream, true);      // raises instead, also for no page
+Report.ExportPDF(FileName, false, false, Title, Company); // raises on error
 
 // PDF export configuration:
 Report.ExportPdfEmbeddedTTF    := True;      // embed TrueType fonts
@@ -358,6 +359,23 @@ Report.ExportPdfMetadataExtension := PdfMetadataFacturX('EN 16931', 'factur-x.xm
 Report.ExportPdfPageMode := pmUseAttachments; // opens the attachments panel;
                                      // pmUseNone (default) writes no /PageMode
 ```
+
+**Errors** (Phase 4's bug-fix PR): `ExportPdfStream` catches every exception
+and returns false, unless `aRaiseException` is true (the trunk's parameter);
+either way it resets `fActivePdfDoc`, which otherwise kept pointing at the
+freed document for the next `RenderPageToCanvas`. `ExportPDF` raises on
+every error: `ESynException` when there is no page and when `Protect` or
+`Encrypt` is true - neither is implemented, and a protection asked for must
+not silently give an open file (the trunk's `ExportPdfEncryption*`
+properties come after R-28; `TPdfDocumentVcl.Create` already takes a
+`TPdfEncryption`, PDF/A refuses one, PDF/UA needs `epContentExtraction`);
+otherwise the export's own exception or that of writing the file
+(`EPdfInvalidOperation`, `EFCreateError`, ...). The PDF is built in a
+`TMemoryStream` and written with `fmCreate` only after a successful export,
+so a failed export leaves the old file. Not a temporary file renamed over
+the target: that needed a free name, a non-overwriting `RenameFile` on
+Windows, the read-only check `fmCreate` does, and lost the file's
+permissions on POSIX (Codex review)
 
 `ExportPdfStream` owns its `TPdfDocumentVcl`, so these are the only way to
 reach `CreateFileAttachmentFrom` and `PdfAMetadaExtension`. The extension is
