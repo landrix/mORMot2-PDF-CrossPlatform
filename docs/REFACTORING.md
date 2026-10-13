@@ -767,9 +767,9 @@ writing an unprotected file - encryption itself after the freeze, with the
 trunk's `ExportPdfEncryption*` properties; it raises on any export error and
 on no page, and writes the file only after the export succeeded in memory
 (a temporary file renamed over the target was tried first: it lost the
-file's permissions on POSIX, among other cases); `ExportPdfStream` keeps returning false and gets the
-trunk's `aRaiseException`; a failed export no longer leaves `fActivePdfDoc`
-on the freed document. iText, PDFBox and ReportLab raise as well where a
+file's permissions on POSIX, among other cases); `ExportPdfStream` keeps
+returning false and gets the trunk's `aRaiseException`; a failed export no
+longer leaves `fActivePdfDoc` on the freed document. iText, PDFBox and ReportLab raise as well where a
 requested protection cannot be applied
 
 ### Phase 5 — Cleanup

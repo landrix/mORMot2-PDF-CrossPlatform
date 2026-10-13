@@ -266,8 +266,9 @@ v0.10.0 (2026-09-30).
   unprotected; encryption comes after R-28 with the trunk's
   `ExportPdfEncryption*` properties. It builds the PDF in memory and writes
   the file only then, so a failed export no longer leaves an empty or
-  partial PDF in place of the old one. `ExportPdfStream` still returns false on error; its new
-  `aRaiseException` parameter (as in the trunk) re-raises instead
+  partial PDF in place of the old one. `ExportPdfStream` still returns
+  false on error; its new `aRaiseException` parameter (as in the trunk)
+  raises instead
 - **Changed: `TPdfDocument.ScreenLogPixels` is 96** on every platform
   (R-28 Phase 3); `TPdfDocumentVcl` and `TPdfDocumentGdi` set the screen's
   resolution on Windows, as the engine did for every document before. Only a

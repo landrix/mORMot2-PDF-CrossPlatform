@@ -2905,7 +2905,12 @@ var
   PdfSubject:   RawUtf8;
 begin
   Result := False;
-  if fPageCount = 0 then Exit;
+  if fPageCount = 0 then
+  begin
+    if aRaiseException then
+      ESynException.RaiseUtf8('%.ExportPdfStream: no page to export', [self]);
+    Exit;
+  end;
   try
     PDF := TPdfDocumentVcl.Create(fUseOutlines, 0, fExportPdfLevel);
     try
@@ -3012,8 +3017,8 @@ begin
   // ExportPdfStream picks them up through the unified code path.
   fTitle             := ATitle;
   fExportPdfSubject  := ACompany;
-  // in memory first: the file is touched only by a complete PDF, and keeps
-  // its permissions, links and read-only state as fmCreate always did
+  // in memory first: the file is touched only by a complete PDF; fmCreate
+  // keeps its permissions and links, and refuses a read-only file, as before
   MS := TMemoryStream.Create;
   try
     ExportPdfStream(MS, {aRaiseException=}true);

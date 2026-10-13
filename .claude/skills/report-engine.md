@@ -337,7 +337,7 @@ PrintReport(Report, 0, 2);
 
 // Export PDF:
 Report.ExportPdfStream(AStream): boolean;   // false on error (or no page)
-Report.ExportPdfStream(AStream, true);      // re-raises the error instead
+Report.ExportPdfStream(AStream, true);      // raises instead, also for no page
 Report.ExportPDF(FileName, false, false, Title, Company); // raises on error
 
 // PDF export configuration:

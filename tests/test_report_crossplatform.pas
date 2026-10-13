@@ -16,7 +16,7 @@ uses
   SysUtils,
   Graphics,
   mormot.core.base,
-  mormot.core.os,      // StringFromFile, FileFromString, FileSetHidden
+  mormot.core.os,      // StringFromFile, FileFromString, FileSetHidden, FileIsWritable
   mormot.core.text,
   mormot.core.unicode, // CountOccurrences
   mormot.core.test,
@@ -909,7 +909,7 @@ end;
 
 procedure TReportTests.TestExportPdfFile;
 var
-  fn, dir: TFileName;
+  fn, dir, ro: TFileName;
 
   function NewReport(Level: TPdfALevel): TGDIPages;
   begin
@@ -967,6 +967,7 @@ var
 begin
   fn := WorkDir + 'report_exportpdf.pdf';
   dir := WorkDir + 'report_exportpdf_dir.pdf';
+  ro := WorkDir + 'report_exportpdf_ro.pdf';
   try
     FileFromString('old', fn);
     Report := NewReport(pdfaNone);
@@ -978,11 +979,6 @@ begin
       Report.ExportPDF(fn, false, false, 'Title', 'Company');
       Check(PosEx('%PDF-', StringFromFile(fn)) = 1, 'the old file is replaced');
       Check(not LeftOver(fn), 'nothing left beside it after success');
-      // a read-only file is refused, as fmCreate refused it
-      FileFromString('old', fn);
-      FileSetHidden(fn, {ReadOnly=}true);
-      CheckRefused(Report, false, false, 'a read-only file raises');
-      FileSetHidden(fn, false);
       // a target the PDF cannot take the place of
       ForceDirectories(dir);
       Check(Raised(Report, dir, false, false), 'a folder as target raises');
@@ -1017,9 +1013,27 @@ begin
     finally
       Report.Free;
     end;
+    // a read-only file is refused, as fmCreate refused it - last, since on
+    // Windows FileSetHidden leaves the file hidden, which fmCreate refuses too
+    FileFromString('old', ro);
+    FileSetHidden(ro, {ReadOnly=}true);
+    if FileIsWritable(ro) then
+      Check(true, 'SKIP: read-only file still writable (root on POSIX)')
+    else
+    begin
+      Report := NewReport(pdfaNone);
+      try
+        Check(Raised(Report, ro, false, false), 'a read-only file raises');
+        CheckEqual(StringFromFile(ro), 'old', 'the read-only file is kept');
+      finally
+        Report.Free;
+      end;
+    end;
   finally
     DeleteFile(fn);
     RemoveDir(dir);
+    FileSetHidden(ro, false); // writable again, so that it can be deleted
+    DeleteFile(ro);
   end;
 end;
 
