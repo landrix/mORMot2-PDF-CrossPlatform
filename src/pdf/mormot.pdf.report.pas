@@ -1,7 +1,7 @@
 /// Cross-Platform Report Engine
 // - this unit is a part of the Open Source Synopse mORMot framework 2,
 // licensed under a MPL/GPL/LGPL three license - see LICENSE.md
-unit mormot.ui.report;
+unit mormot.pdf.report;
 
 {
   *****************************************************************************
@@ -10,7 +10,7 @@ unit mormot.ui.report;
    - TGDIPages: records drawing commands, lays out pages, exports PDF
    - Rendered on any TCanvas, and into PDF through TPdfDocumentVcl
    - No forms and no printer: preview and printing are in
-     mormot.ui.reportpreview
+     mormot.pdf.report.preview
 
   *****************************************************************************
 }
@@ -609,7 +609,7 @@ type
     // - SourceDPI: optional DPI for coordinate conversion (0 = the screen DPI)
     //   set to PDF.ScreenLogPixels (96) for PDF export to ensure consistency
     // - renders header/footer with {#} and {total} placeholder substitution
-    // - preview and printing call this from mormot.ui.reportpreview
+    // - preview and printing call this from mormot.pdf.report.preview
     procedure RenderPageToCanvas(ACanvas: TCanvas;
                                  PageIndex, DestWidth, DestHeight: Integer;
                                  SourceDPI: Integer = 0);

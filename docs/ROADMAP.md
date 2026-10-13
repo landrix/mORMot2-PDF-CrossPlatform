@@ -253,7 +253,13 @@ v0.10.0 (2026-09-30).
   3): `TPdfDocumentVcl` and `TPdfVclCanvas` are unchanged, change the `uses`
   (no compatibility unit). The PDF/A levels, page modes, `/AFRelationship`
   values and `PdfMetadataFacturX` come from `mormot.pdf` (layer 2) or
-  `mormot.ui.report` (layer 3), no longer from the canvas unit
+  `mormot.pdf.report` (layer 3), no longer from the canvas unit
+- **`mormot.ui.report` is now `mormot.pdf.report`, `mormot.ui.reportpreview`
+  is `mormot.pdf.report.preview`** (R-28 Phase 4): `TGDIPages`,
+  `ShowReportPreview` and `PrintReport` are unchanged, change the `uses` (no
+  compatibility unit). The trunk's own `mormot.ui.report` (the Windows-only
+  `TGdiPages` with its built-in preview) goes when this work is merged after
+  mORMot 2.5; it has a different API, not a predecessor of this one
 - **Changed: `TPdfDocument.ScreenLogPixels` is 96** on every platform
   (R-28 Phase 3); `TPdfDocumentVcl` and `TPdfDocumentGdi` set the screen's
   resolution on Windows, as the engine did for every document before. Only a
@@ -354,10 +360,10 @@ forbids it:
 |---|---|
 | R-26, the other demos | overlaps the ASCII-only sources of the formatting pass |
 | R-22 | overlaps the roadmap references taken out of the comments; every unit |
-| R-20 steps 7–8 | a feature; Phase 4 rebuilds report and preview |
+| R-20 steps 7–8 | a feature (Phase 4 moved report and preview as they are) |
 | Windows font subsets | `CreateFontPackage` moves behind the subsetter interface in `mormot.lib.uniscribe` in Phase 1 |
 | Thinner table borders | a feature |
-| R-29 | features in `mormot.ui.report.pas`, which Phase 4 rebuilds |
+| R-29 | features of the report, under the feature freeze |
 | R-30 | builds on R-29; its engine gaps are features in the tagging code |
 
 ### R-26 — `zugferd_demo` on `TGDIPages`, Its Text From the XML — done; the other demos after R-28
@@ -491,7 +497,7 @@ from Delphi 2010: see V. Not checked since step 3: the FPC GUI itself
 (preview, print, export dialog) after the split.
 
 **Remaining, in this order:**
-7. **`mormot.ui.reportpreview` on the VCL.**
+7. **`mormot.pdf.report.preview` on the VCL.**
 8. **The GUI demos with their forms on Delphi** — built in code or a `.dfm`
    beside the `.lfm`, to be decided.
 
@@ -555,7 +561,7 @@ comment shrinks to the rule it protects.
 **The state.** The older code carries the investigations themselves —
 measurements, validator runs, spec clauses argued out, roadmap IDs — above all
 `mormot.pdf.pas` (`PrepareForSaving`, `PrepareFontSubsets`, the text
-rendering chains), also `mormot.ui.report.pas`, the backends and the test
+rendering chains), also `mormot.pdf.report.pas`, the backends and the test
 units. Part of it repeats the skills, part of it is found nowhere else.
 
 **Work.** Unit by unit, one commit each; `mormot.pdf.pas` by section. For
@@ -952,11 +958,11 @@ The CFF series of R-28 tests the CFF programs, the PDF/A-1 refusal of a
 name-keyed face and the routing with a synthetic face (`test_pdf_cff`, not
 tagged); veraPDF and PAC on real CFF output (macOS) are still to run.
 
-### `TGDIPages.ExportPDF` Ignores `Protect` and `Encrypt` — R-28 Phase 4
+### `TGDIPages.ExportPDF` Ignores `Protect` and `Encrypt` — the refusal in Phase 4's bug-fix PR, the feature after R-28
 
 `ExportPDF(FileName, Protect, Encrypt, ..)` takes both flags and passes
 neither on; `ExportPdfStream` creates its `TPdfDocumentVcl` without a
-`TPdfEncryption` (`src/core/mormot.ui.report.pas`, found by Codex while
+`TPdfEncryption` (`src/pdf/mormot.pdf.report.pas`, found by Codex while
 deciding the bug fixes of Phase 2). The trunk's `TGdiPages` has
 `ExportPdfEncryptionLevel`, `ExportPdfEncryptionUserPassword`,
 `ExportPdfEncryptionOwnerPassword` and `ExportPdfEncryptionPermissions` and passes
@@ -966,7 +972,7 @@ bridge's own encryption parameter is scheduled for Phase 2's bug-fix PR.
 
 ### R-10 — Table Row Pagination — unprioritised
 
-**Effort:** 2–3 days | **File:** `src/core/mormot.ui.report.pas`
+**Effort:** 2–3 days | **File:** `src/pdf/mormot.pdf.report.pas`
 
 A table row taller than the remaining page space forces a page break before the
 row. Let the row split: partial cell content on the current page, the rest on

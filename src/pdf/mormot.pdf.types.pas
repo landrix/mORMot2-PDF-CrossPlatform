@@ -63,7 +63,7 @@ type
   // of a totals row; psrTH heads its column
   // - TPdfStructRole(Level) for heading Level 1..6 gives psrH1..psrH6
   // - new roles are appended at the end: TPdfStructRole(Level) and the
-  // dckBeginTR logic in mormot.ui.report depend on the existing ordinals
+  // dckBeginTR logic in mormot.pdf.report depend on the existing ordinals
   TPdfStructRole = (psrDocument, psrH1, psrH2, psrH3, psrH4, psrH5, psrH6,
                     psrP, psrSpan,
                     psrFigure,

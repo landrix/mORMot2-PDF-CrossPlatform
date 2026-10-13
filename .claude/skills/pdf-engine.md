@@ -684,7 +684,7 @@ Doc.EndStructContent;            // delegates to Canvas.EndStructContent
 ### TGDIPages integration
 
 ```pascal
-// In mormot.ui.report.pas — uses mormot.pdf.types (not mormot.pdf)
+// In mormot.pdf.report.pas — uses mormot.pdf.types (not mormot.pdf)
 Report.ExportPdfTagged   := True;    // default False — set BEFORE drawing:
                                      // it forces ExportPdfEmbeddedTTF / clears
                                      // ExportPdfStandardFonts, and those decide
@@ -755,7 +755,7 @@ documents. Resolve font names with `GetPdfFonts` *after* setting `Tagged`.
 
 Platform-specific TTF fonts via `GetPdfFonts(Embedded, SansFont, SerifFont, MonoFont)`
 in `mormot.pdf.types` (constants `PDF_FONT_TTF_SANS/SERIF/MONO`) — layer 1, no
-report engine needed. `GetReportFonts` and `REPORT_FONT_*` in `mormot.ui.report`
+report engine needed. `GetReportFonts` and `REPORT_FONT_*` in `mormot.pdf.report`
 are aliases of them:
 - Windows: Calibri, Cambria, Consolas
 - macOS: Trebuchet MS, Georgia, Andale Mono
