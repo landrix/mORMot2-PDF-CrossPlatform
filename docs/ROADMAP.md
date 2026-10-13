@@ -260,6 +260,14 @@ v0.10.0 (2026-09-30).
   compatibility unit). The trunk's own `mormot.ui.report` (the Windows-only
   `TGdiPages` with its built-in preview) goes when this work is merged after
   mORMot 2.5; it has a different API, not a predecessor of this one
+- **Changed: `TGDIPages.ExportPDF` raises** (R-28 Phase 4 bug fixes) when
+  the export fails, and `ESynException` when there is no page and when
+  `Protect` or `Encrypt` is true - both were ignored, the file came out
+  unprotected; encryption comes after R-28 with the trunk's
+  `ExportPdfEncryption*` properties. It builds the PDF in memory and writes
+  the file only then, so a failed export no longer leaves an empty or
+  partial PDF in place of the old one. `ExportPdfStream` still returns false on error; its new
+  `aRaiseException` parameter (as in the trunk) re-raises instead
 - **Changed: `TPdfDocument.ScreenLogPixels` is 96** on every platform
   (R-28 Phase 3); `TPdfDocumentVcl` and `TPdfDocumentGdi` set the screen's
   resolution on Windows, as the engine did for every document before. Only a
@@ -958,17 +966,18 @@ The CFF series of R-28 tests the CFF programs, the PDF/A-1 refusal of a
 name-keyed face and the routing with a synthetic face (`test_pdf_cff`, not
 tagged); veraPDF and PAC on real CFF output (macOS) are still to run.
 
-### `TGDIPages.ExportPDF` Ignores `Protect` and `Encrypt` — the refusal in Phase 4's bug-fix PR, the feature after R-28
+### `TGDIPages.ExportPDF`: `Protect` and `Encrypt` — refused since Phase 4's bug-fix PR, the feature after R-28
 
-`ExportPDF(FileName, Protect, Encrypt, ..)` takes both flags and passes
-neither on; `ExportPdfStream` creates its `TPdfDocumentVcl` without a
-`TPdfEncryption` (`src/pdf/mormot.pdf.report.pas`, found by Codex while
-deciding the bug fixes of Phase 2). The trunk's `TGdiPages` has
-`ExportPdfEncryptionLevel`, `ExportPdfEncryptionUserPassword`,
-`ExportPdfEncryptionOwnerPassword` and `ExportPdfEncryptionPermissions` and passes
-`TPdfEncryption.New(..)`. Needs a password and permission policy; until
-then a requested protection should be refused rather than ignored. The
-bridge's own encryption parameter is scheduled for Phase 2's bug-fix PR.
+`ExportPDF(FileName, Protect, Encrypt, ..)` took both flags and passed
+neither on (found by Codex while deciding the bug fixes of Phase 2); since
+Phase 4's bug-fix PR it raises when either is true. Open, after R-28: the
+trunk's `TGdiPages` properties `ExportPdfEncryptionLevel`,
+`ExportPdfEncryptionUserPassword`, `ExportPdfEncryptionOwnerPassword` and
+`ExportPdfEncryptionPermissions`, passed as `TPdfEncryption.New(..)` to the
+`TPdfDocumentVcl` that `ExportPdfStream` creates (the bridge takes one
+since Phase 2's bug-fix PR). Needs a password and permission policy; PDF/A
+refuses encryption (the engine raises), PDF/UA needs `epContentExtraction`,
+and `elAES_256` gives no encryption (`TPdfEncryption.New` returns nil).
 
 ### R-10 — Table Row Pagination — unprioritised
 
