@@ -212,7 +212,8 @@ checked against that record:
    for `IFontProvider` and `IFontSubsetter`), then `84012287b` (2026-10-09, step
    W3: `IFontProvider.GetGlyphAdvance`), then `2f0e02243` (2026-10-09, the
    bounds of `ExtractSfntFromTtc`), then `681bbe2a1` (2026-10-09, Phase 1b:
-   `IFontFace` replaces the device context).
+   `IFontFace` replaces the device context), then `dae12d24e` (2026-10-13,
+   fonts from memory: `RegisterFontData`, the test fonts' first step).
    **Checked:** against `d60cc6e80`, today's `main`,
    `test_runner` 259/259 on Windows (FPC Win64, Delphi 7, Delphi 2010),
    298/298 on Linux, 317/317 on macOS (fpcupdeluxe, FPC 3.2.3). Against
@@ -862,6 +863,16 @@ Process, agreed in the forum:
     GDI and FreeType give different `/Ascent`, `/FontBBox` and `/Widths`
     for the same file today; that reader is also the base of the own
     subsetter, after the merge
+
+  **Step 1** (branch `pr/test-fonts`, mORMot2 `pdf-font-memory`):
+  `RegisterFontData` with both backends, the first test font (`mORMot Test
+  Sans`, a Latin subset of Noto Sans) and `TestRegisteredFont`: family and
+  style from the bytes, enumerated, the face created from the registered
+  bytes (`GetFaceFile` returns them - no substitute), embedded in a PDF,
+  forgotten again; truncated and broken data refused. `test_runner` 868/868
+  on Windows (FPC 3.3.1 aarch64, Delphi 7, Delphi 13 Win32/Win64), 815 on
+  Linux, 842 on macOS. Next: the
+  Arabic and the CJK test font, then the font tests moved onto them
 
 ## Open Decisions
 

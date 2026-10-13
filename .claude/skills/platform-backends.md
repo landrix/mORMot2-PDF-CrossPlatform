@@ -272,6 +272,41 @@ required FreeType before HarfBuzz.
 
 ---
 
+### Registered Fonts — a Face From Bytes
+
+```pascal
+family := RegisterFontData(StringFromFile('MyFont.ttf'));   // '' if no font
+family := RegisterFontData(TtcBytes, {FaceIndex=}2);       // a face of a .ttc
+UnregisterFontData;                                          // forget them all
+```
+
+`mormot.lib.core` keeps the bytes and reads the family (name ID 1, Windows
+Unicode English first) and the style (OS/2 `usWeightClass` >= 600, `fsSelection`
+bit 0; else `head.macStyle`) itself, with `mormot.core.base` only. Register
+before a document exists: `TPdfDocument` reads the enumerator's list once
+(`SetFont` checks it before asking the provider).
+- **FreeType:** `CreateFace` asks `FindRegisteredFont` first and opens the face
+  with `FT_New_Memory_Face`; `TFreeTypeFont.Data` keeps the bytes alive while
+  FreeType reads them, and `GetFontData(0)` extracts the face of a registered
+  `.ttc` from them. The enumerator adds `AddRegisteredFontNames`
+- **GDI:** `RegisterFontData` calls `OnRegisterFontData`, which
+  `mormot.lib.uniscribe` sets: `AddFontMemResourceEx` installs the font for
+  the process (the whole file, a collection too), so every
+  `CreateFontIndirectW` finds it by name - `GdiCreateFace` from a LOGFONT as
+  well; removed at finalization. Such a font is not enumerated by
+  `EnumFontFamiliesExW`: the enumerator adds the registered names. A
+  registered family with the name of an installed one is left to GDI's
+  mapper - give test fonts names of their own
+- **Precedence:** a registered family comes before the system fonts in the
+  backends; a test provider in front of them (`TFakeProvider`) answers its
+  own names first
+- **Not here:** no decorator in the `FontProvider` global (it would outlive
+  FreeType at finalization) and no `IFontProvider` method (decided for the
+  test fonts, `docs/REFACTORING.md`)
+
+The test fonts in `tests/fonts` (renamed OFL subsets, `README.md` there) are
+registered this way; `TestFontFile` finds the folder from the executable.
+
 ## Data Types (mormot.lib.core)
 
 ### TFontRequest — Font Request Descriptor
