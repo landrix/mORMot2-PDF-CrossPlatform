@@ -296,10 +296,18 @@ before a document exists: `TPdfDocument` reads the enumerator's list once
   well; removed at finalization. Such a font is not enumerated by
   `EnumFontFamiliesExW`: the enumerator adds the registered names. A
   registered family with the name of an installed one is left to GDI's
-  mapper - give test fonts names of their own
-- **Precedence:** a registered family comes before the system fonts in the
-  backends; a test provider in front of them (`TFakeProvider`) answers its
-  own names first
+  mapper - give test fonts names of their own. `UnregisterFontData` leaves
+  the font installed for GDI - a document created before still draws with
+  it; a new one no longer lists the family, so its `SetFont` falls back -
+  while FreeType forgets it
+- **When:** after the unit initializations - `RegisterUniscribe` sets the
+  hook, a font registered before it is never installed for GDI - and
+  before the document; for a document that exists already,
+  `TPdfDocument.AddTrueTypeFont(family)` adds the name to its list
+- **Precedence:** FreeType opens a registered family before the system
+  fonts; on Windows GDI's mapper chooses between a registered and an
+  installed font of the same name. A test provider in front of the backend
+  (`TFakeProvider`) answers its own names first
 - **Not here:** no decorator in the `FontProvider` global (it would outlive
   FreeType at finalization) and no `IFontProvider` method (decided for the
   test fonts, `docs/REFACTORING.md`)

@@ -15,7 +15,7 @@ this repository.
 `170271c706114acaf044c25b650efcb59043dcc57cd50916081bd40bd1f84f36`): Basic
 Latin, Latin-1 and the punctuation of a report (dashes, quotes, bullet,
 ellipsis, euro); the layout tables (GDEF, GPOS, GSUB) kept, the hinting
-dropped; names 1, 3, 4, 6 and 16 renamed.
+dropped; name IDs 1, 3, 4 and 6 renamed (the source has no 16).
 
 Rebuilt with fontTools (4.65 here):
 

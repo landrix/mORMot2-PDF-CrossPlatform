@@ -212,7 +212,7 @@ checked against that record:
    for `IFontProvider` and `IFontSubsetter`), then `84012287b` (2026-10-09, step
    W3: `IFontProvider.GetGlyphAdvance`), then `2f0e02243` (2026-10-09, the
    bounds of `ExtractSfntFromTtc`), then `681bbe2a1` (2026-10-09, Phase 1b:
-   `IFontFace` replaces the device context), then `dae12d24e` (2026-10-13,
+   `IFontFace` replaces the device context), then `9cf8add51` (2026-10-13,
    fonts from memory: `RegisterFontData`, the test fonts' first step).
    **Checked:** against `d60cc6e80`, today's `main`,
    `test_runner` 259/259 on Windows (FPC Win64, Delphi 7, Delphi 2010),
@@ -864,7 +864,7 @@ Process, agreed in the forum:
     for the same file today; that reader is also the base of the own
     subsetter, after the merge
 
-  **Step 1** (branch `pr/test-fonts`, mORMot2 `pdf-font-memory`):
+  **Step 1** (branch `pr/test-fonts`, mORMot2 `pdf-font-layer` at `9cf8add51`):
   `RegisterFontData` with both backends, the first test font (`mORMot Test
   Sans`, a Latin subset of Noto Sans) and `TestRegisteredFont`: family and
   style from the bytes, enumerated, the face created from the registered

@@ -262,9 +262,10 @@ v0.10.0 (2026-09-30).
   mORMot 2.5; it has a different API, not a predecessor of this one
 - **New: fonts from memory** (`mormot.lib.core`): `RegisterFontData(Bytes,
   FaceIndex)` makes a TrueType/OpenType font, or a face of a collection,
-  available by its family name before the system fonts - on Linux and macOS
-  through `FT_New_Memory_Face`, on Windows installed for the process
-  (`AddFontMemResourceEx`). Register before the document is created. The
+  available by its family name - on Linux and macOS through
+  `FT_New_Memory_Face`, before the system fonts; on Windows installed for the
+  process (`AddFontMemResourceEx`), give it a name no installed font has.
+  Register before the document is created. The
   tests get fonts of their own this way, so that they stop depending on the
   fonts a machine has installed - a first test now, the font tests to follow
 - **Changed: `TGDIPages.ExportPDF` raises** (R-28 Phase 4 bug fixes) when
