@@ -421,7 +421,8 @@ Report.AddExportPdfAttachment(Xml, 'factur-x.xml', 'Factur-X invoice data',
   'text/xml', afrAlternative);
 Report.ExportPdfMetadataExtension := PdfMetadataFacturX('EN 16931', 'factur-x.xml');
 ```
-`TPdfAFRelationship` re-exported by `mormot.ui.report`, as
+`TPdfAFRelationship` re-exported by `mormot.ui.report` (now
+`mormot.pdf.report`), as
 `TPdfALevel` is. **Rejected:** an event `OnExportPdfDocument(Sender, Doc)` —
 it hands out the document in the middle of the stream (an `AddPage` there
 breaks the file), and `of object` needs a helper class in a console program.
