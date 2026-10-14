@@ -982,6 +982,27 @@ Process, agreed in the forum:
   `test_runner` 1024/1024 on Windows (FPC 3.3.1 aarch64, Delphi 7, Delphi
   13 Win32/Win64), 1018 on Linux, 1051 on macOS
 
+  **Step 3c** (branch `pr/test-fonts-3c`, on 3b): the golden cases
+  `cjk_subset` and `arabic_shaped` draw with Test CJK and Test Arabic
+  instead of a face per OS (Microsoft YaHei and Tahoma, Hiragino Sans GB
+  and Geeza Pro, Droid Sans Fallback and Noto Naskh Arabic). Compared
+  against the old baselines first: on every machine exactly these two
+  differed, nothing else; their new files then became the baseline,
+  replaced on each machine (Windows FPC 3.3.1 aarch64, Delphi 7, Delphi 13
+  Win32/Win64, Linux, macOS). On Windows `cjk_subset` now embeds Test CJK
+  whole, without a subset tag: FontSub takes TrueType outlines only
+  (`TestSubsetAcceptsCff`), so the case no longer covers FontSub on a CJK
+  face there - Test Sans and Test Arabic (`arabic_shaped` itself) still
+  go through it. On POSIX hb-subset subsets the CFF. The other golden cases
+  keep the OS faces of `GetPdfFonts` and the report's export fonts
+  (`tagged_embedded`, `pdfa3u_attachment`, `canvas_bridge_tagged`,
+  `report_tagged`, `report_pdfa3u`): they test the library's own platform
+  mapping, which always resolves, and need bold, serif and mono faces that
+  Test Sans does not have. Fable: a failed `EnsureTestFonts` ends the case,
+  so `--golden-record` never writes a baseline from a substitute face.
+  `test_runner` 1026/1026 on
+  Windows, 1020 on Linux, 1053 on macOS
+
 ## Open Decisions
 
 - ~~Golden files in `mormot2tests`~~ decided 2026-10-13: compared by

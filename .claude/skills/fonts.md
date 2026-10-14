@@ -94,8 +94,10 @@ embedded". Inflate every stream with `python3` and search the result instead.
 `PdfFaceCffInfo`, `TPdfCffTests.SystemFaces`): Hiragino Sans GB is
 Adobe-GB1 with 288 glyphs whose CID is not their glyph index; Noto Sans CJK
 is Adobe-Identity, every CID its index. hb-subset keeps the ROS, the
-FDArray and the charset: the subset in the Mac `cjk_subset` baseline is
-Adobe-GB1-6, 3416 glyphs (`--retain-gids`). The codes of a `CIDFontType0`
+FDArray and the charset: the subset of Hiragino Sans GB in the Mac
+`cjk_subset` baseline until 3c of the test fonts was Adobe-GB1-6, 3416
+glyphs (`--retain-gids`; the case draws with Test CJK since, Adobe-Identity
+with 454 of 550 CIDs not their index; Hiragino in `SystemFaceCids`). The codes of a `CIDFontType0`
 are CIDs (ISO 32000-1 9.7.4.2), not glyph indexes, so writing glyph indexes
 under Identity-H draws the wrong glyph for those 288 - fixed by the CFF
 series of R-28 (below). An earlier note here called Hiragino name-keyed
@@ -665,11 +667,12 @@ single most important thing to know about RTL here:
 | Font | Presentation forms U+FE70–FEFF in CMAP? | Path taken | Width source |
 |---|---|---|---|
 | Noto Naskh Arabic (Linux) | yes | Step 2 | `hmtx`, via the CMAP |
-| Geeza Pro (macOS) | **no** | Step 3 | HarfBuzz advance |
+| Geeza Pro (macOS) | **no** | Step 3 | `hmtx` by glyph index (`GlyphHmtxWidth`); the shaper's positioned advance goes into `TJ` |
+| mORMot Test Arabic (`tests/fonts`, every platform) | **no** | Step 3 | the same; Windows: `GetGlyphAdvance` |
 
-So on Linux the HarfBuzz advance is computed and then **discarded** — the shaper
-width path is effectively dead code there. Any bug in it is invisible on Linux
-and fatal on macOS. Check the `ToUnicode` CMap to tell which path ran: real
+So with Noto Naskh Arabic the HarfBuzz advance is computed and then **discarded** —
+the Step 3 path never runs. A bug in it was invisible on Linux and fatal on
+macOS until the tests moved to Test Arabic, which reaches Step 3 everywhere. Check the `ToUnicode` CMap to tell which path ran: real
 U+06xx code points mean Step 2, PUA U+E0xx values mean Step 3.
 
 ### HarfBuzz scaling — do NOT use FT_LOAD_NO_SCALE
