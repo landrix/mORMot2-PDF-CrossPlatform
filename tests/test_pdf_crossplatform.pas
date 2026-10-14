@@ -1099,14 +1099,16 @@ end;
 
 procedure TPdfCrossPlatTests.TestTestFontFiles;
 const
-  FILES: array[0..5] of TFileName = (
+  FILES: array[0..6] of TFileName = (
     'mORMotTestSans-Regular.ttf', 'mORMotTestArabic-Regular.ttf',
     'mORMotTestCJK-Regular.otf', 'mORMotTestSymbol-Regular.ttf',
+    'mORMotTestSymbolLow-Regular.ttf',
     'mORMotTestCollection.ttc', 'mORMotTestCollection.ttc');
-  FACES: array[0..5] of integer = (0, 0, 0, 0, 0, 1);
-  FAMILIES: array[0..5] of RawUtf8 = (
+  FACES: array[0..6] of integer = (0, 0, 0, 0, 0, 0, 1);
+  FAMILIES: array[0..6] of RawUtf8 = (
     'mORMot Test Sans', 'mORMot Test Arabic', 'mORMot Test CJK',
-    'mORMot Test Symbol', 'mORMot Test TTC A', 'mORMot Test TTC B');
+    'mORMot Test Symbol', 'mORMot Test Symbol Low',
+    'mORMot Test TTC A', 'mORMot Test TTC B');
 var
   data: RawByteString;
   i: PtrInt;
@@ -1147,17 +1149,17 @@ var
 begin
   // a symbol font maps the bytes in its (3,0) cmap; FreeType selects no
   // charmap for such a face by itself
+  FillChar(req, SizeOf(req), 0);
+  req.Height := -1000;
+  req.Weight := 400;
+  req.CharSet := 2; // SYMBOL_CHARSET
   try
     for n := 0 to {$ifdef OSWINDOWS} 0 {$else} high(FILES) {$endif} do
     begin
       data := StringFromFile(TestFontFile(FILES[n]));
       Check(data <> '', FILES[n]);
       CheckEqual(RegisterFontData(data), FAMILIES[n]);
-      FillChar(req, SizeOf(req), 0);
       req.FaceName := Utf8ToSynUnicode(FAMILIES[n]);
-      req.Height := -1000;
-      req.Weight := 400;
-      req.CharSet := 2; // SYMBOL_CHARSET
       f := FontProvider.CreateFace(req);
       if not Check(f <> nil, 'face created') then
         continue;

@@ -338,7 +338,9 @@ U+00xx, then U+F0xx, F1xx and F2xx (`FT_Get_Char_Index`) - the ranges ISO
 measured F1xx and F2xx in memory) but not 00xx: a symbol font mapping the
 bytes as they are gets the `.notdef` advance there (measured with `mORMot
 Test Symbol Low`), so `TestRegisteredSymbol` checks that variant on POSIX
-only.
+only. The engine's own lookup for the Type0 path (`FindOrAddUsedWideChar`)
+tries the code and U+F000 + the byte only: a symbol font at F1xx or F2xx
+gets right `/Widths` there but `.notdef` glyphs - not met yet, open.
 
 ## Data Types (mormot.lib.core)
 
