@@ -329,6 +329,19 @@ keeps the source's `head` dates). `TestTestFontFiles` registers every file,
 the symbol font (one (3,0) cmap) and both faces of `mORMotTestCollection.ttc`
 included.
 
+**Symbol faces.** A face whose only cmap is (3,0) (Wingdings, the test
+symbol fonts) gets no charmap from FreeType, and `FT_Load_Char` then reads
+a code as a glyph index. `CreateFace` selects `FT_ENCODING_MS_SYMBOL` for
+it (`TFreeTypeFont.IsSymbol`), and `GetCharAbcWidths` looks a byte up at
+U+00xx, then U+F0xx, F1xx and F2xx (`FT_Get_Char_Index`) - the ranges ISO
+32000-1 9.6.6.4 lets a PDF viewer look in. GDI reads F0xx-F2xx (Codex
+measured F1xx and F2xx in memory) but not 00xx: a symbol font mapping the
+bytes as they are gets the `.notdef` advance there (measured with `mORMot
+Test Symbol Low`), so `TestRegisteredSymbol` checks that variant on POSIX
+only. The engine's own lookup for the Type0 path (`FindOrAddUsedWideChar`)
+tries the code and U+F000 + the byte only: a symbol font at F1xx or F2xx
+gets right `/Widths` there but `.notdef` glyphs - not met yet, open.
+
 ## Data Types (mormot.lib.core)
 
 ### TFontRequest — Font Request Descriptor

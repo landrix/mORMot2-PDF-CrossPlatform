@@ -78,14 +78,15 @@ def add_cursive(font):
                 ls.FeatureCount = len(ls.FeatureIndex)
 
 
-def make_symbol(font):
+def make_symbol(font, base=0xF000):
     """Make the face a symbol font: one (3,0) cmap at U+F020-F07E, as
     Wingdings has, the OS/2 code page of the symbol character set, the name
-    records of the symbol encoding."""
+    records of the symbol encoding. With base 0 the cmap holds the bytes as
+    they are, as some older symbol fonts do."""
     best = font.getBestCmap()
     sub = cmap_format_4(4)
     sub.platformID, sub.platEncID, sub.language = 3, 0, 0
-    sub.cmap = {0xF000 + c: best[c] for c in ASCII if c in best}
+    sub.cmap = {base + c: best[c] for c in ASCII if c in best}
     table = newTable("cmap")
     table.tableVersion = 0
     table.tables = [sub]
@@ -128,6 +129,11 @@ FONTS = [
     dict(src="NotoSans-Regular.ttf", index=0,
          dst="mORMotTestSymbol-Regular.ttf", family="mORMot Test Symbol",
          ps="mORMotTestSymbol-Regular", unicodes=ASCII, post=make_symbol),
+    # the same symbol font with its cmap at U+0020-007E
+    dict(src="NotoSans-Regular.ttf", index=0,
+         dst="mORMotTestSymbolLow-Regular.ttf", family="mORMot Test Symbol Low",
+         ps="mORMotTestSymbolLow-Regular", unicodes=ASCII,
+         post=lambda font: make_symbol(font, 0)),
     # a collection of two faces of their own names: face 1 lacks 'A'-'G', so
     # 'H' is another glyph there than in face 0
     dict(src="NotoSans-Regular.ttf", index=0,

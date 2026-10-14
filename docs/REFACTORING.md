@@ -213,7 +213,8 @@ checked against that record:
    W3: `IFontProvider.GetGlyphAdvance`), then `2f0e02243` (2026-10-09, the
    bounds of `ExtractSfntFromTtc`), then `681bbe2a1` (2026-10-09, Phase 1b:
    `IFontFace` replaces the device context), then `9cf8add51` (2026-10-13,
-   fonts from memory: `RegisterFontData`, the test fonts' first step).
+   fonts from memory: `RegisterFontData`, the test fonts' first step), then
+   `c68fc85aa` (2026-10-14, symbol faces measured by their symbol cmap).
    **Checked:** against `d60cc6e80`, today's `main`,
    `test_runner` 259/259 on Windows (FPC Win64, Delphi 7, Delphi 2010),
    298/298 on Linux, 317/317 on macOS (fpcupdeluxe, FPC 3.2.3). Against
@@ -918,10 +919,18 @@ Process, agreed in the forum:
   FreeType selects no charmap for a face whose only cmap is (3,0) - Test
   Symbol, as Wingdings - and `FT_Load_Char` then takes the code for a
   glyph index: `GetCharAbcWidths` (`mormot.lib.freetype`) measures 'a' as
-  glyph 97 (350 units) instead of glyph 66 at U+F061 (561). The fix needs
-  `FT_Select_Charmap(FT_ENCODING_MS_SYMBOL)` when `charmap` is nil and the
-  code moved to U+F0xx, and `TestSubsetSymbolFont` an assertion of the
-  mapped width - a fix for the bug-fix PR of this step
+  glyph 97 (350 units) instead of glyph 66 at U+F061 (561)
+
+  **Step 3 bug fixes** (branch `pr/test-fonts-3-fixes`, on 3a; mORMot2
+  `pdf-font-layer` at `c68fc85aa`): the symbol charmap selected, a byte looked up at
+  U+00xx, then F0xx, F1xx and F2xx (Codex: a cmap may hold the bytes in
+  any of the ranges ISO 32000-1 9.6.6.4 names); `mORMot Test Symbol Low`,
+  the test symbol font with its cmap at U+0020, and `TestRegisteredSymbol`
+  (the widths of ' ', 'A', 'a'; the U+0020 variant on POSIX only - GDI
+  gives `.notdef` there, measured). Without the fix the
+  macOS run fails exactly the three widths. `test_runner` 932/932 on
+  Windows (FPC 3.3.1 aarch64, Delphi 7, Delphi 13 Win32/Win64), 888 on
+  Linux, 915 on macOS
 
 ## Open Decisions
 

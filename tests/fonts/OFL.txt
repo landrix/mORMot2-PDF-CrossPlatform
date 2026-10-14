@@ -1,5 +1,6 @@
-mORMotTestSans-Regular.ttf, mORMotTestSymbol-Regular.ttf and
-mORMotTestCollection.ttc, subsets of Noto Sans:
+mORMotTestSans-Regular.ttf, mORMotTestSymbol-Regular.ttf,
+mORMotTestSymbolLow-Regular.ttf and mORMotTestCollection.ttc, subsets of
+Noto Sans:
 Copyright 2015 Google LLC. All Rights Reserved.
 (Copyright 2010, 2012-2020 Google Inc., 2015-2020 Google LLC)
 

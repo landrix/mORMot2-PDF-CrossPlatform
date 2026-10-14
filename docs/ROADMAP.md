@@ -260,6 +260,11 @@ v0.10.0 (2026-09-30).
   compatibility unit). The trunk's own `mormot.ui.report` (the Windows-only
   `TGdiPages` with its built-in preview) goes when this work is merged after
   mORMot 2.5; it has a different API, not a predecessor of this one
+- **Fixed: symbol fonts on Linux and macOS** (`mormot.lib.freetype`): a
+  font whose only cmap is a symbol one (Wingdings and the like) was
+  measured with the widths of other glyphs - FreeType selected no charmap
+  and read the codes as glyph indexes. Its `/Widths` are now those of the
+  glyphs drawn
 - **New: fonts from memory** (`mormot.lib.core`): `RegisterFontData(Bytes,
   FaceIndex)` makes a TrueType/OpenType font, or a face of a collection,
   available by its family name - on Linux and macOS through

@@ -48,6 +48,7 @@ type
     procedure TestRegisteredFont;
     procedure TestRegisteredArabic;
     procedure TestTestFontFiles;
+    procedure TestRegisteredSymbol;
   end;
 
 /// the full name of a font of tests/fonts, '' if it is not found
@@ -1098,14 +1099,16 @@ end;
 
 procedure TPdfCrossPlatTests.TestTestFontFiles;
 const
-  FILES: array[0..5] of TFileName = (
+  FILES: array[0..6] of TFileName = (
     'mORMotTestSans-Regular.ttf', 'mORMotTestArabic-Regular.ttf',
     'mORMotTestCJK-Regular.otf', 'mORMotTestSymbol-Regular.ttf',
+    'mORMotTestSymbolLow-Regular.ttf',
     'mORMotTestCollection.ttc', 'mORMotTestCollection.ttc');
-  FACES: array[0..5] of integer = (0, 0, 0, 0, 0, 1);
-  FAMILIES: array[0..5] of RawUtf8 = (
+  FACES: array[0..6] of integer = (0, 0, 0, 0, 0, 0, 1);
+  FAMILIES: array[0..6] of RawUtf8 = (
     'mORMot Test Sans', 'mORMot Test Arabic', 'mORMot Test CJK',
-    'mORMot Test Symbol', 'mORMot Test TTC A', 'mORMot Test TTC B');
+    'mORMot Test Symbol', 'mORMot Test Symbol Low',
+    'mORMot Test TTC A', 'mORMot Test TTC B');
 var
   data: RawByteString;
   i: PtrInt;
@@ -1120,6 +1123,53 @@ begin
       CheckEqual(RegisterFontData(data, FACES[i]), FAMILIES[i]);
     end;
     CheckEqual(RegisterFontData(data, 2), '', 'a collection of two faces');
+  finally
+    UnregisterFontData;
+  end;
+end;
+
+procedure TPdfCrossPlatTests.TestRegisteredSymbol;
+const
+  // the advances of the test fonts' glyphs of ' ', 'A', 'a' (fontTools); as
+  // glyph indexes 32, 65, 97 the codes would give 434, 281 and 350
+  SAMPLE: array[0..2] of AnsiChar = (' ', 'A', 'a');
+  ADVANCE: array[0..2] of integer = (260, 639, 561);
+  // the cmap at U+F020-F07E, as Wingdings has it, and at U+0020-007E -
+  // where GDI finds nothing: it gives the .notdef advance (measured)
+  FILES: array[0..1] of TFileName = (
+    'mORMotTestSymbol-Regular.ttf', 'mORMotTestSymbolLow-Regular.ttf');
+  FAMILIES: array[0..1] of RawUtf8 = (
+    'mORMot Test Symbol', 'mORMot Test Symbol Low');
+var
+  data: RawByteString;
+  req: TFontRequest;
+  f: IFontFace;
+  abc: TFontCharAbcArray;
+  i, n: PtrInt;
+begin
+  // a symbol font maps the bytes in its (3,0) cmap; FreeType selects no
+  // charmap for such a face by itself
+  FillChar(req, SizeOf(req), 0);
+  req.Height := -1000;
+  req.Weight := 400;
+  req.CharSet := 2; // SYMBOL_CHARSET
+  try
+    for n := 0 to {$ifdef OSWINDOWS} 0 {$else} high(FILES) {$endif} do
+    begin
+      data := StringFromFile(TestFontFile(FILES[n]));
+      Check(data <> '', FILES[n]);
+      CheckEqual(RegisterFontData(data), FAMILIES[n]);
+      req.FaceName := Utf8ToSynUnicode(FAMILIES[n]);
+      f := FontProvider.CreateFace(req);
+      if not Check(f <> nil, 'face created') then
+        continue;
+      for i := 0 to high(SAMPLE) do
+        if Check(f.GetCharAbcWidths(ord(SAMPLE[i]), ord(SAMPLE[i]), abc) and
+                 (length(abc) = 1), 'GetCharAbcWidths') then
+          CheckEqual(abc[0].abcA + integer(abc[0].abcB) + abc[0].abcC,
+            ADVANCE[i], Utf8ToString(FAMILIES[n]) + ': the glyph the cmap maps the byte to');
+      f := nil;
+    end;
   finally
     UnregisterFontData;
   end;
