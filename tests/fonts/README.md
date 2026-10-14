@@ -25,8 +25,8 @@ this repository.
 
 All keep their layout tables (GSUB and GPOS; GDEF in the `glyf` faces, BASE
 and VORG in the CJK face) and drop the hinting; name IDs 1-4 and 6 are
-renamed (16 and 17 likewise and 18-25 dropped if a source has them - these
-three have none), and the
+renamed (16 and 17 likewise and 18-25 dropped if a source has them - the
+three sources have none), and the
 CFF names follow name ID 6. The copyright (0), trademark (7) and URL (11)
 records of the sources are kept.
 

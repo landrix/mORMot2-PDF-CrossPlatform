@@ -64,9 +64,9 @@ def add_cursive(font):
     # the feature list sorted by tag, as the OpenType spec recommends: the
     # indexes of the language systems follow
     records = gpos.FeatureList.FeatureRecord + [record]
-    order = sorted(range(len(records)), key=lambda i: records[i].FeatureTag)
-    moved = {old: new for new, old in enumerate(order)}
-    gpos.FeatureList.FeatureRecord = [records[i] for i in order]
+    by_tag = sorted(range(len(records)), key=lambda i: records[i].FeatureTag)
+    moved = {old: new for new, old in enumerate(by_tag)}
+    gpos.FeatureList.FeatureRecord = [records[i] for i in by_tag]
     gpos.FeatureList.FeatureCount = len(records)
     for script in gpos.ScriptList.ScriptRecord:
         systems = [script.Script.DefaultLangSys] + \
