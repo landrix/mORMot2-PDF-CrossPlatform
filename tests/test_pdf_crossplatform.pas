@@ -47,6 +47,7 @@ type
     procedure TestPdfMultiPage;
     procedure TestRegisteredFont;
     procedure TestRegisteredArabic;
+    procedure TestTestFontFiles;
   end;
 
 /// the full name of a font of tests/fonts, '' if it is not found
@@ -1090,6 +1091,35 @@ begin
       CheckEqual(PdfWidthOf(pdf, JOINED[i]), JOINED_ADVANCE[i],
         'the /W of a joined form is its hmtx advance');
     end;
+  finally
+    UnregisterFontData;
+  end;
+end;
+
+procedure TPdfCrossPlatTests.TestTestFontFiles;
+const
+  FILES: array[0..5] of TFileName = (
+    'mORMotTestSans-Regular.ttf', 'mORMotTestArabic-Regular.ttf',
+    'mORMotTestCJK-Regular.otf', 'mORMotTestSymbol-Regular.ttf',
+    'mORMotTestCollection.ttc', 'mORMotTestCollection.ttc');
+  FACES: array[0..5] of integer = (0, 0, 0, 0, 0, 1);
+  FAMILIES: array[0..5] of RawUtf8 = (
+    'mORMot Test Sans', 'mORMot Test Arabic', 'mORMot Test CJK',
+    'mORMot Test Symbol', 'mORMot Test TTC A', 'mORMot Test TTC B');
+var
+  data: RawByteString;
+  i: PtrInt;
+begin
+  // every file of tests/fonts registers under its family: the name table
+  // the tests rely on, the face of a collection, the symbol encoding
+  try
+    for i := 0 to high(FILES) do
+    begin
+      data := StringFromFile(TestFontFile(FILES[i]));
+      Check(data <> '', FILES[i]);
+      CheckEqual(RegisterFontData(data, FACES[i]), FAMILIES[i]);
+    end;
+    CheckEqual(RegisterFontData(data, 2), '', 'a collection of two faces');
   finally
     UnregisterFontData;
   end;
