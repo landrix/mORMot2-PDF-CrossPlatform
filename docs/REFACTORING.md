@@ -955,12 +955,15 @@ Process, agreed in the forum:
   library stay. Found for the bug-fix PR: with `UseUniscribe`, a Latin
   item in a face that lacks Latin - the Arabic test font - is drawn as
   `.notdef` without the fallback font on Windows (Uniscribe shapes it with
-  default glyphs; only an item it cannot shape falls back), and on macOS
-  the same mixed line falls back neither and leaves the Arabic unshaped.
+  default glyphs; only an item it cannot shape falls back), and with
+  HarfBuzz (measured on macOS) the same mixed line falls back neither and
+  leaves the Arabic unshaped: `THarfBuzzShaper.Shape` makes one run of the
+  whole text, its script guessed from the first strong character - no
+  per-script runs on POSIX (Fable, from the code).
   The two faces of the test collection are pinned ('H' glyph 41 and 34,
   233 and 226 glyphs - Codex: the provider must not be its own reference).
-  `test_runner` 1022/1022 on Windows (FPC 3.3.1 aarch64, Delphi 7, Delphi
-  13 Win32/Win64), 1016 on Linux, 1049 on macOS
+  `test_runner` 1024/1024 on Windows (FPC 3.3.1 aarch64, Delphi 7, Delphi
+  13 Win32/Win64), 1018 on Linux, 1051 on macOS
 
 ## Open Decisions
 

@@ -783,6 +783,8 @@ begin
 end;
 
 procedure TPdfSubsetEngineTests.TestSubsetUnionOfStyles;
+const
+  OMEGA: RawUtf8 = {$ifdef HASCODEPAGE} #$03A9 {$else} #$CE#$A9 {$endif};
 var
   pdf, ttf: RawByteString;
 begin
@@ -793,10 +795,12 @@ begin
   end;
   // the Latin test font has no bold face: Bold resolves to the same file, so
   // the Regular and Bold fonts share one face and must share one subset
-  pdf := BuildPdf(SansFont, 'Hello', false, false, true);
+  // Omega through the Type0 instance, the rest through the WinAnsi one
+  pdf := BuildPdf(SansFont, 'Hello ' + OMEGA, false, false, true);
   CheckEqual(CountOccurrences('/Length1 ', pdf), 1, 'Regular and Bold share one file');
   ttf := FirstFontFile(pdf);
   Check(SfntGlyphLength(ttf, SfntCmapLookup(ttf, ord('H'))) > 0, 'H kept');
+  Check(SfntGlyphLength(ttf, SfntCmapLookup(ttf, $03A9)) > 0, 'Omega kept');
   Check(SfntGlyphLength(ttf, SfntCmapLookup(ttf, ord('!'))) > 0,
     '! drawn only in Bold, yet kept in the shared subset');
 end;
@@ -1105,7 +1109,9 @@ begin
     Check(sub = whole, name + ': embedded whole without SupportsSymbolic');
     exit;
   end;
-  Check(length(sub) * 2 < length(whole), name + ': subset with SupportsSymbolic');
+  Check((GlyfLength(sub) > 0) and
+        (GlyfLength(sub) * 2 < GlyfLength(whole)),
+    name + ': subset with SupportsSymbolic');
   kept := true;
   for i := 1 to length(SAMPLE) do
   begin

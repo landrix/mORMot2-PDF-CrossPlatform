@@ -758,6 +758,7 @@ end;
 procedure TPdfCffTests.SystemFaces;
 var
   info: TPdfCffInfo;
+  sans: IFontFace;
   {$ifndef OSWINDOWS}
   lf: TFontRequest;
   i, diff: integer;
@@ -784,8 +785,11 @@ var
   {$endif OSWINDOWS}
 
 begin
-  // a glyf face has no 'CFF ' table, the CJK test font is CID-keyed
-  Check(PdfFaceCffInfo(TestFace(TEST_SANS), info) = pcNone, TEST_SANS);
+  // a glyf face has no 'CFF ' table - as no face: checked to exist first -
+  // the CJK test font is CID-keyed
+  sans := TestFace(TEST_SANS);
+  if Check(sans <> nil, TEST_SANS) then
+    Check(PdfFaceCffInfo(sans, info) = pcNone, TEST_SANS);
   Check(PdfFaceCffInfo(TestFace(TEST_CJK), info) = pcCidKeyed, TEST_CJK);
   {$ifdef OSDARWIN}
   // the CJK face of the Mac, where installed: CID-keyed, 288 glyphs whose
@@ -1166,6 +1170,7 @@ var
 begin
   { the CID-keyed face of SystemFaceCids on every machine: a subset of Noto
     Sans CJK, whose glyph indexes no longer are their CIDs }
+  UnregisterFontData; // the copy EnsureTestFonts registered
   data := StringFromFile(TestFontFile('mORMotTestCJK-Regular.otf'));
   Check(data <> '', 'tests/fonts/mORMotTestCJK-Regular.otf found');
   if data = '' then

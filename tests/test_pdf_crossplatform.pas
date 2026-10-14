@@ -65,6 +65,9 @@ const
   TEST_SYMBOL_LOW = 'mORMot Test Symbol Low';
   TEST_TTC_A = 'mORMot Test TTC A';
   TEST_TTC_B = 'mORMot Test TTC B';
+  /// DEFAULT_CHARSET: GDI takes another font for a registered one that lacks
+  // the code page asked for (platform-backends skill)
+  TEST_FONT_CHARSET = 1;
 
 /// register every font of tests/fonts that is not registered yet
 // - false if a file is missing or refused
@@ -74,9 +77,8 @@ const
 function EnsureTestFonts: boolean;
 
 /// a face of a test font at 1000 units per em, nil if it cannot be created
-// - DEFAULT_CHARSET by default: GDI takes another font for a registered one
-// that lacks the code page asked for (platform-backends skill)
-function TestFace(const Family: RawUtf8; CharSet: byte = 1): IFontFace;
+function TestFace(const Family: RawUtf8;
+  CharSet: byte = TEST_FONT_CHARSET): IFontFace;
 
 /// is Code one of the 4-digit codes of the hex strings of the first text
 // object of an uncompressed PDF? A shaped run is one Tj when the shaper's
@@ -688,6 +690,7 @@ const
     '/System/Library/Fonts', '/Library/Fonts', '/usr/share/fonts', '');
 var
   ttcName: TFileName;
+  ttc: RawByteString;
   i: integer;
 
   procedure CheckFace(const ttc: RawByteString; index, glyphs: integer);
@@ -734,8 +737,9 @@ begin
   if Check(ttcName <> '', 'tests/fonts/mORMotTestCollection.ttc found') then
   begin
     // 233 and 226 glyphs (tests/fonts/README.md): face 1 lacks 'A'-'G'
-    CheckFace(StringFromFile(ttcName), 0, 233);
-    CheckFace(StringFromFile(ttcName), 1, 226);
+    ttc := StringFromFile(ttcName);
+    CheckFace(ttc, 0, 233);
+    CheckFace(ttc, 1, 226);
   end;
   // and face 0 of an installed collection, where there is one
   ttcName := '';
@@ -910,6 +914,7 @@ var
   doc: TPdfDocument;
   ms: TMemoryStream;
 begin
+  UnregisterFontData; // the copy EnsureTestFonts registered
   data := StringFromFile(TestFontFile('mORMotTestSans-Regular.ttf'));
   Check(data <> '', 'tests/fonts/mORMotTestSans-Regular.ttf found');
   if data = '' then
@@ -1009,7 +1014,7 @@ begin
     req.FaceName := FAMILY;
     req.Height := -1000;
     req.Weight := 400;
-    req.CharSet := 1; // DEFAULT_CHARSET: GDI substitutes for ANSI_CHARSET
+    req.CharSet := TEST_FONT_CHARSET;
     f := FontProvider.CreateFace(req);
     Check(f <> nil, 'face created');
     if f = nil then
@@ -1041,7 +1046,7 @@ begin
       doc.UseUniscribe := true;
       doc.AddPage;
       doc.Canvas.RightToLeftText := true;
-      doc.Canvas.SetFont(FAMILY, 24, [], 1);
+      doc.Canvas.SetFont(FAMILY, 24, [], TEST_FONT_CHARSET);
       doc.Canvas.TextOutW(40, 700, @MARHABA[0]);
       doc.SaveToStream(ms);
       FastSetRawByteString(pdf, ms.Memory, ms.Size);
