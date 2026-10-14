@@ -327,7 +327,12 @@ glyph IDs, CIDs and advances in the tests are read from the files with
 fontTools, so a rebuilt font must give the same bytes (`make_test_fonts.py`
 keeps the source's `head` dates). `TestTestFontFiles` registers every file,
 the symbol font (one (3,0) cmap) and both faces of `mORMotTestCollection.ttc`
-included.
+included. Every font test takes its face from `TestFace(TEST_SANS)` and its
+siblings, or calls `EnsureTestFonts` before the document it draws with
+(`test_pdf_crossplatform`): registered once, again after a test called
+`UnregisterFontData`; never a second time while registered, which would
+install a second copy in GDI. An installed face is only an extra - checked
+where present, no SKIP where not.
 
 **Symbol faces.** A face whose only cmap is (3,0) (Wingdings, the test
 symbol fonts) gets no charmap from FreeType, and `FT_Load_Char` then reads

@@ -932,6 +932,39 @@ Process, agreed in the forum:
   Windows (FPC 3.3.1 aarch64, Delphi 7, Delphi 13 Win32/Win64), 888 on
   Linux, 915 on macOS
 
+  **Step 3b** (branch `pr/test-fonts-3b`, on the bug fixes): the font tests
+  on the test fonts, no golden file touched. `EnsureTestFonts` and
+  `TestFace` (`test_pdf_crossplatform`) register what is missing - again
+  after a test that called `UnregisterFontData` - before a document reads
+  its font list. Moved: metrics, WinAnsi widths, font data, enumeration,
+  faces keeping their state, the shaper's advances and y offsets, U-2
+  (`TestShapedGlyphWidthFromHmtx`, Geeza Pro an extra where installed), the
+  `.ttc` extraction (the test collection, an installed one an extra), the
+  subsetter suites (`SansFont` is Test Sans; `TestSubsetUnionOfStyles` on
+  it), `CheckTtcFaces` (the two test faces first), the symbol subset, the
+  CFF face, `SystemFaces`, the smoke CJK and Arabic faces. A system face
+  stays as a silent extra: Hiragino Sans GB (`SystemFaces`,
+  `SystemFaceCids`, published on macOS only), Noto Sans CJK on Linux, the
+  installed collections, Nirmala UI (`TestShapedAfterFallback`). Size
+  checks compare the `glyf` table: FontSub keeps the layout tables whole,
+  so Test Sans shrinks from 42 KB to 18 KB as a file while its outlines
+  shrink far more; hb-subset passes the old file ratios too. Uniscribe
+  gives no y offsets (glyphs only): `TestTextShaperYOffsets` expects none
+  from a shaper without advances. Left: `TestShapedGlyphKeys` (a face of
+  more than 4096 glyphs); the skips for a missing shaper or subsetter
+  library stay. Found for the bug-fix PR: with `UseUniscribe`, a Latin
+  item in a face that lacks Latin - the Arabic test font - is drawn as
+  `.notdef` without the fallback font on Windows (Uniscribe shapes it with
+  default glyphs; only an item it cannot shape falls back), and with
+  HarfBuzz (measured on macOS) the same mixed line falls back neither and
+  leaves the Arabic unshaped: `THarfBuzzShaper.Shape` makes one run of the
+  whole text, its script guessed from the first strong character - no
+  per-script runs on POSIX (Fable, from the code).
+  The two faces of the test collection are pinned ('H' glyph 41 and 34,
+  233 and 226 glyphs - Codex: the provider must not be its own reference).
+  `test_runner` 1024/1024 on Windows (FPC 3.3.1 aarch64, Delphi 7, Delphi
+  13 Win32/Win64), 1018 on Linux, 1051 on macOS
+
 ## Open Decisions
 
 - ~~Golden files in `mormot2tests`~~ decided 2026-10-13: compared by
