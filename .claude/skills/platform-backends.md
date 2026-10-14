@@ -325,7 +325,9 @@ their `/W` from `hmtx`; skipped without a shaper) and `RegisteredFaceCids`
 the case `SystemFaceCids` covers with Hiragino Sans GB on macOS only). Their
 glyph IDs, CIDs and advances in the tests are read from the files with
 fontTools, so a rebuilt font must give the same bytes (`make_test_fonts.py`
-keeps the source's `head` dates).
+keeps the source's `head` dates). `TestTestFontFiles` registers every file,
+the symbol font (one (3,0) cmap) and both faces of `mORMotTestCollection.ttc`
+included.
 
 ## Data Types (mormot.lib.core)
 

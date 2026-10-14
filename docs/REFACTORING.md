@@ -889,6 +889,33 @@ Process, agreed in the forum:
   (FPC 3.3.1 aarch64, Delphi 7, Delphi 13 Win32/Win64), 855 on Linux,
   882 on macOS. Next: the font tests moved onto the test fonts
 
+  **Step 3 decided** (2026-10-14, with Sven, three alternatives, discussed
+  with Codex and Fable): **the test font first, the system face as a silent
+  extra.** Each font test asserts on a registered test font, everywhere; a
+  system face stays only where it covers what no test font can - the
+  measured faces (Hiragino's CIDs, Geeza Pro, the Nirmala UI fallback) and
+  the installed collections, whose file path memory registration does not
+  take - and adds no SKIP where it is missing. Rejected: replacing every
+  system face (the regressions behind those tests were found on real
+  fonts), and test-font twins beside the system tests (the skips stay, the
+  code doubles). As HarfBuzz (`test/shape` fonts), Skia (`resources/fonts`),
+  pdfium (`test_fonts`) and iText test: bundled small fonts carry the tests,
+  system fonts carry none. Three PRs, one kind of change each: (a) the test
+  fonts the moved tests need - Greek in Test Sans (a Type0 character), a
+  made-up `curs` lookup in Test Arabic (U-2), a symbol font, a collection of
+  two faces; (b) the tests, no golden file; (c) the golden cases, re-recorded
+  once on every machine. Left for later: a fake face of more than 4096
+  glyphs for `TestShapedGlyphKeys`, and `tests/fonts` on Android
+
+  **Step 3a** (branch `pr/test-fonts-3a`): the four additions above and
+  `TestTestFontFiles`, which registers each file under its family. The
+  Arabic glyph IDs are those of step 2: the lookup is appended after the
+  subset, and its anchors skip init hah, whose advance a `kern` pair
+  changes too (HarfBuzz 14.6.0 through uharfbuzz 0.56.3: x offset -40 and advance 40
+  below `hmtx` on meem and beh). `test_runner` 921/921 on Windows (FPC 3.3.1
+  aarch64, Delphi 7, Delphi 13 Win32/Win64), 868 on Linux,
+  895 on macOS
+
 ## Open Decisions
 
 - ~~Golden files in `mormot2tests`~~ decided 2026-10-13: compared by
