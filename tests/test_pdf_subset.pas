@@ -20,6 +20,7 @@ uses
   mormot.core.test,
   mormot.lib.core,
   mormot.pdf.types,
+  test_pdf_crossplatform, // the test fonts
   {$ifdef OSWINDOWS}
   Windows,
   mormot.lib.uniscribe,
@@ -318,6 +319,17 @@ begin
 end;
 
 
+// the length of the glyf table of a face, 0 without one: what a subset
+// leaves out - FontSub keeps the layout tables whole, so the file of a small
+// face shrinks far less than its outlines
+function GlyfLength(const Face: RawByteString): cardinal;
+var
+  o: cardinal;
+begin
+  if not SfntFindTable(Face, 'glyf', o, result) then
+    result := 0;
+end;
+
 // the native handle of a face, nil for none
 function FaceHandle(const Face: IFontFace): TFontHandle;
 begin
@@ -337,14 +349,9 @@ end;
 { TPdfSubsetTests }
 
 function TPdfSubsetTests.PrepareFace: boolean;
-const
-  FONTS: array[0..3] of RawUtf8 = (
-    'Liberation Sans', 'Arial', 'DejaVu Sans', 'Verdana');
 var
-  lf: TFontRequest;
   face: IFontFace;
   size: cardinal;
-  f: PtrInt;
 begin
   result := false;
   if FontSubsetter = nil then
@@ -357,15 +364,9 @@ begin
     result := true;
     exit;
   end;
-  for f := 0 to high(FONTS) do
+  face := TestFace(TEST_SANS);
+  if face <> nil then
   begin
-    FillChar(lf, SizeOf(lf), 0);
-    lf.FaceName := SynUnicode(FONTS[f]);
-    lf.Height := -1000;
-    lf.Weight := 400;
-    face := FontProvider.CreateFace(lf);
-    if face = nil then
-      continue;
     size := face.GetFontData(0, 0, nil, 0);
     if size <> FONT_DATA_ERROR then
     begin
@@ -373,61 +374,37 @@ begin
       if face.GetFontData(0, 0, pointer(fFace), size) <> size then
         fFace := '';
     end;
-    if (fFace <> '') and
-       (copy(fFace, 1, 4) = #0#1#0#0) and
-       (SfntCmapLookup(fFace, ord('A')) <> 0) then
-    begin
-      fFaceName := FONTS[f];
-      fFont := face; // kept for the subsetter
-      break;
-    end;
-    fFace := '';
   end;
-  result := fFace <> '';
-  if not result then
-    Check(true, 'SKIP: no glyf-based test font found on this system');
+  result := (fFace <> '') and
+            (copy(fFace, 1, 4) = #0#1#0#0) and
+            (SfntCmapLookup(fFace, ord('A')) <> 0);
+  if Check(result, 'the glyf test font') then
+  begin
+    fFaceName := TEST_SANS;
+    fFont := face; // kept for the subsetter
+  end
+  else
+    fFace := '';
 end;
 
 function TPdfSubsetTests.LoadCffFace(out aFace: RawByteString;
   out aFont: IFontFace): boolean;
-const
-  // CFF system faces: macOS ships its CJK families as OpenType/CFF
-  CFF_FONTS: array[0..2] of RawUtf8 = (
-    'Hiragino Sans GB', 'Hiragino Mincho ProN', 'Source Han Sans');
 var
-  lf: TFontRequest;
-  face: IFontFace;
   size: cardinal;
-  f: PtrInt;
 begin
   aFace := '';
-  aFont := nil;
-  for f := 0 to high(CFF_FONTS) do
+  aFont := TestFace(TEST_CJK);
+  if aFont <> nil then
   begin
-    FillChar(lf, SizeOf(lf), 0);
-    lf.FaceName := SynUnicode(CFF_FONTS[f]);
-    lf.Height := -1000;
-    lf.Weight := 400;
-    face := FontProvider.CreateFace(lf);
-    if face = nil then
-      continue;
-    size := face.GetFontData(0, 0, nil, 0);
+    size := aFont.GetFontData(0, 0, nil, 0);
     if size <> FONT_DATA_ERROR then
     begin
       SetLength(aFace, size);
-      if face.GetFontData(0, 0, pointer(aFace), size) <> size then
+      if aFont.GetFontData(0, 0, pointer(aFace), size) <> size then
         aFace := '';
     end;
-    if copy(aFace, 1, 4) = 'OTTO' then
-    begin
-      aFont := face;
-      break;
-    end;
-    aFace := '';
   end;
-  result := aFace <> '';
-  if not result then
-    Check(true, 'SKIP: no CFF face installed on this system');
+  result := Check(copy(aFace, 1, 4) = 'OTTO', 'the CFF test font');
 end;
 
 function TPdfSubsetTests.SubsetOf(const Unicodes, Glyphs: array of integer;
@@ -512,8 +489,10 @@ begin
     exit;
   Check(SubsetOf([ord('H'), ord('e'), ord('l'), ord('o'), ord(' '),
     ord('W'), ord('r'), ord('d'), ord('!')], [], sub), 'Subset failed');
-  Check(length(sub) * 10 < length(fFace), FormatString('% subset is % of % bytes',
-    [fFaceName, length(sub), length(fFace)]));
+  Check((GlyfLength(sub) > 0) and
+        (GlyfLength(sub) * 10 < GlyfLength(fFace)),
+    FormatString('% subset glyf is % of % bytes',
+      [fFaceName, GlyfLength(sub), GlyfLength(fFace)]));
 end;
 
 procedure TPdfSubsetTests.TestSubsetAcceptsCff;
@@ -703,10 +682,10 @@ end;
 { TPdfSubsetEngineTests }
 
 function TPdfSubsetEngineTests.SansFont: string;
-var
-  serif, mono: string;
 begin
-  GetPdfFonts(true, result, serif, mono);
+  // registered before the document reads its font list
+  Check(EnsureTestFonts, 'the test fonts registered');
+  result := TEST_SANS;
 end;
 
 procedure DrawUtf8Text(PDF: TPdfDocument; X, Y: single; const aText: RawUtf8);
@@ -771,8 +750,10 @@ begin
   end;
   whole := BuildPdf(SansFont, 'Hello World', true, false, false);
   sub := BuildPdf(SansFont, 'Hello World', false, false, false);
-  Check(length(sub) * 4 < length(whole), FormatString('subset PDF % bytes, whole %',
-    [length(sub), length(whole)]));
+  Check((GlyfLength(FirstFontFile(sub)) > 0) and
+        (GlyfLength(FirstFontFile(sub)) * 4 < GlyfLength(FirstFontFile(whole))),
+    FormatString('subset glyf % bytes, whole %',
+      [GlyfLength(FirstFontFile(sub)), GlyfLength(FirstFontFile(whole))]));
   Check(copy(FirstFontFile(sub), 1, 4) = #0#1#0#0, 'embedded subset is an sfnt');
 end;
 
@@ -802,8 +783,6 @@ begin
 end;
 
 procedure TPdfSubsetEngineTests.TestSubsetUnionOfStyles;
-const
-  ZHONG: RawUtf8 = {$ifdef HASCODEPAGE} #$4E2D {$else} #$E4#$B8#$AD {$endif};
 var
   pdf, ttf: RawByteString;
 begin
@@ -812,17 +791,12 @@ begin
     Check(true, 'SKIP: no IFontSubsetter registered');
     exit;
   end;
-  // Droid Sans Fallback has no bold face: Bold resolves to the same file, so
+  // the Latin test font has no bold face: Bold resolves to the same file, so
   // the Regular and Bold fonts share one face and must share one subset
-  pdf := BuildPdf('Droid Sans Fallback', ZHONG, false, false, true);
-  if Pos(RawByteString('DroidSansFallback'), pdf) = 0 then
-  begin
-    Check(true, 'SKIP: Droid Sans Fallback not installed');
-    exit;
-  end;
+  pdf := BuildPdf(SansFont, 'Hello', false, false, true);
   CheckEqual(CountOccurrences('/Length1 ', pdf), 1, 'Regular and Bold share one file');
   ttf := FirstFontFile(pdf);
-  Check(SfntGlyphLength(ttf, SfntCmapLookup(ttf, $4E2D)) > 0, 'CJK glyph kept');
+  Check(SfntGlyphLength(ttf, SfntCmapLookup(ttf, ord('H'))) > 0, 'H kept');
   Check(SfntGlyphLength(ttf, SfntCmapLookup(ttf, ord('!'))) > 0,
     '! drawn only in Bold, yet kept in the shared subset');
 end;
@@ -875,7 +849,7 @@ begin
   end;
   // PDF/UA allows subsets, and retained glyph IDs keep the round-trip
   Check(FirstSubsetTag(tagged) <> '', 'tagged output is subset');
-  Check(length(FirstFontFile(tagged)) * 10 < length(FirstFontFile(whole)),
+  Check(GlyfLength(FirstFontFile(tagged)) * 10 < GlyfLength(FirstFontFile(whole)),
     'and much smaller');
   Check(Pos(RawByteString('/ToUnicode'), tagged) > 0,
     'WinAnsi ToUnicode CMap still written (pdffonts: uni=yes)');
@@ -909,7 +883,7 @@ begin
     exit;
   end;
   Check(FirstSubsetTag(pdfa3) <> '', 'PDF/A-3 output is subset');
-  Check(length(FirstFontFile(pdfa3)) * 10 < length(FirstFontFile(whole)),
+  Check(GlyfLength(FirstFontFile(pdfa3)) * 10 < GlyfLength(FirstFontFile(whole)),
     'and much smaller');
 end;
 
@@ -989,11 +963,15 @@ const
   // on Windows, and the family-name list used before knew none of them
   // right; the last three are face 0 of their file on Linux and macOS, the
   // one face FreeType reaches there - two of them CFF
-  TTC_FONTS: array[0..8] of RawUtf8 = (
+  TTC_FONTS: array[0..10] of RawUtf8 = (
+    TEST_TTC_A, TEST_TTC_B,
     'MS UI Gothic', 'Yu Gothic UI', 'Microsoft YaHei UI',
     'Microsoft JhengHei UI', 'MS Gothic', 'Microsoft YaHei',
     'Noto Sans CJK JP', 'Hiragino Sans GB', 'Helvetica');
   SAMPLE = 'Hello';
+  // 'H' in the two faces of the test collection (tests/fonts/README.md):
+  // face 1 lacks 'A'-'G'
+  TEST_TTC_H: array[0..1] of integer = (41, 34);
 var
   fonts: TRawUtf8DynArray;
   f, i, g, found: integer;
@@ -1002,6 +980,8 @@ var
   o, l, ho, hl: cardinal;
   same: boolean;
 begin
+  // both faces of the test collection, the installed ones where there are
+  Check(EnsureTestFonts, 'the test fonts registered');
   fonts := nil;
   FontEnumerator.EnumTrueTypeFonts(fonts);
   found := 0;
@@ -1009,9 +989,10 @@ begin
   begin
     if FindRawUtf8(fonts, TTC_FONTS[f]) < 0 then
       continue;
+    if f <= high(TEST_TTC_H) then
+      inc(found);
     cmap := PlatformFontTable(TTC_FONTS[f], 'cmap');
     hhea := PlatformFontTable(TTC_FONTS[f], 'hhea');
-    inc(found);
     name := Utf8ToString(TTC_FONTS[f]) + ', ' + aWhat;
     if (cmap = '') or
        (hhea = '') then
@@ -1041,6 +1022,10 @@ begin
               (SfntCmapLookup(face, ord(SAMPLE[i])) = g);
     end;
     Check(same, name + ': the font file maps the text as the face does');
+    // and it is the face asked for, not another one of the collection
+    if f <= high(TEST_TTC_H) then
+      CheckEqual(SfntCmapLookup(face, ord('H')), TEST_TTC_H[f],
+        name + ': the face of the collection asked for');
     // hhea up to numberOfHMetrics, which a subset may lower
     Check(SfntFindTable(face, 'hhea', o, l) and
           SfntFindTable(hhea, 'hhea', ho, hl) and
@@ -1048,8 +1033,7 @@ begin
           (copy(face, o + 1, 34) = copy(hhea, ho + 1, 34)),
       name + ': the font file has the hhea of the face');
   end;
-  if found = 0 then
-    Check(true, 'SKIP: none of the .ttc faces installed');
+  CheckEqual(found, 2, 'both faces of the test collection');
 end;
 
 procedure TPdfSubsetEngineTests.TestSubsetTtcFace;
@@ -1089,11 +1073,9 @@ end;
 
 procedure TPdfSubsetEngineTests.TestSubsetSymbolFont;
 const
-  SYMBOL_FONTS: array[0..2] of RawUtf8 = ('Wingdings', 'Webdings', 'Symbol');
   SAMPLE = 'abc';
 var
-  fonts: TRawUtf8DynArray;
-  f, i, g: integer;
+  i, g: integer;
   name: string;
   whole, sub: RawByteString;
   kept: boolean;
@@ -1111,18 +1093,9 @@ begin
   {$else}
   Check(not FontSubsetter.SupportsSymbolic, 'hb-subset leaves symbol fonts whole');
   {$endif OSWINDOWS}
-  fonts := nil;
-  FontEnumerator.EnumTrueTypeFonts(fonts);
-  f := 0;
-  while (f <= high(SYMBOL_FONTS)) and
-        (FindRawUtf8(fonts, SYMBOL_FONTS[f]) < 0) do
-    inc(f);
-  if f > high(SYMBOL_FONTS) then
-  begin
-    Check(true, 'SKIP: no symbol font installed');
-    exit;
-  end;
-  name := Utf8ToString(SYMBOL_FONTS[f]);
+  // the test symbol font: its cmap at U+F0xx, as Wingdings has it
+  Check(EnsureTestFonts, 'the test fonts registered');
+  name := TEST_SYMBOL;
   // SYMBOL_CHARSET makes the font symbolic (/Flags)
   whole := FirstFontFile(BuildPdf(name, SAMPLE, true, false, false, pdfaNone, 2));
   sub := FirstFontFile(BuildPdf(name, SAMPLE, false, false, false, pdfaNone, 2));
@@ -1146,42 +1119,21 @@ end;
 
 procedure TPdfSubsetEngineTests.TestGlyphAdvanceByIndex;
 const
-  SANS_FONTS: array[0..3] of RawUtf8 = (
-    'Arial', 'Liberation Sans', 'DejaVu Sans', 'Helvetica');
   SAMPLE = 'MiW .';
 var
-  req: TFontRequest;
   face: IFontFace;
-  fonts: TRawUtf8DynArray;
   abc: TFontCharAbcArray;
   cmap: RawByteString;
-  f, i, g, adv: integer;
+  i, g, adv: integer;
   same: boolean;
 begin
   { IFontProvider.GetGlyphAdvance gives a glyph its width by index - for a
     shaped glyph no character maps to (GetAndMarkGlyphAsUsed, step 3): for a
     glyph a character does map to, it agrees with GetCharAbcWidths }
-  fonts := nil;
-  FontEnumerator.EnumTrueTypeFonts(fonts);
-  f := 0;
-  while (f <= high(SANS_FONTS)) and
-        (FindRawUtf8(fonts, SANS_FONTS[f]) < 0) do
-    inc(f);
-  if f > high(SANS_FONTS) then
-  begin
-    Check(true, 'SKIP: no test font installed');
+  face := TestFace(TEST_SANS);
+  if not Check(face <> nil, 'face created') then
     exit;
-  end;
-  cmap := PlatformFontTable(SANS_FONTS[f], 'cmap');
-  FillChar(req, SizeOf(req), 0);
-  req.FaceName := Utf8ToSynUnicode(SANS_FONTS[f]);
-  req.Height := -1000;
-  req.Weight := 400;
-  req.CharSet := PDF_DEFAULT_CHARSET;
-  face := FontProvider.CreateFace(req);
-  Check(face <> nil, 'face created');
-  if face = nil then
-    exit;
+  cmap := PlatformFontTable(TEST_SANS, 'cmap');
   Check(face.GetCharAbcWidths(32, 255, abc) and
         (length(abc) = 224), 'widths by character');
   same := length(abc) = 224;
@@ -1195,8 +1147,7 @@ begin
                    integer(abc[ord(SAMPLE[i]) - 32].abcB) +
                    abc[ord(SAMPLE[i]) - 32].abcC);
   end;
-  Check(same, Utf8ToString(SANS_FONTS[f]) +
-    ': the advance by glyph index is the one by character');
+  Check(same, 'the advance by glyph index is the one by character');
 end;
 
 type
@@ -1219,19 +1170,17 @@ begin
   { the TLogFontW constructor creates the font from the whole LOGFONT, as
     before W3: lfWidth widens the widths the engine reads from GDI
     (TFontRequest has no width) }
+  Check(EnsureTestFonts, 'the test fonts registered');
   PDF := TPdfDocument.Create(false, 0, pdfaNone);
   try
-    ndx := TPdfDocumentAccess(PDF).GetTrueTypeFontIndex('Arial');
-    if ndx < 0 then
-    begin
-      Check(true, 'SKIP: Arial not installed');
+    ndx := TPdfDocumentAccess(PDF).GetTrueTypeFontIndex(TEST_SANS);
+    if not Check(ndx >= 0, TEST_SANS) then
       exit;
-    end;
     FillChar(lf, SizeOf(lf), 0);
     lf.lfHeight := -1000;
     lf.lfWeight := 400;
     lf.lfCharSet := PDF_DEFAULT_CHARSET;
-    Utf8ToWideChar(@lf.lfFaceName, 'Arial');
+    Utf8ToWideChar(@lf.lfFaceName, TEST_SANS);
     normal := TPdfFontTrueTypeAccess(TPdfFontTrueType.Create(PDF, ndx, [], lf, nil));
     lf.lfWidth := 1000;
     wide := TPdfFontTrueTypeAccess(TPdfFontTrueType.Create(PDF, ndx, [], lf, nil));

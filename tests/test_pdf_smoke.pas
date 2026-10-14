@@ -29,6 +29,7 @@ uses
   mormot.pdf.types,     // TPdfStructRole, GetPdfFonts
   mormot.pdf,        // TPdfDocument, TPdfCanvas
   test_pdf_cff,         // SwapInFakeFace
+  test_pdf_crossplatform, // the test fonts
   test_pdf_subset;      // DrawUtf8Text
 
 type
@@ -1071,23 +1072,10 @@ begin
 end;
 
 const
-  // the faces the chinese_demo and rtl_demo use on each platform
-  {$ifdef OSWINDOWS}
-  CJK_FONT    = 'Microsoft YaHei';
-  ARABIC_FONT = 'Tahoma';
-  {$else}
-  {$ifdef OSDARWIN}
-  CJK_FONT    = 'Hiragino Sans GB';
-  ARABIC_FONT = 'Geeza Pro';
-  {$else}
-  {$ifdef OSANDROID}
-  CJK_FONT    = 'Noto Sans CJK JP'; // face 0 of NotoSansCJK-Regular.ttc
-  {$else}
-  CJK_FONT    = 'Droid Sans Fallback';
-  {$endif OSANDROID}
-  ARABIC_FONT = 'Noto Naskh Arabic';
-  {$endif OSDARWIN}
-  {$endif OSWINDOWS}
+  // the test fonts: a CID-keyed CFF face, an Arabic face without
+  // presentation forms - the same faces on every platform
+  CJK_FONT    = TEST_CJK;
+  ARABIC_FONT = TEST_ARABIC;
   /// 字体嵌入测试 - "font embedding test"
   CJK_TEXT = {$ifdef HASCODEPAGE}
     #$5B57#$4F53#$5D4C#$5165#$6D4B#$8BD5 {$else}
@@ -1163,6 +1151,7 @@ begin
   { tagged Latin, CJK and shaped Arabic through layer 1 alone - the output
     Delphi and FPC have to agree on (R-19); the file is kept in WorkDir,
     next to the executable }
+  Check(EnsureTestFonts, 'the test fonts registered');
   Stream := TMemoryStream.Create;
   try
     PDF := TPdfDocument.Create(false, 0, pdfaNone);
@@ -1204,8 +1193,8 @@ begin
     Check(CountOccurrences('/FontFile', s) >= 3, 'Latin, CJK and Arabic faces embedded');
     Check(Pos(RawByteString('5B57'), s) > 0, 'ToUnicode maps the CJK text (U+5B57)');
     { joined Arabic letters are presentation forms (U+FExx) or, in a face
-      without them, PUA slots (U+Exxx); unshaped text maps to U+06xx only
-      (R-13). POSIX shapes only when libharfbuzz loaded }
+      without them as the test font, PUA slots (U+Exxx); unshaped text maps
+      to U+06xx only (R-13). POSIX shapes only when libharfbuzz loaded }
     if {$ifdef OSWINDOWS} true {$else} FontShaper <> nil {$endif} then
       Check((Pos(RawByteString('> <FE'), s) > 0) or
             (Pos(RawByteString('> <E'), s) > 0), 'the Arabic text is shaped');
@@ -1237,6 +1226,7 @@ var
   PDF: TPdfDocument;
   Stream: TMemoryStream;
 begin
+  EnsureTestFonts; // before the document reads its font list
   Stream := TMemoryStream.Create;
   try
     PDF := TPdfDocument.Create(false, 0, pdfaNone);
@@ -1304,7 +1294,12 @@ var
 begin
   { Uniscribe draws an item it cannot shape in the main font unshaped, and its
     characters then come from the fallback font; the shaped item after it drew
-    the main font's glyph IDs in the fallback font, which was still active }
+    the main font's glyph IDs in the fallback font, which was still active -
+    a measured face: it runs where Nirmala UI is the fallback taken, on
+    Windows, and adds nothing elsewhere. Only an item Uniscribe cannot shape
+    in the main font falls back: a Latin item in the Arabic test font is
+    drawn as .notdef (REFACTORING, step 3b) }
+  Check(EnsureTestFonts, 'the test fonts registered');
   Stream := TMemoryStream.Create;
   try
     PDF := TPdfDocument.Create(false, 0, pdfaNone);
@@ -1325,10 +1320,7 @@ begin
     Stream.Free;
   end;
   if Pos(RawByteString('NirmalaUI'), s) = 0 then
-  begin
-    Check(true, 'SKIP: no Nirmala UI fallback font, or no fallback taken');
-    exit;
-  end;
+    exit; // no Nirmala UI, or no fallback taken
   Check(IsShaped(s), 'the Arabic item is shaped');
   CheckEqual(CountOccurrences('> Tj'#10'<', s), 0,
     'the shaped item switches back to the main font after the fallback');

@@ -48,7 +48,9 @@ type
     procedure EmbeddedPrograms;
     procedure UnembeddedNameKeyed;
     procedure TextStateAcrossQ;
-    procedure SystemFaceCids;
+    {$ifdef OSDARWIN}
+    procedure SystemFaceCids; // the CID-keyed face of RegisteredFaceCids, measured
+    {$endif OSDARWIN}
     procedure RegisteredFaceCids;
   end;
 
@@ -755,8 +757,9 @@ end;
 
 procedure TPdfCffTests.SystemFaces;
 var
-  lf: TFontRequest;
   info: TPdfCffInfo;
+  {$ifndef OSWINDOWS}
+  lf: TFontRequest;
   i, diff: integer;
   identity: boolean;
 
@@ -769,28 +772,40 @@ var
     result := FontProvider.CreateFace(lf);
   end;
 
+  // the backend substitutes a missing face: an extra checks the list
+  function Installed(const Name: RawUtf8): boolean;
+  var
+    fonts: TRawUtf8DynArray;
+  begin
+    fonts := nil;
+    FontEnumerator.EnumTrueTypeFonts(fonts);
+    result := FindRawUtf8(fonts, Name) >= 0;
+  end;
+  {$endif OSWINDOWS}
+
 begin
-  // a glyf face has no 'CFF ' table
-  if PdfFaceCffInfo(Face({$ifdef OSWINDOWS} 'Arial' {$else}
-       {$ifdef OSDARWIN} 'Helvetica' {$else} 'DejaVu Sans' {$endif}
-       {$endif}), info) = pcNone then
-    Check(true)
-  else
-    Check(true, 'SKIP: the glyf face resolved to a CFF face');
+  // a glyf face has no 'CFF ' table, the CJK test font is CID-keyed
+  Check(PdfFaceCffInfo(TestFace(TEST_SANS), info) = pcNone, TEST_SANS);
+  Check(PdfFaceCffInfo(TestFace(TEST_CJK), info) = pcCidKeyed, TEST_CJK);
   {$ifdef OSDARWIN}
-  // the CJK face of the Mac tests: CID-keyed, 288 glyphs whose CID differs
-  Check(PdfFaceCffInfo(Face('Hiragino Sans GB'), info) = pcCidKeyed,
-    'Hiragino Sans GB');
-  CheckEqual(info.Registry, 'Adobe');
-  diff := 0;
-  for i := 0 to high(info.Cid) do
-    if info.Cid[i] <> i then
-      inc(diff);
-  CheckEqual(diff, 288, 'glyphs whose CID is not their index');
+  // the CJK face of the Mac, where installed: CID-keyed, 288 glyphs whose
+  // CID differs
+  if Installed('Hiragino Sans GB') then
+  begin
+    Check(PdfFaceCffInfo(Face('Hiragino Sans GB'), info) = pcCidKeyed,
+      'Hiragino Sans GB');
+    CheckEqual(info.Registry, 'Adobe');
+    diff := 0;
+    for i := 0 to high(info.Cid) do
+      if info.Cid[i] <> i then
+        inc(diff);
+    CheckEqual(diff, 288, 'glyphs whose CID is not their index');
+  end;
   {$else}
   {$ifdef OSLINUX}
   // Noto Sans CJK is Adobe-Identity-0: CID-keyed, every CID its index
-  if PdfFaceCffInfo(Face('Noto Sans CJK JP'), info) = pcCidKeyed then
+  if Installed('Noto Sans CJK JP') and
+     (PdfFaceCffInfo(Face('Noto Sans CJK JP'), info) = pcCidKeyed) then
   begin
     CheckEqual(info.Registry, 'Adobe');
     CheckEqual(info.Ordering, 'Identity');
@@ -799,11 +814,7 @@ begin
       if info.Cid[i] <> i then
         identity := false;
     Check(identity, 'Noto Sans CJK: the identity');
-  end
-  else
-    Check(true, 'SKIP: Noto Sans CJK JP not installed');
-  {$else}
-  Check(true, 'SKIP: no CFF system face known here');
+  end;
   {$endif OSLINUX}
   {$endif OSDARWIN}
 end;
@@ -1096,8 +1107,8 @@ begin
   Check(PosEx('THE-WHOLE-FACE', s) > 0, 'the face embedded for it');
 end;
 
-procedure TPdfCffTests.SystemFaceCids;
 {$ifdef OSDARWIN}
+procedure TPdfCffTests.SystemFaceCids;
 const
   // U+9FA6: glyph 29064 of Hiragino Sans GB, CID 30284 ($764C)
   CHAR_9FA6: RawUtf8 = {$ifdef HASCODEPAGE} #$9FA6 {$else} #$E9#$BE#$A6 {$endif};
@@ -1105,7 +1116,12 @@ var
   pdf: TPdfDocument;
   stream: TMemoryStream;
   s: RawUtf8;
+  fonts: TRawUtf8DynArray;
 begin
+  fonts := nil;
+  FontEnumerator.EnumTrueTypeFonts(fonts);
+  if FindRawUtf8(fonts, 'Hiragino Sans GB') < 0 then
+    exit; // an extra: the measured face, where installed
   stream := TMemoryStream.Create;
   try
     pdf := TPdfDocument.Create(false, 0, pdfaNone);
@@ -1130,10 +1146,6 @@ begin
   Check(PosEx('<7188>', s) = 0, 'no glyph index');
   Check(PosEx('/W [30284[', s) > 0, '/W keyed by the CID');
   Check(PosEx('<764C> <9FA6>', s) > 0, '/ToUnicode keyed by the CID');
-end;
-{$else}
-begin
-  Check(true, 'SKIP: Hiragino Sans GB is a macOS face');
 end;
 {$endif OSDARWIN}
 
