@@ -107,8 +107,10 @@ packages `mormot2` and `LCL`, and the runner uses `Interfaces` and
 **Steps:**
 1. **Linux** on `ubuntu-26.04` (Lazarus 4.4, FPC 3.2.2, way A):
    Lazarus with the GTK2 widgetset from `apt`, `libfreetype6`,
-   `libharfbuzz0b`, `libharfbuzz-subset0`, the faces the tests name
-   (DejaVu, Liberation, Droid Sans Fallback, Noto Naskh Arabic, Noto CJK),
+   `libharfbuzz0b`, `libharfbuzz-subset0`, the faces the tests and demos
+   name (DejaVu, Liberation, Noto CJK; Droid Sans Fallback and Noto Naskh
+   Arabic for `chinese_demo` and `rtl_demo` - the tests draw CJK and Arabic
+   with `tests/fonts`),
    then `lazbuild tests/test_runner.lpi -B` and
    `tests/bin/x86_64-linux/test_runner`, under `xvfb-run` if the widgetset
    wants a display. A second step may run `tests/no_hbsubset.sh` for the

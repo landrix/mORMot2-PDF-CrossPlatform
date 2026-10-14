@@ -976,7 +976,14 @@ Process, agreed in the forum:
   whole, without a subset tag: FontSub takes TrueType outlines only
   (`TestSubsetAcceptsCff`), so the case no longer covers FontSub on a CJK
   face there - Test Sans and Test Arabic (`arabic_shaped` itself) still
-  go through it. On POSIX hb-subset subsets the CFF. `test_runner` 1026/1026 on
+  go through it. On POSIX hb-subset subsets the CFF. The other golden cases
+  keep the OS faces of `GetPdfFonts` and the report's export fonts
+  (`tagged_embedded`, `pdfa3u_attachment`, `canvas_bridge_tagged`,
+  `report_tagged`, `report_pdfa3u`): they test the library's own platform
+  mapping, which always resolves, and need bold, serif and mono faces that
+  Test Sans does not have. Fable: a failed `EnsureTestFonts` ends the case,
+  so `--golden-record` never writes a baseline from a substitute face.
+  `test_runner` 1026/1026 on
   Windows, 1020 on Linux, 1053 on macOS
 
 ## Open Decisions

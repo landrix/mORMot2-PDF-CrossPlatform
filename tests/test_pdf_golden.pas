@@ -552,7 +552,9 @@ procedure TPdfGoldenTests.CjkSubset;
 var
   doc: TPdfDocument;
 begin
-  Check(EnsureTestFonts, 'the test fonts registered'); // before the font list
+  // before the font list; never record a baseline from a substitute face
+  if not Check(EnsureTestFonts, 'the test fonts registered') then
+    exit;
   doc := TPdfDocument.Create;
   try
     doc.Info.CreationDate := GOLDEN_DATE;
@@ -571,7 +573,9 @@ procedure TPdfGoldenTests.ArabicShaped;
 var
   doc: TPdfDocument;
 begin
-  Check(EnsureTestFonts, 'the test fonts registered'); // before the font list
+  // before the font list; never record a baseline from a substitute face
+  if not Check(EnsureTestFonts, 'the test fonts registered') then
+    exit;
   doc := TPdfDocument.Create;
   try
     doc.Info.CreationDate := GOLDEN_DATE;
