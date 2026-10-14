@@ -12,16 +12,21 @@ this repository.
 | `mORMotTestSans-Regular.ttf` | mORMot Test Sans | `NotoSans-Regular.ttf` 2.004, Debian/Ubuntu package `fonts-noto-core` 20201225-2 | `89c3c497f618fdaa0b2d1e98fef93582f28c71debd2c4a8cdf41f190ced2909d` |
 | `mORMotTestArabic-Regular.ttf` | mORMot Test Arabic | `NotoSansArabic-Regular.ttf` 2.005, `fonts-noto-core` 20201225-2 | `504d7407d86875acf7d04dfaa0fd7524d0b8797723bc4aa18022f29db25b0b6e` |
 | `mORMotTestCJK-Regular.otf` | mORMot Test CJK | face 0 (JP) of `NotoSansCJK-Regular.ttc` 2.004, `fonts-noto-cjk` 1:20230817 | `b76b0433203017ca80401b2ee0dd69350349871c4b19d504c34dbdd80541690a` |
+| `mORMotTestSymbol-Regular.ttf` | mORMot Test Symbol | `NotoSans-Regular.ttf`, as above | `89c3c497f618fdaa0b2d1e98fef93582f28c71debd2c4a8cdf41f190ced2909d` |
+| `mORMotTestCollection.ttc` | mORMot Test TTC A, mORMot Test TTC B | `NotoSans-Regular.ttf`, as above | `89c3c497f618fdaa0b2d1e98fef93582f28c71debd2c4a8cdf41f190ced2909d` |
 
 | File | Bytes | sha256 | What it holds |
 |---|---|---|---|
-| `mORMotTestSans-Regular.ttf` | 34,804 | `d13ea16e9b40d0b8894a6984536fccd408e4d2c209c0e8d29b3dbb52b5cbffa4` | `glyf`: Basic Latin, Latin-1 and the punctuation of a report (dashes, quotes, bullet, ellipsis, euro) |
-| `mORMotTestArabic-Regular.ttf` | 56,360 | `6089fe1bf35d482d462b151809b6b44fe10d2009c3cd75569e27bfa17b465f4c` | `glyf`: the Arabic letters, marks and digits, **no presentation forms** in the cmap (U+FB50-FEFF): the contextual forms are reached only through GSUB, by a shaper |
+| `mORMotTestSans-Regular.ttf` | 42,168 | `db82eb84a7b34f91b0f94f130a2d161642e07207531ed6d2b848ba3ba2a17ef8` | `glyf`: Basic Latin, Latin-1, the punctuation of a report (dashes, quotes, bullet, ellipsis, euro) and the Greek letters - characters out of WinAnsi, drawn through the Type0 font |
+| `mORMotTestArabic-Regular.ttf` | 56,436 | `218c71509626c81ee98c57b76e5ba0e1b1ab529cc349d162c761cea6b6765784` | `glyf`: the Arabic letters, marks and digits, **no presentation forms** in the cmap (U+FB50-FEFF): the contextual forms are reached only through GSUB, by a shaper; plus one **made-up** `curs` lookup (GPOS type 3) for 'marhaba': meem to reh and beh to alef, the exit anchor 40 units in, so a shaper gives these glyphs an x offset of -40 and an advance 40 below `hmtx` |
 | `mORMotTestCJK-Regular.otf` | 66,920 | `952173c26fbe5d702554386dcc1e0320727520478291da036618c01b9df78642` | CID-keyed CFF (Adobe-Identity-0): Basic Latin, a few ideographs and kana; after the subset most glyph indexes differ from their CIDs (U+5B57: glyph 257, CID 15364) |
+| `mORMotTestSymbol-Regular.ttf` | 23,976 | `d93ae69394dc88c7f30d1ae86160497b2e2975f5a6c3e9859f51377af2bac259` | `glyf`: a symbol font as Wingdings is one - ASCII at U+F020-F07E in a single (3,0) cmap, the symbol code page (OS/2 bit 31), the name records in the symbol encoding |
+| `mORMotTestCollection.ttc` | 46,776 | `875acb78bbf2b9d91f4a0f686a0bf98924a399a0cfffc8f484d2e2c7b37d3ccd` | a collection of two `glyf` faces: face 0 Basic Latin, face 1 the same without 'A'-'G', so its 'H' is glyph 34, face 0's glyph 41 |
 
-All three keep their layout tables (GSUB and GPOS; GDEF in the two `glyf`
-faces, BASE and VORG in the CJK face) and drop the hinting; name IDs 1-4 and 6 are renamed (16 and 17 likewise
-and 18-25 dropped if a source has them - these three have none), and the
+All keep their layout tables (GSUB and GPOS; GDEF in the `glyf` faces, BASE
+and VORG in the CJK face) and drop the hinting; name IDs 1-4 and 6 are
+renamed (16 and 17 likewise and 18-25 dropped if a source has them - the
+three sources have none), and the
 CFF names follow name ID 6. The copyright (0), trademark (7) and URL (11)
 records of the sources are kept.
 
