@@ -31,6 +31,7 @@ uses
   mormot.pdf.types,     // TPdfStructRole, GetPdfFonts
   mormot.pdf,
   pdf_inspect,          // NormalizePdf, ComparePdfText
+  test_pdf_crossplatform, // EnsureTestFonts, TEST_CJK, TEST_ARABIC
   test_pdf_subset;      // DrawUtf8Text
 
 var
@@ -144,18 +145,9 @@ const
   UMLAUTS: RawUtf8 = 'Umlauts: ' + {$ifdef HASCODEPAGE}
     #$00E4#$00F6#$00FC#$00C4#$00D6#$00DC#$00DF' '#$20AC {$else}
     #$C3#$A4#$C3#$B6#$C3#$BC#$C3#$84#$C3#$96#$C3#$9C#$C3#$9F' '#$E2#$82#$AC {$endif};
-  {$ifdef OSWINDOWS}
-  CJK_FONT = 'Microsoft YaHei';
-  ARABIC_FONT = 'Tahoma';
-  {$else}
-  {$ifdef OSDARWIN}
-  CJK_FONT = 'Hiragino Sans GB';
-  ARABIC_FONT = 'Geeza Pro';
-  {$else}
-  CJK_FONT = 'Droid Sans Fallback';
-  ARABIC_FONT = 'Noto Naskh Arabic';
-  {$endif OSDARWIN}
-  {$endif OSWINDOWS}
+  // the registered test fonts (tests/fonts), the same faces on every machine
+  CJK_FONT = TEST_CJK;
+  ARABIC_FONT = TEST_ARABIC;
   INVOICE_XML = '<?xml version="1.0" encoding="UTF-8"?>'#10 +
     '<rsm:CrossIndustryInvoice xmlns:rsm="urn:un:unece:uncefact:data:' +
     'standard:CrossIndustryInvoice:100"/>'#10;
@@ -560,6 +552,7 @@ procedure TPdfGoldenTests.CjkSubset;
 var
   doc: TPdfDocument;
 begin
+  Check(EnsureTestFonts, 'the test fonts registered'); // before the font list
   doc := TPdfDocument.Create;
   try
     doc.Info.CreationDate := GOLDEN_DATE;
@@ -578,6 +571,7 @@ procedure TPdfGoldenTests.ArabicShaped;
 var
   doc: TPdfDocument;
 begin
+  Check(EnsureTestFonts, 'the test fonts registered'); // before the font list
   doc := TPdfDocument.Create;
   try
     doc.Info.CreationDate := GOLDEN_DATE;
