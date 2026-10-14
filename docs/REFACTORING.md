@@ -808,7 +808,24 @@ Process, agreed in the forum:
     before Phase 3 moves it, `mormot.pdf` and `mormot.pdf.canvas` in one PR
     before the 2.5 merge (Arnaud expects more formatting), the report
     (`mormot.pdf.report` since Phase 4) after `feature/invoice-demo` has
-    landed, at the latest before the 2.5 merge (decided for Phase 4)
+    landed, at the latest before the 2.5 merge (decided for Phase 4).
+    These PRs also bring the existing code to the source form of
+    `CLAUDE.md` (binding since 2026-10-14), measured that day: banners
+    missing in `mormot.pdf.fpimage`, `.report`, `.report.preview`,
+    `.types`, and written `{****` without the space in `mormot.pdf` (8) and
+    `mormot.pdf.canvas` (4); `///` missing on 2 of 16 unit-level routines
+    of `mormot.pdf`; `raise Exception.Create` 10 times in
+    `mormot.pdf.report`, once in `mormot.pdf` (the PDF/A font fallback) and
+    once in `zugferd_demo` (`ESynException` instead - a change for callers
+    that catch by class, so "To Announce"); `with` outside comments and
+    strings 57 times in `mormot.pdf`, 64 in `mormot.pdf.canvas` (mostly
+    from the trunk's original), twice in `mormot.pdf.report`, 10 times in
+    the tests, twice in `mormot.lib.harfbuzz`; no licence line in any unit or program of
+    `tests` and `examples`, no overview block or banner in the test units,
+    no `///` head in six demo units (both `uReport`, both main forms,
+    `server`, `data`). Fields without `f`: `TPdfWrite.B`, `BEnd`, `BEnd4`
+    (from the original) and `TPdfEnum.Canvas`, `Obj`, `nDC`, `DC`
+    (`mormot.pdf.canvas`)
 - **Into the trunk after mORMot 2.5** (Arnaud, gist, 2026-10-11): the trunk
   is in its 2.5 release cycle, so the work stays in the branches until 2.5
   is out and merges then; the trunk's old `mormot.ui.pdf` and

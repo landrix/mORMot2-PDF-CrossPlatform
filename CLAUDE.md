@@ -271,7 +271,34 @@ Details on interfaces and registration: `.claude/skills/platform-backends.md`
   numbers as `RawByteString`, never from `#$8B` literals or `StringOfChar`
 - No blank lines between `begin`/`end` blocks
 - Interfaces with reference counting (`TInterfacedObject`)
-- Error handling via `ESynException`
+- **The mORMot2 source form — binding** (decided 2026-10-14, checked
+  against the trunk's own code): new and changed code follows it, the
+  existing code is brought to it in the formatting PRs (`docs/REFACTORING.md`,
+  "formatting"):
+  - **unit head:** a `///` line saying what the unit is, then
+    `// - this unit is a part of the Open Source Synopse mORMot framework 2,`
+    `// licensed under a MPL/GPL/LGPL three license - see LICENSE.md` - in
+    every unit and program, tests and demos too
+  - **overview block** under the `unit` line: `{ ***** … ***** }` naming the
+    sections of the unit
+  - **section banners** in interface and implementation:
+    `{ ************ Section Name }` - a space after the brace, as the trunk
+    writes them
+  - **`///` documentation** for everything public: types, routines,
+    methods, properties, constants; `// -` lines for the details
+  - **`f` prefix for fields**; no prefix required for parameters: the
+    trunk writes most of them without one (`Data`, `Len`; about 85% in the
+    interfaces of `src/core`), some with `a`
+  - **exceptions only of `ESynException`** or a class derived from it,
+    raised through `ESynException.RaiseU`/`RaiseUtf8` or `Create`; never
+    `Exception`, `EAbort` or another RTL class
+  - **no `with`** - stricter than the trunk, which has 469 outside
+    comments and strings in `src/core`, `lib`, `net` and `orm`: a `with`
+    hides which object a name belongs to, and a field added later changes
+    what the code means without a compiler message
+  - **CRLF line endings** in the working copy (`core.autocrlf` keeps the
+    index of this repository LF; the trunk stores CRLF - the units are
+    converted when they move there)
 - No RTTI where avoidable
 - **Comments: short, the why only.** A source comment says in a line or two
   why the code is as it is, so nobody removes what looks redundant. While a
