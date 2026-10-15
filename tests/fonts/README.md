@@ -14,6 +14,7 @@ this repository.
 | `mORMotTestCJK-Regular.otf` | mORMot Test CJK | face 0 (JP) of `NotoSansCJK-Regular.ttc` 2.004, `fonts-noto-cjk` 1:20230817 | `b76b0433203017ca80401b2ee0dd69350349871c4b19d504c34dbdd80541690a` |
 | `mORMotTestSymbol-Regular.ttf` | mORMot Test Symbol | `NotoSans-Regular.ttf`, as above | `89c3c497f618fdaa0b2d1e98fef93582f28c71debd2c4a8cdf41f190ced2909d` |
 | `mORMotTestSymbolLow-Regular.ttf` | mORMot Test Symbol Low | `NotoSans-Regular.ttf`, as above | `89c3c497f618fdaa0b2d1e98fef93582f28c71debd2c4a8cdf41f190ced2909d` |
+| `mORMotTestSymbolF2-Regular.ttf` | mORMot Test Symbol F2 | `NotoSans-Regular.ttf`, as above | `89c3c497f618fdaa0b2d1e98fef93582f28c71debd2c4a8cdf41f190ced2909d` |
 | `mORMotTestCollection.ttc` | mORMot Test TTC A, mORMot Test TTC B | `NotoSans-Regular.ttf`, as above | `89c3c497f618fdaa0b2d1e98fef93582f28c71debd2c4a8cdf41f190ced2909d` |
 
 | File | Bytes | sha256 | What it holds |
@@ -23,6 +24,7 @@ this repository.
 | `mORMotTestCJK-Regular.otf` | 66,920 | `952173c26fbe5d702554386dcc1e0320727520478291da036618c01b9df78642` | CID-keyed CFF (Adobe-Identity-0): Basic Latin, a few ideographs and kana; after the subset most glyph indexes differ from their CIDs (U+5B57: glyph 257, CID 15364) |
 | `mORMotTestSymbol-Regular.ttf` | 23,976 | `d93ae69394dc88c7f30d1ae86160497b2e2975f5a6c3e9859f51377af2bac259` | `glyf`: a symbol font as Wingdings is one - ASCII at U+F020-F07E in a single (3,0) cmap, the symbol code page (OS/2 bit 31), the name records in the symbol encoding |
 | `mORMotTestSymbolLow-Regular.ttf` | 24,008 | `64a8eeaaadec4ce731801bfecb5684773ff998c366b1fb38e20c5b9fbb673c3a` | the same symbol font with its cmap at U+0020-007E, the bytes as they are, as some older symbol fonts have it |
+| `mORMotTestSymbolF2-Regular.ttf` | 24,000 | `36d0bfca007ffadd5913994bb26bce6b007dc52e55db6943b77f0ecb1043b2cc` | the same symbol font with its cmap at U+F220-F27E, the last of the ranges ISO 32000-1 9.6.6.4 names for the bytes |
 | `mORMotTestCollection.ttc` | 46,776 | `875acb78bbf2b9d91f4a0f686a0bf98924a399a0cfffc8f484d2e2c7b37d3ccd` | a collection of two `glyf` faces: face 0 Basic Latin, face 1 the same without 'A'-'G', so its 'H' is glyph 34, face 0's glyph 41 |
 
 All keep their layout tables (GSUB and GPOS; GDEF in the `glyf` faces, BASE
@@ -33,7 +35,9 @@ CFF names follow name ID 6. The copyright (0), trademark (7) and URL (11)
 records of the sources are kept.
 
 Rebuilt with fontTools (4.65 here), the same bytes every time (the `head`
-dates are those of the source, the bounds those of the subset):
+dates are those of the source, the bounds those of the subset; GSUB and
+GPOS packed by fontTools' own packer even where `uharfbuzz` is installed,
+whose repacker lays the same tables out in other bytes):
 
 ```bash
 python tests/fonts/make_test_fonts.py <folder with the three sources> tests/fonts

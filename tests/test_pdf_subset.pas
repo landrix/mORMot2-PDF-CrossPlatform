@@ -90,6 +90,7 @@ type
     procedure TestSubsetTtcFace;
     procedure TestWholeTtcFace;
     procedure TestSubsetSymbolFont;
+    procedure TestSymbolFontGlyphs;
     procedure TestFaceNotFoundRaises;
     procedure TestTaggedAlwaysEmbeds;
     procedure TestGlyphAdvanceByIndex;
@@ -216,7 +217,7 @@ begin
           1:
             sub := p;
           0:
-            // a symbol font: its codes are U+F0xx
+            // a symbol font: its codes are bytes at U+F0xx, F1xx, F2xx or 00xx
             sym := p;
         end;
     end;
@@ -1121,6 +1122,73 @@ begin
             (SfntGlyphLength(sub, g) > 0);
   end;
   Check(kept, name + ': the glyphs of the text are kept');
+end;
+
+procedure TPdfSubsetEngineTests.TestSymbolFontGlyphs;
+const
+  SAMPLE = 'abc';
+  FAMILIES: array[0..2] of RawUtf8 = (
+    TEST_SYMBOL, TEST_SYMBOL_F2, TEST_SYMBOL_LOW);
+  // where each font's (3,0) cmap holds the bytes
+  RANGES: array[0..2] of cardinal = ($F000, $F200, 0);
+  OMEGA: RawUtf8 = {$ifdef HASCODEPAGE} #$03A9 {$else} #$CE#$A9 {$endif};
+var
+  doc: TPdfDocument;
+  Stream: TMemoryStream;
+  s, whole, line: RawByteString;
+  b, at: PtrInt;
+  i, n, g: integer;
+begin
+  { once a symbol font has its Unicode instance - a character out of WinAnsi
+    made it - its WinAnsi text is drawn by glyph, the byte looked up in the
+    (3,0) cmap: in each range of ISO 32000-1 9.6.6.4. A range the engine
+    missed gave glyph 0, so the fallback font drew the text }
+  Check(EnsureTestFonts, 'the test fonts registered');
+  // GDI maps nothing at U+00xx (TestRegisteredSymbol): not on Windows
+  for n := 0 to {$ifdef OSWINDOWS} 1 {$else} high(FAMILIES) {$endif} do
+  begin
+    Stream := TMemoryStream.Create;
+    try
+      doc := TPdfDocument.Create;
+      try
+        doc.CompressionMethod := cmNone;
+        doc.EmbeddedTTF := true;
+        doc.EmbeddedWholeTtf := true;
+        doc.AddPage;
+        doc.Canvas.SetFont(FAMILIES[n], 12, [], 2); // SYMBOL_CHARSET
+        DrawUtf8Text(doc, 15, 800, OMEGA);
+        // Omega has no WinAnsi byte: glyph 0, the fallback font drew it
+        doc.Canvas.SetFont(FAMILIES[n], 12, [], 2);
+        DrawUtf8Text(doc, 15, 770, SAMPLE);
+        doc.SaveToStream(Stream);
+      finally
+        doc.Free;
+      end;
+      SetLength(s, Stream.Size);
+      Stream.Position := 0;
+      Stream.Read(pointer(s)^, Stream.Size);
+    finally
+      Stream.Free;
+    end;
+    whole := FirstFontFile(s);
+    // no continue on failure: the checks below fail too, a constant count
+    Check(whole <> '', Utf8ToString(FAMILIES[n]) + ': embedded');
+    // the text object of the second line, not the /ToUnicode CMap
+    b := PosEx('770 Td', s);
+    line := copy(s, b, PosEx('ET', s, b) - b);
+    at := 1;
+    for i := 1 to length(SAMPLE) do
+    begin
+      g := SfntCmapLookup(whole, RANGES[n] + ord(SAMPLE[i]));
+      Check(g > 0, 'the cmap maps the byte');
+      // in order: a fallback face's glyph may have the same number
+      at := PosEx('<' + StringToUtf8(IntToHex(g, 4)) + '>', line, at);
+      Check(at > 0,
+        Utf8ToString(FAMILIES[n]) + ': drawn with the glyph the cmap maps the byte to');
+      if at = 0 then
+        at := length(line) + 1; // the rest fails too: a constant count
+    end;
+  end;
 end;
 
 procedure TPdfSubsetEngineTests.TestGlyphAdvanceByIndex;

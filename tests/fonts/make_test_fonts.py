@@ -134,6 +134,12 @@ FONTS = [
          dst="mORMotTestSymbolLow-Regular.ttf", family="mORMot Test Symbol Low",
          ps="mORMotTestSymbolLow-Regular", unicodes=ASCII,
          post=lambda font: make_symbol(font, 0)),
+    # the same symbol font with its cmap at U+F220-F27E: the last of the
+    # ranges ISO 32000-1 9.6.6.4 names for the bytes of a symbol font
+    dict(src="NotoSans-Regular.ttf", index=0,
+         dst="mORMotTestSymbolF2-Regular.ttf", family="mORMot Test Symbol F2",
+         ps="mORMotTestSymbolF2-Regular", unicodes=ASCII,
+         post=lambda font: make_symbol(font, 0xF200)),
     # a collection of two faces of their own names: face 1 lacks 'A'-'G', so
     # 'H' is another glyph there than in face 0
     dict(src="NotoSans-Regular.ttf", index=0,
@@ -158,6 +164,9 @@ def build(src, index, family, ps, unicodes):
     opts.font_number = index
     font = subset.load_font(src, opts)
     font.recalcTimestamp = False  # the same bytes on every rebuild
+    # the pure Python packer of GSUB/GPOS: with uharfbuzz installed fontTools
+    # packs them with HarfBuzz's repacker, the same tables in other bytes
+    font.cfg["fontTools.ttLib.tables.otBase:USE_HARFBUZZ_REPACKER"] = False
     sub = subset.Subsetter(opts)
     sub.populate(unicodes=unicodes)
     sub.subset(font)

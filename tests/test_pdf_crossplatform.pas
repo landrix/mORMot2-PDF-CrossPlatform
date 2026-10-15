@@ -63,6 +63,7 @@ const
   TEST_CJK = 'mORMot Test CJK';
   TEST_SYMBOL = 'mORMot Test Symbol';
   TEST_SYMBOL_LOW = 'mORMot Test Symbol Low';
+  TEST_SYMBOL_F2 = 'mORMot Test Symbol F2';
   TEST_TTC_A = 'mORMot Test TTC A';
   TEST_TTC_B = 'mORMot Test TTC B';
   /// DEFAULT_CHARSET: GDI takes another font for a registered one that lacks
@@ -110,15 +111,15 @@ end;
 
 function EnsureTestFonts: boolean;
 const
-  FILES: array[0..6] of TFileName = (
+  FILES: array[0..7] of TFileName = (
     'mORMotTestSans-Regular.ttf', 'mORMotTestArabic-Regular.ttf',
     'mORMotTestCJK-Regular.otf', 'mORMotTestSymbol-Regular.ttf',
-    'mORMotTestSymbolLow-Regular.ttf',
+    'mORMotTestSymbolLow-Regular.ttf', 'mORMotTestSymbolF2-Regular.ttf',
     'mORMotTestCollection.ttc', 'mORMotTestCollection.ttc');
-  FACES: array[0..6] of integer = (0, 0, 0, 0, 0, 0, 1);
-  FAMILIES: array[0..6] of RawUtf8 = (
+  FACES: array[0..7] of integer = (0, 0, 0, 0, 0, 0, 0, 1);
+  FAMILIES: array[0..7] of RawUtf8 = (
     TEST_SANS, TEST_ARABIC, TEST_CJK, TEST_SYMBOL, TEST_SYMBOL_LOW,
-    TEST_TTC_A, TEST_TTC_B);
+    TEST_SYMBOL_F2, TEST_TTC_A, TEST_TTC_B);
 var
   req: TFontRequest;
   data: RawByteString;
@@ -1068,15 +1069,15 @@ end;
 
 procedure TPdfCrossPlatTests.TestTestFontFiles;
 const
-  FILES: array[0..6] of TFileName = (
+  FILES: array[0..7] of TFileName = (
     'mORMotTestSans-Regular.ttf', 'mORMotTestArabic-Regular.ttf',
     'mORMotTestCJK-Regular.otf', 'mORMotTestSymbol-Regular.ttf',
-    'mORMotTestSymbolLow-Regular.ttf',
+    'mORMotTestSymbolLow-Regular.ttf', 'mORMotTestSymbolF2-Regular.ttf',
     'mORMotTestCollection.ttc', 'mORMotTestCollection.ttc');
-  FACES: array[0..6] of integer = (0, 0, 0, 0, 0, 0, 1);
-  FAMILIES: array[0..6] of RawUtf8 = (
+  FACES: array[0..7] of integer = (0, 0, 0, 0, 0, 0, 0, 1);
+  FAMILIES: array[0..7] of RawUtf8 = (
     'mORMot Test Sans', 'mORMot Test Arabic', 'mORMot Test CJK',
-    'mORMot Test Symbol', 'mORMot Test Symbol Low',
+    'mORMot Test Symbol', 'mORMot Test Symbol Low', 'mORMot Test Symbol F2',
     'mORMot Test TTC A', 'mORMot Test TTC B');
 var
   data: RawByteString;
@@ -1103,12 +1104,14 @@ const
   // glyph indexes 32, 65, 97 the codes would give 434, 281 and 350
   SAMPLE: array[0..2] of AnsiChar = (' ', 'A', 'a');
   ADVANCE: array[0..2] of integer = (260, 639, 561);
-  // the cmap at U+F020-F07E, as Wingdings has it, and at U+0020-007E -
-  // where GDI finds nothing: it gives the .notdef advance (measured)
-  FILES: array[0..1] of TFileName = (
-    'mORMotTestSymbol-Regular.ttf', 'mORMotTestSymbolLow-Regular.ttf');
-  FAMILIES: array[0..1] of RawUtf8 = (
-    'mORMot Test Symbol', 'mORMot Test Symbol Low');
+  // the cmap at U+F020-F07E, as Wingdings has it, at U+F220-F27E, and at
+  // U+0020-007E - where GDI finds nothing: it gives the .notdef advance
+  // (measured)
+  FILES: array[0..2] of TFileName = (
+    'mORMotTestSymbol-Regular.ttf', 'mORMotTestSymbolF2-Regular.ttf',
+    'mORMotTestSymbolLow-Regular.ttf');
+  FAMILIES: array[0..2] of RawUtf8 = (
+    'mORMot Test Symbol', 'mORMot Test Symbol F2', 'mORMot Test Symbol Low');
 var
   data: RawByteString;
   req: TFontRequest;
@@ -1123,7 +1126,7 @@ begin
   req.Weight := 400;
   req.CharSet := 2; // SYMBOL_CHARSET
   try
-    for n := 0 to {$ifdef OSWINDOWS} 0 {$else} high(FILES) {$endif} do
+    for n := 0 to {$ifdef OSWINDOWS} 1 {$else} high(FILES) {$endif} do
     begin
       data := StringFromFile(TestFontFile(FILES[n]));
       Check(data <> '', FILES[n]);
