@@ -1024,6 +1024,19 @@ the next. The split row's cells have to stay inside **one** `TR` element
 referencing both pages — `TPdfDocumentVcl.ResumeStructContent` does this for
 text blocks (B-2) and is the model to follow.
 
+### R-31 — WinAnsi Text in a Face Without a (3,1) or (1,0) cmap — unprioritised
+
+**Effort:** 1 day | **File:** `src/pdf/mormot.pdf.pas`
+
+Found by Martin on #52 (`arabic_system` on macOS): the space of line 1 is
+drawn as `.notdef`. The space goes through the simple TrueType font
+(WinAnsi), and a viewer reaches its glyph through the (3,1) or (1,0) cmap
+of the embedded program (ISO 32000-1 9.6.6.4); Geeza Pro has only (0,3).
+The engine has always written Geeza Pro this way; the golden case only made
+it visible, and the macOS baseline holds it. Fix: draw the WinAnsi text of
+such a face by glyph through its Type0 font, as a CFF face does
+(`Type0Only`), or write a (3,1) subtable into the embedded program.
+
 ### R-11 — TTC Face Index — unprioritised
 
 **Effort:** 1 day | **Files:** `mormot.lib.freetype`, `mormot.lib.core`
