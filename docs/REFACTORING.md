@@ -815,7 +815,8 @@ Process, agreed in the forum:
     `.types`, and written `{****` without the space in `mormot.pdf` (8) and
     `mormot.pdf.canvas` (4); `///` missing on 2 of 16 unit-level routines
     of `mormot.pdf`; `raise Exception.Create` 10 times in
-    `mormot.pdf.report`, once in `mormot.pdf` (the PDF/A font fallback) and
+    `mormot.pdf.report`, once in `mormot.pdf` (the PDF/A font fallback,
+    gone with the fallback step: `EPdfInvalidOperation` since 2026-10-15) and
     once in `zugferd_demo` (`ESynException` instead - a change for callers
     that catch by class, so "To Announce"); `with` outside comments and
     strings 57 times in `mormot.pdf`, 64 in `mormot.pdf.canvas` (mostly
@@ -1061,6 +1062,26 @@ Process, agreed in the forum:
   `test_runner` 1106/1106 on Windows (FPC 3.3.1 aarch64, Delphi 7, Delphi
   13 Win32/Win64), 1108 on Linux (also with `--require-fonts`), 1141 on
   macOS
+
+  **The fallback step** (branch `pr/fallback`, on #52; variant 2, decided
+  2026-10-15 after Codex and Fable - the engine owns the policy, the
+  shapers report missing coverage and reshape a part in its context, as
+  Blink, LibreOffice, Pango and Skia separate them). Sven decided: PDF/A
+  raises for every glyph left unresolved (ISO 19005-2 6.2.11.8 forbids
+  .notdef; iText and veraPDF see it so), and the WinAnsi coverage comes
+  from the engine's own cmap reader, not a new `IFontFace` method. Commit
+  1, the plain path: `TPdfTtf.LoadCmap`/`CreateCmap`/`GlyphOf` (the cmap
+  part of `TPdfTtf.Create` on its own), `TPdfFontTrueType.WinAnsiMissing`
+  (a set read once per WinAnsi font, only where a missing character has a
+  way out), the simple path and `ShowText(PdfString)` send such a
+  character the glyph way, `GetWideCharWidth` measures it in the fallback
+  face, `AddGlyphFromChar` raises under PDF/A for every glyph left 0
+  (`EPdfInvalidOperation`). `TestPlainFallback` (Test Arabic + Test Sans):
+  six checks fail without it. No golden file changed; `test_runner`
+  1115/1115 on Windows (FPC 3.3.1 aarch64, Delphi 7, Delphi 13
+  Win32/Win64), 1117 on Linux, 1150 on macOS. Next: the contract,
+  the Uniscribe and HarfBuzz shapers (fork), then the engine for shaped
+  text and a `mixed_fallback` golden case
 
 ## Open Decisions
 

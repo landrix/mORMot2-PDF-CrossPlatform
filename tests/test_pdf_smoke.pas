@@ -64,6 +64,7 @@ type
     procedure TestTaggedUnicode;
     procedure TestShapingSwitch;
     procedure TestShapedAfterFallback;
+    procedure TestPlainFallback;
     procedure TestShapedRunOutcomeUnset;
     procedure TestZeroRealIsWritten;
   end;
@@ -1279,6 +1280,83 @@ begin
   GetPdfFonts(true, sans, serif, mono);
   CheckEqual(CountOccurrences('/Type0', ShapedPdf(StringToUtf8(sans), 'Hello, World', true, false)), 0,
     'Latin text with UseUniscribe stays in the simple font');
+end;
+
+// Arabic and ' Ab' in the Arabic test font, Test Sans the fallback font
+function PlainFallbackPdf(aFallBack, aPdfString: boolean;
+  aPdfA: TPdfALevel = pdfaNone): RawByteString;
+var
+  PDF: TPdfDocument;
+  Stream: TMemoryStream;
+begin
+  Stream := TMemoryStream.Create;
+  try
+    PDF := TPdfDocument.Create(false, 0, aPdfA);
+    try
+      PDF.CompressionMethod := cmNone;
+      PDF.EmbeddedTTF := true;
+      PDF.FontFallBackName := TEST_SANS;
+      PDF.UseFontFallBack := aFallBack;
+      PDF.AddPage;
+      PDF.Canvas.SetFont(ARABIC_FONT, 24, [], PDF_DEFAULT_CHARSET);
+      if aPdfString then
+        PDF.Canvas.TextOut(40, 650, 'Ab')
+      else
+        DrawUtf8Text(PDF, 40, 650, ARABIC_TEXT + ' Ab');
+      PDF.SaveToStream(Stream);
+    finally
+      PDF.Free;
+    end;
+    result := StreamToRaw(Stream);
+  finally
+    Stream.Free;
+  end;
+end;
+
+procedure TPdfSmokeTests.TestPlainFallback;
+var
+  s: RawByteString;
+  raised: boolean;
+  PDF: TPdfDocument;
+  arabic, sans: single;
+begin
+  { a WinAnsi character the main face lacks went out in its simple font as
+    .notdef: it is drawn by glyph now, where it falls back - read from the
+    face's own cmap, no Unicode font added for a face that has them all }
+  Check(EnsureTestFonts, 'the test fonts registered');
+  s := PlainFallbackPdf(true, false);
+  Check(Pos(RawByteString('mORMotTestSans'), s) > 0, 'the fallback font drew Ab');
+  Check(Pos(RawByteString('Ab) Tj'), s) = 0, 'not in the simple Arabic font');
+  s := PlainFallbackPdf(true, true);
+  Check(Pos(RawByteString('mORMotTestSans'), s) > 0, 'TextOut of a PdfString too');
+  Check(Pos(RawByteString('(Ab) Tj'), s) = 0, 'TextOut: not in the simple font');
+  // no fallback: the simple font draws it, as before
+  s := PlainFallbackPdf(false, false);
+  Check(Pos(RawByteString('mORMotTestSans'), s) = 0, 'fallback off: no Test Sans');
+  Check(Pos(RawByteString('Ab) Tj'), s) > 0, 'fallback off: the simple font');
+  // PDF/A forbids .notdef (ISO 19005-2 6.2.11.8): no way out raises
+  raised := false;
+  try
+    PlainFallbackPdf(false, false, pdfa3U);
+  except
+    on E: EPdfInvalidOperation do
+      raised := Pos('U+0041', E.Message) > 0; // ours, not another rule's
+  end;
+  Check(raised, 'PDF/A without a fallback raises');
+  // measured where it is drawn
+  PDF := TPdfDocument.Create;
+  try
+    PDF.FontFallBackName := TEST_SANS;
+    PDF.AddPage;
+    PDF.Canvas.SetFont(TEST_SANS, 24, [], PDF_DEFAULT_CHARSET);
+    sans := PDF.Canvas.UnicodeTextWidth('Ab');
+    PDF.Canvas.SetFont(ARABIC_FONT, 24, [], PDF_DEFAULT_CHARSET);
+    arabic := PDF.Canvas.UnicodeTextWidth('Ab');
+    Check((sans > 0) and
+          (abs(arabic - sans) < 0.01), 'measured with the fallback font');
+  finally
+    PDF.Free;
+  end;
 end;
 
 procedure TPdfSmokeTests.TestShapedAfterFallback;

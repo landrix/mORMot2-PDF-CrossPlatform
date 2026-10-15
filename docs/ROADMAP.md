@@ -269,6 +269,15 @@ v0.10.0 (2026-09-30).
   a character out of WinAnsi had been drawn in it. Such a character itself
   is now drawn by the fallback font on every platform; on Windows it was
   drawn as the symbol font's glyph for '?'
+- **Fixed: characters the font lacks** (`mormot.pdf`): a WinAnsi
+  character (Latin, digits, punctuation) missing from the font - Latin text
+  in an Arabic or CJK font - was written in the font's simple encoding and
+  shown as a box; it is drawn from the fallback font now, as the other
+  characters were, and measured there. Only where a fallback font is on
+- **Changed under PDF/A:** a character neither the font nor the fallback
+  font has raises `EPdfInvalidOperation` (was `Exception`, and only when no
+  fallback font was registered at all): PDF/A forbids the box glyph
+  (ISO 19005-2 6.2.11.8), so such a file was not conformant
 - **New: fonts from memory** (`mormot.lib.core`): `RegisterFontData(Bytes,
   FaceIndex)` makes a TrueType/OpenType font, or a face of a collection,
   available by its family name - on Linux and macOS through

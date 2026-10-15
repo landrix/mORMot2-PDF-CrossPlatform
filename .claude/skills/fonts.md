@@ -506,10 +506,26 @@ if Glyph = 0 and fUseFontFallBack and fFontFallBackIndex >= 0:
     Glyph := 0
 else:
   fnt := Ttf
+if Glyph = 0 and fPdfA <> pdfaNone: raise EPdfInvalidOperation — PDF/A forbids .notdef
 
 Canvas.SetPdfFont(fnt.UnicodeFont, size)  — switch page font to CID font for output
 Add('<XXXX>')                              — write CID hex
 ```
+**A WinAnsi character the face lacks takes this path too** (since the
+fallback step, 2026-10-15): `AddUnicodeHexTextNoUniScribe` writes WinAnsi
+text as a `(...)` string in the simple font only while
+`Ttf.WinAnsiMissing(ansi)` is false. That set is read once per WinAnsi font
+from the face's own cmap (`TPdfTtf.CreateCmap` + `GlyphOf`, the reader of
+`TPdfTtf.Create` on its own), never through the Unicode instance, which
+would add a font object to every document. It applies only where a missing
+character has a way out - `UseFontFallBack` with a fallback face, or PDF/A
+(which raises) - and not to symbol fonts or an unreadable cmap; elsewhere
+the simple font draws it as before. `ShowText(PdfString)` sends such a text
+the Unicode way (`WinAnsiTextMissing`), and `GetWideCharWidth` gives 0 for
+it, so `UnicodeTextWidth` measures it in the fallback face. PDF/A raises for
+every glyph left 0 - fallback off, none registered, or the fallback face
+lacking it too (ISO 19005-2 6.2.11.8); before, only when none was
+registered.
 
 ### `GetAndMarkGlyphAsUsed(aGlyph)` — WinAnsi font only (`pdf.pas:6273`)
 
@@ -763,8 +779,10 @@ as `<XXXX> Tj` - the glyph ID, or the CID of a CID-keyed CFF face.
 No GSUB shaping; `GetAndMarkGlyphAsUsed` is not called.
 
 **Linux/macOS CJK font note:** CJK-only fallback fonts (e.g. `Droid Sans Fallback`) do not
-contain Latin glyphs. Mixed Latin+CJK strings rendered with a CJK font will show `.notdef`
-for the Latin portion. Render Latin segments with a separate Latin font.
+contain Latin glyphs. Mixed Latin+CJK strings rendered with a CJK font drew `.notdef` for the
+Latin portion until 2026-10-15; the Latin now comes from the fallback font on the plain path
+(above). Shaped text (`UseUniscribe`) does not fall back yet: the next commits of the
+fallback step.
 
 ---
 

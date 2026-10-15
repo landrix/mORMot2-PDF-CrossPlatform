@@ -2858,12 +2858,21 @@ type
     idRangeOffset: PWordArray;
     /// Glyph index array (arbitrary length)
     glyphIndexArray: PWordArray;
+    /// true if the cmap read is the (3,0) one of a symbol font
+    Symbol: boolean;
+  protected
+    // read the cmap of aFace: true with fmt4 and its arrays set
+    function LoadCmap(const aFace: IFontFace): boolean;
   public
     /// create Unicode glyph description for a supplied true Type Font
     // - reads the tables of its face (aUnicodeTtf.fFace)
     // - this constructor will fill fUsedWide[] and fUsedWideChar of aUnicodeTtf
     // with every available unicode value, and its corresponding glyph and width
     constructor Create(aUnicodeTtf: TPdfFontTrueType); reintroduce;
+    /// read the cmap of a face only, for GlyphOf
+    constructor CreateCmap(const aFace: IFontFace);
+    /// the glyph a code point has in the format 4 cmap, 0 if none
+    function GlyphOf(aCode: cardinal): integer;
   end;
 
   /// this dynamic array stores details about used unicode characters
@@ -2919,11 +2928,19 @@ type
     // the WinAnsi font of a CID-keyed or an embedded CFF face (Type0Only):
     // its dictionary is not in the file
     fInternal: boolean;
+    // the WinAnsi characters the face does not map, read on first use by
+    // WinAnsiMissing
+    fWinAnsiMissing: set of AnsiChar;
+    fWinAnsiMissingRead: boolean;
     // below are some bigger structures
     fLogFont: TFontRequest;
     fM: TFontMetrics;
     fOTM: TFontOutlineMetrics;
     procedure CreateAssociatedUnicodeFont;
+    // true if the face does not map the WinAnsi character and a missing one
+    // has a way out - the fallback font, or the PDF/A error: such a character
+    // is drawn by glyph, not in the simple font
+    function WinAnsiMissing(aAnsi: integer): boolean;
     // raise the error of a face that cannot be embedded, with its way out
     procedure RaiseNotEmbeddable;
     // update font description from used chars
@@ -5525,14 +5542,9 @@ begin
   else
     Glyph := 0;
   with Canvas.fDoc do
-    if (fPdfA <> pdfaNone) and
-       (Glyph = 0) and
-       (fFontFallBackIndex < 0) then
-      raise Exception.Create('PDF/A expects font fallback to be enabled, ' +
-        'and the required font is not available on this system')
-    else if (Glyph = 0) and
-            fUseFontFallBack and
-            (fFontFallBackIndex >= 0) then
+    if (Glyph = 0) and
+       fUseFontFallBack and
+       (fFontFallBackIndex >= 0) then
     begin
       if fAddGlyphFont = fMain then
       begin
@@ -5559,6 +5571,13 @@ begin
       fAddGlyphFont := fMain;
       fnt := Ttf;
     end;
+  // PDF/A forbids a reference to .notdef (ISO 19005-2 6.2.11.8)
+  if (Glyph = 0) and
+     (Canvas.fDoc.fPdfA <> pdfaNone) then
+    EPdfInvalidOperation.RaiseUtf8('PDF/A: U+% is in neither "%" nor the ' +
+      'fallback font - set FontFallBackName to a font that has it', [
+      IntToHex(ord(Char), 4),
+      Canvas.fDoc.fTrueTypeFonts[Ttf.fTrueTypeFontsIndex - 1]]);
   if (Canvas.fPage.Font <> fnt.UnicodeFont) and
      (fnt.UnicodeFont = nil) then
     fnt.CreateAssociatedUnicodeFont;
@@ -5617,6 +5636,16 @@ procedure TPdfWrite.AddUnicodeHexTextNoUniScribe(PW: PWideChar;
 var
   ansi: integer;
   symbolfont, type0only: boolean;
+
+  // a WinAnsi character the face lacks is drawn by glyph, which falls back
+  function Missing(aAnsi: integer): boolean;
+  begin
+    result := (Ttf <> nil) and
+              not symbolfont and
+              not type0only and
+              Ttf.WinAnsiMissing(aAnsi);
+  end;
+
 begin
   type0only := false;
   if Ttf <> nil then
@@ -5638,7 +5667,8 @@ begin
   begin
     if (ansi > 0) and
        not symbolfont and
-       not type0only then
+       not type0only and
+       not Missing(ansi) then
     begin
       // add WinAnsi-encoded chars as such
       if (Ttf <> nil) and
@@ -5659,7 +5689,8 @@ begin
         if (Ttf = nil) and
            (ansi < 0) then
           ansi := ord('?'); // WinAnsi only font shows ? glyph for unicode chars
-      until ansi <= 0;
+      until (ansi <= 0) or
+            Missing(ansi);
       Add(')').Add(SHOWTEXTCMD[NextLine]);
       NextLine := false; // MoveToNextLine only once
     end;
@@ -5677,7 +5708,8 @@ begin
           continue; // we allow one space inside Unicode text
     until (ansi = 0) or
           ((ansi > 0) and
-           not type0only);
+           not type0only and
+           not Missing(ansi));
     AddGlyphFlush(Canvas, Ttf, @NextLine);
   end;
 end;
@@ -6164,21 +6196,19 @@ end;
 
 { TPdfTtf }
 
-constructor TPdfTtf.Create(aUnicodeTtf: TPdfFontTrueType);
+function TPdfTtf.LoadCmap(const aFace: IFontFace): boolean;
 var
   P: pointer;
   SubTable: ^TCmapSubTableArray absolute P;
   Header: ^TCmapHeader;
-  i, n, code, ndx: PtrInt;
+  i: PtrInt;
   off, uni: cardinal;
-  glyph: integer;
-  delta, offs: PtrInt;
-  W, numOfLongHorMetrics: word;
 begin
+  result := false;
   // retrieve the 'cmap' (character code mapping) table
   // see http://developer.apple.com/fonts/TTRefMan/RM06/Chap6cmap.html
   // and http://www.microsoft.com/typography/OTSPEC/cmap.htm
-  P := GetTtfData(aUnicodeTtf.fFace, 'cmap', fcmap);
+  P := GetTtfData(aFace, 'cmap', fcmap);
   if P = nil then
     exit;
   Header := P;
@@ -6191,12 +6221,12 @@ begin
       begin
         if platformSpecificID = TTFCFP_SYMBOL_CHAR_SET then
         begin
-          aUnicodeTtf.fIsSymbolFont := true;
+          Symbol := true;
           off := offset;
         end
         else if platformSpecificID = TTFCFP_UNICODE_CHAR_SET then
         begin
-          aUnicodeTtf.fIsSymbolFont := false;
+          Symbol := false;
           off := offset;
           break; // preferred specific ID
         end;
@@ -6213,7 +6243,7 @@ begin
   if off = 0 then
   begin
     off := uni; // no Microsoft subtable: fall back to the Unicode platform
-    aUnicodeTtf.fIsSymbolFont := false;
+    Symbol := false;
   end;
   if off = 0 then
     exit; // no subtable we could use
@@ -6239,13 +6269,71 @@ begin
   with fmt4^ do
   begin
     if format <> 4 then
+    begin
+      fmt4 := nil;
       exit; // we handle only cmap table format 4
+    end;
     endCode := pointer(PtrUInt(@format) + SizeOf(TCmapFmt4));
     startCode := pointer(PtrUInt(endCode) + segCountX2 + 2); // +2 = reservedPad
     idDelta := pointer(PtrUInt(startCode) + segCountX2);
     idRangeOffset := pointer(PtrUInt(idDelta) + segCountX2);
     glyphIndexArray := pointer(PtrUInt(idRangeOffset) + segCountX2);
   end;
+  result := true;
+end;
+
+constructor TPdfTtf.CreateCmap(const aFace: IFontFace);
+begin
+  inherited Create;
+  if not LoadCmap(aFace) then
+    fmt4 := nil;
+end;
+
+function TPdfTtf.GlyphOf(aCode: cardinal): integer;
+var
+  i, n, ndx: PtrInt;
+begin
+  result := 0;
+  if (fmt4 = nil) or
+     (aCode > $ffff) then
+    exit;
+  n := fmt4^.segCountX2 shr 1;
+  for i := 0 to n - 1 do
+    if endCode[i] >= aCode then
+    begin
+      if startCode[i] > aCode then
+        exit; // in no segment
+      if idRangeOffset[i] = 0 then
+        result := (integer(aCode) + idDelta[i]) and $ffff
+      else
+      begin
+        ndx := idRangeOffset[i] shr 1 + i - n + PtrInt(aCode) - startCode[i];
+        // within the table read: a broken cmap is no glyph, not a GPF
+        if (ndx < 0) or
+           (PtrUInt(@glyphIndexArray[ndx]) + 2 >
+            PtrUInt(fcmap) + PtrUInt(length(fcmap)) * 2) then
+          exit;
+        result := glyphIndexArray[ndx];
+        if result <> 0 then
+          result := (result + idDelta[i]) and $ffff;
+      end;
+      exit;
+    end;
+end;
+
+constructor TPdfTtf.Create(aUnicodeTtf: TPdfFontTrueType);
+var
+  P: pointer;
+  i, n, code, ndx: PtrInt;
+  glyph: integer;
+  delta, offs: PtrInt;
+  W, numOfLongHorMetrics: word;
+begin
+  Symbol := aUnicodeTtf.fIsSymbolFont;
+  i := ord(LoadCmap(aUnicodeTtf.fFace));
+  aUnicodeTtf.fIsSymbolFont := Symbol; // as the selection left it
+  if i = 0 then
+    exit;
   // 'head', 'hmtx' (horizontal metrics) and 'hhea' (Horizontal Header) tables
   // see http://developer.apple.com/fonts/TTRefMan/RM06/Chap6hmtx.html
   head := GetTtfData(aUnicodeTtf.fFace, 'head', fhead);
@@ -6806,7 +6894,12 @@ begin
   result := WideCharToWinAnsi(ord(aWideChar));
   if Type0Only then
     result := -1; // a WinAnsi character is drawn as a glyph too: its /W width
-  if result >= 0 then
+  if (result >= 0) and
+     fDoc.fUseFontFallBack and
+     (fDoc.fFontFallBackIndex >= 0) and
+     WinAnsiMissing(result) then
+    result := 0 // drawn by the fallback font: UnicodeTextWidth measures it there
+  else if result >= 0 then
     if (fWinAnsiWidth <> nil) and
        (result >= 32) then
       result := fWinAnsiWidth[AnsiChar(result)]
@@ -7686,6 +7779,44 @@ procedure TPdfFontTrueType.CreateAssociatedUnicodeFont;
 begin
   fUnicodeFont := TPdfFontTrueType.Create(
     fDoc, fTrueTypeFontsIndex - 1, fStyle, fLogFont, self);
+end;
+
+function TPdfFontTrueType.WinAnsiMissing(aAnsi: integer): boolean;
+var
+  ttf: TPdfTtf;
+  c: AnsiChar;
+begin
+  result := false;
+  if fUnicode then
+  begin
+    result := fWinAnsiFont.WinAnsiMissing(aAnsi);
+    exit;
+  end;
+  if not ((fDoc.fUseFontFallBack and
+           (fDoc.fFontFallBackIndex >= 0)) or
+          (fDoc.fPdfA <> pdfaNone)) then
+    exit; // no way out: the simple font draws it, as it always did
+  if aAnsi = 160 then
+    aAnsi := 32; // written as a space
+  if (aAnsi < 32) or
+     (aAnsi > 255) then
+    exit;
+  if not fWinAnsiMissingRead then
+  begin
+    // the face's own cmap: the Unicode instance would add a font object
+    fWinAnsiMissingRead := true;
+    ttf := TPdfTtf.CreateCmap(fFace);
+    try
+      if (ttf.fmt4 <> nil) and // an unreadable cmap: no check
+         not ttf.Symbol then
+        for c := #32 to #255 do
+          if ttf.GlyphOf(WinAnsiConvert.AnsiToWide[ord(c)]) = 0 then
+            include(fWinAnsiMissing, c);
+    finally
+      ttf.Free;
+    end;
+  end;
+  result := AnsiChar(aAnsi) in fWinAnsiMissing;
 end;
 
 
@@ -11337,6 +11468,20 @@ end;
 
 {$endif HASVARUSTRING}
 
+// true if the face lacks a character of a WinAnsi text: the Unicode path
+// draws it, where it falls back
+function WinAnsiTextMissing(Ttf: TPdfFontTrueType; const Text: PdfString): boolean;
+var
+  i: PtrInt;
+begin
+  result := true;
+  if not Ttf.IsSymbolic then
+    for i := 1 to length(Text) do
+      if Ttf.WinAnsiMissing(ord(Text[i])) then
+        exit;
+  result := false;
+end;
+
 procedure TPdfCanvas.ShowText(const text: PdfString; NextLine: boolean);
 begin
   ReselectFont;
@@ -11345,7 +11490,8 @@ begin
     if ((fDoc.fCharSet = ANSI_CHARSET) or
         IsAnsiCompatible(text)) and
        ((fPage.fFont.FTrueTypeFontsIndex = 0) or
-        not TPdfFontTrueType(fPage.fFont).Type0Only) then
+        not (TPdfFontTrueType(fPage.fFont).Type0Only or
+             WinAnsiTextMissing(TPdfFontTrueType(fPage.fFont), text))) then
     begin
       if fPage.Font.Unicode and
          (fPage.fFont.FTrueTypeFontsIndex <> 0) then
