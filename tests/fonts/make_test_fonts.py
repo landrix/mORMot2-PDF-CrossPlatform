@@ -113,6 +113,10 @@ def pad_glyphs(font, count=4200):
         if tag in font:
             del font[tag]
     order = font.getGlyphOrder()
+    # expanded first: a composite still in raw bytes keeps the old component
+    # IDs, which would then address the pads
+    for name in order:
+        font["glyf"][name]
     pads = ["pad%04d" % i for i in range(count)]
     for name in pads:
         glyph = Glyph()
@@ -251,6 +255,16 @@ for f in FONTS:
             f["post"](font)
         font.save(dst)
         fonts = [TTFont(dst)]
+    for t in fonts:
+        # every component of a composite glyph has an outline of its own
+        glyf = t["glyf"] if "glyf" in t else None
+        for name in (t.getGlyphOrder() if glyf else []):
+            g = glyf[name]
+            if g.isComposite():
+                for c in g.components:
+                    if glyf[c.glyphName].numberOfContours == 0:
+                        raise SystemExit("%s: %s uses the empty glyph %s"
+                                         % (f["dst"], name, c.glyphName))
     data = open(dst, "rb").read()
     print("  written", f["dst"], len(data), "bytes, sha256",
           hashlib.sha256(data).hexdigest())

@@ -1053,7 +1053,14 @@ Process, agreed in the forum:
   (FontSub on a CJK face again), `TestSubsetCjkGlyf`, and
   `TestShapedGlyphKeys` without an installed face. A subset with retained
   glyph IDs was 404 KB (hmtx, vmtx and loca up to glyph 39783, which the
-  glyf closure kept); the padding gives the same high IDs
+  glyf closure kept); the padding gives the same high IDs. Fable: the
+  composites kept their pre-padding component IDs (glyphs still raw bytes
+  when the order changed), so they addressed the empty pads - 2 of the 6
+  golden characters blank; `pad_glyphs` expands every glyph first, and the
+  generator now refuses a composite whose component has no outline.
+  `test_runner` 1106/1106 on Windows (FPC 3.3.1 aarch64, Delphi 7, Delphi
+  13 Win32/Win64), 1108 on Linux (also with `--require-fonts`), 1141 on
+  macOS
 
 ## Open Decisions
 
