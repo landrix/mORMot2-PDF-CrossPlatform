@@ -6352,7 +6352,7 @@ type
 
 function TPdfFontTrueType.FindOrAddUsedWideChar(aWideChar: WideChar): integer;
 var
-  n, i: integer;
+  n, i, range: integer;
   aSymbolAnsiChar: AnsiChar;
 begin
   if fUnicode then // we need fUsedWide[] to be the used glyphs
@@ -6380,9 +6380,14 @@ begin
   if (i < 0) and
      UnicodeFont.fIsSymbolFont then
   begin
+    // the byte in each range ISO 32000-1 9.6.6.4 names for a (3,0) cmap
     fDoc.Engine.UnicodeBufferToAnsi(@aSymbolAnsiChar, @aWideChar, 1);
-    aWideChar := WideChar($f000 + ord(aSymbolAnsiChar));
-    i := UnicodeFont.fUsedWideChar.IndexOf(ord(aWideChar));
+    range := $f000;
+    repeat
+      i := UnicodeFont.fUsedWideChar.IndexOf(range + ord(aSymbolAnsiChar));
+      inc(range, $100);
+    until (i >= 0) or
+          (range > $f200);
   end;
   if (i < 0) or (i >= length(UnicodeFont.fUsedWide)) then
     i := 0 // glyph absent from CMAP or invariant broken -> use .notdef
