@@ -269,6 +269,22 @@ v0.10.0 (2026-09-30).
   a character out of WinAnsi had been drawn in it. Such a character itself
   is now drawn by the fallback font on every platform; on Windows it was
   drawn as the symbol font's glyph for '?'
+- **Fixed: characters the font lacks** (`mormot.pdf`): a WinAnsi
+  character (Latin, digits, punctuation) missing from the font - Latin text
+  in an Arabic or CJK font - was written in the font's simple encoding and
+  shown as a box; it is drawn from the fallback font now, as the other
+  characters were, and measured there. Only where a fallback font is on
+- **Fixed: mixed text with `UseUniscribe`** (`mormot.pdf`, the shapers of
+  `mormot.lib`): a part of a shaped line the font has no glyphs for - Latin
+  in an Arabic font, Devanagari in a Latin one - is shaped again in the
+  fallback font and drawn from it; Uniscribe drew it as boxes. On Linux and
+  macOS HarfBuzz now shapes a mixed line script by script: `Ab` followed by
+  Arabic left the Arabic unjoined, and `RightToLeftText` turned Latin around
+  as well - it is the base direction of the line now, as on Windows
+- **Changed under PDF/A:** a character neither the font nor the fallback
+  font has raises `EPdfInvalidOperation` (was `Exception`, and only when no
+  fallback font was registered at all): PDF/A forbids the box glyph
+  (ISO 19005-2 6.2.11.8), so such a file was not conformant
 - **New: fonts from memory** (`mormot.lib.core`): `RegisterFontData(Bytes,
   FaceIndex)` makes a TrueType/OpenType font, or a face of a collection,
   available by its family name - on Linux and macOS through
@@ -1007,6 +1023,19 @@ row. Let the row split: partial cell content on the current page, the rest on
 the next. The split row's cells have to stay inside **one** `TR` element
 referencing both pages — `TPdfDocumentVcl.ResumeStructContent` does this for
 text blocks (B-2) and is the model to follow.
+
+### R-31 — WinAnsi Text in a Face Without a (3,1) or (1,0) cmap — unprioritised
+
+**Effort:** 1 day | **File:** `src/pdf/mormot.pdf.pas`
+
+Found by Martin on #52 (`arabic_system` on macOS): the space of line 1 is
+drawn as `.notdef`. The space goes through the simple TrueType font
+(WinAnsi), and a viewer reaches its glyph through the (3,1) or (1,0) cmap
+of the embedded program (ISO 32000-1 9.6.6.4); Geeza Pro has only (0,3).
+The engine has always written Geeza Pro this way; the golden case only made
+it visible, and the macOS baseline holds it. Fix: draw the WinAnsi text of
+such a face by glyph through its Type0 font, as a CFF face does
+(`Type0Only`), or write a (3,1) subtable into the embedded program.
 
 ### R-11 — TTC Face Index — unprioritised
 

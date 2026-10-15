@@ -430,8 +430,12 @@ AddUnicodeHexTextShaped:
     else → not shaped
   MoveToNextLine once if NextLine
   per run (visual order):
+    fsoMissingGlyphs, or fskPlain + fsoFailed, with the fallback on
+                           → AddShapedFallback: shaped again in the fallback
+                             face (IFontRunShaper), drawn from it if fsoDone
     fskPlain or fsoUnknown → AddUnicodeHexTextNoUniScribe(#0-terminated copy)
-    fskShaped              → AddShapedRun(Run, WinAnsiTtf)
+    fskShaped              → AddShapedRun(Run, WinAnsiTtf); a missing-glyph
+                             run raises under PDF/A
     fskSkip                → nothing
 
 AddShapedRun(Run, WinAnsiTtf):
@@ -506,10 +510,26 @@ if Glyph = 0 and fUseFontFallBack and fFontFallBackIndex >= 0:
     Glyph := 0
 else:
   fnt := Ttf
+if Glyph = 0 and fPdfA <> pdfaNone: raise EPdfInvalidOperation — PDF/A forbids .notdef
 
 Canvas.SetPdfFont(fnt.UnicodeFont, size)  — switch page font to CID font for output
 Add('<XXXX>')                              — write CID hex
 ```
+**A WinAnsi character the face lacks takes this path too** (since the
+fallback step, 2026-10-15): `AddUnicodeHexTextNoUniScribe` writes WinAnsi
+text as a `(...)` string in the simple font only while
+`Ttf.WinAnsiMissing(ansi)` is false. That set is read once per WinAnsi font
+from the face's own cmap (`TPdfTtf.CreateCmap` + `GlyphOf`, the reader of
+`TPdfTtf.Create` on its own), never through the Unicode instance, which
+would add a font object to every document. It applies only where a missing
+character has a way out - `UseFontFallBack` with a fallback face, or PDF/A
+(which raises) - and not to symbol fonts or an unreadable cmap; elsewhere
+the simple font draws it as before. `ShowText(PdfString)` sends such a text
+the Unicode way (`WinAnsiTextMissing`), and `GetWideCharWidth` gives 0 for
+it, so `UnicodeTextWidth` measures it in the fallback face. PDF/A raises for
+every glyph left 0 - fallback off, none registered, or the fallback face
+lacking it too (ISO 19005-2 6.2.11.8); before, only when none was
+registered.
 
 ### `GetAndMarkGlyphAsUsed(aGlyph)` — WinAnsi font only (`pdf.pas:6273`)
 
@@ -630,7 +650,7 @@ guarded `Doc.UseUniscribe := true` compiles to nothing and the shaper never
 runs — Section 2 of `rtl_demo` then produces output byte-identical to its
 no-shaper Section 1. This was ROADMAP R-16. The property is declared
 unconditionally for that reason, and since 2026-09-29 it is the shaping switch
-on Linux/macOS too (HarfBuzz; `RightToLeftText` is the direction only —
+on Linux/macOS too (HarfBuzz; `RightToLeftText` is the base direction only —
 `platform-backends.md`, Registration). `TestUseUniscribeIsPortable` fails to
 compile if it is ever gated again; `TestShapingSwitch` checks the output.
 
@@ -763,8 +783,10 @@ as `<XXXX> Tj` - the glyph ID, or the CID of a CID-keyed CFF face.
 No GSUB shaping; `GetAndMarkGlyphAsUsed` is not called.
 
 **Linux/macOS CJK font note:** CJK-only fallback fonts (e.g. `Droid Sans Fallback`) do not
-contain Latin glyphs. Mixed Latin+CJK strings rendered with a CJK font will show `.notdef`
-for the Latin portion. Render Latin segments with a separate Latin font.
+contain Latin glyphs. Mixed Latin+CJK strings rendered with a CJK font drew `.notdef` for the
+Latin portion until 2026-10-15; the Latin now comes from the fallback font on the plain path
+(above), and in shaped text (`UseUniscribe`) the part the font lacks is shaped again in the
+fallback face (platform-backends skill, "The one caller").
 
 ---
 

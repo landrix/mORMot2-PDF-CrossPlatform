@@ -73,6 +73,7 @@ type
     procedure CjkGlyfSubset;
     procedure CjkSystem;
     procedure ArabicSystem;
+    procedure MixedFallback;
     {$ifdef PDF_HASVCLCANVAS}
     procedure CanvasBridge;
     procedure CanvasBridgeShapes;
@@ -652,6 +653,32 @@ end;
 procedure TPdfGoldenTests.ArabicSystem;
 begin
   GoldenSystem(SYSTEM_ARABIC_FONT, 'arabic_system', true);
+end;
+
+procedure TPdfGoldenTests.MixedFallback;
+var
+  doc: TPdfDocument;
+begin
+  // Arabic and Latin in the Arabic test font: the Latin shaped again in the
+  // fallback face, Test Sans - a left-to-right line, then a right-to-left one
+  if not Check(EnsureTestFonts, 'the test fonts registered') then
+    exit;
+  doc := TPdfDocument.Create;
+  try
+    doc.Info.CreationDate := GOLDEN_DATE;
+    doc.CompressionMethod := cmNone;
+    doc.EmbeddedTTF := true;
+    doc.FontFallBackName := TEST_SANS;
+    doc.UseUniscribe := true;
+    doc.AddPage;
+    doc.Canvas.SetFont(ARABIC_FONT, 24, [], PDF_DEFAULT_CHARSET);
+    DrawUtf8Text(doc, 56, 760, ARABIC_TEXT + ' Ab');
+    doc.Canvas.RightToLeftText := true;
+    DrawUtf8Text(doc, 56, 700, ARABIC_TEXT + ' Ab');
+    CheckGolden('mixed_fallback', SaveDoc(doc));
+  finally
+    doc.Free;
+  end;
 end;
 
 {$ifdef PDF_HASVCLCANVAS}

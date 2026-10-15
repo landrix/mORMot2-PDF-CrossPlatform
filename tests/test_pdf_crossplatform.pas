@@ -139,8 +139,10 @@ begin
       'the system face % is missing (--require-fonts)', [Name])))
   else
   begin
+    // reported for a face of this OS's list; another OS's face is expected
+    // to be missing, so it is skipped silently
     Test.Check(true, 'SKIP: a system face is not installed');
-    if required then // another OS's face is expected to be missing
+    if required then
       Test.AddConsole('extra skipped: % is not installed', [Name]);
   end;
 end;

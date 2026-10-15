@@ -369,10 +369,12 @@ AddUnicodeHexText (pdf.pas) — UseUniscribe gates the one shaper (since W2):
           RightToLeftText: state.uBidiLevel := 1
         no item fComplex or fRtl → false (Latin: the simple path)
         ScriptLayout(count, levels, VisualToLogical) → visual order
-        per item (empty ones skipped): ScriptShape(0, psc, ...)
+        per item (empty ones skipped), UspShapeItem: ScriptShape(0, psc, ...)
           0                         → fskShaped/fsoDone, zero-width non-
                                       diacritic glyphs left out; no glyph at
-                                      all → fskSkip/fsoDone
+                                      all → fskSkip/fsoDone; a kept glyph =
+                                      wgDefault (ScriptGetFontProperties) →
+                                      fsoMissingGlyphs
           E_OUTOFMEMORY             → fskPlain/fsoFailed
           E_PENDING, NOT_IN_FONT    → again with its own DC holding the font:
                                       0 → as above, else fskPlain/fsoFailed
@@ -380,13 +382,20 @@ AddUnicodeHexText (pdf.pas) — UseUniscribe gates the one shaper (since W2):
         ScriptFreeCache(psc); true
       Linux/macOS - THarfBuzzShaper (mormot.lib.harfbuzz):
         not RightToLeftText and not NeedsShaping(PW, Len) → false
-        hb_ft_font_create(ctx^.Face), RTL forced or guessed, hb_shape
-        → one run fskShaped/fsoDone: Glyphs, Advances, Offsets (x),
-          YOffsets (y, not drawn yet), Clusters - 1/1000 em
+        hb_ft_font_create(ctx^.Face); script runs (hb_unicode_script,
+        neutrals take the script before them); per run, the whole text as
+        context: direction from the script, hb_shape → fskShaped/fsoDone
+        (glyph 0 → fsoMissingGlyphs): Glyphs, Advances, Offsets (x),
+        YOffsets (y, not drawn yet), Clusters - 1/1000 em; two-level order,
+        RightToLeftText the base direction
     false, or runs not covering the text / arrays misaligned → not shaped
     MoveToNextLine once if NL
-    per run: fskPlain or fsoUnknown → AddUnicodeHexTextNoUniScribe(copy + #0)
-             fskShaped              → AddShapedRun(Run, WinAnsiTtf)
+    per run: AddShapedFallback: fsoMissingGlyphs or fskPlain/fsoFailed,
+               fallback on → IFontRunShaper.ShapeRun with the fallback face;
+               fsoDone → AddShapedRun(r, fallback), done
+             fskPlain or fsoUnknown → AddUnicodeHexTextNoUniScribe(copy + #0)
+             fskShaped              → (fsoMissingGlyphs under PDF/A: raise)
+                                      AddShapedRun(Run, WinAnsiTtf)
              fskSkip                → nothing
 
 AddShapedRun(Run, WinAnsiTtf):          ← the font it was shaped with

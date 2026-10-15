@@ -193,6 +193,47 @@ begin
                       BE32(Face, lofs + cardinal(Glyph) * 4));
 end;
 
+// true if Glyph is no composite, or every component of it has an outline
+// - flags of the 'glyf' component records: ISO/IEC 14496-22 5.3.3
+function SfntComponentsKept(const Face: RawByteString; Glyph: integer): boolean;
+var
+  hofs, hlen, lofs, llen, gofs, glen, p, flags: cardinal;
+begin
+  result := false;
+  if not SfntFindTable(Face, 'head', hofs, hlen) or
+     not SfntFindTable(Face, 'loca', lofs, llen) or
+     not SfntFindTable(Face, 'glyf', gofs, glen) or
+     (SfntGlyphLength(Face, Glyph) <= 0) then
+    exit;
+  if BE16(Face, hofs + 50) = 0 then
+    p := gofs + BE16(Face, lofs + cardinal(Glyph) * 2) * 2
+  else
+    p := gofs + BE32(Face, lofs + cardinal(Glyph) * 4);
+  result := true;
+  if BE16(Face, p) and $8000 = 0 then
+    exit; // numberOfContours >= 0: a simple glyph
+  inc(p, 10); // the header
+  repeat
+    flags := BE16(Face, p);
+    if SfntGlyphLength(Face, BE16(Face, p + 2)) <= 0 then
+    begin
+      result := false; // a component without outline: blank
+      exit;
+    end;
+    inc(p, 4);
+    if flags and 1 <> 0 then // ARG_1_AND_2_ARE_WORDS
+      inc(p, 4)
+    else
+      inc(p, 2);
+    if flags and 8 <> 0 then // WE_HAVE_A_SCALE
+      inc(p, 2)
+    else if flags and $40 <> 0 then // WE_HAVE_AN_X_AND_Y_SCALE
+      inc(p, 4)
+    else if flags and $80 <> 0 then // WE_HAVE_A_TWO_BY_TWO
+      inc(p, 8);
+  until flags and $20 = 0; // MORE_COMPONENTS
+end;
+
 function SfntCmapLookup(const Face: RawByteString; CodePoint: cardinal): integer;
 var
   cofs, clen, n, i, sub, uni, sym, segX2, s, e, delta, range, p: cardinal;
@@ -1234,6 +1275,7 @@ begin
     kept := kept and
             (g > 0) and
             (SfntGlyphLength(sub, g) > 0) and
+            SfntComponentsKept(sub, g) and // Martin, #52: not blank
             PdfTextShows(pdf, StringToUtf8(IntToHex(g, 4)));
   end;
   Check(above, 'the glyphs drawn are above 4096');

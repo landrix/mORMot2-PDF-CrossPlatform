@@ -214,7 +214,10 @@ checked against that record:
    bounds of `ExtractSfntFromTtc`), then `681bbe2a1` (2026-10-09, Phase 1b:
    `IFontFace` replaces the device context), then `9cf8add51` (2026-10-13,
    fonts from memory: `RegisterFontData`, the test fonts' first step), then
-   `c68fc85aa` (2026-10-14, symbol faces measured by their symbol cmap).
+   `c68fc85aa` (2026-10-14, symbol faces measured by their symbol cmap), then
+   `c53462a61` (2026-10-15, the fallback step: `fsoMissingGlyphs`,
+   `IFontRunShaper`, HarfBuzz script runs), then `b2d659d44` (2026-10-15,
+   Uniscribe keeps the missing-glyph check when its font properties fail).
    **Checked:** against `d60cc6e80`, today's `main`,
    `test_runner` 259/259 on Windows (FPC Win64, Delphi 7, Delphi 2010),
    298/298 on Linux, 317/317 on macOS (fpcupdeluxe, FPC 3.2.3). Against
@@ -815,7 +818,8 @@ Process, agreed in the forum:
     `.types`, and written `{****` without the space in `mormot.pdf` (8) and
     `mormot.pdf.canvas` (4); `///` missing on 2 of 16 unit-level routines
     of `mormot.pdf`; `raise Exception.Create` 10 times in
-    `mormot.pdf.report`, once in `mormot.pdf` (the PDF/A font fallback) and
+    `mormot.pdf.report`, once in `mormot.pdf` (the PDF/A font fallback,
+    gone with the fallback step: `EPdfInvalidOperation` since 2026-10-15) and
     once in `zugferd_demo` (`ESynException` instead - a change for callers
     that catch by class, so "To Announce"); `with` outside comments and
     strings 57 times in `mormot.pdf`, 64 in `mormot.pdf.canvas` (mostly
@@ -1061,6 +1065,50 @@ Process, agreed in the forum:
   `test_runner` 1106/1106 on Windows (FPC 3.3.1 aarch64, Delphi 7, Delphi
   13 Win32/Win64), 1108 on Linux (also with `--require-fonts`), 1141 on
   macOS
+
+  **The fallback step** (branch `pr/fallback`, on #52; variant 2, decided
+  2026-10-15 after Codex and Fable - the engine owns the policy, the
+  shapers report missing coverage and reshape a part in its context, as
+  Blink, LibreOffice, Pango and Skia separate them). Sven decided: PDF/A
+  raises for every glyph left unresolved (ISO 19005-2 6.2.11.8 forbids
+  .notdef; iText and veraPDF see it so), and the WinAnsi coverage comes
+  from the engine's own cmap reader, not a new `IFontFace` method. Commit
+  1, the plain path: `TPdfTtf.LoadCmap`/`CreateCmap`/`GlyphOf` (the cmap
+  part of `TPdfTtf.Create` on its own), `TPdfFontTrueType.WinAnsiMissing`
+  (a set read once per WinAnsi font, only where a missing character has a
+  way out), the simple path and `ShowText(PdfString)` send such a
+  character the glyph way, `GetWideCharWidth` measures it in the fallback
+  face, `AddGlyphFromChar` raises under PDF/A for every glyph left 0
+  (`EPdfInvalidOperation`). `TestPlainFallback` (Test Arabic + Test Sans):
+  six checks fail without it. No golden file changed; `test_runner`
+  1115/1115 on Windows (FPC 3.3.1 aarch64, Delphi 7, Delphi 13
+  Win32/Win64), 1117 on Linux, 1150 on macOS. Commits 2-5, the fork:
+  `fsoMissingGlyphs` appended, `TFontShapedRun.Analysis` and `Rtl` (not
+  `RightToLeft`, which a `with` would shadow), the optional
+  `IFontRunShaper`; Uniscribe's per-item shaping in `UspShapeItem` (shared
+  by `ShapeRun`), `wgDefault` from `ScriptGetFontProperties`; HarfBuzz
+  script runs with the whole text as context, a two-level order,
+  `RightToLeft` the base direction only (Codex: forcing every run RTL
+  reversed Latin), `ShapeRun`. Codex: Uniscribe's `ShapeRun` took
+  `fskSkip` + `fsoFailed` for a success. Commit 6, the engine:
+  `AddShapedFallback` shapes a `fsoMissingGlyphs` or `fskPlain` +
+  `fsoFailed` run again in the fallback face (Fable: the second is the
+  common case, Arabic in a Latin font), a missing-glyph run raises under
+  PDF/A; `TestShapedFallback` (both orders, both base directions, fallback
+  off, PDF/A) - nine checks fail without it; the golden case
+  `mixed_fallback`. No other golden file changed. mORMot2 pin
+  `c53462a61`. `test_runner` 1133/1133 on Windows (FPC 3.3.1 aarch64,
+  Delphi 7, Delphi 13 Win32/Win64), 1135 on Linux, 1168 on macOS. Not
+  done: per-cluster fallback, full bidi. Fable's branch review: a
+  default-ignorable code point (ZWNJ, ZWJ, the bidi controls, a variation
+  selector) no font has raised under PDF/A on the plain path while both
+  shapers drop it - it is not drawn now (`IsDefaultIgnorable`);
+  `TextWidth(PdfString)` measured a missing WinAnsi character in the main
+  font while `TextOut` drew it from the fallback; Uniscribe's check is kept
+  (wgDefault 0) when `ScriptGetFontProperties` fails. Left: an
+  `hb_font_t` per `ShapeRun` call, and the cmap read twice per font once its
+  Unicode instance exists. `test_runner` 1135/1135 on Windows, 1137 on
+  Linux, 1170 on macOS
 
 ## Open Decisions
 

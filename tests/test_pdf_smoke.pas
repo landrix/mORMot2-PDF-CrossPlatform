@@ -64,6 +64,8 @@ type
     procedure TestTaggedUnicode;
     procedure TestShapingSwitch;
     procedure TestShapedAfterFallback;
+    procedure TestPlainFallback;
+    procedure TestShapedFallback;
     procedure TestShapedRunOutcomeUnset;
     procedure TestZeroRealIsWritten;
   end;
@@ -1281,6 +1283,224 @@ begin
     'Latin text with UseUniscribe stays in the simple font');
 end;
 
+// Arabic and ' Ab' in the Arabic test font, Test Sans the fallback font
+const
+  /// U+200C ZERO WIDTH NON-JOINER
+  ZWNJ: RawUtf8 = {$ifdef HASCODEPAGE} #$200C {$else} #$E2#$80#$8C {$endif};
+
+function PlainFallbackPdf(aFallBack, aPdfString: boolean;
+  aPdfA: TPdfALevel = pdfaNone): RawByteString;
+var
+  PDF: TPdfDocument;
+  Stream: TMemoryStream;
+begin
+  Stream := TMemoryStream.Create;
+  try
+    PDF := TPdfDocument.Create(false, 0, aPdfA);
+    try
+      PDF.CompressionMethod := cmNone;
+      PDF.EmbeddedTTF := true;
+      PDF.FontFallBackName := TEST_SANS;
+      PDF.UseFontFallBack := aFallBack;
+      PDF.AddPage;
+      PDF.Canvas.SetFont(ARABIC_FONT, 24, [], PDF_DEFAULT_CHARSET);
+      if aPdfString then
+        PDF.Canvas.TextOut(40, 650, 'Ab')
+      else
+        DrawUtf8Text(PDF, 40, 650, ARABIC_TEXT + ' Ab');
+      PDF.SaveToStream(Stream);
+    finally
+      PDF.Free;
+    end;
+    result := StreamToRaw(Stream);
+  finally
+    Stream.Free;
+  end;
+end;
+
+procedure TPdfSmokeTests.TestPlainFallback;
+var
+  s: RawByteString;
+  raised: boolean;
+  PDF: TPdfDocument;
+  arabic, sans: single;
+begin
+  { a WinAnsi character the main face lacks went out in its simple font as
+    .notdef: it is drawn by glyph now, where it falls back - read from the
+    face's own cmap, no Unicode font added for a face that has them all }
+  Check(EnsureTestFonts, 'the test fonts registered');
+  s := PlainFallbackPdf(true, false);
+  Check(Pos(RawByteString('mORMotTestSans'), s) > 0, 'the fallback font drew Ab');
+  Check(Pos(RawByteString('Ab) Tj'), s) = 0, 'not in the simple Arabic font');
+  s := PlainFallbackPdf(true, true);
+  Check(Pos(RawByteString('mORMotTestSans'), s) > 0, 'TextOut of a PdfString too');
+  Check(Pos(RawByteString('(Ab) Tj'), s) = 0, 'TextOut: not in the simple font');
+  // no fallback: the simple font draws it, as before
+  s := PlainFallbackPdf(false, false);
+  Check(Pos(RawByteString('mORMotTestSans'), s) = 0, 'fallback off: no Test Sans');
+  Check(Pos(RawByteString('Ab) Tj'), s) > 0, 'fallback off: the simple font');
+  // PDF/A forbids .notdef (ISO 19005-2 6.2.11.8): no way out raises
+  raised := false;
+  try
+    PlainFallbackPdf(false, false, pdfa3U);
+  except
+    on E: EPdfInvalidOperation do
+      raised := Pos('U+0041', E.Message) > 0; // ours, not another rule's
+  end;
+  Check(raised, 'PDF/A without a fallback raises');
+  // a format control no font has draws nothing - no PDF/A error (Test Sans
+  // has no ZWNJ; both shapers drop it too)
+  raised := false;
+  try
+    PDF := TPdfDocument.Create(false, 0, pdfa3U);
+    try
+      PDF.FontFallBackName := TEST_SANS;
+      PDF.AddPage;
+      PDF.Canvas.SetFont(TEST_SANS, 24, [], PDF_DEFAULT_CHARSET);
+      DrawUtf8Text(PDF, 40, 650, 'a' + ZWNJ + 'b');
+    finally
+      PDF.Free;
+    end;
+  except
+    on EPdfInvalidOperation do
+      raised := true;
+  end;
+  Check(not raised, 'a ZWNJ no font has is no PDF/A error');
+  // measured where it is drawn, by both APIs
+  PDF := TPdfDocument.Create;
+  try
+    PDF.FontFallBackName := TEST_SANS;
+    PDF.AddPage;
+    PDF.Canvas.SetFont(TEST_SANS, 24, [], PDF_DEFAULT_CHARSET);
+    sans := PDF.Canvas.UnicodeTextWidth('Ab');
+    PDF.Canvas.SetFont(ARABIC_FONT, 24, [], PDF_DEFAULT_CHARSET);
+    arabic := PDF.Canvas.UnicodeTextWidth('Ab');
+    Check((sans > 0) and
+          (abs(arabic - sans) < 0.01), 'measured with the fallback font');
+    arabic := PDF.Canvas.TextWidth('Ab');
+    Check(abs(arabic - sans) < 0.01, 'TextWidth of a PdfString too');
+  finally
+    PDF.Free;
+  end;
+end;
+
+// a shaped line of the Arabic test font with Test Sans as its fallback font
+function ShapedFallbackPdf(const aText: RawUtf8; aRtl: boolean;
+  aFallBack: boolean = true; aPdfA: TPdfALevel = pdfaNone): RawByteString;
+var
+  PDF: TPdfDocument;
+  Stream: TMemoryStream;
+begin
+  Stream := TMemoryStream.Create;
+  try
+    PDF := TPdfDocument.Create(false, 0, aPdfA);
+    try
+      PDF.CompressionMethod := cmNone;
+      PDF.EmbeddedTTF := true;
+      PDF.FontFallBackName := TEST_SANS;
+      PDF.UseFontFallBack := aFallBack;
+      PDF.UseUniscribe := true;
+      PDF.AddPage;
+      PDF.Canvas.RightToLeftText := aRtl;
+      PDF.Canvas.SetFont(ARABIC_FONT, 24, [], PDF_DEFAULT_CHARSET);
+      DrawUtf8Text(PDF, 40, 650, aText);
+      PDF.SaveToStream(Stream);
+    finally
+      PDF.Free;
+    end;
+    result := StreamToRaw(Stream);
+  finally
+    Stream.Free;
+  end;
+end;
+
+// where the Type0 font of Test Sans is selected in the first text object,
+// relative to its first glyph string: -1 before it, 1 after it, 0 not at all
+function SansSelected(const s: RawByteString): integer;
+var
+  p, e, b, t, h: PtrInt;
+  name: RawByteString;
+begin
+  result := 0;
+  p := PosEx('mORMotTestSans/Subtype/Type0/Encoding/Identity-H/Name/', s);
+  if p = 0 then
+    exit;
+  inc(p, length('mORMotTestSans/Subtype/Type0/Encoding/Identity-H/Name/'));
+  e := p;
+  while (e <= length(s)) and
+        (s[e] <> '/') do
+    inc(e);
+  // no '+': FPC 3.2.2 i386 drops a RawByteString operand of a concatenation
+  SetLength(name, e - p + 2);
+  name[1] := '/';
+  Move(s[p], name[2], e - p);
+  name[e - p + 2] := ' ';
+  b := PosEx('BT', s);
+  t := PosEx(name, s, b);
+  h := PosEx('<', s, b);
+  if (t = 0) or
+     (h = 0) then
+    exit;
+  if t < h then
+    result := -1
+  else
+    result := 1;
+end;
+
+procedure TPdfSmokeTests.TestShapedFallback;
+var
+  arabicFirst, latinFirst: RawUtf8;
+  s: RawByteString;
+  rtl: boolean;
+  raised: boolean;
+begin
+  { a part of a shaped line the main font lacks glyphs for - the Latin of a
+    line in the Arabic test font - is shaped again in the fallback face and
+    drawn from it (IFontRunShaper), the Arabic still joined: Uniscribe gave
+    .notdef for it, HarfBuzz one run of the whole line }
+  {$ifndef OSWINDOWS}
+  if FontShaper = nil then
+  begin
+    Check(true, 'SKIP: no text shaper (libharfbuzz absent)');
+    exit;
+  end;
+  {$endif OSWINDOWS}
+  Check(EnsureTestFonts, 'the test fonts registered');
+  arabicFirst := ARABIC_TEXT + ' Ab';
+  latinFirst := 'Ab ' + ARABIC_TEXT;
+  for rtl := false to true do
+  begin
+    s := ShapedFallbackPdf(arabicFirst, rtl);
+    Check(IsShaped(s), 'Arabic first: the Arabic joined');
+    Check(not PdfTextShows(s, '0000'), 'Arabic first: no .notdef');
+    // the visual order: the Arabic run left of 'Ab' on a left-to-right line,
+    // right of it on a right-to-left one
+    if rtl then
+      CheckEqual(SansSelected(s), -1, 'Arabic first, RTL: Ab drawn first')
+    else
+      CheckEqual(SansSelected(s), 1, 'Arabic first, LTR: Ab drawn after');
+    s := ShapedFallbackPdf(latinFirst, rtl);
+    Check(IsShaped(s), 'Latin first: the Arabic joined');
+    Check(not PdfTextShows(s, '0000'), 'Latin first: no .notdef');
+    if rtl then
+      CheckEqual(SansSelected(s), 1, 'Latin first, RTL: Ab drawn after')
+    else
+      CheckEqual(SansSelected(s), -1, 'Latin first, LTR: Ab drawn first');
+  end;
+  // no fallback: the part keeps the main font, as before
+  s := ShapedFallbackPdf(arabicFirst, false, false);
+  CheckEqual(SansSelected(s), 0, 'fallback off: no Test Sans');
+  // PDF/A forbids .notdef: no way out raises
+  raised := false;
+  try
+    ShapedFallbackPdf(arabicFirst, false, false, pdfa3U);
+  except
+    on E: EPdfInvalidOperation do
+      raised := Pos('PDF/A', E.Message) > 0;
+  end;
+  Check(raised, 'PDF/A without a fallback raises');
+end;
+
 procedure TPdfSmokeTests.TestShapedAfterFallback;
 const
   /// देव then عربي: Devanagari, which the main font lacks, then Arabic
@@ -1296,9 +1516,9 @@ begin
     characters then come from the fallback font; the shaped item after it drew
     the main font's glyph IDs in the fallback font, which was still active -
     a measured face: it runs where Nirmala UI is the fallback taken, on
-    Windows, and adds nothing elsewhere. Only an item Uniscribe cannot shape
-    in the main font falls back: a Latin item in the Arabic test font is
-    drawn as .notdef (REFACTORING, step 3b) }
+    Windows, and adds nothing elsewhere. Since the fallback step the
+    Devanagari item is shaped again in the fallback face (TestShapedFallback
+    covers that on every platform) }
   Check(EnsureTestFonts, 'the test fonts registered');
   {$ifdef OSWINDOWS}
   if not SystemFaceExtra(self, 'Nirmala UI') then
