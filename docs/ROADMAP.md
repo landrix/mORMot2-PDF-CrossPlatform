@@ -264,7 +264,9 @@ v0.10.0 (2026-09-30).
   font whose only cmap is a symbol one (Wingdings and the like) was
   measured with the widths of other glyphs - FreeType selected no charmap
   and read the codes as glyph indexes. Its `/Widths` are now those of the
-  glyphs drawn
+  glyphs drawn. On every platform, a symbol font whose cmap holds the bytes
+  at U+F1xx or U+F2xx, not F0xx, drew its text with the fallback font once
+  a character out of WinAnsi had been drawn in it
 - **New: fonts from memory** (`mormot.lib.core`): `RegisterFontData(Bytes,
   FaceIndex)` makes a TrueType/OpenType font, or a face of a collection,
   available by its family name - on Linux and macOS through

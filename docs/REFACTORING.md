@@ -1003,6 +1003,30 @@ Process, agreed in the forum:
   `test_runner` 1026/1026 on
   Windows, 1020 on Linux, 1053 on macOS
 
+  **Step 3 bug fixes, part 2** (branch `pr/step3-fixes`, from main after
+  3c): the engine looks a symbol font's byte up at U+F000, F100 and F200
+  (`FindOrAddUsedWideChar`; F0xx only before), `mORMot Test Symbol F2`
+  (cmap at U+F220) and `TestSymbolFontGlyphs` - without the fix exactly
+  its three F2 glyphs fail. The lookup matters once the font has its
+  Unicode instance: from then on its WinAnsi text is drawn by glyph, and a
+  missed range gave glyph 0 and the fallback font. `make_test_fonts.py`
+  packs GSUB/GPOS with fontTools' own packer: with `uharfbuzz` installed it
+  used HarfBuzz's repacker, the same tables in other bytes (found when the
+  new font was added - every existing file differed). The fallback finding
+  of 3b, corrected by Codex and Fable from the code: on Windows any item
+  Uniscribe shapes with S_OK keeps its `.notdef` (Microsoft: the caller
+  must scan for `wgDefault`; `fskPlain` also comes from `E_OUTOFMEMORY` and
+  failed retries, not only `USP_E_SCRIPT_NOT_IN_FONT`); with HarfBuzz the
+  one run takes the first script other than Common/Inherited, so
+  `<Arabic> Ab` is shaped as Arabic with the Latin as `.notdef`, and only
+  `Ab <Arabic>` leaves the Arabic unshaped; and the simple path falls back
+  only for characters out of WinAnsi - WinAnsi text such as `Ab` goes out
+  in the main font unchecked, with or without `UseUniscribe`. So a
+  `.notdef` run turned `fskPlain` would not fix the case: the fix is a
+  step of its own (item analysis, coverage, HarfBuzz script runs).
+  `test_runner` 1052/1052 on Windows (FPC 3.3.1 aarch64, Delphi 7, Delphi
+  13 Win32/Win64), 1053 on Linux, 1086 on macOS
+
 ## Open Decisions
 
 - ~~Golden files in `mormot2tests`~~ decided 2026-10-13: compared by

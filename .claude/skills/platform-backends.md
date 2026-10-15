@@ -343,9 +343,12 @@ U+00xx, then U+F0xx, F1xx and F2xx (`FT_Get_Char_Index`) - the ranges ISO
 measured F1xx and F2xx in memory) but not 00xx: a symbol font mapping the
 bytes as they are gets the `.notdef` advance there (measured with `mORMot
 Test Symbol Low`), so `TestRegisteredSymbol` checks that variant on POSIX
-only. The engine's own lookup for the Type0 path (`FindOrAddUsedWideChar`)
-tries the code and U+F000 + the byte only: a symbol font at F1xx or F2xx
-gets right `/Widths` there but `.notdef` glyphs - not met yet, open.
+only. The engine's own lookup (`FindOrAddUsedWideChar`) tries the code,
+then U+F000, F100 and F200 + the byte. It matters once a symbol font has
+its Unicode instance - a character out of WinAnsi made it: from then on its
+WinAnsi text is drawn by glyph, and a range it missed gave glyph 0, so the
+fallback font drew the text (F1xx/F2xx until 2026-10-15; `mORMot Test
+Symbol F2`, `TestSymbolFontGlyphs`).
 
 ## Data Types (mormot.lib.core)
 
