@@ -153,14 +153,24 @@ every code unit of the text once, a part left out included: `Kind` - how to
 draw it (`fskPlain` - unshaped; `fskShaped` - glyphs hold the result;
 `fskSkip` - nothing), `Outcome` - why (`fsoUnknown`; `fsoDone`;
 `fsoNotNeeded`; `fsoFailed`, e.g. Uniscribe's dropped item is `fskSkip` +
-`fsoFailed`). The zero values are the safe ones (Martin's review of #21,
+`fsoFailed`; `fsoMissingGlyphs`, appended 2026-10-15: shaped, but with the
+font's missing glyph for a character it lacks). The zero values are the safe ones (Martin's review of #21,
 2026-10-08): a shaper sets both fields on every run, and a run left zeroed
 reads as `fskPlain` + `fsoUnknown`, which a caller draws unshaped whatever its
 `Kind` (as HarfBuzz's `HB_DIRECTION_INVALID` = 0, proto3's `UNSPECIFIED`).
 Then `TextStart`/`TextLen`
 in UTF-16 code units of the whole text, then `Glyphs` and the parallel
 `Advances`, `Offsets` (to the right), `YOffsets` (upwards; 1/1000 em, empty =
-none; offsets never move the pen) and `Clusters`.
+none; offsets never move the pen) and `Clusters`; `Analysis` (the shaper's
+own: Uniscribe's packed `SCRIPT_ANALYSIS`, HarfBuzz's `hb_script_t`) and
+`Rtl`, for `IFontRunShaper`.
+
+**`IFontRunShaper`** (optional, own GUID, 2026-10-15; both shapers):
+`ShapeRun(Text, Len, Font, var Run)` shapes one run of a `Shape` result
+again with another face, its `Analysis` and `Rtl`, the whole text as context
+(HarfBuzz) - new arrays, so a copy of the run keeps the old ones; false and
+`Run` unchanged on any failure (`fsoFailed`). The engine uses it for the
+fallback face (below).
 
 The two shapers:
 - **`TUniscribeShaper`** (`mormot.lib.uniscribe`): itemizes exactly `Len`
@@ -172,12 +182,28 @@ The two shapers:
   any other error -> `fskSkip` + `fsoFailed`; no glyph at all -> `fskSkip` +
   `fsoDone`. Zero-width glyphs which are no diacritic are left out (a run may
   end up with no glyph: the caller still switches to the Unicode font). No
-  `Advances`/`Offsets`: the font's apply. Its `SCRIPT_CACHE` is freed per call
+  `Advances`/`Offsets`: the font's apply. Its `SCRIPT_CACHE` is freed per call.
+  ScriptShape returns S_OK with the font's default glyph for a character it
+  lacks - the caller has to scan for it (Microsoft): `wgDefault` comes from
+  `ScriptGetFontProperties` once per call, and a kept glyph equal to it makes
+  the run `fsoMissingGlyphs`. Every item, a Latin one in a complex line
+  included, is shaped (`UspShapeItem`, shared with `ShapeRun`)
 - **`THarfBuzzShaper`** (`mormot.lib.harfbuzz`): returns false unless
   `RightToLeft` or `NeedsShaping` (a character of Hebrew, Arabic to Myanmar
   U+0590-109F, Khmer/Mongolian, U+A800-ABFF, presentation forms - what
-  Uniscribe marks complex); otherwise one `fskShaped` + `fsoDone` run over the
-  whole text with every glyph, `Advances`, `Offsets`, `YOffsets`, `Clusters`
+  Uniscribe marks complex). Otherwise, since 2026-10-15, one run per script
+  run (`hb_unicode_script`; Common, Inherited and Unknown take the script
+  before them, leading ones the first after them, as ICU's ScriptRun), each
+  shaped with the whole text as context (`buffer_add_utf16` with offset and
+  length), its direction from its script (`hb_script_get_horizontal_direction`,
+  INVALID as LTR), the script set; every glyph, `Advances`, `Offsets`,
+  `YOffsets`, `Clusters` (absolute). Glyph 0 makes a run `fsoMissingGlyphs`.
+  Visual order by two levels only: the base is RTL with `RightToLeft`, LTR
+  otherwise (as Uniscribe's `uBidiLevel`); a sequence of runs against the
+  base is reversed - no full bidi (no FriBidi), so digits inside an Arabic
+  run still come out reversed. Before, it was one run of the whole text with
+  the script of its first strong character: `Ab <Arabic>` left the Arabic
+  unshaped, and `RightToLeft` reversed Latin too
 
 **The one caller**, `TPdfWrite.AddUnicodeHexTextShaped` (since W2): checks
 every run before writing anything - `TextStart`/`TextLen` inside the text,
@@ -189,7 +215,12 @@ simple path. Then
 path on a `#0`-terminated copy of its text; `fskShaped` -> `AddShapedRun` in
 the Unicode font of the font the text was shaped with (a `Tj` with the font's
 advances, or the `TJ` positioning when the run has `Advances`); `fskSkip` ->
-nothing. **`YOffsets` are not drawn yet:** `TJ` moves horizontally only;
+nothing. **Fallback** (2026-10-15, `AddShapedFallback`): a run with
+`fsoMissingGlyphs`, or `fskPlain` + `fsoFailed` (Uniscribe: a script the
+font lacks), is shaped again with the fallback face through
+`IFontRunShaper` and drawn from it when that gives `fsoDone`; otherwise as
+before - the simple path falls back per character, a missing-glyph run is
+drawn as it is, and raises under PDF/A (ISO 19005-2 6.2.11.8). **`YOffsets` are not drawn yet:** `TJ` moves horizontally only;
 placing marks vertically needs a text rise (`Ts`) per glyph, and Uniscribe
 `ScriptPlace` first - a change of its own (added to the contract 2026-10-08 so
 that it is complete before it goes into the trunk).
@@ -260,12 +291,11 @@ required FreeType before HarfBuzz.
   needs it; Latin text keeps the simple font, as with Uniscribe - a CFF
   face has none: all its text is glyphs of the Type0 font (fonts.md "CFF
   Faces: Type0 Only")
-- `RightToLeftText` is the direction only. HarfBuzz gets RTL forced when it
-  is set; otherwise `hb_buffer_guess_segment_properties` takes the direction
-  from the script (a forced LTR shaped Arabic in the wrong order). Glyphs come
-  back in visual order either way
-- Limit: a run mixing Arabic and Latin in one `TextOut` is not bidi-reordered
-  on Linux/macOS; HarfBuzz shapes, it does not itemize by direction
+- `RightToLeftText` is the direction only: the base direction of the line,
+  on both platforms; each run takes its own from its script. Glyphs come back
+  in visual order
+- Limit: two levels only on Linux/macOS (no full bidi algorithm): digits and
+  neutral characters join the script run before them
 - Changed 2026-09-29: HarfBuzz used to run on `RightToLeftText` alone and
   ignore `UseUniscribe`. Code for Linux/macOS that sets only
   `RightToLeftText` now draws unshaped; guarded by `TestShapingSwitch`

@@ -781,8 +781,8 @@ No GSUB shaping; `GetAndMarkGlyphAsUsed` is not called.
 **Linux/macOS CJK font note:** CJK-only fallback fonts (e.g. `Droid Sans Fallback`) do not
 contain Latin glyphs. Mixed Latin+CJK strings rendered with a CJK font drew `.notdef` for the
 Latin portion until 2026-10-15; the Latin now comes from the fallback font on the plain path
-(above). Shaped text (`UseUniscribe`) does not fall back yet: the next commits of the
-fallback step.
+(above), and in shaped text (`UseUniscribe`) the part the font lacks is shaped again in the
+fallback face (platform-backends skill, "The one caller").
 
 ---
 

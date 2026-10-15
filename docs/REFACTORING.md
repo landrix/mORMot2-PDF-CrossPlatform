@@ -214,7 +214,9 @@ checked against that record:
    bounds of `ExtractSfntFromTtc`), then `681bbe2a1` (2026-10-09, Phase 1b:
    `IFontFace` replaces the device context), then `9cf8add51` (2026-10-13,
    fonts from memory: `RegisterFontData`, the test fonts' first step), then
-   `c68fc85aa` (2026-10-14, symbol faces measured by their symbol cmap).
+   `c68fc85aa` (2026-10-14, symbol faces measured by their symbol cmap), then
+   `c53462a61` (2026-10-15, the fallback step: `fsoMissingGlyphs`,
+   `IFontRunShaper`, HarfBuzz script runs).
    **Checked:** against `d60cc6e80`, today's `main`,
    `test_runner` 259/259 on Windows (FPC Win64, Delphi 7, Delphi 2010),
    298/298 on Linux, 317/317 on macOS (fpcupdeluxe, FPC 3.2.3). Against
@@ -1079,9 +1081,24 @@ Process, agreed in the forum:
   (`EPdfInvalidOperation`). `TestPlainFallback` (Test Arabic + Test Sans):
   six checks fail without it. No golden file changed; `test_runner`
   1115/1115 on Windows (FPC 3.3.1 aarch64, Delphi 7, Delphi 13
-  Win32/Win64), 1117 on Linux, 1150 on macOS. Next: the contract,
-  the Uniscribe and HarfBuzz shapers (fork), then the engine for shaped
-  text and a `mixed_fallback` golden case
+  Win32/Win64), 1117 on Linux, 1150 on macOS. Commits 2-5, the fork:
+  `fsoMissingGlyphs` appended, `TFontShapedRun.Analysis` and `Rtl` (not
+  `RightToLeft`, which a `with` would shadow), the optional
+  `IFontRunShaper`; Uniscribe's per-item shaping in `UspShapeItem` (shared
+  by `ShapeRun`), `wgDefault` from `ScriptGetFontProperties`; HarfBuzz
+  script runs with the whole text as context, a two-level order,
+  `RightToLeft` the base direction only (Codex: forcing every run RTL
+  reversed Latin), `ShapeRun`. Codex: Uniscribe's `ShapeRun` took
+  `fskSkip` + `fsoFailed` for a success. Commit 6, the engine:
+  `AddShapedFallback` shapes a `fsoMissingGlyphs` or `fskPlain` +
+  `fsoFailed` run again in the fallback face (Fable: the second is the
+  common case, Arabic in a Latin font), a missing-glyph run raises under
+  PDF/A; `TestShapedFallback` (both orders, both base directions, fallback
+  off, PDF/A) - nine checks fail without it; the golden case
+  `mixed_fallback`. No other golden file changed. mORMot2 pin
+  `c53462a61`. `test_runner` 1133/1133 on Windows (FPC 3.3.1 aarch64,
+  Delphi 7, Delphi 13 Win32/Win64), 1135 on Linux, 1168 on macOS. Not
+  done: per-cluster fallback, full bidi
 
 ## Open Decisions
 

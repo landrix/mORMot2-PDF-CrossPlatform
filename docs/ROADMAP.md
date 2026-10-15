@@ -274,6 +274,13 @@ v0.10.0 (2026-09-30).
   in an Arabic or CJK font - was written in the font's simple encoding and
   shown as a box; it is drawn from the fallback font now, as the other
   characters were, and measured there. Only where a fallback font is on
+- **Fixed: mixed text with `UseUniscribe`** (`mormot.pdf`, the shapers of
+  `mormot.lib`): a part of a shaped line the font has no glyphs for - Latin
+  in an Arabic font, Devanagari in a Latin one - is shaped again in the
+  fallback font and drawn from it; Uniscribe drew it as boxes. On Linux and
+  macOS HarfBuzz now shapes a mixed line script by script: `Ab` followed by
+  Arabic left the Arabic unjoined, and `RightToLeftText` turned Latin around
+  as well - it is the base direction of the line now, as on Windows
 - **Changed under PDF/A:** a character neither the font nor the fallback
   font has raises `EPdfInvalidOperation` (was `Exception`, and only when no
   fallback font was registered at all): PDF/A forbids the box glyph

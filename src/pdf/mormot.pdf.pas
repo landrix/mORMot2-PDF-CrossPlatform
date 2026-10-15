@@ -770,6 +770,11 @@ type
     /// internal method writing one fskShaped run in the Unicode font of WinAnsiTtf
     procedure AddShapedRun(const Run: TFontShapedRun;
       WinAnsiTtf: TPdfFontTrueType; Canvas: TPdfCanvas);
+    /// internal method drawing a part the font lacks glyphs for from the
+    // fallback face, shaped again in its context - false if it cannot
+    function AddShapedFallback(PW: PWideChar; PWLen: integer;
+      const Run: TFontShapedRun; WinAnsiTtf: TPdfFontTrueType;
+      Canvas: TPdfCanvas): boolean;
     /// internal method writing glyph indexes of Ttf in its Unicode font
     // - AddGlyphs() with the font of the glyphs given, not the current one
     procedure AddGlyphsOf(Ttf: TPdfFontTrueType; Glyphs: PWord;
@@ -5471,6 +5476,50 @@ begin
   end;
 end;
 
+function TPdfWrite.AddShapedFallback(PW: PWideChar; PWLen: integer;
+  const Run: TFontShapedRun; WinAnsiTtf: TPdfFontTrueType;
+  Canvas: TPdfCanvas): boolean;
+var
+  doc: TPdfDocument;
+  shaper: IFontRunShaper;
+  fallback: TPdfFontTrueType;
+  r: TFontShapedRun;
+begin
+  result := false;
+  doc := Canvas.fDoc;
+  // a part shaped with the font's missing glyph, or one the shaper could not
+  // shape with the font (Uniscribe: a script the font lacks)
+  if not ((Run.Outcome = fsoMissingGlyphs) or
+          ((Run.Kind = fskPlain) and
+           (Run.Outcome = fsoFailed))) or
+     not doc.fUseFontFallBack or
+     (doc.fFontFallBackIndex < 0) or
+     not Supports(FontShaper, IFontRunShaper, shaper) then
+    exit;
+  // AForceTtf >= 0: the font object only, the page font stays
+  fallback := Canvas.SetFont('', Canvas.fPage.FontSize, WinAnsiTtf.fStyle,
+    -1, doc.fFontFallBackIndex) as TPdfFontTrueType;
+  if fallback = nil then
+    exit;
+  fallback := fallback.WinAnsiFont;
+  if fallback = WinAnsiTtf then
+    exit; // the main font is the fallback font
+  r := Run;
+  if not shaper.ShapeRun(PW, PWLen, fallback.fFace.Handle, r) or
+     (r.Outcome <> fsoDone) or // the fallback face lacks a glyph too
+     ((r.Kind <> fskShaped) and
+      (r.Kind <> fskSkip)) or
+     ((r.Advances <> nil) and
+      (length(r.Advances) <> length(r.Glyphs))) or
+     ((r.Offsets <> nil) and
+      ((r.Advances = nil) or
+       (length(r.Offsets) <> length(r.Glyphs)))) then
+    exit;
+  if r.Kind = fskShaped then
+    AddShapedRun(r, fallback, Canvas);
+  result := true;
+end;
+
 function TPdfWrite.AddUnicodeHexTextShaped(PW: PWideChar; PWLen: integer;
   WinAnsiTtf: TPdfFontTrueType; NextLine: boolean; Canvas: TPdfCanvas): boolean;
 var
@@ -5511,18 +5560,28 @@ begin
   if NextLine then
     Canvas.MoveToNextLine; // once, before the first run
   for i := 0 to high(Runs) do
-    with Runs[i] do
-      if (Kind = fskPlain) or
-         (Outcome = fsoUnknown) then // the shaper left it unset
+    if not AddShapedFallback(PW, PWLen, Runs[i], WinAnsiTtf, Canvas) then
+      if (Runs[i].Kind = fskPlain) or
+         (Runs[i].Outcome = fsoUnknown) then // the shaper left it unset
       begin
-        // the simple path reads up to a #0
-        tmp.Init(PW + TextStart, TextLen * 2);
-        PWordArray(tmp.buf)[TextLen] := 0;
+        // the simple path reads up to a #0, and falls back per character
+        tmp.Init(PW + Runs[i].TextStart, Runs[i].TextLen * 2);
+        PWordArray(tmp.buf)[Runs[i].TextLen] := 0;
         AddUnicodeHexTextNoUniScribe(tmp.buf, WinAnsiTtf, false, Canvas);
         tmp.Done;
       end
-      else if Kind = fskShaped then
+      else if Runs[i].Kind = fskShaped then
+      begin
+        // PDF/A forbids a reference to .notdef (ISO 19005-2 6.2.11.8)
+        if (Runs[i].Outcome = fsoMissingGlyphs) and
+           (Canvas.fDoc.fPdfA <> pdfaNone) then
+          EPdfInvalidOperation.RaiseUtf8('PDF/A: "%" lacks a glyph of the ' +
+            'shaped text at % and no fallback font has it - set ' +
+            'FontFallBackName to a font that has it', [
+            Canvas.fDoc.fTrueTypeFonts[WinAnsiTtf.fTrueTypeFontsIndex - 1],
+            Runs[i].TextStart]);
         AddShapedRun(Runs[i], WinAnsiTtf, Canvas);
+      end;
       // fskSkip: nothing to draw
 end;
 
