@@ -217,7 +217,7 @@ begin
           1:
             sub := p;
           0:
-            // a symbol font: its codes are U+F0xx
+            // a symbol font: its codes are bytes at U+F0xx, F1xx, F2xx or 00xx
             sym := p;
         end;
     end;
@@ -1157,7 +1157,7 @@ begin
         doc.AddPage;
         doc.Canvas.SetFont(FAMILIES[n], 12, [], 2); // SYMBOL_CHARSET
         DrawUtf8Text(doc, 15, 800, OMEGA);
-        // Omega may have switched to the fallback font (glyph 0 on POSIX)
+        // Omega has no WinAnsi byte: glyph 0, the fallback font drew it
         doc.Canvas.SetFont(FAMILIES[n], 12, [], 2);
         DrawUtf8Text(doc, 15, 770, SAMPLE);
         doc.SaveToStream(Stream);

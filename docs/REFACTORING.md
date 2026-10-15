@@ -1005,7 +1005,11 @@ Process, agreed in the forum:
 
   **Step 3 bug fixes, part 2** (branch `pr/step3-fixes`, from main after
   3c): the engine looks a symbol font's byte up at U+F000, F100 and F200
-  (`FindOrAddUsedWideChar`; F0xx only before), `mORMot Test Symbol F2`
+  (`FindOrAddUsedWideChar`; F0xx only before), the byte now the WinAnsi
+  one (`WideCharToWinAnsi`) - Fable: `Engine.UnicodeBufferToAnsi` wrote the
+  system code page into a one-byte local, up to three UTF-8 bytes on POSIX,
+  and on Windows turned a character out of cp1252 into '?', drawn as the
+  symbol font's '?' glyph instead of the fallback font. `mORMot Test Symbol F2`
   (cmap at U+F220) and `TestSymbolFontGlyphs` - without the fix exactly
   its three F2 glyphs fail. The lookup matters once the font has its
   Unicode instance: from then on its WinAnsi text is drawn by glyph, and a
@@ -1021,7 +1025,9 @@ Process, agreed in the forum:
   `<Arabic> Ab` is shaped as Arabic with the Latin as `.notdef`, and only
   `Ab <Arabic>` leaves the Arabic unshaped; and the simple path falls back
   only for characters out of WinAnsi - WinAnsi text such as `Ab` goes out
-  in the main font unchecked, with or without `UseUniscribe`. So a
+  in the main font unchecked, with or without `UseUniscribe` (in a `glyf`
+  face that is not symbolic; a CFF face and a symbol font with its Unicode
+  instance draw WinAnsi text by glyph and do fall back). So a
   `.notdef` run turned `fskPlain` would not fix the case: the fix is a
   step of its own (item analysis, coverage, HarfBuzz script runs).
   `test_runner` 1052/1052 on Windows (FPC 3.3.1 aarch64, Delphi 7, Delphi

@@ -344,11 +344,17 @@ measured F1xx and F2xx in memory) but not 00xx: a symbol font mapping the
 bytes as they are gets the `.notdef` advance there (measured with `mORMot
 Test Symbol Low`), so `TestRegisteredSymbol` checks that variant on POSIX
 only. The engine's own lookup (`FindOrAddUsedWideChar`) tries the code,
-then U+F000, F100 and F200 + the byte. It matters once a symbol font has
-its Unicode instance - a character out of WinAnsi made it: from then on its
+then U+F000, F100 and F200 + the WinAnsi byte (`WideCharToWinAnsi`, the
+byte the simple path writes); a character with no WinAnsi byte keeps glyph
+0 and goes to the fallback font. It matters once a symbol font has its
+Unicode instance - a character out of WinAnsi made it: from then on its
 WinAnsi text is drawn by glyph, and a range it missed gave glyph 0, so the
 fallback font drew the text (F1xx/F2xx until 2026-10-15; `mORMot Test
-Symbol F2`, `TestSymbolFontGlyphs`).
+Symbol F2`, `TestSymbolFontGlyphs`). Until then the byte came from
+`Engine.UnicodeBufferToAnsi` into a one-byte local: the system code page,
+UTF-8 on POSIX - up to three bytes written past it, and a machine-dependent
+byte ('?' on Windows for a character out of cp1252, so the symbol font's
+'?' glyph was drawn; Fable).
 
 ## Data Types (mormot.lib.core)
 
