@@ -83,7 +83,7 @@ examples/
   (each demo folder carries a short README.md; the source header of its .lpr
    (`layer1_demo`: .dpr) says the same thing in two sentences)
 tests/
-  test_runner.lpr              runs every suite below (green: 1052 assertions on Windows with FPC, Delphi 13 and Delphi 7 - Delphi 2010 last measured at 779 (#33); 1086 on macOS, 1053 on Linux. The font tests assert on the test fonts of tests/fonts everywhere; installed faces (Hiragino Sans GB, Geeza Pro, Nirmala UI, the OS collections) add their checks where present, and only a missing shaper or subsetter library skips - and TestShapedGlyphKeys, which needs an installed face of more than 4096 glyphs; the golden files add two per case with or without a baseline. Delphi 13, measured before the golden files: 259 on Windows, 171 on Linux64, 129 on Android64, layer 1 only)
+  test_runner.lpr              runs every suite below (green: 1106 assertions on Windows with FPC, Delphi 13 and Delphi 7 - Delphi 2010 last measured at 779 (#33); 1141 on macOS, 1108 on Linux. The font tests assert on the test fonts of tests/fonts everywhere; a test that also needs an installed face (Hiragino Sans GB, Geeza Pro, Nirmala UI, the OS collections, the faces of cjk_system and arabic_system) asks SystemFaceExtra first - one assertion either way, a missing face of this OS's list reported, a failure with --require-fonts; only a missing shaper or subsetter library skips; the golden files add two per case with or without a baseline. Delphi 13, measured before the golden files: 259 on Windows, 171 on Linux64, 129 on Android64, layer 1 only)
   test_defines.inc             PDF_HASVCLCANVAS: the TCanvas bridge suites (all compilers since R-20)
   build_delphi7.bat            dcc32 build of one project (R-19)
   build_delphi2010.bat         the same with Delphi 2010, warnings on (R-25, Unicode Delphi)
@@ -102,7 +102,7 @@ tests/
   test_pdf_cff.pas             the CFF reader on tables built in code, and every CFF path through a synthetic face swapped into FontProvider (codes, /W, /ToUnicode, routing, word spacing, programs, names)
   test_pdf_images.pas          golden files of the image paths (raw pixels on every compiler; TBitmap formats, reuse, color key, JPEG) and of EMF (TPdfDocumentGdi, RenderMetaFile; Windows)
   test_report_golden.pas       the same for TGDIPages (layer 3)
-  fonts/                       test fonts the tests register (RegisterFontData): renamed OFL subsets of Noto (Latin, Arabic, CJK, symbol, a collection), their licence, source and generator
+  fonts/                       test fonts the tests register (RegisterFontData): renamed OFL subsets of Noto (Latin, Arabic, CJK, symbol, a collection) and an Apache 2.0 subset of Droid Sans Fallback (CJK with TrueType outlines), their licences, sources and generator
   test_coordinates.pas         page geometry
   test_report_coordinates.pas  report geometry
 reference/
@@ -353,6 +353,13 @@ bin\d2010\test_runner\test_runner.exe --noenter
 
 On Windows every test runner waits for Enter at the end unless it gets a
 parameter — pass `--noenter` when it runs unattended.
+
+**System faces.** The font tests run on the test fonts everywhere; a test
+that also needs a typical face of the OS (YaHei, Hiragino, Geeza Pro, Noto
+CJK...) runs where it is installed and is reported as skipped where not.
+`test_runner --require-fonts` makes a missing one of this OS's list
+(`REQUIRED_SYSTEM_FACES`, `tests/test_pdf_crossplatform.pas`) a failure -
+for a check session, not for CI.
 
 **Golden files.** `test_runner --golden-record` writes this machine's baseline
 to `golden/<os>_<cpu>_<compiler>/` next to the executable (not versioned:

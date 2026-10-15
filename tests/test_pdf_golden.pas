@@ -56,6 +56,11 @@ type
   TPdfGoldenTests = class(TPdfGoldenTestCase)
   protected
     function SaveDoc(Doc: TPdfDocument): RawByteString;
+    // the CJK and the Arabic case in a face of the caller: two assertions
+    procedure GoldenCjk(const Font, Name: RawUtf8);
+    procedure GoldenArabic(const Font, Name: RawUtf8);
+    // a case in a system face: one assertion more, SystemFaceExtra's
+    procedure GoldenSystem(const Font, Name: RawUtf8; Arabic: boolean);
   published
     procedure CompareReportsEveryObject;
     procedure CompareSyntheticObjects;
@@ -65,6 +70,9 @@ type
     procedure PdfA3UAttachment;
     procedure CjkSubset;
     procedure ArabicShaped;
+    procedure CjkGlyfSubset;
+    procedure CjkSystem;
+    procedure ArabicSystem;
     {$ifdef PDF_HASVCLCANVAS}
     procedure CanvasBridge;
     procedure CanvasBridgeShapes;
@@ -148,6 +156,19 @@ const
   // the registered test fonts (tests/fonts), the same faces on every machine
   CJK_FONT = TEST_CJK;
   ARABIC_FONT = TEST_ARABIC;
+  // and the typical faces of each system (REQUIRED_SYSTEM_FACES)
+  {$ifdef OSWINDOWS}
+  SYSTEM_CJK_FONT = 'Microsoft YaHei';
+  SYSTEM_ARABIC_FONT = 'Tahoma';
+  {$else}
+  {$ifdef OSDARWIN}
+  SYSTEM_CJK_FONT = 'Hiragino Sans GB';
+  SYSTEM_ARABIC_FONT = 'Geeza Pro';
+  {$else}
+  SYSTEM_CJK_FONT = 'Droid Sans Fallback';
+  SYSTEM_ARABIC_FONT = 'Noto Naskh Arabic';
+  {$endif OSDARWIN}
+  {$endif OSWINDOWS}
   INVOICE_XML = '<?xml version="1.0" encoding="UTF-8"?>'#10 +
     '<rsm:CrossIndustryInvoice xmlns:rsm="urn:un:unece:uncefact:data:' +
     'standard:CrossIndustryInvoice:100"/>'#10;
@@ -548,49 +569,89 @@ begin
   end;
 end;
 
-procedure TPdfGoldenTests.CjkSubset;
+procedure TPdfGoldenTests.GoldenCjk(const Font, Name: RawUtf8);
 var
   doc: TPdfDocument;
 begin
-  // before the font list; never record a baseline from a substitute face
-  if not Check(EnsureTestFonts, 'the test fonts registered') then
-    exit;
   doc := TPdfDocument.Create;
   try
     doc.Info.CreationDate := GOLDEN_DATE;
     doc.CompressionMethod := cmNone;
     doc.EmbeddedTTF := true;
     doc.AddPage;
-    doc.Canvas.SetFont(CJK_FONT, 24, [], PDF_DEFAULT_CHARSET);
+    doc.Canvas.SetFont(Font, 24, [], PDF_DEFAULT_CHARSET);
     DrawUtf8Text(doc, 56, 760, CJK_TEXT);
-    CheckGolden('cjk_subset', SaveDoc(doc));
+    CheckGolden(Name, SaveDoc(doc));
   finally
     doc.Free;
   end;
 end;
 
-procedure TPdfGoldenTests.ArabicShaped;
+procedure TPdfGoldenTests.GoldenArabic(const Font, Name: RawUtf8);
 var
   doc: TPdfDocument;
 begin
-  // before the font list; never record a baseline from a substitute face
-  if not Check(EnsureTestFonts, 'the test fonts registered') then
-    exit;
   doc := TPdfDocument.Create;
   try
     doc.Info.CreationDate := GOLDEN_DATE;
     doc.CompressionMethod := cmNone;
     doc.EmbeddedTTF := true;
     doc.AddPage;
-    doc.Canvas.SetFont(ARABIC_FONT, 24, [], PDF_DEFAULT_CHARSET);
+    doc.Canvas.SetFont(Font, 24, [], PDF_DEFAULT_CHARSET);
     DrawUtf8Text(doc, 56, 760, ARABIC_TEXT); // isolated forms, no shaper
     doc.UseUniscribe := true;
     doc.Canvas.RightToLeftText := true;
     DrawUtf8Text(doc, 56, 700, ARABIC_TEXT); // shaped, right to left
-    CheckGolden('arabic_shaped', SaveDoc(doc));
+    CheckGolden(Name, SaveDoc(doc));
   finally
     doc.Free;
   end;
+end;
+
+procedure TPdfGoldenTests.GoldenSystem(const Font, Name: RawUtf8;
+  Arabic: boolean);
+begin
+  // a missing face would record a substitute: skipped, or failed with
+  // --require-fonts - the same three assertions either way
+  if not SystemFaceExtra(self, Font) then
+  begin
+    Check(true, 'SKIP: the system face is not installed');
+    Check(true);
+  end
+  else if Arabic then
+    GoldenArabic(Font, Name)
+  else
+    GoldenCjk(Font, Name);
+end;
+
+procedure TPdfGoldenTests.CjkSubset;
+begin
+  // before the font list; never record a baseline from a substitute face
+  if Check(EnsureTestFonts, 'the test fonts registered') then
+    GoldenCjk(CJK_FONT, 'cjk_subset');
+end;
+
+procedure TPdfGoldenTests.ArabicShaped;
+begin
+  if Check(EnsureTestFonts, 'the test fonts registered') then
+    GoldenArabic(ARABIC_FONT, 'arabic_shaped');
+end;
+
+procedure TPdfGoldenTests.CjkGlyfSubset;
+begin
+  // TrueType outlines: subset by FontSub on Windows too, glyphs above 4096
+  if Check(EnsureTestFonts, 'the test fonts registered') then
+    GoldenCjk(TEST_CJK_GLYF, 'cjk_glyf_subset');
+end;
+
+procedure TPdfGoldenTests.CjkSystem;
+begin
+  GoldenSystem(SYSTEM_CJK_FONT, 'cjk_system', false);
+end;
+
+procedure TPdfGoldenTests.ArabicSystem;
+begin
+  GoldenSystem(SYSTEM_ARABIC_FONT, 'arabic_system', true);
 end;
 
 {$ifdef PDF_HASVCLCANVAS}

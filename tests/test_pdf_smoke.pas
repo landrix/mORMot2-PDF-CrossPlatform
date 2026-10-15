@@ -1300,6 +1300,10 @@ begin
     in the main font falls back: a Latin item in the Arabic test font is
     drawn as .notdef (REFACTORING, step 3b) }
   Check(EnsureTestFonts, 'the test fonts registered');
+  {$ifdef OSWINDOWS}
+  if not SystemFaceExtra(self, 'Nirmala UI') then
+    exit;
+  {$endif OSWINDOWS}
   Stream := TMemoryStream.Create;
   try
     PDF := TPdfDocument.Create(false, 0, pdfaNone);

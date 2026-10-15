@@ -331,8 +331,16 @@ included. Every font test takes its face from `TestFace(TEST_SANS)` and its
 siblings, or calls `EnsureTestFonts` before the document it draws with
 (`test_pdf_crossplatform`): registered once, again after a test called
 `UnregisterFontData`; never a second time while registered, which would
-install a second copy in GDI. An installed face is only an extra - checked
-where present, no SKIP where not.
+install a second copy in GDI. An installed face is an extra: a test that
+needs one asks `SystemFaceExtra(self, Name)` first - one assertion either
+way; a missing face of `REQUIRED_SYSTEM_FACES` (the typical faces of this
+OS: Microsoft YaHei, Tahoma, MS Gothic, Nirmala UI; Hiragino Sans GB, Geeza
+Pro, Helvetica; Droid Sans Fallback, Noto Naskh Arabic, Noto Sans CJK JP) is
+reported on the console, and fails with `test_runner --require-fonts`; the
+face of another OS is skipped silently. The golden cases `cjk_system` and
+`arabic_system` draw the golden texts in those faces, `cjk_glyf_subset` in
+`mORMot Test CJK Glyf` - TrueType outlines, so FontSub subsets it on
+Windows, where the CFF of Test CJK is embedded whole.
 
 **Symbol faces.** A face whose only cmap is (3,0) (Wingdings, the test
 symbol fonts) gets no charmap from FreeType, and `FT_Load_Char` then reads
