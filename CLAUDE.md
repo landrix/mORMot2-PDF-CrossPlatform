@@ -102,7 +102,7 @@ tests/
   test_pdf_cff.pas             the CFF reader on tables built in code, and every CFF path through a synthetic face swapped into FontProvider (codes, /W, /ToUnicode, routing, word spacing, programs, names)
   test_pdf_images.pas          golden files of the image paths (raw pixels on every compiler; TBitmap formats, reuse, color key, JPEG) and of EMF (TPdfDocumentGdi, RenderMetaFile; Windows)
   test_report_golden.pas       the same for TGDIPages (layer 3)
-  fonts/                       test fonts the tests register (RegisterFontData): renamed OFL subsets of Noto (Latin, Arabic, CJK, symbol, a collection), their licence, source and generator
+  fonts/                       test fonts the tests register (RegisterFontData): renamed OFL subsets of Noto (Latin, Arabic, CJK, symbol, a collection) and an Apache 2.0 subset of Droid Sans Fallback (CJK with TrueType outlines), their licences, sources and generator
   test_coordinates.pas         page geometry
   test_report_coordinates.pas  report geometry
 reference/
@@ -353,6 +353,13 @@ bin\d2010\test_runner\test_runner.exe --noenter
 
 On Windows every test runner waits for Enter at the end unless it gets a
 parameter — pass `--noenter` when it runs unattended.
+
+**System faces.** The font tests run on the test fonts everywhere; a test
+that also needs a typical face of the OS (YaHei, Hiragino, Geeza Pro, Noto
+CJK...) runs where it is installed and is reported as skipped where not.
+`test_runner --require-fonts` makes a missing one of this OS's list
+(`REQUIRED_SYSTEM_FACES`, `tests/test_pdf_crossplatform.pas`) a failure -
+for a check session, not for CI.
 
 **Golden files.** `test_runner --golden-record` writes this machine's baseline
 to `golden/<os>_<cpu>_<compiler>/` next to the executable (not versioned:

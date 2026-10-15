@@ -1033,6 +1033,28 @@ Process, agreed in the forum:
   `test_runner` 1052/1052 on Windows (FPC 3.3.1 aarch64, Delphi 7, Delphi
   13 Win32/Win64), 1053 on Linux, 1086 on macOS
 
+  **Test fonts and system faces, decided 2026-10-15** (Martin leaned to the
+  typical faces of each system; Codex and Fable, then Sven - option C of
+  three): the test fonts stay the core, no SKIP; the system faces are tested
+  visibly beside them. Rejected: the status quo (an extra that stops running
+  goes unnoticed), and system faces first (the skips return, CI and other
+  machines test what they happen to have - the trap of `docs/CI.md`). As
+  Skia (`--nativeFonts` default, a portable font manager beside it),
+  LibreOffice (bundled fonts, a check against others) and PDFBox (bundled
+  fonts, an installed SimHei test that skips) do it. The package (branch
+  `pr/test-fonts-c`, on #51): `SystemFaceExtra` and `REQUIRED_SYSTEM_FACES`
+  (`test_pdf_crossplatform`) - one assertion either way, a missing face of
+  this OS's list reported, a failure with `test_runner --require-fonts`
+  (for a check session; off in CI); the golden cases `cjk_system` and
+  `arabic_system` (YaHei/Tahoma, Hiragino Sans GB/Geeza Pro, Droid Sans
+  Fallback/Noto Naskh Arabic); `mORMot Test CJK Glyf`, a 31 KB subset of
+  Droid Sans Fallback (Apache 2.0) with TrueType outlines and 4200 empty
+  glyphs before the ones drawn, for the golden case `cjk_glyf_subset`
+  (FontSub on a CJK face again), `TestSubsetCjkGlyf`, and
+  `TestShapedGlyphKeys` without an installed face. A subset with retained
+  glyph IDs was 404 KB (hmtx, vmtx and loca up to glyph 39783, which the
+  glyf closure kept); the padding gives the same high IDs
+
 ## Open Decisions
 
 - ~~Golden files in `mormot2tests`~~ decided 2026-10-13: compared by
