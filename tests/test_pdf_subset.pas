@@ -91,6 +91,7 @@ type
     procedure TestWholeTtcFace;
     procedure TestSubsetSymbolFont;
     procedure TestSymbolFontGlyphs;
+    procedure TestSubsetCjkGlyf;
     procedure TestFaceNotFoundRaises;
     procedure TestTaggedAlwaysEmbeds;
     procedure TestGlyphAdvanceByIndex;
@@ -992,7 +993,12 @@ begin
   found := 0;
   for f := 0 to high(TTC_FONTS) do
   begin
-    if FindRawUtf8(fonts, TTC_FONTS[f]) < 0 then
+    if f <= high(TEST_TTC_H) then
+    begin
+      if FindRawUtf8(fonts, TTC_FONTS[f]) < 0 then
+        continue; // counted below: both test faces must be there
+    end
+    else if not SystemFaceExtra(self, TTC_FONTS[f]) then
       continue;
     if f <= high(TEST_TTC_H) then
       inc(found);
@@ -1191,6 +1197,49 @@ begin
   end;
 end;
 
+procedure TPdfSubsetEngineTests.TestSubsetCjkGlyf;
+const
+  // the golden CJK text: glyphs 4201 and up in the test font
+  SAMPLE: RawUtf8 = {$ifdef HASCODEPAGE}
+    #$4F60#$597D#$FF0C#$4E16#$754C#$FF01 {$else}
+    #$E4#$BD#$A0#$E5#$A5#$BD#$EF#$BC#$8C#$E4#$B8#$96#$E7#$95#$8C#$EF#$BC#$81 {$endif};
+  CODES: array[0..5] of cardinal = (
+    $4F60, $597D, $FF0C, $4E16, $754C, $FF01);
+var
+  pdf, whole, sub: RawByteString;
+  i, g: integer;
+  kept, above: boolean;
+begin
+  { a CJK face with TrueType outlines is subset on every platform - FontSub
+    takes glyf only, so the CFF test font is embedded whole on Windows - and
+    keeps its glyph IDs, which the content draws }
+  if FontSubsetter = nil then
+  begin
+    Check(true, 'SKIP: no IFontSubsetter registered');
+    exit;
+  end;
+  Check(EnsureTestFonts, 'the test fonts registered');
+  whole := FirstFontFile(BuildPdf(TEST_CJK_GLYF, SAMPLE, true, false, false));
+  pdf := BuildPdf(TEST_CJK_GLYF, SAMPLE, false, false, false);
+  sub := FirstFontFile(pdf);
+  Check(FirstSubsetTag(pdf) <> '', 'a subset tag');
+  Check((GlyfLength(sub) > 0) and
+        (GlyfLength(sub) * 2 < GlyfLength(whole)), 'the outlines shrink');
+  kept := true;
+  above := true;
+  for i := 0 to high(CODES) do
+  begin
+    g := SfntCmapLookup(whole, CODES[i]);
+    above := above and (g > 4096);
+    kept := kept and
+            (g > 0) and
+            (SfntGlyphLength(sub, g) > 0) and
+            PdfTextShows(pdf, StringToUtf8(IntToHex(g, 4)));
+  end;
+  Check(above, 'the glyphs drawn are above 4096');
+  Check(kept, 'each glyph kept under its ID and drawn with it');
+end;
+
 procedure TPdfSubsetEngineTests.TestGlyphAdvanceByIndex;
 const
   SAMPLE = 'MiW .';
@@ -1270,9 +1319,10 @@ end;
 procedure TPdfSubsetEngineTests.TestShapedGlyphKeys;
 const
   // faces with more than 4096 glyphs, enough of them out of the cmap (CJK
-  // faces map almost all of theirs: Microsoft YaHei has no such pair)
-  BIG_FONTS: array[0..8] of RawUtf8 = (
-    'Segoe UI', 'Yu Gothic', 'Arial', 'DejaVu Sans', 'Noto Sans',
+  // faces map almost all of theirs: Microsoft YaHei has no such pair) - the
+  // CJK glyf test font first: 4200 empty glyphs before the ones drawn
+  BIG_FONTS: array[0..9] of RawUtf8 = (
+    TEST_CJK_GLYF, 'Segoe UI', 'Yu Gothic', 'Arial', 'DejaVu Sans', 'Noto Sans',
     'Noto Sans CJK JP', 'Hiragino Sans', 'Hiragino Sans GB',
     'Arial Unicode MS');
 var
@@ -1316,6 +1366,7 @@ begin
     under the key $E000 + its index mod 4096, among the characters: two such
     glyphs 4096 apart, or such a glyph and a real character of that key,
     overwrote each other in /W, /ToUnicode and the subset keep list }
+  Check(EnsureTestFonts, 'the test fonts registered');
   Stream := TMemoryStream.Create;
   try
     PDF := TPdfDocument.Create(false, 0, pdfaNone);

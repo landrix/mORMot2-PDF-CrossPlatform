@@ -1,12 +1,14 @@
 """Build the test fonts of tests/fonts from their Noto sources.
 
-Each one is a renamed subset (SIL OFL 1.1, Modified Version): the layout
-tables kept, the hinting dropped. Usage:
+Each one is a renamed subset (SIL OFL 1.1, Modified Version; the one of
+Droid Sans Fallback under the Apache License 2.0): the layout tables kept,
+the hinting dropped. Usage:
 
   python make_test_fonts.py <source folder> <tests/fonts>
 
-The source folder holds NotoSans-Regular.ttf, NotoSansArabic-Regular.ttf and
-NotoSansCJK-Regular.ttc (README.md: versions and sha256).
+The source folder holds NotoSans-Regular.ttf, NotoSansArabic-Regular.ttf,
+NotoSansCJK-Regular.ttc and DroidSansFallbackFull.ttf (README.md: versions
+and sha256).
 """
 import hashlib, os, sys
 from fontTools import subset
@@ -15,6 +17,7 @@ from fontTools.otlLib.builder import (buildAnchor, buildCursivePosSubtable,
 from fontTools.ttLib import TTCollection, TTFont, newTable
 from fontTools.ttLib.tables import otTables as ot
 from fontTools.ttLib.tables._c_m_a_p import cmap_format_4
+from fontTools.ttLib.tables._g_l_y_f import Glyph
 
 # report punctuation: dashes, quotes, bullet, ellipsis, euro
 PUNCT = [0x2013, 0x2014, 0x2018, 0x2019, 0x201A, 0x201C, 0x201D, 0x201E,
@@ -101,6 +104,27 @@ def make_symbol(font, base=0xF000):
             rec.platEncID = 0
 
 
+def pad_glyphs(font, count=4200):
+    """Put count empty glyphs out of the cmap after .notdef: the glyphs drawn
+    get IDs above 4096 - two glyphs 4096 apart with no character, and a keep
+    list of high IDs - in a face of a few KB. The tables address glyphs by
+    name, so cmap and glyf follow; the layout and vertical tables go."""
+    for tag in ("GSUB", "GPOS", "GDEF", "vhea", "vmtx"):
+        if tag in font:
+            del font[tag]
+    order = font.getGlyphOrder()
+    pads = ["pad%04d" % i for i in range(count)]
+    for name in pads:
+        glyph = Glyph()
+        glyph.numberOfContours = 0
+        font["glyf"].glyphs[name] = glyph
+        font["hmtx"].metrics[name] = (0, 0)
+    order = order[:1] + pads + order[1:]
+    font.setGlyphOrder(order)
+    font["glyf"].glyphOrder = order
+    font["maxp"].numGlyphs = len(order)
+
+
 FONTS = [
     # Basic Latin, Latin-1, punctuation, Greek
     dict(src="NotoSans-Regular.ttf", index=0,
@@ -140,6 +164,16 @@ FONTS = [
          dst="mORMotTestSymbolF2-Regular.ttf", family="mORMot Test Symbol F2",
          ps="mORMotTestSymbolF2-Regular", unicodes=ASCII,
          post=lambda font: make_symbol(font, 0xF200)),
+    # a CJK face with TrueType outlines (FontSub subsets glyf only), its
+    # glyphs drawn above glyph 4096
+    dict(src="DroidSansFallbackFull.ttf", index=0,
+         dst="mORMotTestCJKGlyf-Regular.ttf", family="mORMot Test CJK Glyf",
+         ps="mORMotTestCJKGlyf-Regular", post=pad_glyphs,
+         unicodes=[0x20, 0x3000, 0x3001, 0x3002]
+         + text("字体嵌入测试"   # the smoke test
+                "你好，世界！"   # the golden files
+                "一二三中文日本語漢"
+                "あいうかなカナ")),
     # a collection of two faces of their own names: face 1 lacks 'A'-'G', so
     # 'H' is another glyph there than in face 0
     dict(src="NotoSans-Regular.ttf", index=0,
@@ -192,7 +226,7 @@ def build(src, index, family, ps, unicodes):
                 setattr(top, key, names[4] if key == "FullName" else family)
     for rec in table.names:
         s = rec.toUnicode()
-        if rec.nameID in (1, 3, 4, 6, 16, 17) and "Noto" in s \
+        if rec.nameID in (1, 3, 4, 6, 16, 17) and ("Noto" in s or "Droid" in s) \
                 and "subset of" not in s:
             raise SystemExit("name %d still says %r" % (rec.nameID, s))
     if any(0xFB50 <= c <= 0xFEFF for c in font.getBestCmap()):

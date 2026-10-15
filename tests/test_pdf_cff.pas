@@ -772,16 +772,6 @@ var
     lf.Weight := 400;
     result := FontProvider.CreateFace(lf);
   end;
-
-  // the backend substitutes a missing face: an extra checks the list
-  function Installed(const Name: RawUtf8): boolean;
-  var
-    fonts: TRawUtf8DynArray;
-  begin
-    fonts := nil;
-    FontEnumerator.EnumTrueTypeFonts(fonts);
-    result := FindRawUtf8(fonts, Name) >= 0;
-  end;
   {$endif OSWINDOWS}
 
 begin
@@ -794,7 +784,7 @@ begin
   {$ifdef OSDARWIN}
   // the CJK face of the Mac, where installed: CID-keyed, 288 glyphs whose
   // CID differs
-  if Installed('Hiragino Sans GB') then
+  if SystemFaceExtra(self, 'Hiragino Sans GB') then
   begin
     Check(PdfFaceCffInfo(Face('Hiragino Sans GB'), info) = pcCidKeyed,
       'Hiragino Sans GB');
@@ -808,7 +798,7 @@ begin
   {$else}
   {$ifdef OSLINUX}
   // Noto Sans CJK is Adobe-Identity-0: CID-keyed, every CID its index
-  if Installed('Noto Sans CJK JP') and
+  if SystemFaceExtra(self, 'Noto Sans CJK JP') and
      (PdfFaceCffInfo(Face('Noto Sans CJK JP'), info) = pcCidKeyed) then
   begin
     CheckEqual(info.Registry, 'Adobe');

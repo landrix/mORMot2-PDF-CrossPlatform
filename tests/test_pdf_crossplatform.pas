@@ -64,6 +64,7 @@ const
   TEST_SYMBOL = 'mORMot Test Symbol';
   TEST_SYMBOL_LOW = 'mORMot Test Symbol Low';
   TEST_SYMBOL_F2 = 'mORMot Test Symbol F2';
+  TEST_CJK_GLYF = 'mORMot Test CJK Glyf';
   TEST_TTC_A = 'mORMot Test TTC A';
   TEST_TTC_B = 'mORMot Test TTC B';
   /// DEFAULT_CHARSET: GDI takes another font for a registered one that lacks
@@ -88,7 +89,61 @@ function TestFace(const Family: RawUtf8;
 // e.g. the XMP of a tagged or PDF/A document
 function PdfTextShows(const Pdf: RawByteString; const Code: RawUtf8): boolean;
 
+const
+  /// the system faces this OS is expected to have: the extras that run here
+  // - with --require-fonts a missing one fails (SystemFaceExtra)
+  {$ifdef OSWINDOWS}
+  REQUIRED_SYSTEM_FACES: array[0..3] of RawUtf8 = (
+    'Microsoft YaHei', 'Tahoma', 'MS Gothic', 'Nirmala UI');
+  {$else}
+  {$ifdef OSDARWIN}
+  REQUIRED_SYSTEM_FACES: array[0..2] of RawUtf8 = (
+    'Hiragino Sans GB', 'Geeza Pro', 'Helvetica');
+  {$else}
+  REQUIRED_SYSTEM_FACES: array[0..2] of RawUtf8 = (
+    'Droid Sans Fallback', 'Noto Naskh Arabic', 'Noto Sans CJK JP');
+  {$endif OSDARWIN}
+  {$endif OSWINDOWS}
+
+var
+  /// test_runner --require-fonts: a missing face of REQUIRED_SYSTEM_FACES fails
+  RequireSystemFaces: boolean;
+
+/// is a system face installed, for a test that runs only where it is?
+// - one assertion either way: it passes, or it is skipped - reported on the
+// console for a face of REQUIRED_SYSTEM_FACES, a failure for one with
+// --require-fonts
+function SystemFaceExtra(Test: TSynTestCase; const Name: RawUtf8): boolean;
+
 implementation
+
+function SystemFaceExtra(Test: TSynTestCase; const Name: RawUtf8): boolean;
+var
+  fonts: TRawUtf8DynArray;
+  required: boolean;
+  i: PtrInt;
+begin
+  // the backend substitutes a missing face: the installed list decides
+  fonts := nil;
+  FontEnumerator.EnumTrueTypeFonts(fonts);
+  result := FindRawUtf8(fonts, Name) >= 0;
+  required := false;
+  for i := 0 to high(REQUIRED_SYSTEM_FACES) do
+    if REQUIRED_SYSTEM_FACES[i] = Name then
+      required := true;
+  if result then
+    Test.Check(true)
+  else if RequireSystemFaces and
+          required then
+    Test.Check(false, Utf8ToString(FormatUtf8(
+      'the system face % is missing (--require-fonts)', [Name])))
+  else
+  begin
+    Test.Check(true, 'SKIP: a system face is not installed');
+    if required then // another OS's face is expected to be missing
+      Test.AddConsole('extra skipped: % is not installed', [Name]);
+  end;
+end;
 
 function TestFontFile(const Name: TFileName): TFileName;
 var
@@ -111,15 +166,16 @@ end;
 
 function EnsureTestFonts: boolean;
 const
-  FILES: array[0..7] of TFileName = (
+  FILES: array[0..8] of TFileName = (
     'mORMotTestSans-Regular.ttf', 'mORMotTestArabic-Regular.ttf',
     'mORMotTestCJK-Regular.otf', 'mORMotTestSymbol-Regular.ttf',
     'mORMotTestSymbolLow-Regular.ttf', 'mORMotTestSymbolF2-Regular.ttf',
+    'mORMotTestCJKGlyf-Regular.ttf',
     'mORMotTestCollection.ttc', 'mORMotTestCollection.ttc');
-  FACES: array[0..7] of integer = (0, 0, 0, 0, 0, 0, 0, 1);
-  FAMILIES: array[0..7] of RawUtf8 = (
+  FACES: array[0..8] of integer = (0, 0, 0, 0, 0, 0, 0, 0, 1);
+  FAMILIES: array[0..8] of RawUtf8 = (
     TEST_SANS, TEST_ARABIC, TEST_CJK, TEST_SYMBOL, TEST_SYMBOL_LOW,
-    TEST_SYMBOL_F2, TEST_TTC_A, TEST_TTC_B);
+    TEST_SYMBOL_F2, TEST_CJK_GLYF, TEST_TTC_A, TEST_TTC_B);
 var
   req: TFontRequest;
   data: RawByteString;
@@ -430,7 +486,6 @@ const
     doc: TPdfDocument;
     ms: TMemoryStream;
     pdf: RawByteString;
-    fonts: TRawUtf8DynArray;
     i, g, shifted, upm, nlhm, hmtxWords, hmtxAdv: integer;
 
     function Swap16(w: word): word;
@@ -453,14 +508,9 @@ const
     end;
 
   begin
-    if not aRequired then
-    begin
-      // an extra runs where its face is installed: the backend substitutes
-      fonts := nil;
-      FontEnumerator.EnumTrueTypeFonts(fonts);
-      if FindRawUtf8(fonts, aFont) < 0 then
-        exit;
-    end;
+    if not aRequired and
+       not SystemFaceExtra(self, aFont) then
+      exit; // an extra runs where its face is installed
     face := TestFace(aFont);
     if not Check(face <> nil, Utf8ToString(aFont)) then
       exit;
@@ -1069,16 +1119,17 @@ end;
 
 procedure TPdfCrossPlatTests.TestTestFontFiles;
 const
-  FILES: array[0..7] of TFileName = (
+  FILES: array[0..8] of TFileName = (
     'mORMotTestSans-Regular.ttf', 'mORMotTestArabic-Regular.ttf',
     'mORMotTestCJK-Regular.otf', 'mORMotTestSymbol-Regular.ttf',
     'mORMotTestSymbolLow-Regular.ttf', 'mORMotTestSymbolF2-Regular.ttf',
+    'mORMotTestCJKGlyf-Regular.ttf',
     'mORMotTestCollection.ttc', 'mORMotTestCollection.ttc');
-  FACES: array[0..7] of integer = (0, 0, 0, 0, 0, 0, 0, 1);
-  FAMILIES: array[0..7] of RawUtf8 = (
+  FACES: array[0..8] of integer = (0, 0, 0, 0, 0, 0, 0, 0, 1);
+  FAMILIES: array[0..8] of RawUtf8 = (
     'mORMot Test Sans', 'mORMot Test Arabic', 'mORMot Test CJK',
     'mORMot Test Symbol', 'mORMot Test Symbol Low', 'mORMot Test Symbol F2',
-    'mORMot Test TTC A', 'mORMot Test TTC B');
+    'mORMot Test CJK Glyf', 'mORMot Test TTC A', 'mORMot Test TTC B');
 var
   data: RawByteString;
   i: PtrInt;

@@ -75,6 +75,9 @@ begin
   SetExecutableVersion(SYNOPSE_FRAMEWORK_VERSION);
   GoldenRecord := Executable.Command.Option('golden-record',
     'write the golden PDF baseline of this machine instead of comparing');
+  RequireSystemFaces := Executable.Command.Option('require-fonts',
+    'fail where a typical system face of this OS is missing, instead of '+
+    'skipping the test that needs it');
   TIntegrationTests.RunAsConsole('mORMot2 PDF and Report Tests',
     //LOG_VERBOSE +
     LOG_FILTER[lfExceptions] // + [sllErrors, sllWarning]
