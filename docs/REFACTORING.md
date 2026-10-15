@@ -216,7 +216,8 @@ checked against that record:
    fonts from memory: `RegisterFontData`, the test fonts' first step), then
    `c68fc85aa` (2026-10-14, symbol faces measured by their symbol cmap), then
    `c53462a61` (2026-10-15, the fallback step: `fsoMissingGlyphs`,
-   `IFontRunShaper`, HarfBuzz script runs).
+   `IFontRunShaper`, HarfBuzz script runs), then `b2d659d44` (2026-10-15,
+   Uniscribe keeps the missing-glyph check when its font properties fail).
    **Checked:** against `d60cc6e80`, today's `main`,
    `test_runner` 259/259 on Windows (FPC Win64, Delphi 7, Delphi 2010),
    298/298 on Linux, 317/317 on macOS (fpcupdeluxe, FPC 3.2.3). Against
@@ -1098,7 +1099,16 @@ Process, agreed in the forum:
   `mixed_fallback`. No other golden file changed. mORMot2 pin
   `c53462a61`. `test_runner` 1133/1133 on Windows (FPC 3.3.1 aarch64,
   Delphi 7, Delphi 13 Win32/Win64), 1135 on Linux, 1168 on macOS. Not
-  done: per-cluster fallback, full bidi
+  done: per-cluster fallback, full bidi. Fable's branch review: a
+  default-ignorable code point (ZWNJ, ZWJ, the bidi controls, a variation
+  selector) no font has raised under PDF/A on the plain path while both
+  shapers drop it - it is not drawn now (`IsDefaultIgnorable`);
+  `TextWidth(PdfString)` measured a missing WinAnsi character in the main
+  font while `TextOut` drew it from the fallback; Uniscribe's check is kept
+  (wgDefault 0) when `ScriptGetFontProperties` fails. Left: an
+  `hb_font_t` per `ShapeRun` call, and the cmap read twice per font once its
+  Unicode instance exists. `test_runner` 1135/1135 on Windows, 1137 on
+  Linux, 1170 on macOS
 
 ## Open Decisions
 

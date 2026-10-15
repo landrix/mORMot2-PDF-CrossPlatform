@@ -1284,6 +1284,10 @@ begin
 end;
 
 // Arabic and ' Ab' in the Arabic test font, Test Sans the fallback font
+const
+  /// U+200C ZERO WIDTH NON-JOINER
+  ZWNJ: RawUtf8 = {$ifdef HASCODEPAGE} #$200C {$else} #$E2#$80#$8C {$endif};
+
 function PlainFallbackPdf(aFallBack, aPdfString: boolean;
   aPdfA: TPdfALevel = pdfaNone): RawByteString;
 var
@@ -1344,7 +1348,25 @@ begin
       raised := Pos('U+0041', E.Message) > 0; // ours, not another rule's
   end;
   Check(raised, 'PDF/A without a fallback raises');
-  // measured where it is drawn
+  // a format control no font has draws nothing - no PDF/A error (Test Sans
+  // has no ZWNJ; both shapers drop it too)
+  raised := false;
+  try
+    PDF := TPdfDocument.Create(false, 0, pdfa3U);
+    try
+      PDF.FontFallBackName := TEST_SANS;
+      PDF.AddPage;
+      PDF.Canvas.SetFont(TEST_SANS, 24, [], PDF_DEFAULT_CHARSET);
+      DrawUtf8Text(PDF, 40, 650, 'a' + ZWNJ + 'b');
+    finally
+      PDF.Free;
+    end;
+  except
+    on EPdfInvalidOperation do
+      raised := true;
+  end;
+  Check(not raised, 'a ZWNJ no font has is no PDF/A error');
+  // measured where it is drawn, by both APIs
   PDF := TPdfDocument.Create;
   try
     PDF.FontFallBackName := TEST_SANS;
@@ -1355,6 +1377,8 @@ begin
     arabic := PDF.Canvas.UnicodeTextWidth('Ab');
     Check((sans > 0) and
           (abs(arabic - sans) < 0.01), 'measured with the fallback font');
+    arabic := PDF.Canvas.TextWidth('Ab');
+    Check(abs(arabic - sans) < 0.01, 'TextWidth of a PdfString too');
   finally
     PDF.Free;
   end;
@@ -1406,7 +1430,11 @@ begin
   while (e <= length(s)) and
         (s[e] <> '/') do
     inc(e);
-  name := '/' + copy(s, p, e - p) + ' ';
+  // no '+': FPC 3.2.2 i386 drops a RawByteString operand of a concatenation
+  SetLength(name, e - p + 2);
+  name[1] := '/';
+  Move(s[p], name[2], e - p);
+  name[e - p + 2] := ' ';
   b := PosEx('BT', s);
   t := PosEx(name, s, b);
   h := PosEx('<', s, b);

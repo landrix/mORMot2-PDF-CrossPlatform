@@ -5585,6 +5585,20 @@ begin
       // fskSkip: nothing to draw
 end;
 
+// a default-ignorable code point (Unicode 5.21): a format or join control
+// draws nothing - both shapers drop it too
+function IsDefaultIgnorable(c: cardinal): boolean;
+begin
+  case c of
+    $00AD, $034F, $061C, $115F, $1160, $17B4, $17B5, $180B..$180F,
+    $200B..$200F, $202A..$202E, $2060..$206F, $3164, $FE00..$FE0F, $FEFF,
+    $FFA0, $FFF0..$FFF8:
+      result := true;
+  else
+    result := false;
+  end;
+end;
+
 procedure TPdfWrite.AddGlyphFromChar(Char: WideChar; Canvas: TPdfCanvas;
   Ttf: TPdfFontTrueType; NextLine: PBoolean);
 var
@@ -5600,6 +5614,9 @@ begin
     Glyph := Ttf.fUsedWide[idx].Glyph
   else
     Glyph := 0;
+  if (Glyph = 0) and
+     IsDefaultIgnorable(ord(Char)) then
+    exit; // no glyph for a control: nothing to draw, nor to fall back for
   with Canvas.fDoc do
     if (Glyph = 0) and
        fUseFontFallBack and
@@ -6646,6 +6663,16 @@ begin
   if Type0Only then // drawn as glyphs: the widths of /W
     result := WinAnsiFont.GetWideCharWidth(
       WideChar(WinAnsiConvert.AnsiToWide[ord(AText[APos])]))
+  else if not fUnicode and
+          (fDoc.Canvas <> nil) and
+          fDoc.fUseFontFallBack and
+          (fDoc.fFontFallBackIndex >= 0) and
+          WinAnsiMissing(ord(AText[APos])) then
+    // drawn by the fallback font (ShowText): measured there, as
+    // UnicodeTextWidth does - a forced index leaves the page font
+    result := (fDoc.Canvas.SetFont('', 1, fStyle, -1,
+      fDoc.fFontFallBackIndex) as TPdfFontTrueType).WinAnsiFont.
+      GetWideCharWidth(WideChar(WinAnsiConvert.AnsiToWide[ord(AText[APos])]))
   else if fUnicode then
     result := fWinAnsiFont.GetAnsiCharWidth(AText, APos)
   else
