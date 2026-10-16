@@ -543,8 +543,8 @@ Step 1: scan WinAnsiFont.fUsedWide[0..Count-1].Glyph == aGlyph
 Step 2: scan UnicodeFont.fUsedWide[0..Count-1].Glyph == aGlyph  (reverse CMAP)
           → found: WinAnsiFont.FindOrAddUsedWideChar(UnicodeFont.fUsedWideChar.Values[i])
                    return WinAnsiFont.fUsedWide[idx].Glyph
-                   (call must be qualified as WinAnsiFont.FindOrAddUsedWideChar —
-                    bare call inside "with UnicodeFont do" would resolve to UnicodeFont's method)
+                   (the index is one of the WinAnsi instance's fUsedWide[], not of
+                    the Unicode one's CMAP array - both instances have the method)
           → not found: fall through to Step 3
 
 Step 3: GSUB-substituted glyph — not in CMAP at all (rare ligature, etc.)

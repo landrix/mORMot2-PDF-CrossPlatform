@@ -2900,14 +2900,11 @@ var
 begin
   n := length(fExportPdfAttachments);
   SetLength(fExportPdfAttachments, n + 1);
-  with fExportPdfAttachments[n] do
-  begin
-    Content := aContent;
-    Title := aTitle;
-    Description := aDescription;
-    MimeType := aMimeType;
-    Relationship := aRelationship;
-  end;
+  fExportPdfAttachments[n].Content := aContent;
+  fExportPdfAttachments[n].Title := aTitle;
+  fExportPdfAttachments[n].Description := aDescription;
+  fExportPdfAttachments[n].MimeType := aMimeType;
+  fExportPdfAttachments[n].Relationship := aRelationship;
 end;
 
 procedure TGDIPages.ClearExportPdfAttachments;
@@ -3005,10 +3002,11 @@ begin
       if fHeadingCount > 0 then
         AddHeadingsToOutline(PDF);
       for i := 0 to high(fExportPdfAttachments) do
-        with fExportPdfAttachments[i] do
-          PDF.CreateFileAttachmentFrom(Content, Utf8ToString(Title),
-            Utf8ToString(Description), Utf8ToString(MimeType), Now, Now, nil,
-            Relationship);
+        PDF.CreateFileAttachmentFrom(fExportPdfAttachments[i].Content,
+          Utf8ToString(fExportPdfAttachments[i].Title),
+          Utf8ToString(fExportPdfAttachments[i].Description),
+          Utf8ToString(fExportPdfAttachments[i].MimeType), Now, Now, nil,
+          fExportPdfAttachments[i].Relationship);
 
       PDF.SaveToStreamDirectEnd;
     finally
