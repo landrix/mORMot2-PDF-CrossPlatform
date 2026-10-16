@@ -357,7 +357,7 @@ Phase 1b it read the document DC and relied on the font its caller had
 selected):
 
 1. **`head` + `hhea`** — provides `UnitsPerEm` and `numOfLongHorMetrics`
-2. **`cmap`** — Format 4 segment map: populates
+2. **`cmap`** — Format 4 segment map, or the BMP groups of format 12: populates
    - `UnicodeFont.fUsedWideChar.Values[]` — one entry per code point in the CMAP
    - `UnicodeFont.fUsedWide[].Glyph` — glyph ID per code point
 3. **`hmtx`** — Horizontal metrics: sets `UnicodeFont.fUsedWide[].Width` per glyph

@@ -6399,7 +6399,10 @@ begin
   LongRec(off).Lo := LongRec(off).Hi;
   LongRec(off).Hi := i;
   if off > cardinal(Length(fcmap) * 2) then
-    exit; // avoid GPF
+  begin
+    result := LoadCmap12(aFace); // a broken offset: maybe a format 12 one
+    exit;
+  end;
   if off and 1 <> 0 then
   begin
     // odd offset: GetTtfData() applied SwapBuffer() on even-aligned 16-bit
