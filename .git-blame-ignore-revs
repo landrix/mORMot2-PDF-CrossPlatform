@@ -1,0 +1,16 @@
+# The four commits that only reformat code, skipped by GitHub's blame;
+# to make a local git blame skip them too:
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+# Each of them against its parent: the token streams equal (the case
+# commit: respelled names; the comment commit: comments, and a 'type'
+# after a new banner), and the same FPC object code - docs/REFACTORING.md,
+# formatting.
+
+# Formatting: column alignment as the trunk keeps it
+1006bcbd0284541558e023f64196fc5bf3c1a690
+# Formatting: the trunk's spelling of types, constants and system routines
+fcf09f33a34f19ce1dc357e1e3929d454bcb5e7c
+# Formatting: one statement per line, one unit per uses line
+acc98f4ee004125c6bcf61d10b4be51e4070aca7
+# Formatting: section banners, overview blocks and /// documentation
+a9c9b78a56a41bb5d22d3f15e550f090479709ea

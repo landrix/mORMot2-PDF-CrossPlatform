@@ -296,6 +296,9 @@ Details on interfaces and registration: `.claude/skills/platform-backends.md`
     comments and strings in `src/core`, `lib`, `net` and `orm`: a `with`
     hides which object a name belongs to, and a field added later changes
     what the code means without a compiler message
+  - **`git blame`**: GitHub skips the commits that only reformat; to
+    make a local `git blame` skip them too, run
+    `git config blame.ignoreRevsFile .git-blame-ignore-revs`
   - **CRLF line endings** in the working copy (`core.autocrlf` keeps the
     index of this repository LF; the trunk stores CRLF - the units are
     converted when they move there)
