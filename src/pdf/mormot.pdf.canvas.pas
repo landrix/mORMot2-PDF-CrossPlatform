@@ -2058,6 +2058,13 @@ function EnumEMFFunc(DC: HDC; var Table: THandleTable; R: PEnhMetaRecord;
 var
   st: ^TPdfEnumState;
   box: TPdfBox;
+  n: cardinal;
+  rr: PEMRRoundRect;
+  bb: PEMRBitBlt;
+  sb: PEMRStretchBlt;
+  sdib: PEMRStretchDIBits;
+  tb: PEMRTransparentBLT;
+  ab: PEMRAlphaBlend;
   i: PtrInt;
   cp: TPoint;
   InitTransX: XForm;
@@ -2114,20 +2121,26 @@ begin
     EMR_SETWORLDTRANSFORM:
       E.ScaleMatrix(@PEMRSetWorldTransform(R)^.xform, MWT_SET);
     EMR_CREATEPEN:
-      if PEMRCreatePen(R)^.ihPen - 1 < cardinal(length(E.fObj)) then
       begin
-        E.fObj[PEMRCreatePen(R)^.ihPen - 1].kind := OBJ_PEN;
-        E.fObj[PEMRCreatePen(R)^.ihPen - 1].PenColor := PEMRCreatePen(R)^.lopn.lopnColor;
-        E.fObj[PEMRCreatePen(R)^.ihPen - 1].PenWidth := PEMRCreatePen(R)^.lopn.lopnWidth.X;
-        E.fObj[PEMRCreatePen(R)^.ihPen - 1].PenStyle := PEMRCreatePen(R)^.lopn.lopnStyle;
+        n := PEMRCreatePen(R)^.ihPen - 1;
+        if n < cardinal(length(E.fObj)) then
+        begin
+          E.fObj[n].kind := OBJ_PEN;
+          E.fObj[n].PenColor := PEMRCreatePen(R)^.lopn.lopnColor;
+          E.fObj[n].PenWidth := PEMRCreatePen(R)^.lopn.lopnWidth.X;
+          E.fObj[n].PenStyle := PEMRCreatePen(R)^.lopn.lopnStyle;
+        end;
       end;
     EMR_CREATEBRUSHINDIRECT:
-      if PEMRCreateBrushIndirect(R)^.ihBrush - 1 < cardinal(length(E.fObj)) then
       begin
-        E.fObj[PEMRCreateBrushIndirect(R)^.ihBrush - 1].kind := OBJ_BRUSH;
-        E.fObj[PEMRCreateBrushIndirect(R)^.ihBrush - 1].BrushColor := PEMRCreateBrushIndirect(R)^.lb.lbColor;
-        E.fObj[PEMRCreateBrushIndirect(R)^.ihBrush - 1].BrushNull := (PEMRCreateBrushIndirect(R)^.lb.lbStyle = BS_NULL);
-        E.fObj[PEMRCreateBrushIndirect(R)^.ihBrush - 1].BrushStyle := PEMRCreateBrushIndirect(R)^.lb.lbStyle;
+        n := PEMRCreateBrushIndirect(R)^.ihBrush - 1;
+        if n < cardinal(length(E.fObj)) then
+        begin
+          E.fObj[n].kind := OBJ_BRUSH;
+          E.fObj[n].BrushColor := PEMRCreateBrushIndirect(R)^.lb.lbColor;
+          E.fObj[n].BrushNull := (PEMRCreateBrushIndirect(R)^.lb.lbStyle = BS_NULL);
+          E.fObj[n].BrushStyle := PEMRCreateBrushIndirect(R)^.lb.lbStyle;
+        end;
       end;
     EMR_EXTCREATEFONTINDIRECTW:
       E.CreateFont(PEMRExtCreateFontIndirect(R));
@@ -2178,8 +2191,9 @@ begin
       begin
         NormalizeRect(PRect(@PEMRRoundRect(R)^.rclBox)^);
         E.NeedBrushAndPen;
-        E.fCanvas.RoundRectI(PEMRRoundRect(R)^.rclBox.left, PEMRRoundRect(R)^.rclBox.top, PEMRRoundRect(R)^.rclBox.right,
-          PEMRRoundRect(R)^.rclBox.bottom, PEMRRoundRect(R)^.szlCorner.cx, PEMRRoundRect(R)^.szlCorner.cy);
+        rr := PEMRRoundRect(R);
+        E.fCanvas.RoundRectI(rr^.rclBox.left, rr^.rclBox.top, rr^.rclBox.right,
+          rr^.rclBox.bottom, rr^.szlCorner.cx, rr^.szlCorner.cy);
         E.FlushPenBrush;
       end;
     EMR_ARC:
@@ -2562,74 +2576,96 @@ begin
       end;
     EMR_BITBLT:
       begin
-        if (PEMRBitBlt(R)^.offBmiSrc <> 0) and
-           (PEMRBitBlt(R)^.offBitsSrc <> 0) then
-          E.DrawBitmap(PEMRBitBlt(R)^.xSrc, PEMRBitBlt(R)^.ySrc, PEMRBitBlt(R)^.cxDest, PEMRBitBlt(R)^.cyDest, PEMRBitBlt(R)^.xDest, PEMRBitBlt(R)^.yDest,
-            PEMRBitBlt(R)^.cxDest, PEMRBitBlt(R)^.cyDest, PEMRBitBlt(R)^.iUsageSrc, pointer(PtrUInt(R) + PEMRBitBlt(R)^.offBmiSrc),
-            pointer(PtrUInt(R) + PEMRBitBlt(R)^.offBitsSrc), @PEMRBitBlt(R)^.rclBounds, @PEMRBitBlt(R)^.xformSrc, PEMRBitBlt(R)^.dwRop)
+        bb := PEMRBitBlt(R); // only handle RGB bitmaps (no palette)
+        if (bb^.offBmiSrc <> 0) and
+           (bb^.offBitsSrc <> 0) then
+          E.DrawBitmap(bb^.xSrc, bb^.ySrc, bb^.cxDest, bb^.cyDest, bb^.xDest,
+            bb^.yDest, bb^.cxDest, bb^.cyDest, bb^.iUsageSrc,
+            pointer(PtrUInt(R) + bb^.offBmiSrc), pointer(PtrUInt(R) + bb^.offBitsSrc),
+            @bb^.rclBounds, @bb^.xformSrc, bb^.dwRop)
         else
-          case PEMRBitBlt(R)^.dwRop of // we only handle PATCOPY = fillrect
+          case bb^.dwRop of // we only handle PATCOPY = fillrect
             PATCOPY:
-              E.FillRectangle(Rect(PEMRBitBlt(R)^.xDest, PEMRBitBlt(R)^.yDest,
-                PEMRBitBlt(R)^.xDest + PEMRBitBlt(R)^.cxDest, PEMRBitBlt(R)^.yDest + PEMRBitBlt(R)^.cyDest), true);
+              E.FillRectangle(Rect(bb^.xDest, bb^.yDest,
+                bb^.xDest + bb^.cxDest, bb^.yDest + bb^.cyDest), true);
           end;
       end;
     EMR_STRETCHBLT:
       begin
-        if (PEMRStretchBlt(R)^.offBmiSrc <> 0) and
-           (PEMRStretchBlt(R)^.offBitsSrc <> 0) then
-          E.DrawBitmap(PEMRStretchBlt(R)^.xSrc, PEMRStretchBlt(R)^.ySrc, PEMRStretchBlt(R)^.cxSrc, PEMRStretchBlt(R)^.cySrc, PEMRStretchBlt(R)^.xDest, PEMRStretchBlt(R)^.yDest, PEMRStretchBlt(R)^.cxDest,
-            PEMRStretchBlt(R)^.cyDest, PEMRStretchBlt(R)^.iUsageSrc, pointer(PtrUInt(R) + PEMRStretchBlt(R)^.offBmiSrc),
-            pointer(PtrUInt(R) + PEMRStretchBlt(R)^.offBitsSrc), @PEMRStretchBlt(R)^.rclBounds, @PEMRStretchBlt(R)^.xformSrc, PEMRStretchBlt(R)^.dwRop)
+        sb := PEMRStretchBlt(R); // only handle RGB bitmaps (no palette)
+        if (sb^.offBmiSrc <> 0) and
+           (sb^.offBitsSrc <> 0) then
+          E.DrawBitmap(sb^.xSrc, sb^.ySrc, sb^.cxSrc, sb^.cySrc, sb^.xDest,
+            sb^.yDest, sb^.cxDest, sb^.cyDest, sb^.iUsageSrc,
+            pointer(PtrUInt(R) + sb^.offBmiSrc), pointer(PtrUInt(R) + sb^.offBitsSrc),
+            @sb^.rclBounds, @sb^.xformSrc, sb^.dwRop)
         else
-          case PEMRStretchBlt(R)^.dwRop of // we only handle PATCOPY = fillrect
+          case sb^.dwRop of // we only handle PATCOPY = fillrect
             PATCOPY:
-              E.FillRectangle(Rect(
-                PEMRStretchBlt(R)^.xDest, PEMRStretchBlt(R)^.yDest, PEMRStretchBlt(R)^.xDest + PEMRStretchBlt(R)^.cxDest, PEMRStretchBlt(R)^.yDest + PEMRStretchBlt(R)^.cyDest), true);
+              E.FillRectangle(Rect(sb^.xDest, sb^.yDest,
+                sb^.xDest + sb^.cxDest, sb^.yDest + sb^.cyDest), true);
           end;
       end;
     EMR_STRETCHDIBITS:
-      if (PEMRStretchDIBits(R)^.offBmiSrc <> 0) and
-         (PEMRStretchDIBits(R)^.offBitsSrc <> 0) then
       begin
-        if st^.WorldTransform.eM22 < 0 then
-          PBitmapInfo(PtrUInt(R) + PEMRStretchDIBits(R)^.offBmiSrc)^.bmiHeader.biHeight := -PBitmapInfo(PtrUInt(R) + PEMRStretchDIBits(R)^.offBmiSrc)^.bmiHeader.biHeight;
-        E.DrawBitmap(PEMRStretchDIBits(R)^.xSrc, PEMRStretchDIBits(R)^.ySrc, PEMRStretchDIBits(R)^.cxSrc, PEMRStretchDIBits(R)^.cySrc, PEMRStretchDIBits(R)^.xDest, PEMRStretchDIBits(R)^.yDest, PEMRStretchDIBits(R)^.cxDest, PEMRStretchDIBits(R)^.cyDest,
-          PEMRStretchDIBits(R)^.iUsageSrc, pointer(PtrUInt(R) + PEMRStretchDIBits(R)^.offBmiSrc),
-          pointer(PtrUInt(R) + PEMRStretchDIBits(R)^.offBitsSrc), @PEMRStretchDIBits(R)^.rclBounds, nil, PEMRStretchDIBits(R)^.dwRop);
+        sdib := PEMRStretchDIBits(R); // only handle RGB bitmaps (no palette)
+        if (sdib^.offBmiSrc <> 0) and
+           (sdib^.offBitsSrc <> 0) then
+        begin
+          if st^.WorldTransform.eM22 < 0 then
+            PBitmapInfo(PtrUInt(R) + sdib^.offBmiSrc)^.bmiHeader.biHeight :=
+              -PBitmapInfo(PtrUInt(R) + sdib^.offBmiSrc)^.bmiHeader.biHeight;
+          E.DrawBitmap(sdib^.xSrc, sdib^.ySrc, sdib^.cxSrc, sdib^.cySrc,
+            sdib^.xDest, sdib^.yDest, sdib^.cxDest, sdib^.cyDest, sdib^.iUsageSrc,
+            pointer(PtrUInt(R) + sdib^.offBmiSrc),
+            pointer(PtrUInt(R) + sdib^.offBitsSrc), @sdib^.rclBounds, nil,
+            sdib^.dwRop);
+        end;
       end;
     EMR_TRANSPARENTBLT:
-      if (PEMRTransparentBLT(R)^.offBmiSrc <> 0) and
-         (PEMRTransparentBLT(R)^.offBitsSrc <> 0) then
-        E.DrawBitmap(PEMRTransparentBLT(R)^.xSrc, PEMRTransparentBLT(R)^.ySrc, PEMRTransparentBLT(R)^.cxSrc, PEMRTransparentBLT(R)^.cySrc, PEMRTransparentBLT(R)^.xDest, PEMRTransparentBLT(R)^.yDest, PEMRTransparentBLT(R)^.cxDest, PEMRTransparentBLT(R)^.cyDest,
-          PEMRTransparentBLT(R)^.iUsageSrc, pointer(PtrUInt(R) + PEMRTransparentBLT(R)^.offBmiSrc),
-          pointer(PtrUInt(R) + PEMRTransparentBLT(R)^.offBitsSrc), @PEMRTransparentBLT(R)^.rclBounds, @PEMRTransparentBLT(R)^.xformSrc, SRCCOPY,
-          PEMRTransparentBLT(R)^.dwRop); // dwRop stores the transparent color
+      begin
+        tb := PEMRTransparentBLT(R); // only handle RGB bitmaps (no palette)
+        if (tb^.offBmiSrc <> 0) and
+           (tb^.offBitsSrc <> 0) then
+          E.DrawBitmap(tb^.xSrc, tb^.ySrc, tb^.cxSrc, tb^.cySrc, tb^.xDest,
+            tb^.yDest, tb^.cxDest, tb^.cyDest, tb^.iUsageSrc,
+            pointer(PtrUInt(R) + tb^.offBmiSrc), pointer(PtrUInt(R) + tb^.offBitsSrc),
+            @tb^.rclBounds, @tb^.xformSrc, SRCCOPY,
+            tb^.dwRop); // dwRop stores the transparent color
+      end;
     EMR_ALPHABLEND:
-      if (PEMRAlphaBlend(R)^.offBmiSrc <> 0) and
-         (PEMRAlphaBlend(R)^.offBitsSrc <> 0) then
-        E.DrawBitmap (PEMRAlphaBlend(R)^.xSrc, PEMRAlphaBlend(R)^.ySrc, PEMRAlphaBlend(R)^.cxSrc, PEMRAlphaBlend(R)^.cySrc, PEMRAlphaBlend(R)^.xDest, PEMRAlphaBlend(R)^.yDest, PEMRAlphaBlend(R)^.cxDest, PEMRAlphaBlend(R)^.cyDest,
-          PEMRAlphaBlend(R)^.iUsageSrc, pointer(PtrUInt(R) + PEMRAlphaBlend(R)^.offBmiSrc), pointer(
-           PtrUInt(R) + PEMRAlphaBlend(R)^.offBitsSrc), @PEMRAlphaBlend(R)^.rclBounds, @PEMRAlphaBlend(R)^.xformSrc, SRCCOPY, PEMRAlphaBlend(R)^.dwRop)
-      else
-        case PEMRAlphaBlend(R)^.dwRop of // we only handle PATCOPY = fillrect
-          PATCOPY:
-            E.FillRectangle(Rect(PEMRAlphaBlend(R)^.xDest, PEMRAlphaBlend(R)^.yDest,
-              PEMRAlphaBlend(R)^.xDest + PEMRAlphaBlend(R)^.cxDest, PEMRAlphaBlend(R)^.yDest + PEMRAlphaBlend(R)^.cyDest), true);
-        end;
+      begin
+        ab := PEMRAlphaBlend(R); // only handle RGB bitmaps (no palette nor transparency)
+        if (ab^.offBmiSrc <> 0) and
+           (ab^.offBitsSrc <> 0) then
+          E.DrawBitmap(ab^.xSrc, ab^.ySrc, ab^.cxSrc, ab^.cySrc, ab^.xDest,
+            ab^.yDest, ab^.cxDest, ab^.cyDest, ab^.iUsageSrc,
+            pointer(PtrUInt(R) + ab^.offBmiSrc), pointer(PtrUInt(R) + ab^.offBitsSrc),
+            @ab^.rclBounds, @ab^.xformSrc, SRCCOPY, ab^.dwRop)
+        else
+          case ab^.dwRop of // we only handle PATCOPY = fillrect
+            PATCOPY:
+              E.FillRectangle(Rect(ab^.xDest, ab^.yDest,
+                ab^.xDest + ab^.cxDest, ab^.yDest + ab^.cyDest), true);
+          end;
+      end;
     EMR_GDICOMMENT:
       if PEMRGDIComment(R)^.cbData >= 1 then
-        E.HandleComment(
-          TPdfGdiComment(PEMRGDIComment(R)^.Data[0]), PAnsiChar(@PEMRGDIComment(R)^.Data) + 1, PEMRGDIComment(R)^.cbData - 1);
+        E.HandleComment(TPdfGdiComment(PEMRGDIComment(R)^.Data[0]),
+          PAnsiChar(@PEMRGDIComment(R)^.Data) + 1, PEMRGDIComment(R)^.cbData - 1);
     EMR_MODIFYWORLDTRANSFORM:
       E.ScaleMatrix(@PEMRModifyWorldTransform(R)^.xform, PEMRModifyWorldTransform(R)^.iMode);
     EMR_EXTCREATEPEN: // approx. - fast solution
-      if PEMRExtCreatePen(R)^.ihPen - 1 < cardinal(length(E.fObj)) then
       begin
-        E.fObj[PEMRExtCreatePen(R)^.ihPen - 1].kind := OBJ_PEN;
-        E.fObj[PEMRExtCreatePen(R)^.ihPen - 1].PenColor := PEMRExtCreatePen(R)^.elp.elpColor;
-        E.fObj[PEMRExtCreatePen(R)^.ihPen - 1].PenWidth := PEMRExtCreatePen(R)^.elp.elpWidth;
-        E.fObj[PEMRExtCreatePen(R)^.ihPen - 1].PenStyle := PEMRExtCreatePen(R)^.elp.elpPenStyle and (PS_STYLE_MASK or PS_ENDCAP_MASK);
+        n := PEMRExtCreatePen(R)^.ihPen - 1;
+        if n < cardinal(length(E.fObj)) then
+        begin
+          E.fObj[n].kind := OBJ_PEN;
+          E.fObj[n].PenColor := PEMRExtCreatePen(R)^.elp.elpColor;
+          E.fObj[n].PenWidth := PEMRExtCreatePen(R)^.elp.elpWidth;
+          E.fObj[n].PenStyle := PEMRExtCreatePen(R)^.elp.elpPenStyle and
+            (PS_STYLE_MASK or PS_ENDCAP_MASK);
+        end;
       end;
     EMR_SETMITERLIMIT:
       if PEMRSetMiterLimit(R)^.eMiterLimit > 0.1 then
@@ -2793,7 +2829,8 @@ begin
     A.fKerningHScaleBottom := KerningHScaleBottom;
     A.fKerningHScaleTop := KerningHScaleTop;
     if TPdfDocumentAccess(A.fDoc).fPrinterPxPerInch.X = 0 then
-      TPdfDocumentAccess(A.fDoc).fPrinterPxPerInch := CurrentPrinterRes; // caching for major speedup
+      // caching for major speedup
+      TPdfDocumentAccess(A.fDoc).fPrinterPxPerInch := CurrentPrinterRes;
     A.fPrinterPxPerInch := TPdfDocumentAccess(A.fDoc).fPrinterPxPerInch;
     Int64(E.fDC[0].WinSize) := PInt64(@R.Right)^;
     E.fDC[0].ViewSize := E.fDC[0].WinSize;
@@ -2836,6 +2873,7 @@ end;
 
 procedure TPdfEnum.CreateFont(aLogFont: PEMRExtCreateFontIndirect);
 var
+  n: cardinal;
   hf: HFONT;
   tm: TTextMetric;
   old: HGDIOBJ;
@@ -2847,15 +2885,16 @@ begin
   GetTextMetrics(dest, tm);
   SelectObject(dest, old);
   DeleteObject(hf);
-  if aLogFont^.ihFont - 1 < cardinal(length(fObj)) then
+  n := aLogFont^.ihFont - 1;
+  if n < cardinal(length(fObj)) then
   begin
-    fObj[aLogFont^.ihFont - 1].kind := OBJ_FONT;
-    MoveFast(aLogFont^.elfw.elfLogFont, fObj[aLogFont^.ihFont - 1].LogFont, SizeOf(fObj[aLogFont^.ihFont - 1].LogFont));
-    fObj[aLogFont^.ihFont - 1].LogFont.lfPitchAndFamily := tm.tmPitchAndFamily;
-    if fObj[aLogFont^.ihFont - 1].LogFont.lfOrientation <> 0 then
-      fObj[aLogFont^.ihFont - 1].FontSpec.angle := fObj[aLogFont^.ihFont - 1].LogFont.lfOrientation div 10 // -360..+360
+    fObj[n].kind := OBJ_FONT;
+    MoveFast(aLogFont^.elfw.elfLogFont, fObj[n].LogFont, SizeOf(fObj[n].LogFont));
+    fObj[n].LogFont.lfPitchAndFamily := tm.tmPitchAndFamily;
+    if fObj[n].LogFont.lfOrientation <> 0 then
+      fObj[n].FontSpec.angle := fObj[n].LogFont.lfOrientation div 10 // -360..+360
     else
-      fObj[aLogFont^.ihFont - 1].FontSpec.angle := fObj[aLogFont^.ihFont - 1].LogFont.lfEscapement div 10;
+      fObj[n].FontSpec.angle := fObj[n].LogFont.lfEscapement div 10;
     fObj[aLogFont^.ihFont - 1].FontSpec.ascent := tm.tmAscent;
     fObj[aLogFont^.ihFont - 1].FontSpec.descent := tm.tmDescent;
     fObj[aLogFont^.ihFont - 1].FontSpec.cell := tm.tmHeight - tm.tmInternalLeading;
@@ -2965,7 +3004,9 @@ begin
           tri := @vertex[data^.nVer];
           for i := 1 to data^.nTri do
           begin
-            FillColor := RGBA(vertex[tri[i - 1].Vertex1].Red, vertex[tri[i - 1].Vertex1].Green, vertex[tri[i - 1].Vertex1].Blue, 0); // ignore Alpha
+            FillColor := RGBA(vertex[tri[i - 1].Vertex1].Red,
+              vertex[tri[i - 1].Vertex1].Green, vertex[tri[i - 1].Vertex1].Blue,
+              0); // ignore Alpha
             fCanvas.MoveToI(vertex[tri[i - 1].Vertex1].X, vertex[tri[i - 1].Vertex1].Y);
             fCanvas.LineToI(vertex[tri[i - 1].Vertex2].X, vertex[tri[i - 1].Vertex2].Y);
             fCanvas.LineToI(vertex[tri[i - 1].Vertex3].X, vertex[tri[i - 1].Vertex3].Y);
@@ -3125,7 +3166,8 @@ begin
       BLACK_PEN:
         begin
           if fInLined and
-             ((fDC[fDCIndex].pen.color <> STOCKPENCOLOR[iObject]) or not fDC[fDCIndex].pen.null) then
+             ((fDC[fDCIndex].pen.color <> STOCKPENCOLOR[iObject]) or
+              not fDC[fDCIndex].pen.null) then
           begin
             fInLined := false;
             if not fDC[fDCIndex].pen.null then
@@ -3164,7 +3206,8 @@ begin
       OBJ_FONT:
         begin
           fDC[fDCIndex].Font.spec := fObj[iObject - 1].FontSpec;
-          MoveFast(fObj[iObject - 1].LogFont, fDC[fDCIndex].Font.LogFont, SizeOf(fObj[iObject - 1].LogFont));
+          MoveFast(fObj[iObject - 1].LogFont, fDC[fDCIndex].Font.LogFont,
+            SizeOf(fObj[iObject - 1].LogFont));
         end;
     end;
 end;
@@ -3365,8 +3408,10 @@ begin
         fCanvas.fViewSize.cy := -fCanvas.fPrinterPxPerInch.Y;
         fCanvas.fWinSize.cx := fDC[fDCIndex].WinSize.cx * 10;
         fCanvas.fWinSize.cy := fDC[fDCIndex].WinSize.cy * 10;
-        xdim := abs(fCanvas.fViewSize.cx * fDC[fDCIndex].WinSize.cx / (fCanvas.fPrinterPxPerInch.X * fCanvas.fWinSize.cx));
-        ydim := abs(fCanvas.fViewSize.cy * fDC[fDCIndex].WinSize.cy / (fCanvas.fPrinterPxPerInch.Y * fCanvas.fWinSize.cy));
+        xdim := abs(fCanvas.fViewSize.cx * fDC[fDCIndex].WinSize.cx /
+          (fCanvas.fPrinterPxPerInch.X * fCanvas.fWinSize.cx));
+        ydim := abs(fCanvas.fViewSize.cy * fDC[fDCIndex].WinSize.cy /
+          (fCanvas.fPrinterPxPerInch.Y * fCanvas.fWinSize.cy));
         if xdim > ydim then
         begin
           if fCanvas.fViewSize.cx >= 0 then
@@ -3644,7 +3689,8 @@ begin
     else
       ss := abs(fDC[fDCIndex].Font.spec.cell) * fscaleY;
     // ensure this font is selected (very fast if was already selected)
-    {$ifdef USE_UNISCRIBE}fnt :={$endif} fCanvas.SetFont(TPdfDocumentAccess(fCanvas.fDoc).EmfDC, fDC[fDCIndex].Font.LogFont, ss);
+    {$ifdef USE_UNISCRIBE}fnt :={$endif} fCanvas.SetFont(
+      TPdfDocumentAccess(fCanvas.fDoc).EmfDC, fDC[fDCIndex].Font.LogFont, ss);
     // calculate coordinates
     po := fCanvas.fUseMetaFileTextPositioning;
     if (R.emrtext.fOptions and ETO_GLYPH_INDEX <> 0) then
@@ -3750,13 +3796,15 @@ begin
     // detect clipping
     if fCanvas.fUseMetaFileTextClipping <> tcNeverClip then
     begin
-      clipped := (R.emrtext.rcl.Right > R.emrtext.rcl.Left) and (R.emrtext.rcl.Bottom > R.emrtext.rcl.Top);
+      clipped := (R.emrtext.rcl.Right > R.emrtext.rcl.Left) and
+                 (R.emrtext.rcl.Bottom > R.emrtext.rcl.Top);
       if clipped then
         clip := fCanvas.BoxI(TRect(R.emrtext.rcl), true)
       else
       begin
         if fCanvas.fUseMetaFileTextClipping = tcClipExplicit then
-          clipped := (R.rclBounds.Right > R.rclBounds.Left) and (R.rclBounds.Bottom > R.rclBounds.Top);
+          clipped := (R.rclBounds.Right > R.rclBounds.Left) and
+                     (R.rclBounds.Bottom > R.rclBounds.Top);
         if clipped then
           clip := fCanvas.BoxI(TRect(R.rclBounds), true)
         else
@@ -3840,8 +3888,9 @@ begin
           fCanvas.S2Y(posi.X * fDC[fDCIndex].WorldTransform.eM12 +
             posi.Y * fDC[fDCIndex].WorldTransform.eM22 + fDC[fDCIndex].WorldTransform.eDy))
       else
-        fCanvas.SetTextMatrix(-fDC[fDCIndex].WorldTransform.eM11, -fDC[fDCIndex].WorldTransform.eM12, -
-          fDC[fDCIndex].WorldTransform.eM21, -fDC[fDCIndex].WorldTransform.eM22,
+        fCanvas.SetTextMatrix(-fDC[fDCIndex].WorldTransform.eM11,
+          -fDC[fDCIndex].WorldTransform.eM12, -fDC[fDCIndex].WorldTransform.eM21,
+          -fDC[fDCIndex].WorldTransform.eM22,
           fCanvas.S2X(posi.X * fDC[fDCIndex].WorldTransform.eM11 +
             posi.Y * fDC[fDCIndex].WorldTransform.eM21 + fDC[fDCIndex].WorldTransform.eDx),
           fCanvas.S2Y(posi.X * fDC[fDCIndex].WorldTransform.eM12 +

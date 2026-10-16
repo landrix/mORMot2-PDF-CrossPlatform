@@ -5209,7 +5209,7 @@ begin
   PW := pointer(Bin);
   repeat
     L := len;
-    if PtrInt(fBEnd - fB) <= L * 2 then // note: PtrInt(BEnd - B) could be < 0
+    if PtrInt(fBEnd - fB) <= L * 2 then // note: PtrInt(fBEnd - fB) could be < 0
     begin
       Save;
       if L > high(fTmp) shr 1 then
