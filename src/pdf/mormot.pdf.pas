@@ -50,7 +50,7 @@ uses
   mormot.core.datetime,
   mormot.core.buffers,
   mormot.core.data,
-  Contnrs;  // TObjectList (for fStructElems)
+  contnrs;  // TObjectList (for fStructElems)
 
 
 
@@ -146,7 +146,7 @@ type
     case integer of
       0: (Left, Top, Right, Bottom: integer);
       1: (TopLeft, BottomRight: TPoint);
-      2: (Rect: Types.TRect);
+      2: (Rect: types.TRect);
   end;
   PRect = ^TRect;
 
@@ -449,7 +449,7 @@ const
   /// allow all actions for a pdf encrypted file
   // - to be used as parameter for TPdfEncryption.New() class method
   PDF_PERMISSION_ALL: TPdfEncryptionPermissions =
-    [Low(TPdfEncryptionPermission)..high(TPdfEncryptionPermission)];
+    [low(TPdfEncryptionPermission)..high(TPdfEncryptionPermission)];
 
   /// disable modification and annotation of a pdf encrypted file
   // - to be used as parameter for TPdfEncryption.New() class method
@@ -2174,7 +2174,7 @@ type
     // approximation constructed from straight line segments
     // - Flatness is a number in the range 0 to 100; a value of 0 specifies
     // the output device's default flatness tolerance
-    procedure SetFlat(flatness: Byte);                           {  i   }
+    procedure SetFlat(flatness: byte);                           {  i   }
     /// Set the line cap style in the graphics state
     // - The line cap style specifies the shape to be used at the
     // ends of open subpaths (and dashes, if any) when they are stroked
@@ -3562,7 +3562,7 @@ begin
   if Value <> nil then
     while true do
       if Value^ = #0 then
-        Break
+        break
       else if not (Value^ in LeadBytes) then
         inc(Value)
       else
@@ -4373,7 +4373,7 @@ var
   i: PtrInt;
 begin
   Create(AObjectMgr);
-  for i := 0 to High(AArray) do
+  for i := 0 to high(AArray) do
     AddItem(TPdfNumber.Create(AArray[i]));
 end;
 
@@ -4702,7 +4702,7 @@ var
   i: PtrInt;
   e: TPdfDictionaryElement;
 begin
-  if Self <> nil then
+  if self <> nil then
     for i := 0 to fArray.Count - 1 do
     begin
       e := fArray.List[i];
@@ -4710,7 +4710,7 @@ begin
       begin
         fArray.Remove(e);
         e.Free;
-        Break;
+        break;
       end;
     end;
 end;
@@ -5128,7 +5128,7 @@ begin // this function is intented to use with Tj or '
         include(Font.fWinAnsiUsed, Text^);
       case Text^ of
         #0:
-          Break;
+          break;
         #160:
           begin        // fixed space is written as normal space
             B^ := ' ';
@@ -5220,7 +5220,7 @@ begin
   if BEnd - B <= 32 then
     Save;
   // Value := Trunc(Value * 100 + 0.5) / 100; // 2 decim rounding done by str()
-  if Abs(Value) < 1E-2 then
+  if abs(Value) < 1E-2 then
     Add('0 ')
   else
   begin
@@ -6177,7 +6177,7 @@ end;
 
 procedure TPdfFont.AddUsedWinAnsiChar(aChar: AnsiChar);
 begin
-  if Self <> nil then
+  if self <> nil then
     include(fWinAnsiUsed, aChar);
 end;
 
@@ -7716,13 +7716,13 @@ begin
         if c in fWinAnsiUsed then
         begin
           fFirstChar := ord(c);
-          Break;
+          break;
         end;
       for c := #255 downto #32 do
         if c in fWinAnsiUsed then
         begin
           fLastChar := ord(c);
-          Break;
+          break;
         end;
       if fFirstChar <> 0 then
       begin
@@ -8044,7 +8044,7 @@ begin
   fDoc := AParent.Doc;
   Data := TPdfDictionary.Create(fDoc.fXRef);
   fDoc.fXRef.AddObject(Data);
-  fDoc.fObjectList.Add(Self);
+  fDoc.fObjectList.Add(self);
   if TopPosition >= 0 then
   begin
     if fDoc.Canvas.fPage = nil then
@@ -8076,7 +8076,7 @@ begin
     TmpEntry.fCount := TmpEntry.fCount + 1;
     TmpEntry := TmpEntry.Parent;
   end;
-  result := TPdfOutlineEntry.Create(Self, TopPosition);
+  result := TPdfOutlineEntry.Create(self, TopPosition);
   if fFirst = nil then
     fFirst := result;
   if fLast <> nil then
@@ -8122,7 +8122,7 @@ begin
   Data := TPdfDictionary.Create(ADoc.fXRef);
   fDoc.fXRef.AddObject(Data);
   Data.AddItem('Type', 'Outlines');
-  fDoc.fObjectList.Add(Self);
+  fDoc.fObjectList.Add(self);
 end;
 
 procedure TPdfOutlineRoot.Save;
@@ -8168,7 +8168,7 @@ begin
       'ensure libfreetype is installed and mormot.lib.freetype is used');
   // no screen here: the canvas adapters set the screen's resolution
   fScreenLogPixels := 96;
-  fCanvas := TPdfCanvas.Create(Self); // need fScreenLogPixels
+  fCanvas := TPdfCanvas.Create(self); // need fScreenLogPixels
   // retrieve true type fonts available for all charsets (via platform backend)
   FontEnumerator.EnumTrueTypeFonts(fTrueTypeFonts);
   QuickSortRawUtf8(fTrueTypeFonts, length(fTrueTypeFonts), nil, @StrIComp);
@@ -8446,7 +8446,7 @@ end;
 
 function TPdfDocument.CreateDestination: TPdfDestination;
 begin
-  result := TPdfDestination.Create(Self);
+  result := TPdfDestination.Create(self);
   fObjectList.Add(result);
 end;
 
@@ -8466,7 +8466,7 @@ begin
   aDest.DestinationType := dtXYZ;
   aDest.Zoom := 0; // will leave Zoom factor unchanged
   aDest.Left := 0; // go to left side of the page
-  aDest.Top := Round(TopPosition);
+  aDest.Top := round(TopPosition);
   fBookMarks.AddObject(aBookmarkName, aDest);
   with fMissingBookmarks do
     for i := Count - 1 downto 0 do
@@ -8533,7 +8533,7 @@ begin
   fObjectList.Add(fRoot);
   if UseOutlines then
   begin
-    fOutlineRoot := TPdfOutlineRoot.Create(Self);
+    fOutlineRoot := TPdfOutlineRoot.Create(self);
     fRoot.Data.AddItem('Outlines', fOutlineRoot.Data);
   end;
   CreateInfo;
@@ -8589,7 +8589,7 @@ begin
     dic.AddItem('DestOutputProfile', rgb);
     fOutputIntents.AddItem(dic);
     cat.AddItem('OutputIntents', fOutputIntents);
-    fMetaData := TPdfStream.Create(Self);
+    fMetaData := TPdfStream.Create(self);
     fMetaData.Attributes.AddItem('Subtype', 'XML');
     fMetaData.Attributes.AddItem('Type', 'Metadata');
     fMetaData.fFilter := '';
@@ -8686,7 +8686,7 @@ begin
       // XMP metadata stream (PDF/UA-1) - only when PDF/A has not already set it
       if (fPdfA = pdfaNone) and (fMetaData = nil) then
       begin
-        fMetaData := TPdfStream.Create(Self);
+        fMetaData := TPdfStream.Create(self);
         fMetaData.Attributes.AddItem('Subtype', 'XML');
         fMetaData.Attributes.AddItem('Type', 'Metadata');
         fMetaData.fFilter := '';
@@ -9861,7 +9861,7 @@ begin
           (result.Parent <> nil) do
       result := result.Parent;
   end;
-  result := result.AddChild(Trunc(TopPosition));
+  result := result.AddChild(trunc(TopPosition));
   result.Title := Title;
   result.Level := Level;
   fLastOutline := result;
@@ -9914,12 +9914,12 @@ begin
   if P.Height > 1 then
   begin
     // divided before multiplied: (Height - 1) * stride + row cannot overflow
-    if P.Stride <> Low(PtrInt) then
-      stride := Abs(Int64(P.Stride));
+    if P.Stride <> low(PtrInt) then
+      stride := abs(Int64(P.Stride));
     if stride < row then
       EPdfInvalidValue.RaiseUtf8('TPdfImagePixels: Stride % below a row of %',
         [P.Stride, row]);
-    if stride > (High(Int64) - row) div (P.Height - 1) then
+    if stride > (high(Int64) - row) div (P.Height - 1) then
       EPdfInvalidValue.RaiseUtf8('TPdfImagePixels: Stride % too big', [P.Stride]);
   end;
   if Int64(P.Size) < Int64(P.Height - 1) * stride + row then
@@ -10103,7 +10103,7 @@ begin
         if arr <> nil then
         begin
           rad := TPdfArray.Create(fXRef);
-          for i := Low(ContentGroups) to High(ContentGroups) do
+          for i := low(ContentGroups) to high(ContentGroups) do
             if ContentGroups[i] <> nil then
               rad.AddItem(ContentGroups[i]);
           if rad.ItemCount > 0 then
@@ -10152,7 +10152,7 @@ var
   mime: RawUtf8;
 begin
   // create embedded file stream with main attributes
-  str := TPdfStream.Create(Self);
+  str := TPdfStream.Create(self);
   if pointer(Buffer) <> nil then
     str.Writer.Add(pointer(Buffer), length(Buffer));
   if Assigned(Stream) then
@@ -10361,7 +10361,7 @@ begin
       w := w + fWordSpace;
     tot := tot + w;
     if tot > Width then
-      Break;
+      break;
     if SysLocale.FarEast then
       i := NextCharIndex(Text, i)
     else
@@ -10973,7 +10973,7 @@ begin
       lf.Weight := FW_BOLD
     else
       lf.Weight := FW_NORMAL;
-    lf.Italic := Byte(pfsItalic in AStyle);
+    lf.Italic := byte(pfsItalic in AStyle);
     lf.CharSet := ACharSet;
     lf.PitchAndFamily := 0;
     // we register now the WinAnsi font to the associated fDoc
@@ -11047,9 +11047,9 @@ begin
   w := TextWidth(Text);
   case Alignment of
     paCenter:
-      x := Round((ARect.Right - ARect.Left - w) / 2);
+      x := round((ARect.Right - ARect.Left - w) / 2);
     paRightJustify:
-      x := ARect.Right - ARect.Left - Round(w);
+      x := ARect.Right - ARect.Left - round(w);
   else
     x := 0;
   end;
@@ -11126,7 +11126,7 @@ begin
       MoveToNextLine;
       ARect.Top := ARect.Top - fPage.Leading;
       if ARect.Top < ARect.Bottom + fPage.FontSize then
-        Break;
+        break;
       xp := ARect.Left;
     end;
     xp := xp + w;
@@ -11268,7 +11268,7 @@ end;
 
 // General Graphics State
 
-procedure TPdfCanvas.SetFlat(flatness: Byte);
+procedure TPdfCanvas.SetFlat(flatness: byte);
 begin
   if fContents <> nil then
     fContents.Writer.Add(flatness).Add(' i'#10);
@@ -11287,9 +11287,9 @@ begin
   if fContents = nil then
     exit;
   fContents.Writer.Add('[');
-  if (High(aarray) >= 0) and
+  if (high(aarray) >= 0) and
      (aarray[0] <> 0) then
-    for i := 0 to High(aarray) do
+    for i := 0 to high(aarray) do
       fContents.Writer.AddWithSpace(aarray[i]);
   fContents.Writer.Add('] ').Add(phase).Add(' d'#10);
 end;
@@ -11659,7 +11659,7 @@ begin
     Value := 0
   else if Value > 1 then
     Value := 1;
-  intVal := Round(Value * 100);
+  intVal := round(Value * 100);
   gsName := 'Fca' + PdfString(IntToStr(intVal));
   extGs := fPage.GetResources('ExtGState');
   if extGs = nil then
@@ -11690,7 +11690,7 @@ begin
     Value := 0
   else if Value > 1 then
     Value := 1;
-  intVal := Round(Value * 100);
+  intVal := round(Value * 100);
   gsName := 'SCA' + PdfString(IntToStr(intVal));
   extGs := fPage.GetResources('ExtGState');
   if extGs = nil then
@@ -11917,7 +11917,7 @@ var
 begin
   if CalcCurveArcData(
        centerx, centery, W, H, Sx, Sy, Ex, Ey, clockwise, arctype, res) then
-    for i := 0 to High(res) do
+    for i := 0 to high(res) do
       with res[i] do
         case res of
           caMoveto:
@@ -11929,8 +11929,8 @@ begin
               S2X(pts[2].x), S2Y(pts[2].Y));
           caPosition:
             begin
-              position.x := Round(pts[0].x);
-              position.y := Round(pts[0].Y);
+              position.x := round(pts[0].x);
+              position.y := round(pts[0].Y);
             end;
         end;
 end;
@@ -12023,7 +12023,7 @@ begin
   if PDF_STRUCT_CONTAINER[ARole] then
     exit; // a container groups kids only: no marked-content region, no MCID
   mcid := fPage.fCurrentMCID;
-  Inc(fPage.fCurrentMCID);
+  inc(fPage.fCurrentMCID);
   elem.AddMCID(mcid, fPage.fStructParents);
   elem.RegionOpen := true;
   fContents.Writer.Add('/').Add(PDF_STRUCT_ROLE[ARole]).
@@ -12083,7 +12083,7 @@ begin
      PDF_STRUCT_CONTAINER[elem.Role] then
     exit;
   mcid := fPage.fCurrentMCID;
-  Inc(fPage.fCurrentMCID);
+  inc(fPage.fCurrentMCID);
   elem.AddMCID(mcid, fPage.fStructParents);
   elem.RegionOpen := true;
   fContents.Writer.Add('/').Add(PDF_STRUCT_ROLE[elem.Role]).
@@ -12135,7 +12135,7 @@ begin
   if not AOpenRegion then
     exit;
   mcid := fPage.fCurrentMCID;
-  Inc(fPage.fCurrentMCID);
+  inc(fPage.fCurrentMCID);
   elem.AddMCID(mcid, fPage.fStructParents);
   elem.RegionOpen := true;
   fContents.Writer.Add('/').Add(PDF_STRUCT_ROLE[elem.Role]).
@@ -12394,7 +12394,7 @@ begin
      not (m is TPdfName) then
     exit;
   s := m.Value;
-  for result := Low(TPdfPageMode) to High(TPdfPageMode) do
+  for result := low(TPdfPageMode) to high(TPdfPageMode) do
     if PDF_PAGE_MODE_NAMES[result] = s then
       exit;
   result := pmUseNone;
@@ -12503,7 +12503,7 @@ begin
      not m.InheritsFrom(TPdfName) then
     exit;
   s := m.Value;
-  for result := Low(PDF_PAGE_MODE_NAMES) to High(PDF_PAGE_MODE_NAMES) do
+  for result := low(PDF_PAGE_MODE_NAMES) to high(PDF_PAGE_MODE_NAMES) do
     if PDF_PAGE_MODE_NAMES[result] = s then
       exit;
   result := pmUseNone;

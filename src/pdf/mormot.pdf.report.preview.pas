@@ -20,18 +20,18 @@ interface
 {$I mormot.defines.inc}
 
 uses
-  Classes,
-  SysUtils,
-  Types,
-  Math,
-  Graphics,
-  Controls,
-  Forms,
-  ExtCtrls,
-  StdCtrls,
-  Dialogs,
-  LCLType,
-  Printers,
+  classes,
+  sysutils,
+  types,
+  math,
+  graphics,
+  controls,
+  forms,
+  extctrls,
+  stdctrls,
+  dialogs,
+  lcltype,
+  printers,
   mormot.core.base,
   mormot.core.unicode,
   mormot.pdf.report;
@@ -58,17 +58,17 @@ type
   TReportPreview = class
   private
     fReport: TGDIPages;
-    fCurrPage: Integer;
-    fTotalPages: Integer;
+    fCurrPage: integer;
+    fTotalPages: integer;
     fLblPage: TLabel;
     fEdtZoom: TEdit; // editable zoom percentage input
     fPaintBox: TPaintBox;
     fScrollBox: TScrollBox; // scrollable container for zoomed page
-    fW: Integer;            // base preview width @ 96 DPI (unzoomed)
-    fH: Integer;            // base preview height @ 96 DPI (unzoomed)
-    fZoom: Double;          // zoom factor (1.0 = 100%)
+    fW: integer;            // base preview width @ 96 DPI (unzoomed)
+    fH: integer;            // base preview height @ 96 DPI (unzoomed)
+    fZoom: double;          // zoom factor (1.0 = 100%)
     procedure UpdateLabel;
-    procedure GoToPage(Page: Integer);
+    procedure GoToPage(Page: integer);
     procedure ApplyZoom;
     procedure DoPaint(Sender: TObject);
     procedure DoPrev(Sender: TObject);
@@ -78,9 +78,9 @@ type
     procedure DoFitPage(Sender: TObject);
     procedure DoFitWidth(Sender: TObject);
     procedure DoFormResize(Sender: TObject);
-    procedure DoKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
+    procedure DoKeyDown(Sender: TObject; var Key: word; Shift: TShiftState);
     procedure DoMouseWheel(Sender: TObject; Shift: TShiftState;
-      WheelDelta: Integer; MousePos: TPoint; var Handled: Boolean);
+      WheelDelta: integer; MousePos: TPoint; var Handled: boolean);
     procedure DoZoomEdit(Sender: TObject);
   public
     constructor Create(Report: TGDIPages);
@@ -99,10 +99,10 @@ begin
     fLblPage.Caption := Format('Page %d / %d', [fCurrPage + 1, fTotalPages]);
 end;
 
-procedure TReportPreview.GoToPage(Page: Integer);
+procedure TReportPreview.GoToPage(Page: integer);
 begin
   if (Page = fCurrPage) or (Page < 0) or (Page >= fTotalPages) then
-    Exit;
+    exit;
   fCurrPage := Page;
   UpdateLabel;
   if fPaintBox <> nil then
@@ -112,11 +112,11 @@ end;
 procedure TReportPreview.DoPaint(Sender: TObject);
 var
   PB: TPaintBox;
-  ZW, ZH: Integer;
+  ZW, ZH: integer;
 begin
   PB := TPaintBox(Sender);
-  ZW := Round(fW * fZoom);
-  ZH := Round(fH * fZoom);
+  ZW := round(fW * fZoom);
+  ZH := round(fH * fZoom);
   PB.Canvas.Brush.Color := clWhite;
   PB.Canvas.FillRect(Rect(0, 0, ZW, ZH));
   if (fCurrPage >= 0) and (fCurrPage < fTotalPages) then
@@ -135,12 +135,12 @@ end;
 
 procedure TReportPreview.ApplyZoom;
 var
-  ZW, ZH, CX, CY: Integer;
+  ZW, ZH, CX, CY: integer;
 begin
   if (fPaintBox = nil) or (fScrollBox = nil) then
-    Exit;
-  ZW := Round(fW * fZoom);
-  ZH := Round(fH * fZoom);
+    exit;
+  ZW := round(fW * fZoom);
+  ZH := round(fH * fZoom);
   fPaintBox.Width := ZW;
   fPaintBox.Height := ZH;
   CX := (fScrollBox.ClientWidth - ZW) div 2;
@@ -150,7 +150,7 @@ begin
   fPaintBox.Left := CX;
   fPaintBox.Top := CY;
   if fEdtZoom <> nil then
-    fEdtZoom.Text := Format('%d%%', [Round(fZoom * 100)]);
+    fEdtZoom.Text := Format('%d%%', [round(fZoom * 100)]);
   fPaintBox.Invalidate;
 end;
 
@@ -178,10 +178,10 @@ end;
 
 procedure TReportPreview.DoFitPage(Sender: TObject);
 var
-  ZX, ZY: Double;
+  ZX, ZY: double;
 begin
   if fScrollBox = nil then
-    Exit;
+    exit;
   ZX := (fScrollBox.ClientWidth - 2 * GRAY_MARGIN) / fW;
   ZY := (fScrollBox.ClientHeight - 2 * GRAY_MARGIN) / fH;
   fZoom := Min(ZX, ZY);
@@ -193,7 +193,7 @@ end;
 procedure TReportPreview.DoFitWidth(Sender: TObject);
 begin
   if fScrollBox = nil then
-    Exit;
+    exit;
   fZoom := (fScrollBox.ClientWidth - 2 * GRAY_MARGIN) / fW;
   if fZoom < 0.1 then
     fZoom := 0.1;
@@ -207,7 +207,7 @@ begin
     fLblPage.Left := (fLblPage.Parent.Width - fLblPage.Width) div 2;
 end;
 
-procedure TReportPreview.DoKeyDown(Sender: TObject; var Key: Word;
+procedure TReportPreview.DoKeyDown(Sender: TObject; var Key: word;
   Shift: TShiftState);
 begin
   case Key of
@@ -235,7 +235,7 @@ begin
 end;
 
 procedure TReportPreview.DoMouseWheel(Sender: TObject; Shift: TShiftState;
-  WheelDelta: Integer; MousePos: TPoint; var Handled: Boolean);
+  WheelDelta: integer; MousePos: TPoint; var Handled: boolean);
 begin
   if ssCtrl in Shift then
   begin
@@ -243,25 +243,25 @@ begin
       DoZoomIn(nil)
     else
       DoZoomOut(nil);
-    Handled := True;
+    Handled := true;
   end;
 end;
 
 procedure TReportPreview.DoZoomEdit(Sender: TObject);
 var
   S: string;
-  ZoomVal: Double;
-  Code: Integer;
+  ZoomVal: double;
+  Code: integer;
 begin
-  if fEdtZoom = nil then Exit;
+  if fEdtZoom = nil then exit;
   S := Trim(fEdtZoom.Text);
-  if (Length(S) > 0) and (S[Length(S)] = '%') then
-    S := Trim(Copy(S, 1, Length(S) - 1));
+  if (length(S) > 0) and (S[length(S)] = '%') then
+    S := Trim(Copy(S, 1, length(S) - 1));
   Val(S, ZoomVal, Code);
   if Code <> 0 then
   begin
-    fEdtZoom.Text := Format('%d%%', [Round(fZoom * 100)]);
-    Exit;
+    fEdtZoom.Text := Format('%d%%', [round(fZoom * 100)]);
+    exit;
   end;
   ZoomVal := ZoomVal / 100.0;
   if ZoomVal < 0.25 then ZoomVal := 0.25;
@@ -288,7 +288,7 @@ begin
   if fTotalPages = 0 then
   begin
     ShowMessage('No pages available.');
-    Exit;
+    exit;
   end;
   fCurrPage := 0;
   fZoom := 1.0;
@@ -311,9 +311,9 @@ begin
       Form.Caption := 'Print Preview';
     Form.Position := poScreenCenter;
     Form.BorderStyle := bsSizeable;
-    Form.KeyPreview := True;
-    Form.Width := Min(Round(Screen.Width * 0.8), 1200);
-    Form.Height := Min(Round(Screen.Height * 0.8), 900);
+    Form.KeyPreview := true;
+    Form.Width := Min(round(Screen.Width * 0.8), 1200);
+    Form.Height := Min(round(Screen.Height * 0.8), 900);
     Form.OnResize := DoFormResize;
     Form.OnKeyDown := DoKeyDown;
     // --- top toolbar panel (zoom controls) ---
@@ -361,7 +361,7 @@ begin
     BtnPrev.OnClick := DoPrev;
     LblPage := TLabel.Create(Form);
     LblPage.Parent := BtnPanel;
-    LblPage.AutoSize := False;
+    LblPage.AutoSize := false;
     LblPage.Width := 140;
     LblPage.Left := (BtnPanel.Width - 140) div 2;
     LblPage.Top := 14;
@@ -385,7 +385,7 @@ begin
     ScrollBox.Parent := Form;
     ScrollBox.Align := alClient;
     ScrollBox.Color := clSilver;
-    ScrollBox.AutoScroll := True;
+    ScrollBox.AutoScroll := true;
     ScrollBox.BorderStyle := bsNone;
     ScrollBox.OnMouseWheel := DoMouseWheel;
     fScrollBox := ScrollBox;
@@ -420,14 +420,14 @@ end;
 
 procedure PrintReport(Report: TGDIPages; From, To_: integer);
 var
-  i: Integer;
+  i: integer;
 begin
   if To_ >= Report.PageCount then
     To_ := Report.PageCount - 1;
   if From < 0 then
     From := 0;
   if From > To_ then
-    Exit;
+    exit;
   Printer.BeginDoc;
   try
     for i := From to To_ do

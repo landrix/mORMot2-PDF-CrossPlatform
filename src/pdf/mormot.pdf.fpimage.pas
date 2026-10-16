@@ -22,11 +22,11 @@ interface
 {$ifndef OSWINDOWS}
 
 uses
-  SysUtils,
-  Classes,
-  FPImage,
-  FPReadPNG,
-  FPReadJPEG,
+  sysutils,
+  classes,
+  fpimage,
+  fpreadpng,
+  fpreadjpeg,
   mormot.core.base,
   mormot.core.unicode;
 
@@ -83,7 +83,7 @@ implementation
 {$ifndef OSWINDOWS}
 
 uses
-  FPWriteJPEG;
+  fpwritejpeg;
 
 // ---------------------------------------------------------------------------
 // TPdfFPImageAdapter
