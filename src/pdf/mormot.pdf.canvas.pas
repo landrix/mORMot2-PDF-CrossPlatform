@@ -1118,28 +1118,25 @@ begin
     on Exception do // raised e.g. if no Printer is existing
       exit;
   end;
-  with logical do
-  begin
-    if cx < cy then
-    begin // handle landscape or portrait at once
-      tmp := cx;
-      cx := cy;
-      cy := tmp;
-    end;
-    case cy of
-      148:
-        result := psA5;
-      210:
-        result := psA4; // A4 (297 x 210mm)
-      216:
-        if cx = 279 then
-          result := psLetter
-        else if cx = 356 then
-          result := psLegal;
-      297:
-        if cx = 420 then
-          result := psA3;
-    end;
+  if logical.cx < logical.cy then
+  begin // handle landscape or portrait at once
+    tmp := logical.cx;
+    logical.cx := logical.cy;
+    logical.cy := tmp;
+  end;
+  case logical.cy of
+    148:
+      result := psA5;
+    210:
+      result := psA4; // A4 (297 x 210mm)
+    216:
+      if logical.cx = 279 then
+        result := psLetter
+      else if logical.cx = 356 then
+        result := psLegal;
+    297:
+      if logical.cx = 420 then
+        result := psA3;
   end;
 end;
 
@@ -1481,6 +1478,7 @@ var
   bmp: TBitmap;
   ms: TMemoryStream;
   px: TPdfImagePixels;
+  jpg: TJpegImage;
   {$ifdef FPC}
   buf: RawByteString;
   {$else}
@@ -1507,17 +1505,15 @@ begin
   begin
     ms := TMemoryStream.Create;
     try
-      with TJpegImage(Graphic) do
-      begin
-        if Doc.ForceJPEGCompression <> 0 then
-          CompressionQuality := Doc.ForceJPEGCompression;
-        {$ifdef USE_SYNGDIPLUS}
-        if Doc.ForceJPEGCompression = 0 then // recompression only if necessary
-          SaveInternalToStream(ms)
-        else
-        {$endif USE_SYNGDIPLUS}
-          SaveToStream(ms); // with CompressionQuality recompress
-      end;
+      jpg := TJpegImage(Graphic);
+      if Doc.ForceJPEGCompression <> 0 then
+        jpg.CompressionQuality := Doc.ForceJPEGCompression;
+      {$ifdef USE_SYNGDIPLUS}
+      if Doc.ForceJPEGCompression = 0 then // recompression only if necessary
+        jpg.SaveInternalToStream(ms)
+      else
+      {$endif USE_SYNGDIPLUS}
+        jpg.SaveToStream(ms); // with CompressionQuality recompress
       result := TPdfImage.CreateJpeg(Doc, ms.Memory, ms.Size, Graphic.Width,
         Graphic.Height, DontAddToFXref);
     finally
@@ -1690,25 +1686,27 @@ begin
 end;
 
 function TPdfDocumentGdi.GetVclCanvas: TCanvas;
+var
+  page: TPdfPageGdi;
 begin
-  with TPdfPageGdi(TPdfCanvasAccess(fCanvas).fPage) do
-  begin
-    if fVclCurrentCanvas = nil then
-      CreateVclCanvas;
-    result := fVclCurrentCanvas;
-  end;
+  page := TPdfPageGdi(TPdfCanvasAccess(fCanvas).fPage);
+  if page.fVclCurrentCanvas = nil then
+    page.CreateVclCanvas;
+  result := page.fVclCurrentCanvas;
 end;
 
 function TPdfDocumentGdi.GetVclCanvasSize: TSize;
+var
+  page: TPdfPageGdi;
 begin
   if (fCanvas <> nil) and
      (TPdfCanvasAccess(fCanvas).fPage <> nil) then
-    with TPdfPageGdi(TPdfCanvasAccess(fCanvas).fPage) do
-    begin
-      if fVclCurrentCanvas = nil then
-        CreateVclCanvas;
-      result := fVclCanvasSize;
-    end
+  begin
+    page := TPdfPageGdi(TPdfCanvasAccess(fCanvas).fPage);
+    if page.fVclCurrentCanvas = nil then
+      page.CreateVclCanvas;
+    result := page.fVclCanvasSize;
+  end
   else
     Int64(result) := 0;
 end;
@@ -2058,744 +2056,704 @@ end;
 function EnumEMFFunc(DC: HDC; var Table: THandleTable; R: PEnhMetaRecord;
   NumObjects: DWord; E: TPdfEnum): LongBool; stdcall;
 var
+  st: ^TPdfEnumState;
+  box: TPdfBox;
   i: PtrInt;
+  cp: TPoint;
   InitTransX: XForm;
   polytypes: PByteArray;
 begin
   result := true;
-  with E.DC[E.nDC] do
-    case R^.iType of
-      EMR_HEADER:
+  st := @E.DC[E.nDC];
+  case R^.iType of
+    EMR_HEADER:
+      begin
+        SetLength(E.obj, PEnhMetaHeader(R)^.nHandles);
+        st^.WinOrg.X := 0;
+        st^.WinOrg.Y := 0;
+        st^.ViewOrg.X := 0;
+        st^.ViewOrg.Y := 0;
+        st^.MappingMode := GetMapMode(DC);
+        st^.PolyFillMode := GetPolyFillMode(DC);
+        st^.StretchBltMode := GetStretchBltMode(DC);
+        st^.ArcDirection := AD_COUNTERCLOCKWISE;
+        InitTransX := DefaultIdentityMatrix;
+        E.InitTransformMatrix := InitTransX;
+        E.ScaleMatrix(@InitTransX, MWT_SET); // keep init
+        E.InitMetaRgn(TRect(PEnhMetaHeader(R)^.rclBounds));
+      end;
+    EMR_SETWINDOWEXTEX:
+      st^.WinSize := PEMRSetWindowExtEx(R)^.szlExtent;
+    EMR_SETWINDOWORGEX:
+      st^.WinOrg := PEMRSetWindowOrgEx(R)^.ptlOrigin;
+    EMR_SETVIEWPORTEXTEX:
+      st^.ViewSize := PEMRSetViewPortExtEx(R)^.szlExtent;
+    EMR_SETVIEWPORTORGEX:
+      st^.ViewOrg := PEMRSetViewPortOrgEx(R)^.ptlOrigin;
+    EMR_SETBKMODE:
+      st^.Font.BkMode := PEMRSetBkMode(R)^.iMode;
+    EMR_SETBKCOLOR:
+      if PEMRSetBkColor(R)^.crColor = cardinal(clNone) then
+        st^.Font.BkColor := 0
+      else
+        st^.Font.BkColor := PEMRSetBkColor(R)^.crColor;
+    EMR_SETTEXTCOLOR:
+      if PEMRSetTextColor(R)^.crColor = cardinal(clNone) then
+        st^.Font.Color := 0
+      else
+        st^.Font.Color := PEMRSetTextColor(R)^.crColor;
+    EMR_SETTEXTALIGN:
+      st^.Font.Align := PEMRSetTextAlign(R)^.iMode;
+    EMR_EXTTEXTOUTA,
+    EMR_EXTTEXTOUTW:
+      E.TextOut(PEMRExtTextOut(R)^);
+    EMR_SAVEDC:
+      E.SaveDC;
+    EMR_RESTOREDC:
+      E.RestoreDC;
+    EMR_SETWORLDTRANSFORM:
+      E.ScaleMatrix(@PEMRSetWorldTransform(R)^.xform, MWT_SET);
+    EMR_CREATEPEN:
+      if PEMRCreatePen(R)^.ihPen - 1 < cardinal(length(E.Obj)) then
+      begin
+        E.obj[PEMRCreatePen(R)^.ihPen - 1].kind := OBJ_PEN;
+        E.obj[PEMRCreatePen(R)^.ihPen - 1].PenColor := PEMRCreatePen(R)^.lopn.lopnColor;
+        E.obj[PEMRCreatePen(R)^.ihPen - 1].PenWidth := PEMRCreatePen(R)^.lopn.lopnWidth.X;
+        E.obj[PEMRCreatePen(R)^.ihPen - 1].PenStyle := PEMRCreatePen(R)^.lopn.lopnStyle;
+      end;
+    EMR_CREATEBRUSHINDIRECT:
+      if PEMRCreateBrushIndirect(R)^.ihBrush - 1 < cardinal(length(E.Obj)) then
+      begin
+        E.obj[PEMRCreateBrushIndirect(R)^.ihBrush - 1].kind := OBJ_BRUSH;
+        E.obj[PEMRCreateBrushIndirect(R)^.ihBrush - 1].BrushColor := PEMRCreateBrushIndirect(R)^.lb.lbColor;
+        E.obj[PEMRCreateBrushIndirect(R)^.ihBrush - 1].BrushNull := (PEMRCreateBrushIndirect(R)^.lb.lbStyle = BS_NULL);
+        E.obj[PEMRCreateBrushIndirect(R)^.ihBrush - 1].BrushStyle := PEMRCreateBrushIndirect(R)^.lb.lbStyle;
+      end;
+    EMR_EXTCREATEFONTINDIRECTW:
+      E.CreateFont(PEMRExtCreateFontIndirect(R));
+    EMR_DELETEOBJECT:
+      if PEMRDeleteObject(R)^.ihObject - 1 < cardinal(length(E.Obj)) then // avoid GPF
+        E.obj[PEMRDeleteObject(R)^.ihObject - 1].kind := 0;
+    EMR_SELECTOBJECT:
+      E.SelectObjectFromIndex(PEMRSelectObject(R)^.ihObject);
+    EMR_MOVETOEX:
+      begin
+        st^.position := PEMRMoveToEx(R)^.ptl; // temp var to ignore unused moves
+        if E.Canvas.fNewPath then
         begin
-          SetLength(E.obj, PEnhMetaHeader(R)^.nHandles);
-          WinOrg.X := 0;
-          WinOrg.Y := 0;
-          ViewOrg.X := 0;
-          ViewOrg.Y := 0;
-          MappingMode := GetMapMode(DC);
-          PolyFillMode := GetPolyFillMode(DC);
-          StretchBltMode := GetStretchBltMode(DC);
-          ArcDirection := AD_COUNTERCLOCKWISE;
-          InitTransX := DefaultIdentityMatrix;
-          E.InitTransformMatrix := InitTransX;
-          E.ScaleMatrix(@InitTransX, MWT_SET); // keep init
-          E.InitMetaRgn(TRect(PEnhMetaHeader(R)^.rclBounds));
-        end;
-      EMR_SETWINDOWEXTEX:
-        WinSize := PEMRSetWindowExtEx(R)^.szlExtent;
-      EMR_SETWINDOWORGEX:
-        WinOrg := PEMRSetWindowOrgEx(R)^.ptlOrigin;
-      EMR_SETVIEWPORTEXTEX:
-        ViewSize := PEMRSetViewPortExtEx(R)^.szlExtent;
-      EMR_SETVIEWPORTORGEX:
-        ViewOrg := PEMRSetViewPortOrgEx(R)^.ptlOrigin;
-      EMR_SETBKMODE:
-        Font.BkMode := PEMRSetBkMode(R)^.iMode;
-      EMR_SETBKCOLOR:
-        if PEMRSetBkColor(R)^.crColor = cardinal(clNone) then
-          Font.BkColor := 0
+          E.Canvas.MoveToI(st^.position.X, st^.position.Y);
+          st^.Moved := true;
+        end
         else
-          Font.BkColor := PEMRSetBkColor(R)^.crColor;
-      EMR_SETTEXTCOLOR:
-        if PEMRSetTextColor(R)^.crColor = cardinal(clNone) then
-          Font.Color := 0
-        else
-          Font.Color := PEMRSetTextColor(R)^.crColor;
-      EMR_SETTEXTALIGN:
-        Font.Align := PEMRSetTextAlign(R)^.iMode;
-      EMR_EXTTEXTOUTA,
-      EMR_EXTTEXTOUTW:
-        E.TextOut(PEMRExtTextOut(R)^);
-      EMR_SAVEDC:
-        E.SaveDC;
-      EMR_RESTOREDC:
-        E.RestoreDC;
-      EMR_SETWORLDTRANSFORM:
-        E.ScaleMatrix(@PEMRSetWorldTransform(R)^.xform, MWT_SET);
-      EMR_CREATEPEN:
-        with PEMRCreatePen(R)^ do
-          if ihPen - 1 < cardinal(length(E.Obj)) then
-            with E.obj[ihPen - 1] do
-            begin
-              kind := OBJ_PEN;
-              PenColor := lopn.lopnColor;
-              PenWidth := lopn.lopnWidth.X;
-              PenStyle := lopn.lopnStyle;
-            end;
-      EMR_CREATEBRUSHINDIRECT:
-        with PEMRCreateBrushIndirect(R)^ do
-          if ihBrush - 1 < cardinal(length(E.Obj)) then
-            with E.obj[ihBrush - 1] do
-            begin
-              kind := OBJ_BRUSH;
-              BrushColor := lb.lbColor;
-              BrushNull := (lb.lbStyle = BS_NULL);
-              BrushStyle := lb.lbStyle;
-            end;
-      EMR_EXTCREATEFONTINDIRECTW:
-        E.CreateFont(PEMRExtCreateFontIndirect(R));
-      EMR_DELETEOBJECT:
-        with PEMRDeleteObject(R)^ do
-          if ihObject - 1 < cardinal(length(E.Obj)) then // avoid GPF
-            E.obj[ihObject - 1].kind := 0;
-      EMR_SELECTOBJECT:
-        E.SelectObjectFromIndex(PEMRSelectObject(R)^.ihObject);
-      EMR_MOVETOEX:
-        begin
-          position := PEMRMoveToEx(R)^.ptl; // temp var to ignore unused moves
-          if E.Canvas.fNewPath then
-          begin
-            E.Canvas.MoveToI(position.X, position.Y);
-            Moved := true;
-          end
-          else
-            Moved := false;
-        end;
-      EMR_LINETO:
-        begin
-          E.NeedPen;
-          if not E.Canvas.fNewPath and
-             not Moved then
-            E.Canvas.MoveToI(position.X, position.Y);
-          E.Canvas.LineToI(PEMRLineTo(R)^.ptl.X, PEMRLineTo(R)^.ptl.Y);
-          position := PEMRLineTo(R)^.ptl;
-          Moved := false;
-          E.fInLined := true;
-          if not E.Canvas.fNewPath then
-            if not pen.null then
-              E.Canvas.Stroke
-        end;
-      EMR_RECTANGLE,
-      EMR_ELLIPSE:
-        begin
-          E.NeedBrushAndPen;
-          with E.Canvas.BoxI(TRect(PEMRRectangle(R)^.rclBox), true) do
-            case R^.iType of
-              EMR_RECTANGLE:
-                E.Canvas.Rectangle(Left, Top, Width, Height);
-              EMR_ELLIPSE:
-                E.Canvas.Ellipse(Left, Top, Width, Height);
-            end;
-          E.FlushPenBrush;
-        end;
-      EMR_ROUNDRECT:
-        begin
-          NormalizeRect(PRect(@PEMRRoundRect(R)^.rclBox)^);
-          E.NeedBrushAndPen;
-          with PEMRRoundRect(R)^ do
-            E.Canvas.RoundRectI(rclBox.left, rclBox.top, rclBox.right,
-              rclBox.bottom, szlCorner.cx, szlCorner.cy);
-          E.FlushPenBrush;
-        end;
-      EMR_ARC:
-        begin
-          NormalizeRect(PRect(@PEMRARC(R)^.rclBox)^);
-          E.NeedPen;
-          with PEMRARC(R)^, CenterPoint(TRect(rclBox)) do
-            E.Canvas.ArcI(X, Y, rclBox.Right - rclBox.Left,
-              rclBox.Bottom - rclBox.Top, ptlStart.x, ptlStart.y,
-              ptlEnd.x, ptlEnd.y, E.dc[E.nDC].ArcDirection = AD_CLOCKWISE,
-              acArc, position);
-          E.Canvas.Stroke;
-        end;
-      EMR_ARCTO:
-        begin
-          NormalizeRect(PRect(@PEMRARCTO(R)^.rclBox)^);
-          E.NeedPen;
-          if not E.Canvas.fNewPath and
-             not Moved then
-            E.Canvas.MoveToI(position.X, position.Y);
-          with PEMRARC(R)^, CenterPoint(TRect(rclBox)) do
-          begin
-            // E.Canvas.LineTo(ptlStart.x, ptlStart.y);
-            E.Canvas.ArcI(X, Y, rclBox.Right - rclBox.Left,
-              rclBox.Bottom - rclBox.Top, ptlStart.x, ptlStart.y,
-              ptlEnd.x, ptlEnd.y, E.dc[E.nDC].ArcDirection = AD_CLOCKWISE,
-              acArcTo, position);
-            Moved := false;
-            E.fInLined := true;
-            if not E.Canvas.fNewPath then
-              if not pen.null then
-                E.Canvas.Stroke;
-          end;
-        end;
-      EMR_PIE:
-        begin
-          NormalizeRect(PRect(@PEMRPie(R)^.rclBox)^);
-          E.NeedBrushAndPen;
-          with PEMRPie(R)^, CenterPoint(TRect(rclBox)) do
-            E.Canvas.ArcI(X, Y, rclBox.Right - rclBox.Left,
-              rclBox.Bottom - rclBox.Top, ptlStart.x, ptlStart.y,
-              ptlEnd.x, ptlEnd.y, E.dc[E.nDC].ArcDirection = AD_CLOCKWISE,
-              acPie, position);
-          if pen.null then
-            E.Canvas.Fill
-          else
-            E.Canvas.FillStroke;
-        end;
-      EMR_CHORD:
-        begin
-          NormalizeRect(PRect(@PEMRChord(R)^.rclBox)^);
-          E.NeedBrushAndPen;
-          with PEMRChord(R)^, CenterPoint(TRect(rclBox)) do
-            E.Canvas.ArcI(X, Y, rclBox.Right - rclBox.Left,
-              rclBox.Bottom - rclBox.Top, ptlStart.x, ptlStart.y,
-              ptlEnd.x, ptlEnd.y, E.dc[E.nDC].ArcDirection = AD_CLOCKWISE,
-              acChoord, position);
-          if pen.null then
-            E.Canvas.Fill
-          else
-            E.Canvas.FillStroke;
-        end;
-      EMR_FILLRGN:
-        begin
-          E.SelectObjectFromIndex(PEMRFillRgn(R)^.ihBrush);
-          E.NeedBrushAndPen;
-          E.FillRectangle(
-            TRect(PRgnDataHeader(@PEMRFillRgn(R)^.RgnData[0])^.rcBound), false);
-        end;
-      EMR_POLYGON,
-      EMR_POLYLINE,
-      EMR_POLYGON16,
-      EMR_POLYLINE16:
-        if not brush.null or
-           not pen.null then
-        begin
-          if R^.iType in [EMR_POLYGON, EMR_POLYGON16] then
-            E.NeedBrushAndPen
-          else
-            E.NeedPen;
-          if R^.iType in [EMR_POLYGON, EMR_POLYLINE] then
-          begin
-            E.Canvas.MoveToI(PEMRPolyLine(R)^.aptl[0].x, PEMRPolyLine(R)^.aptl[0].Y);
-            for i := 1 to PEMRPolyLine(R)^.cptl - 1 do
-              E.Canvas.LineToI(PEMRPolyLine(R)^.aptl[i].x, PEMRPolyLine(R)^.aptl[i].Y);
-            if PEMRPolyLine(R)^.cptl > 0 then
-              position := PEMRPolyLine(R)^.aptl[PEMRPolyLine(R)^.cptl - 1]
-            else
-              position := PEMRPolyLine(R)^.aptl[0];
-          end
-          else
-          begin
-            E.Canvas.MoveToI(PEMRPolyLine16(R)^.apts[0].x, PEMRPolyLine16(R)^.apts[0].Y);
-            if PEMRPolyLine16(R)^.cpts > 0 then
-            begin
-              for i := 1 to PEMRPolyLine16(R)^.cpts - 1 do
-                E.Canvas.LineToI(
-                  PEMRPolyLine16(R)^.apts[i].x, PEMRPolyLine16(R)^.apts[i].Y);
-              with PEMRPolyLine16(R)^.apts[PEMRPolyLine16(R)^.cpts - 1] do
-              begin
-                position.X := x;
-                position.Y := Y;
-              end;
-            end
-            else
-            begin
-              position.X := PEMRPolyLine16(R)^.apts[0].x;
-              position.Y := PEMRPolyLine16(R)^.apts[0].Y;
-            end;
-          end;
-          Moved := false;
-          if R^.iType in [EMR_POLYGON, EMR_POLYGON16] then
-          begin
-            E.Canvas.Closepath;
-            E.FlushPenBrush;
-          end
-          else if not pen.null then
+          st^.Moved := false;
+      end;
+    EMR_LINETO:
+      begin
+        E.NeedPen;
+        if not E.Canvas.fNewPath and
+           not st^.Moved then
+          E.Canvas.MoveToI(st^.position.X, st^.position.Y);
+        E.Canvas.LineToI(PEMRLineTo(R)^.ptl.X, PEMRLineTo(R)^.ptl.Y);
+        st^.position := PEMRLineTo(R)^.ptl;
+        st^.Moved := false;
+        E.fInLined := true;
+        if not E.Canvas.fNewPath then
+          if not st^.pen.null then
             E.Canvas.Stroke
-          else // for lines
-            E.Canvas.NewPath;
+      end;
+    EMR_RECTANGLE,
+    EMR_ELLIPSE:
+      begin
+        E.NeedBrushAndPen;
+        box := E.Canvas.BoxI(TRect(PEMRRectangle(R)^.rclBox), true);
+        case R^.iType of
+          EMR_RECTANGLE:
+            E.Canvas.Rectangle(box.Left, box.Top, box.Width, box.Height);
+          EMR_ELLIPSE:
+            E.Canvas.Ellipse(box.Left, box.Top, box.Width, box.Height);
         end;
-      EMR_POLYPOLYGON,
-      EMR_POLYPOLYGON16,
-      EMR_POLYPOLYLINE,
-      EMR_POLYPOLYLINE16:
-        E.PolyPoly(PEMRPolyPolygon(R), R^.iType);
-      EMR_POLYBEZIER:
+        E.FlushPenBrush;
+      end;
+    EMR_ROUNDRECT:
+      begin
+        NormalizeRect(PRect(@PEMRRoundRect(R)^.rclBox)^);
+        E.NeedBrushAndPen;
+        E.Canvas.RoundRectI(PEMRRoundRect(R)^.rclBox.left, PEMRRoundRect(R)^.rclBox.top, PEMRRoundRect(R)^.rclBox.right,
+          PEMRRoundRect(R)^.rclBox.bottom, PEMRRoundRect(R)^.szlCorner.cx, PEMRRoundRect(R)^.szlCorner.cy);
+        E.FlushPenBrush;
+      end;
+    EMR_ARC:
+      begin
+        NormalizeRect(PRect(@PEMRARC(R)^.rclBox)^);
+        E.NeedPen;
+        cp := CenterPoint(TRect(PEMRARC(R)^.rclBox));
+        E.Canvas.ArcI(cp.X, cp.Y, PEMRARC(R)^.rclBox.Right - PEMRARC(R)^.rclBox.Left,
+          PEMRARC(R)^.rclBox.Bottom - PEMRARC(R)^.rclBox.Top,
+          PEMRARC(R)^.ptlStart.x, PEMRARC(R)^.ptlStart.y,
+          PEMRARC(R)^.ptlEnd.x, PEMRARC(R)^.ptlEnd.y,
+          E.dc[E.nDC].ArcDirection = AD_CLOCKWISE, acArc, st^.position);
+        E.Canvas.Stroke;
+      end;
+    EMR_ARCTO:
+      begin
+        NormalizeRect(PRect(@PEMRARCTO(R)^.rclBox)^);
+        E.NeedPen;
+        if not E.Canvas.fNewPath and
+           not st^.Moved then
+          E.Canvas.MoveToI(st^.position.X, st^.position.Y);
+        cp := CenterPoint(TRect(PEMRARC(R)^.rclBox));
+        // E.Canvas.LineTo(ptlStart.x, ptlStart.y);
+        E.Canvas.ArcI(cp.X, cp.Y, PEMRARC(R)^.rclBox.Right - PEMRARC(R)^.rclBox.Left,
+          PEMRARC(R)^.rclBox.Bottom - PEMRARC(R)^.rclBox.Top,
+          PEMRARC(R)^.ptlStart.x, PEMRARC(R)^.ptlStart.y,
+          PEMRARC(R)^.ptlEnd.x, PEMRARC(R)^.ptlEnd.y,
+          E.dc[E.nDC].ArcDirection = AD_CLOCKWISE, acArcTo, st^.position);
+        st^.Moved := false;
+        E.fInLined := true;
+        if not E.Canvas.fNewPath then
+          if not st^.pen.null then
+            E.Canvas.Stroke;
+      end;
+    EMR_PIE:
+      begin
+        NormalizeRect(PRect(@PEMRPie(R)^.rclBox)^);
+        E.NeedBrushAndPen;
+        cp := CenterPoint(TRect(PEMRPie(R)^.rclBox));
+        E.Canvas.ArcI(cp.X, cp.Y, PEMRPie(R)^.rclBox.Right - PEMRPie(R)^.rclBox.Left,
+          PEMRPie(R)^.rclBox.Bottom - PEMRPie(R)^.rclBox.Top,
+          PEMRPie(R)^.ptlStart.x, PEMRPie(R)^.ptlStart.y,
+          PEMRPie(R)^.ptlEnd.x, PEMRPie(R)^.ptlEnd.y,
+          E.dc[E.nDC].ArcDirection = AD_CLOCKWISE, acPie, st^.position);
+        if st^.pen.null then
+          E.Canvas.Fill
+        else
+          E.Canvas.FillStroke;
+      end;
+    EMR_CHORD:
+      begin
+        NormalizeRect(PRect(@PEMRChord(R)^.rclBox)^);
+        E.NeedBrushAndPen;
+        cp := CenterPoint(TRect(PEMRChord(R)^.rclBox));
+        E.Canvas.ArcI(cp.X, cp.Y, PEMRChord(R)^.rclBox.Right - PEMRChord(R)^.rclBox.Left,
+          PEMRChord(R)^.rclBox.Bottom - PEMRChord(R)^.rclBox.Top,
+          PEMRChord(R)^.ptlStart.x, PEMRChord(R)^.ptlStart.y,
+          PEMRChord(R)^.ptlEnd.x, PEMRChord(R)^.ptlEnd.y,
+          E.dc[E.nDC].ArcDirection = AD_CLOCKWISE, acChoord, st^.position);
+        if st^.pen.null then
+          E.Canvas.Fill
+        else
+          E.Canvas.FillStroke;
+      end;
+    EMR_FILLRGN:
+      begin
+        E.SelectObjectFromIndex(PEMRFillRgn(R)^.ihBrush);
+        E.NeedBrushAndPen;
+        E.FillRectangle(
+          TRect(PRgnDataHeader(@PEMRFillRgn(R)^.RgnData[0])^.rcBound), false);
+      end;
+    EMR_POLYGON,
+    EMR_POLYLINE,
+    EMR_POLYGON16,
+    EMR_POLYLINE16:
+      if not st^.brush.null or
+         not st^.pen.null then
+      begin
+        if R^.iType in [EMR_POLYGON, EMR_POLYGON16] then
+          E.NeedBrushAndPen
+        else
+          E.NeedPen;
+        if R^.iType in [EMR_POLYGON, EMR_POLYLINE] then
         begin
-          if not pen.null then
-            E.NeedPen;
-          E.Canvas.MoveToI(
-            PEMRPolyBezier(R)^.aptl[0].x, PEMRPolyBezier(R)^.aptl[0].Y);
-          for i := 0 to (PEMRPolyBezier(R)^.cptl div 3) - 1 do
+          E.Canvas.MoveToI(PEMRPolyLine(R)^.aptl[0].x, PEMRPolyLine(R)^.aptl[0].Y);
+          for i := 1 to PEMRPolyLine(R)^.cptl - 1 do
+            E.Canvas.LineToI(PEMRPolyLine(R)^.aptl[i].x, PEMRPolyLine(R)^.aptl[i].Y);
+          if PEMRPolyLine(R)^.cptl > 0 then
+            st^.position := PEMRPolyLine(R)^.aptl[PEMRPolyLine(R)^.cptl - 1]
+          else
+            st^.position := PEMRPolyLine(R)^.aptl[0];
+        end
+        else
+        begin
+          E.Canvas.MoveToI(PEMRPolyLine16(R)^.apts[0].x, PEMRPolyLine16(R)^.apts[0].Y);
+          if PEMRPolyLine16(R)^.cpts > 0 then
+          begin
+            for i := 1 to PEMRPolyLine16(R)^.cpts - 1 do
+              E.Canvas.LineToI(
+                PEMRPolyLine16(R)^.apts[i].x, PEMRPolyLine16(R)^.apts[i].Y);
+            st^.position.X := PEMRPolyLine16(R)^.apts[PEMRPolyLine16(R)^.cpts - 1].x;
+            st^.position.Y := PEMRPolyLine16(R)^.apts[PEMRPolyLine16(R)^.cpts - 1].Y;
+          end
+          else
+          begin
+            st^.position.X := PEMRPolyLine16(R)^.apts[0].x;
+            st^.position.Y := PEMRPolyLine16(R)^.apts[0].Y;
+          end;
+        end;
+        st^.Moved := false;
+        if R^.iType in [EMR_POLYGON, EMR_POLYGON16] then
+        begin
+          E.Canvas.Closepath;
+          E.FlushPenBrush;
+        end
+        else if not st^.pen.null then
+          E.Canvas.Stroke
+        else // for lines
+          E.Canvas.NewPath;
+      end;
+    EMR_POLYPOLYGON,
+    EMR_POLYPOLYGON16,
+    EMR_POLYPOLYLINE,
+    EMR_POLYPOLYLINE16:
+      E.PolyPoly(PEMRPolyPolygon(R), R^.iType);
+    EMR_POLYBEZIER:
+      begin
+        if not st^.pen.null then
+          E.NeedPen;
+        E.Canvas.MoveToI(
+          PEMRPolyBezier(R)^.aptl[0].x, PEMRPolyBezier(R)^.aptl[0].Y);
+        for i := 0 to (PEMRPolyBezier(R)^.cptl div 3) - 1 do
+          E.Canvas.CurveToCI(
+            PEMRPolyBezier(R)^.aptl[i * 3 + 1].X,
+            PEMRPolyBezier(R)^.aptl[i * 3 + 1].Y,
+            PEMRPolyBezier(R)^.aptl[i * 3 + 2].X,
+            PEMRPolyBezier(R)^.aptl[i * 3 + 2].Y,
+            PEMRPolyBezier(R)^.aptl[i * 3 + 3].X,
+            PEMRPolyBezier(R)^.aptl[i * 3 + 3].Y);
+        if PEMRPolyBezier(R)^.cptl > 0 then
+          st^.position := PEMRPolyBezier(R)^.aptl[PEMRPolyBezier(R)^.cptl - 1]
+        else
+          st^.position := PEMRPolyBezier(R)^.aptl[0];
+        st^.Moved := false;
+        if not E.Canvas.fNewPath then
+          if not st^.pen.null then
+            E.Canvas.Stroke
+          else
+            E.Canvas.NewPath;
+      end;
+    EMR_POLYBEZIER16:
+      begin
+        if not st^.pen.null then
+          E.NeedPen;
+        E.Canvas.MoveToI(
+          PEMRPolyBezier16(R)^.apts[0].x, PEMRPolyBezier16(R)^.apts[0].Y);
+        if PEMRPolyBezier16(R)^.cpts > 0 then
+        begin
+          for i := 0 to (PEMRPolyBezier16(R)^.cpts div 3) - 1 do
             E.Canvas.CurveToCI(
-              PEMRPolyBezier(R)^.aptl[i * 3 + 1].X,
-              PEMRPolyBezier(R)^.aptl[i * 3 + 1].Y,
-              PEMRPolyBezier(R)^.aptl[i * 3 + 2].X,
-              PEMRPolyBezier(R)^.aptl[i * 3 + 2].Y,
-              PEMRPolyBezier(R)^.aptl[i * 3 + 3].X,
-              PEMRPolyBezier(R)^.aptl[i * 3 + 3].Y);
-          if PEMRPolyBezier(R)^.cptl > 0 then
-            position := PEMRPolyBezier(R)^.aptl[PEMRPolyBezier(R)^.cptl - 1]
+              PEMRPolyBezier16(R)^.apts[i * 3 + 1].X,
+              PEMRPolyBezier16(R)^.apts[i * 3 + 1].Y,
+              PEMRPolyBezier16(R)^.apts[i * 3 + 2].X,
+              PEMRPolyBezier16(R)^.apts[i * 3 + 2].Y,
+              PEMRPolyBezier16(R)^.apts[i * 3 + 3].X,
+              PEMRPolyBezier16(R)^.apts[i * 3 + 3].Y);
+          st^.position.X := PEMRPolyBezier16(R)^.apts[PEMRPolyBezier16(R)^.cpts - 1].x;
+          st^.position.Y := PEMRPolyBezier16(R)^.apts[PEMRPolyBezier16(R)^.cpts - 1].Y;
+        end
+        else
+        begin
+          st^.position.X := PEMRPolyBezier16(R)^.apts[0].x;
+          st^.position.Y := PEMRPolyBezier16(R)^.apts[0].Y;
+        end;
+        st^.Moved := false;
+        if not E.Canvas.fNewPath then
+          if not st^.pen.null then
+            E.Canvas.Stroke
           else
-            position := PEMRPolyBezier(R)^.aptl[0];
-          Moved := false;
-          if not E.Canvas.fNewPath then
-            if not pen.null then
-              E.Canvas.Stroke
-            else
-              E.Canvas.NewPath;
-        end;
-      EMR_POLYBEZIER16:
-        begin
-          if not pen.null then
-            E.NeedPen;
-          E.Canvas.MoveToI(
-            PEMRPolyBezier16(R)^.apts[0].x, PEMRPolyBezier16(R)^.apts[0].Y);
-          if PEMRPolyBezier16(R)^.cpts > 0 then
-          begin
-            for i := 0 to (PEMRPolyBezier16(R)^.cpts div 3) - 1 do
-              E.Canvas.CurveToCI(
-                PEMRPolyBezier16(R)^.apts[i * 3 + 1].X,
-                PEMRPolyBezier16(R)^.apts[i * 3 + 1].Y,
-                PEMRPolyBezier16(R)^.apts[i * 3 + 2].X,
-                PEMRPolyBezier16(R)^.apts[i * 3 + 2].Y,
-                PEMRPolyBezier16(R)^.apts[i * 3 + 3].X,
-                PEMRPolyBezier16(R)^.apts[i * 3 + 3].Y);
-            with PEMRPolyBezier16(R)^.apts[PEMRPolyBezier16(R)^.cpts - 1] do
-            begin
-              position.X := x;
-              position.Y := Y;
-            end;
-          end
-          else
-          begin
-            position.X := PEMRPolyBezier16(R)^.apts[0].x;
-            position.Y := PEMRPolyBezier16(R)^.apts[0].Y;
-          end;
-          Moved := false;
-          if not E.Canvas.fNewPath then
-            if not pen.null then
-              E.Canvas.Stroke
-            else
-              E.Canvas.NewPath;
-        end;
-      EMR_POLYBEZIERTO:
-        begin
-          if not pen.null then
-            E.NeedPen;
-          if not E.Canvas.fNewPath then
-            if not Moved then
-              E.Canvas.MoveToI(position.X, position.Y);
-          if PEMRPolyBezierTo(R)^.cptl > 0 then
-          begin
-            for i := 0 to (PEMRPolyBezierTo(R)^.cptl div 3) - 1 do
-              E.Canvas.CurveToCI(
-                PEMRPolyBezierTo(R)^.aptl[i * 3].X,
-                PEMRPolyBezierTo(R)^.aptl[i * 3].Y,
-                PEMRPolyBezierTo(R)^.aptl[i * 3 + 1].X,
-                PEMRPolyBezierTo(R)^.aptl[i * 3 + 1].Y,
-                PEMRPolyBezierTo(R)^.aptl[i * 3 + 2].X,
-                PEMRPolyBezierTo(R)^.aptl[i * 3 + 2].Y);
-            position := PEMRPolyBezierTo(R)^.aptl[PEMRPolyBezierTo(R)^.cptl - 1];
-          end;
-          Moved := false;
-          if not E.Canvas.fNewPath then
-            if not pen.null then
-              E.Canvas.Stroke
-            else
-              E.Canvas.NewPath;
-        end;
-      EMR_POLYBEZIERTO16:
-        begin
-          if not pen.null then
-            E.NeedPen;
-          if not E.Canvas.fNewPath then
-            if not Moved then
-              E.Canvas.MoveToI(position.X, position.Y);
-          if PEMRPolyBezierTo16(R)^.cpts > 0 then
-          begin
-            for i := 0 to (PEMRPolyBezierTo16(R)^.cpts div 3) - 1 do
-              E.Canvas.CurveToCI(
-                PEMRPolyBezierTo16(R)^.apts[i * 3].X,
-                PEMRPolyBezierTo16(R)^.apts[i * 3].Y,
-                PEMRPolyBezierTo16(R)^.apts[i * 3 + 1].X,
-                PEMRPolyBezierTo16(R)^.apts[i * 3 + 1].Y,
-                PEMRPolyBezierTo16(R)^.apts[i * 3 + 2].X,
-                PEMRPolyBezierTo16(R)^.apts[i * 3 + 2].Y);
-            with PEMRPolyBezierTo16(R)^.apts[PEMRPolyBezierTo16(R)^.cpts - 1] do
-            begin
-              position.X := x;
-              position.Y := Y;
-            end;
-          end;
-          Moved := false;
-          if not E.Canvas.fNewPath then
-            if not pen.null then
-              E.Canvas.Stroke
-            else
-              E.Canvas.NewPath;
-        end;
-      EMR_POLYLINETO,
-      EMR_POLYLINETO16:
-        begin
-          if not pen.null then
-            E.NeedPen;
-          if not E.Canvas.fNewPath then
-          begin
             E.Canvas.NewPath;
-            if not Moved then
-              E.Canvas.MoveToI(position.X, position.Y);
-          end;
-          if R^.iType = EMR_POLYLINETO then
-          begin
-            if PEMRPolyLineTo(R)^.cptl > 0 then
-            begin
-              for i := 0 to PEMRPolyLineTo(R)^.cptl - 1 do
-                with PEMRPolyLineTo(R)^.aptl[i] do
-                  E.Canvas.LineToI(X, Y);
-              position := PEMRPolyLineTo(R)^.aptl[PEMRPolyLineTo(R)^.cptl - 1];
-            end;
-          end
+      end;
+    EMR_POLYBEZIERTO:
+      begin
+        if not st^.pen.null then
+          E.NeedPen;
+        if not E.Canvas.fNewPath then
+          if not st^.Moved then
+            E.Canvas.MoveToI(st^.position.X, st^.position.Y);
+        if PEMRPolyBezierTo(R)^.cptl > 0 then
+        begin
+          for i := 0 to (PEMRPolyBezierTo(R)^.cptl div 3) - 1 do
+            E.Canvas.CurveToCI(
+              PEMRPolyBezierTo(R)^.aptl[i * 3].X,
+              PEMRPolyBezierTo(R)^.aptl[i * 3].Y,
+              PEMRPolyBezierTo(R)^.aptl[i * 3 + 1].X,
+              PEMRPolyBezierTo(R)^.aptl[i * 3 + 1].Y,
+              PEMRPolyBezierTo(R)^.aptl[i * 3 + 2].X,
+              PEMRPolyBezierTo(R)^.aptl[i * 3 + 2].Y);
+          st^.position := PEMRPolyBezierTo(R)^.aptl[PEMRPolyBezierTo(R)^.cptl - 1];
+        end;
+        st^.Moved := false;
+        if not E.Canvas.fNewPath then
+          if not st^.pen.null then
+            E.Canvas.Stroke
           else
-          // EMR_POLYLINETO16
-          if PEMRPolyLineTo16(R)^.cpts > 0 then
-          begin
-            for i := 0 to PEMRPolyLineTo16(R)^.cpts - 1 do
-              with PEMRPolyLineTo16(R)^.apts[i] do
-                E.Canvas.LineToI(X, Y);
-            with PEMRPolyLineTo16(R)^.apts[PEMRPolyLineTo16(R)^.cpts - 1] do
-            begin
-              position.X := x;
-              position.Y := Y;
-            end;
-          end;
-          Moved := false;
-          if not E.Canvas.fNewPath then
-            if not pen.null then
-              E.Canvas.Stroke
-            else
-              E.Canvas.NewPath;
-        end;
-      EMR_POLYDRAW:
-        if PEMRPolyDraw(R)^.cptl > 0 then
+            E.Canvas.NewPath;
+      end;
+    EMR_POLYBEZIERTO16:
+      begin
+        if not st^.pen.null then
+          E.NeedPen;
+        if not E.Canvas.fNewPath then
+          if not st^.Moved then
+            E.Canvas.MoveToI(st^.position.X, st^.position.Y);
+        if PEMRPolyBezierTo16(R)^.cpts > 0 then
         begin
-          if not pen.null then
-            E.NeedPen;
-          polytypes := @PEMRPolyDraw(R)^.aptl[PEMRPolyDraw(R)^.cptl];
-          i := 0;
-          while i < integer(PEMRPolyDraw(R)^.cptl) do
-          begin
-            case polytypes^[i] and not PT_CLOSEFIGURE of
-              PT_LINETO:
-                begin
-                  with PEMRPolyDraw(R)^.aptl[i] do
-                    E.Canvas.LineToI(X, Y);
-                  if polytypes^[i] and PT_CLOSEFIGURE <> 0 then
-                  begin
-                    E.Canvas.LineToI(position.X, position.Y);
-                    position := PEMRPolyDraw(R)^.aptl[i];
-                  end;
-                end;
-              PT_BEZIERTO:
-                begin
-                  E.Canvas.CurveToCI(
-                    PEMRPolyDraw(R)^.aptl[i].X,
-                    PEMRPolyDraw(R)^.aptl[i].Y,
-                    PEMRPolyDraw(R)^.aptl[i + 1].X,
-                    PEMRPolyDraw(R)^.aptl[i + 1].Y,
-                    PEMRPolyDraw(R)^.aptl[i + 2].X,
-                    PEMRPolyDraw(R)^.aptl[i + 2].Y);
-                  inc(i, 2); // eventual inc(i) below
-                  if polytypes^[i] and PT_CLOSEFIGURE <> 0 then
-                  begin
-                    E.Canvas.LineToI(position.X, position.Y);
-                    position := PEMRPolyDraw(R)^.aptl[i];
-                  end;
-                end;
-              PT_MOVETO:
-                begin
-                  with PEMRPolyDraw(R)^.aptl[i] do
-                    E.Canvas.MoveToI(X, Y);
-                  position := PEMRPolyDraw(R)^.aptl[i];
-                end;
-            else
-              break; // invalid type
-            end;
-            inc(i);
-          end;
-          position := PEMRPolyDraw(R)^.aptl[PEMRPolyDraw(R)^.cptl - 1];
-          Moved := false;
-          if not E.Canvas.fNewPath then
-            if not pen.null then
-              E.Canvas.Stroke
-            else
-              E.Canvas.NewPath;
+          for i := 0 to (PEMRPolyBezierTo16(R)^.cpts div 3) - 1 do
+            E.Canvas.CurveToCI(
+              PEMRPolyBezierTo16(R)^.apts[i * 3].X,
+              PEMRPolyBezierTo16(R)^.apts[i * 3].Y,
+              PEMRPolyBezierTo16(R)^.apts[i * 3 + 1].X,
+              PEMRPolyBezierTo16(R)^.apts[i * 3 + 1].Y,
+              PEMRPolyBezierTo16(R)^.apts[i * 3 + 2].X,
+              PEMRPolyBezierTo16(R)^.apts[i * 3 + 2].Y);
+          st^.position.X := PEMRPolyBezierTo16(R)^.apts[PEMRPolyBezierTo16(R)^.cpts - 1].x;
+          st^.position.Y := PEMRPolyBezierTo16(R)^.apts[PEMRPolyBezierTo16(R)^.cpts - 1].Y;
         end;
-      EMR_POLYDRAW16:
-        if PEMRPolyDraw16(R)^.cpts > 0 then
-        begin
-          if not pen.null then
-            E.NeedPen;
-          polytypes := @PEMRPolyDraw16(R)^.apts[PEMRPolyDraw16(R)^.cpts];
-          i := 0;
-          while i < integer(PEMRPolyDraw16(R)^.cpts) do
-          begin
-            case polytypes^[i] and not PT_CLOSEFIGURE of
-              PT_LINETO:
-                begin
-                  with PEMRPolyDraw16(R)^.apts[i] do
-                    E.Canvas.LineToI(X, Y);
-                  if polytypes^[i] and PT_CLOSEFIGURE <> 0 then
-                  begin
-                    E.Canvas.LineToI(position.X, position.Y);
-                    with PEMRPolyDraw16(R)^.apts[i] do
-                    begin
-                      position.X := x;
-                      position.Y := Y;
-                    end;
-                  end;
-                end;
-              PT_BEZIERTO:
-                begin
-                  E.Canvas.CurveToCI(
-                    PEMRPolyDraw16(R)^.apts[i].X,
-                    PEMRPolyDraw16(R)^.apts[i].Y,
-                    PEMRPolyDraw16(R)^.apts[i + 1].X,
-                    PEMRPolyDraw16(R)^.apts[i + 1].Y,
-                    PEMRPolyDraw16(R)^.apts[i + 2].X,
-                    PEMRPolyDraw16(R)^.apts[i + 2].Y);
-                  inc(i, 2); // eventual inc(i) below
-                  if polytypes^[i] and PT_CLOSEFIGURE <> 0 then
-                  begin
-                    E.Canvas.LineToI(position.X, position.Y);
-                    with PEMRPolyDraw16(R)^.apts[i] do
-                    begin
-                      position.X := X;
-                      position.Y := Y;
-                    end;
-                  end;
-                end;
-              PT_MOVETO:
-                begin
-                  with PEMRPolyDraw16(R)^.apts[i] do
-                  begin
-                    E.Canvas.MoveToI(X, Y);
-                    position.X := X;
-                    position.Y := Y;
-                  end;
-                end;
-            else
-              break; // invalid type
-            end;
-            inc(i);
-          end;
-          with PEMRPolyDraw16(R)^.apts[PEMRPolyDraw16(R)^.cpts - 1] do
-          begin
-            position.X := X;
-            position.Y := Y;
-          end;
-          Moved := false;
-          if not E.Canvas.fNewPath then
-            if not pen.null then
-              E.Canvas.Stroke
-            else
-              E.Canvas.NewPath;
-        end;
-      EMR_BITBLT:
-        begin
-          with PEMRBitBlt(R)^ do // only handle RGB bitmaps (no palette)
-            if (offBmiSrc <> 0) and
-               (offBitsSrc <> 0) then
-              E.DrawBitmap(xSrc, ySrc, cxDest, cyDest, xDest, yDest,
-                cxDest, cyDest, iUsageSrc, pointer(PtrUInt(R) + offBmiSrc),
-                pointer(PtrUInt(R) + offBitsSrc), @rclBounds, @xformSrc, dwRop)
-            else
-              case dwRop of // we only handle PATCOPY = fillrect
-                PATCOPY:
-                  E.FillRectangle(Rect(xDest, yDest,
-                    xDest + cxDest, yDest + cyDest), true);
-              end;
-        end;
-      EMR_STRETCHBLT:
-        begin
-          with PEMRStretchBlt(R)^ do // only handle RGB bitmaps (no palette)
-            if (offBmiSrc <> 0) and
-               (offBitsSrc <> 0) then
-              E.DrawBitmap(xSrc, ySrc, cxSrc, cySrc, xDest, yDest, cxDest,
-                cyDest, iUsageSrc, pointer(PtrUInt(R) + offBmiSrc),
-                pointer(PtrUInt(R) + offBitsSrc), @rclBounds, @xformSrc, dwRop)
-            else
-              case dwRop of // we only handle PATCOPY = fillrect
-                PATCOPY:
-                  E.FillRectangle(Rect(
-                    xDest, yDest, xDest + cxDest, yDest + cyDest), true);
-              end;
-        end;
-      EMR_STRETCHDIBITS:
-        with PEMRStretchDIBits(R)^ do // only handle RGB bitmaps (no palette)
-          if (offBmiSrc <> 0) and
-             (offBitsSrc <> 0) then
-          begin
-            if WorldTransform.eM22 < 0 then
-              with PBitmapInfo(PtrUInt(R) + offBmiSrc)^ do
-                bmiHeader.biHeight := -bmiHeader.biHeight;
-            E.DrawBitmap(xSrc, ySrc, cxSrc, cySrc, xDest, yDest, cxDest, cyDest,
-              iUsageSrc, pointer(PtrUInt(R) + offBmiSrc),
-              pointer(PtrUInt(R) + offBitsSrc), @rclBounds, nil, dwRop);
-          end;
-      EMR_TRANSPARENTBLT:
-        with PEMRTransparentBLT(R)^ do // only handle RGB bitmaps (no palette)
-          if (offBmiSrc <> 0) and
-             (offBitsSrc <> 0) then
-            E.DrawBitmap(xSrc, ySrc, cxSrc, cySrc, xDest, yDest, cxDest, cyDest,
-              iUsageSrc, pointer(PtrUInt(R) + offBmiSrc),
-              pointer(PtrUInt(R) + offBitsSrc), @rclBounds, @xformSrc, SRCCOPY,
-              dwRop); // dwRop stores the transparent color
-      EMR_ALPHABLEND:
-        with PEMRAlphaBlend(R)^ do // only handle RGB bitmaps (no palette nor transparency)
-          if (offBmiSrc <> 0) and
-             (offBitsSrc <> 0) then
-            E.DrawBitmap (xSrc, ySrc, cxSrc, cySrc, xDest, yDest, cxDest, cyDest,
-              iUsageSrc, pointer(PtrUInt(R) + offBmiSrc), pointer(
-               PtrUInt(R) + offBitsSrc), @rclBounds, @xformSrc, SRCCOPY, dwRop)
+        st^.Moved := false;
+        if not E.Canvas.fNewPath then
+          if not st^.pen.null then
+            E.Canvas.Stroke
           else
-            case dwRop of // we only handle PATCOPY = fillrect
-              PATCOPY:
-                E.FillRectangle(Rect(xDest, yDest,
-                  xDest + cxDest, yDest + cyDest), true);
-            end;
-      EMR_GDICOMMENT:
-        with PEMRGDIComment(R)^ do
-          if cbData >= 1 then
-            E.HandleComment(
-              TPdfGdiComment(Data[0]), PAnsiChar(@Data) + 1, cbData - 1);
-      EMR_MODIFYWORLDTRANSFORM:
-        with PEMRModifyWorldTransform(R)^ do
-          E.ScaleMatrix(@xform, iMode);
-      EMR_EXTCREATEPEN: // approx. - fast solution
-        with PEMRExtCreatePen(R)^ do
-          if ihPen - 1 < cardinal(length(E.Obj)) then
-            with E.obj[ihPen - 1] do
-            begin
-              kind := OBJ_PEN;
-              PenColor := elp.elpColor;
-              PenWidth := elp.elpWidth;
-              PenStyle := elp.elpPenStyle and (PS_STYLE_MASK or PS_ENDCAP_MASK);
-            end;
-      EMR_SETMITERLIMIT:
-        if PEMRSetMiterLimit(R)^.eMiterLimit > 0.1 then
-          E.Canvas.SetMiterLimit(PEMRSetMiterLimit(R)^.eMiterLimit);
-      EMR_SETMETARGN:
-        E.SetMetaRgn;
-      EMR_EXTSELECTCLIPRGN:
-        E.ExtSelectClipRgn(PEMRExtSelectClipRgn(R));
-      EMR_INTERSECTCLIPRECT:
-        ClipRgn := E.IntersectClipRect(E.Canvas.BoxI(
-          TRect(PEMRIntersectClipRect(R)^.rclClip), true), ClipRgn);
-      EMR_SETMAPMODE:
-        MappingMode := PEMRSetMapMode(R)^.iMode;
-      EMR_BEGINPATH:
+            E.Canvas.NewPath;
+      end;
+    EMR_POLYLINETO,
+    EMR_POLYLINETO16:
+      begin
+        if not st^.pen.null then
+          E.NeedPen;
+        if not E.Canvas.fNewPath then
         begin
           E.Canvas.NewPath;
-          if not Moved then
-          begin
-            E.Canvas.MoveToI(position.X, position.Y);
-            Moved := true;
-          end;
+          if not st^.Moved then
+            E.Canvas.MoveToI(st^.position.X, st^.position.Y);
         end;
-      EMR_ENDPATH:
+        if R^.iType = EMR_POLYLINETO then
+        begin
+          if PEMRPolyLineTo(R)^.cptl > 0 then
+          begin
+            for i := 0 to PEMRPolyLineTo(R)^.cptl - 1 do
+              E.Canvas.LineToI(PEMRPolyLineTo(R)^.aptl[i].X, PEMRPolyLineTo(R)^.aptl[i].Y);
+            st^.position := PEMRPolyLineTo(R)^.aptl[PEMRPolyLineTo(R)^.cptl - 1];
+          end;
+        end
+        else
+        // EMR_POLYLINETO16
+        if PEMRPolyLineTo16(R)^.cpts > 0 then
+        begin
+          for i := 0 to PEMRPolyLineTo16(R)^.cpts - 1 do
+            E.Canvas.LineToI(PEMRPolyLineTo16(R)^.apts[i].X, PEMRPolyLineTo16(R)^.apts[i].Y);
+          st^.position.X := PEMRPolyLineTo16(R)^.apts[PEMRPolyLineTo16(R)^.cpts - 1].x;
+          st^.position.Y := PEMRPolyLineTo16(R)^.apts[PEMRPolyLineTo16(R)^.cpts - 1].Y;
+        end;
+        st^.Moved := false;
+        if not E.Canvas.fNewPath then
+          if not st^.pen.null then
+            E.Canvas.Stroke
+          else
+            E.Canvas.NewPath;
+      end;
+    EMR_POLYDRAW:
+      if PEMRPolyDraw(R)^.cptl > 0 then
+      begin
+        if not st^.pen.null then
+          E.NeedPen;
+        polytypes := @PEMRPolyDraw(R)^.aptl[PEMRPolyDraw(R)^.cptl];
+        i := 0;
+        while i < integer(PEMRPolyDraw(R)^.cptl) do
+        begin
+          case polytypes^[i] and not PT_CLOSEFIGURE of
+            PT_LINETO:
+              begin
+                E.Canvas.LineToI(PEMRPolyDraw(R)^.aptl[i].X, PEMRPolyDraw(R)^.aptl[i].Y);
+                if polytypes^[i] and PT_CLOSEFIGURE <> 0 then
+                begin
+                  E.Canvas.LineToI(st^.position.X, st^.position.Y);
+                  st^.position := PEMRPolyDraw(R)^.aptl[i];
+                end;
+              end;
+            PT_BEZIERTO:
+              begin
+                E.Canvas.CurveToCI(
+                  PEMRPolyDraw(R)^.aptl[i].X,
+                  PEMRPolyDraw(R)^.aptl[i].Y,
+                  PEMRPolyDraw(R)^.aptl[i + 1].X,
+                  PEMRPolyDraw(R)^.aptl[i + 1].Y,
+                  PEMRPolyDraw(R)^.aptl[i + 2].X,
+                  PEMRPolyDraw(R)^.aptl[i + 2].Y);
+                inc(i, 2); // eventual inc(i) below
+                if polytypes^[i] and PT_CLOSEFIGURE <> 0 then
+                begin
+                  E.Canvas.LineToI(st^.position.X, st^.position.Y);
+                  st^.position := PEMRPolyDraw(R)^.aptl[i];
+                end;
+              end;
+            PT_MOVETO:
+              begin
+                E.Canvas.MoveToI(PEMRPolyDraw(R)^.aptl[i].X, PEMRPolyDraw(R)^.aptl[i].Y);
+                st^.position := PEMRPolyDraw(R)^.aptl[i];
+              end;
+          else
+            break; // invalid type
+          end;
+          inc(i);
+        end;
+        st^.position := PEMRPolyDraw(R)^.aptl[PEMRPolyDraw(R)^.cptl - 1];
+        st^.Moved := false;
+        if not E.Canvas.fNewPath then
+          if not st^.pen.null then
+            E.Canvas.Stroke
+          else
+            E.Canvas.NewPath;
+      end;
+    EMR_POLYDRAW16:
+      if PEMRPolyDraw16(R)^.cpts > 0 then
+      begin
+        if not st^.pen.null then
+          E.NeedPen;
+        polytypes := @PEMRPolyDraw16(R)^.apts[PEMRPolyDraw16(R)^.cpts];
+        i := 0;
+        while i < integer(PEMRPolyDraw16(R)^.cpts) do
+        begin
+          case polytypes^[i] and not PT_CLOSEFIGURE of
+            PT_LINETO:
+              begin
+                E.Canvas.LineToI(PEMRPolyDraw16(R)^.apts[i].X, PEMRPolyDraw16(R)^.apts[i].Y);
+                if polytypes^[i] and PT_CLOSEFIGURE <> 0 then
+                begin
+                  E.Canvas.LineToI(st^.position.X, st^.position.Y);
+                  st^.position.X := PEMRPolyDraw16(R)^.apts[i].x;
+                  st^.position.Y := PEMRPolyDraw16(R)^.apts[i].Y;
+                end;
+              end;
+            PT_BEZIERTO:
+              begin
+                E.Canvas.CurveToCI(
+                  PEMRPolyDraw16(R)^.apts[i].X,
+                  PEMRPolyDraw16(R)^.apts[i].Y,
+                  PEMRPolyDraw16(R)^.apts[i + 1].X,
+                  PEMRPolyDraw16(R)^.apts[i + 1].Y,
+                  PEMRPolyDraw16(R)^.apts[i + 2].X,
+                  PEMRPolyDraw16(R)^.apts[i + 2].Y);
+                inc(i, 2); // eventual inc(i) below
+                if polytypes^[i] and PT_CLOSEFIGURE <> 0 then
+                begin
+                  E.Canvas.LineToI(st^.position.X, st^.position.Y);
+                  st^.position.X := PEMRPolyDraw16(R)^.apts[i].X;
+                  st^.position.Y := PEMRPolyDraw16(R)^.apts[i].Y;
+                end;
+              end;
+            PT_MOVETO:
+              begin
+                E.Canvas.MoveToI(PEMRPolyDraw16(R)^.apts[i].X, PEMRPolyDraw16(R)^.apts[i].Y);
+                st^.position.X := PEMRPolyDraw16(R)^.apts[i].X;
+                st^.position.Y := PEMRPolyDraw16(R)^.apts[i].Y;
+              end;
+          else
+            break; // invalid type
+          end;
+          inc(i);
+        end;
+        st^.position.X := PEMRPolyDraw16(R)^.apts[PEMRPolyDraw16(R)^.cpts - 1].X;
+        st^.position.Y := PEMRPolyDraw16(R)^.apts[PEMRPolyDraw16(R)^.cpts - 1].Y;
+        st^.Moved := false;
+        if not E.Canvas.fNewPath then
+          if not st^.pen.null then
+            E.Canvas.Stroke
+          else
+            E.Canvas.NewPath;
+      end;
+    EMR_BITBLT:
+      begin
+        if (PEMRBitBlt(R)^.offBmiSrc <> 0) and
+           (PEMRBitBlt(R)^.offBitsSrc <> 0) then
+          E.DrawBitmap(PEMRBitBlt(R)^.xSrc, PEMRBitBlt(R)^.ySrc, PEMRBitBlt(R)^.cxDest, PEMRBitBlt(R)^.cyDest, PEMRBitBlt(R)^.xDest, PEMRBitBlt(R)^.yDest,
+            PEMRBitBlt(R)^.cxDest, PEMRBitBlt(R)^.cyDest, PEMRBitBlt(R)^.iUsageSrc, pointer(PtrUInt(R) + PEMRBitBlt(R)^.offBmiSrc),
+            pointer(PtrUInt(R) + PEMRBitBlt(R)^.offBitsSrc), @PEMRBitBlt(R)^.rclBounds, @PEMRBitBlt(R)^.xformSrc, PEMRBitBlt(R)^.dwRop)
+        else
+          case PEMRBitBlt(R)^.dwRop of // we only handle PATCOPY = fillrect
+            PATCOPY:
+              E.FillRectangle(Rect(PEMRBitBlt(R)^.xDest, PEMRBitBlt(R)^.yDest,
+                PEMRBitBlt(R)^.xDest + PEMRBitBlt(R)^.cxDest, PEMRBitBlt(R)^.yDest + PEMRBitBlt(R)^.cyDest), true);
+          end;
+      end;
+    EMR_STRETCHBLT:
+      begin
+        if (PEMRStretchBlt(R)^.offBmiSrc <> 0) and
+           (PEMRStretchBlt(R)^.offBitsSrc <> 0) then
+          E.DrawBitmap(PEMRStretchBlt(R)^.xSrc, PEMRStretchBlt(R)^.ySrc, PEMRStretchBlt(R)^.cxSrc, PEMRStretchBlt(R)^.cySrc, PEMRStretchBlt(R)^.xDest, PEMRStretchBlt(R)^.yDest, PEMRStretchBlt(R)^.cxDest,
+            PEMRStretchBlt(R)^.cyDest, PEMRStretchBlt(R)^.iUsageSrc, pointer(PtrUInt(R) + PEMRStretchBlt(R)^.offBmiSrc),
+            pointer(PtrUInt(R) + PEMRStretchBlt(R)^.offBitsSrc), @PEMRStretchBlt(R)^.rclBounds, @PEMRStretchBlt(R)^.xformSrc, PEMRStretchBlt(R)^.dwRop)
+        else
+          case PEMRStretchBlt(R)^.dwRop of // we only handle PATCOPY = fillrect
+            PATCOPY:
+              E.FillRectangle(Rect(
+                PEMRStretchBlt(R)^.xDest, PEMRStretchBlt(R)^.yDest, PEMRStretchBlt(R)^.xDest + PEMRStretchBlt(R)^.cxDest, PEMRStretchBlt(R)^.yDest + PEMRStretchBlt(R)^.cyDest), true);
+          end;
+      end;
+    EMR_STRETCHDIBITS:
+      if (PEMRStretchDIBits(R)^.offBmiSrc <> 0) and
+         (PEMRStretchDIBits(R)^.offBitsSrc <> 0) then
+      begin
+        if st^.WorldTransform.eM22 < 0 then
+          PBitmapInfo(PtrUInt(R) + PEMRStretchDIBits(R)^.offBmiSrc)^.bmiHeader.biHeight := -PBitmapInfo(PtrUInt(R) + PEMRStretchDIBits(R)^.offBmiSrc)^.bmiHeader.biHeight;
+        E.DrawBitmap(PEMRStretchDIBits(R)^.xSrc, PEMRStretchDIBits(R)^.ySrc, PEMRStretchDIBits(R)^.cxSrc, PEMRStretchDIBits(R)^.cySrc, PEMRStretchDIBits(R)^.xDest, PEMRStretchDIBits(R)^.yDest, PEMRStretchDIBits(R)^.cxDest, PEMRStretchDIBits(R)^.cyDest,
+          PEMRStretchDIBits(R)^.iUsageSrc, pointer(PtrUInt(R) + PEMRStretchDIBits(R)^.offBmiSrc),
+          pointer(PtrUInt(R) + PEMRStretchDIBits(R)^.offBitsSrc), @PEMRStretchDIBits(R)^.rclBounds, nil, PEMRStretchDIBits(R)^.dwRop);
+      end;
+    EMR_TRANSPARENTBLT:
+      if (PEMRTransparentBLT(R)^.offBmiSrc <> 0) and
+         (PEMRTransparentBLT(R)^.offBitsSrc <> 0) then
+        E.DrawBitmap(PEMRTransparentBLT(R)^.xSrc, PEMRTransparentBLT(R)^.ySrc, PEMRTransparentBLT(R)^.cxSrc, PEMRTransparentBLT(R)^.cySrc, PEMRTransparentBLT(R)^.xDest, PEMRTransparentBLT(R)^.yDest, PEMRTransparentBLT(R)^.cxDest, PEMRTransparentBLT(R)^.cyDest,
+          PEMRTransparentBLT(R)^.iUsageSrc, pointer(PtrUInt(R) + PEMRTransparentBLT(R)^.offBmiSrc),
+          pointer(PtrUInt(R) + PEMRTransparentBLT(R)^.offBitsSrc), @PEMRTransparentBLT(R)^.rclBounds, @PEMRTransparentBLT(R)^.xformSrc, SRCCOPY,
+          PEMRTransparentBLT(R)^.dwRop); // dwRop stores the transparent color
+    EMR_ALPHABLEND:
+      if (PEMRAlphaBlend(R)^.offBmiSrc <> 0) and
+         (PEMRAlphaBlend(R)^.offBitsSrc <> 0) then
+        E.DrawBitmap (PEMRAlphaBlend(R)^.xSrc, PEMRAlphaBlend(R)^.ySrc, PEMRAlphaBlend(R)^.cxSrc, PEMRAlphaBlend(R)^.cySrc, PEMRAlphaBlend(R)^.xDest, PEMRAlphaBlend(R)^.yDest, PEMRAlphaBlend(R)^.cxDest, PEMRAlphaBlend(R)^.cyDest,
+          PEMRAlphaBlend(R)^.iUsageSrc, pointer(PtrUInt(R) + PEMRAlphaBlend(R)^.offBmiSrc), pointer(
+           PtrUInt(R) + PEMRAlphaBlend(R)^.offBitsSrc), @PEMRAlphaBlend(R)^.rclBounds, @PEMRAlphaBlend(R)^.xformSrc, SRCCOPY, PEMRAlphaBlend(R)^.dwRop)
+      else
+        case PEMRAlphaBlend(R)^.dwRop of // we only handle PATCOPY = fillrect
+          PATCOPY:
+            E.FillRectangle(Rect(PEMRAlphaBlend(R)^.xDest, PEMRAlphaBlend(R)^.yDest,
+              PEMRAlphaBlend(R)^.xDest + PEMRAlphaBlend(R)^.cxDest, PEMRAlphaBlend(R)^.yDest + PEMRAlphaBlend(R)^.cyDest), true);
+        end;
+    EMR_GDICOMMENT:
+      if PEMRGDIComment(R)^.cbData >= 1 then
+        E.HandleComment(
+          TPdfGdiComment(PEMRGDIComment(R)^.Data[0]), PAnsiChar(@PEMRGDIComment(R)^.Data) + 1, PEMRGDIComment(R)^.cbData - 1);
+    EMR_MODIFYWORLDTRANSFORM:
+      E.ScaleMatrix(@PEMRModifyWorldTransform(R)^.xform, PEMRModifyWorldTransform(R)^.iMode);
+    EMR_EXTCREATEPEN: // approx. - fast solution
+      if PEMRExtCreatePen(R)^.ihPen - 1 < cardinal(length(E.Obj)) then
+      begin
+        E.obj[PEMRExtCreatePen(R)^.ihPen - 1].kind := OBJ_PEN;
+        E.obj[PEMRExtCreatePen(R)^.ihPen - 1].PenColor := PEMRExtCreatePen(R)^.elp.elpColor;
+        E.obj[PEMRExtCreatePen(R)^.ihPen - 1].PenWidth := PEMRExtCreatePen(R)^.elp.elpWidth;
+        E.obj[PEMRExtCreatePen(R)^.ihPen - 1].PenStyle := PEMRExtCreatePen(R)^.elp.elpPenStyle and (PS_STYLE_MASK or PS_ENDCAP_MASK);
+      end;
+    EMR_SETMITERLIMIT:
+      if PEMRSetMiterLimit(R)^.eMiterLimit > 0.1 then
+        E.Canvas.SetMiterLimit(PEMRSetMiterLimit(R)^.eMiterLimit);
+    EMR_SETMETARGN:
+      E.SetMetaRgn;
+    EMR_EXTSELECTCLIPRGN:
+      E.ExtSelectClipRgn(PEMRExtSelectClipRgn(R));
+    EMR_INTERSECTCLIPRECT:
+      st^.ClipRgn := E.IntersectClipRect(E.Canvas.BoxI(
+        TRect(PEMRIntersectClipRect(R)^.rclClip), true), st^.ClipRgn);
+    EMR_SETMAPMODE:
+      st^.MappingMode := PEMRSetMapMode(R)^.iMode;
+    EMR_BEGINPATH:
+      begin
+        E.Canvas.NewPath;
+        if not st^.Moved then
+        begin
+          E.Canvas.MoveToI(st^.position.X, st^.position.Y);
+          st^.Moved := true;
+        end;
+      end;
+    EMR_ENDPATH:
+      E.Canvas.fNewPath := false;
+    EMR_ABORTPATH:
+      begin
+        E.Canvas.NewPath;
         E.Canvas.fNewPath := false;
-      EMR_ABORTPATH:
+      end;
+    EMR_CLOSEFIGURE:
+      E.Canvas.ClosePath;
+    EMR_FILLPATH:
+      begin
+        if not st^.brush.Null then
         begin
-          E.Canvas.NewPath;
-          E.Canvas.fNewPath := false;
+          E.FillColor := st^.brush.color;
+          E.Canvas.Fill;
         end;
-      EMR_CLOSEFIGURE:
-        E.Canvas.ClosePath;
-      EMR_FILLPATH:
+        E.Canvas.NewPath;
+        E.Canvas.fNewPath := false;
+      end;
+    EMR_STROKEPATH:
+      begin
+        if not st^.pen.null then
         begin
-          if not brush.Null then
-          begin
-            E.FillColor := brush.color;
-            E.Canvas.Fill;
-          end;
-          E.Canvas.NewPath;
-          E.Canvas.fNewPath := false;
-        end;
-      EMR_STROKEPATH:
-        begin
-          if not pen.null then
-          begin
-            E.NeedPen;
-            E.Canvas.Stroke;
-          end;
-          E.Canvas.NewPath;
-          E.Canvas.fNewPath := false;
-        end;
-      EMR_STROKEANDFILLPATH:
-        begin
-          if not brush.Null then
-          begin
-            E.NeedPen;
-            E.FillColor := brush.color;
-            if not pen.null then
-              if PolyFillMode = ALTERNATE then
-                E.Canvas.EofillStroke
-              else
-                E.Canvas.FillStroke
-            else if PolyFillMode = ALTERNATE then
-              E.Canvas.EoFill
-            else
-              E.Canvas.Fill
-          end
-          else if not pen.null then
-          begin
-            E.NeedPen;
-            E.Canvas.Stroke;
-          end;
-          E.Canvas.NewPath;
-          E.Canvas.fNewPath := false;
-        end;
-      EMR_SETPOLYFILLMODE:
-        PolyFillMode := PEMRSetPolyFillMode(R)^.iMode;
-      EMR_GRADIENTFILL:
-        E.GradientFill(PEMGradientFill(R));
-      EMR_SETSTRETCHBLTMODE:
-        StretchBltMode := PEMRSetStretchBltMode(R)^.iMode;
-      EMR_SETARCDIRECTION:
-        ArcDirection := PEMRSetArcDirection(R)^.iArcDirection;
-      EMR_SETPIXELV:
-        begin
-          // prepare pixel size and color
-          if pen.width <> 1 then
-          begin
-            E.fPenWidth := E.Canvas.fWorldFactorX * E.Canvas.fDevScaleX;
-            E.Canvas.SetLineWidth(E.fPenWidth * E.Canvas.fFactorX);
-          end;
-          if PEMRSetPixelV(R)^.crColor <> cardinal(pen.color) then
-            E.Canvas.SetRGBStrokeColor(PEMRSetPixelV(R)^.crColor);
-          // draw point
-          position := TPoint(Point(PEMRSetPixelV(R)^.ptlPixel.X, PEMRSetPixelV(R)
-            ^.ptlPixel.Y));
-          E.Canvas.PointI(position.X, position.Y);
+          E.NeedPen;
           E.Canvas.Stroke;
-          Moved := false;
-          // rollback pixel size and color
-          if pen.width <> 1 then
-          begin
-            E.fPenWidth := pen.width * E.Canvas.fWorldFactorX * E.Canvas.fDevScaleX;
-            E.Canvas.SetLineWidth(E.fPenWidth * E.Canvas.fFactorX);
-          end;
-          if PEMRSetPixelV(R)^.crColor <> cardinal(pen.color) then
-            E.Canvas.SetRGBStrokeColor(pen.color);
         end;
-     // TBD
-      EMR_SMALLTEXTOUT,
-      EMR_SETROP2,
-      EMR_ALPHADIBBLEND,
-      EMR_SETBRUSHORGEX,
-      EMR_SETICMMODE,
-      EMR_SELECTPALETTE,
-      EMR_CREATEPALETTE,
-      EMR_SETPALETTEENTRIES,
-      EMR_RESIZEPALETTE,
-      EMR_REALIZEPALETTE,
-      EMR_EOF:
-        ; //do nothing
-    else
-      R^.iType := R^.iType; // for debug purpose (breakpoint)
-    end;
+        E.Canvas.NewPath;
+        E.Canvas.fNewPath := false;
+      end;
+    EMR_STROKEANDFILLPATH:
+      begin
+        if not st^.brush.Null then
+        begin
+          E.NeedPen;
+          E.FillColor := st^.brush.color;
+          if not st^.pen.null then
+            if st^.PolyFillMode = ALTERNATE then
+              E.Canvas.EofillStroke
+            else
+              E.Canvas.FillStroke
+          else if st^.PolyFillMode = ALTERNATE then
+            E.Canvas.EoFill
+          else
+            E.Canvas.Fill
+        end
+        else if not st^.pen.null then
+        begin
+          E.NeedPen;
+          E.Canvas.Stroke;
+        end;
+        E.Canvas.NewPath;
+        E.Canvas.fNewPath := false;
+      end;
+    EMR_SETPOLYFILLMODE:
+      st^.PolyFillMode := PEMRSetPolyFillMode(R)^.iMode;
+    EMR_GRADIENTFILL:
+      E.GradientFill(PEMGradientFill(R));
+    EMR_SETSTRETCHBLTMODE:
+      st^.StretchBltMode := PEMRSetStretchBltMode(R)^.iMode;
+    EMR_SETARCDIRECTION:
+      st^.ArcDirection := PEMRSetArcDirection(R)^.iArcDirection;
+    EMR_SETPIXELV:
+      begin
+        // prepare pixel size and color
+        if st^.pen.width <> 1 then
+        begin
+          E.fPenWidth := E.Canvas.fWorldFactorX * E.Canvas.fDevScaleX;
+          E.Canvas.SetLineWidth(E.fPenWidth * E.Canvas.fFactorX);
+        end;
+        if PEMRSetPixelV(R)^.crColor <> cardinal(st^.pen.color) then
+          E.Canvas.SetRGBStrokeColor(PEMRSetPixelV(R)^.crColor);
+        // draw point
+        st^.position := TPoint(Point(PEMRSetPixelV(R)^.ptlPixel.X, PEMRSetPixelV(R)
+          ^.ptlPixel.Y));
+        E.Canvas.PointI(st^.position.X, st^.position.Y);
+        E.Canvas.Stroke;
+        st^.Moved := false;
+        // rollback pixel size and color
+        if st^.pen.width <> 1 then
+        begin
+          E.fPenWidth := st^.pen.width * E.Canvas.fWorldFactorX * E.Canvas.fDevScaleX;
+          E.Canvas.SetLineWidth(E.fPenWidth * E.Canvas.fFactorX);
+        end;
+        if PEMRSetPixelV(R)^.crColor <> cardinal(st^.pen.color) then
+          E.Canvas.SetRGBStrokeColor(st^.pen.color);
+      end;
+   // TBD
+    EMR_SMALLTEXTOUT,
+    EMR_SETROP2,
+    EMR_ALPHADIBBLEND,
+    EMR_SETBRUSHORGEX,
+    EMR_SETICMMODE,
+    EMR_SELECTPALETTE,
+    EMR_CREATEPALETTE,
+    EMR_SETPALETTEENTRIES,
+    EMR_RESIZEPALETTE,
+    EMR_REALIZEPALETTE,
+    EMR_EOF:
+      ; //do nothing
+  else
+    R^.iType := R^.iType; // for debug purpose (breakpoint)
+  end;
   case R^.iType of
     EMR_RESTOREDC,
     EMR_SETWINDOWEXTEX,
@@ -2834,17 +2792,11 @@ begin
     A.fUseMetaFileTextClipping := TextClipping;
     A.fKerningHScaleBottom := KerningHScaleBottom;
     A.fKerningHScaleTop := KerningHScaleTop;
-    with TPdfDocumentAccess(A.fDoc) do
-    begin
-      if fPrinterPxPerInch.X = 0 then
-        fPrinterPxPerInch := CurrentPrinterRes; // caching for major speedup
-      A.fPrinterPxPerInch := fPrinterPxPerInch;
-    end;
-    with E.DC[0] do
-    begin
-      Int64(WinSize) := PInt64(@R.Right)^;
-      ViewSize := WinSize;
-    end;
+    if TPdfDocumentAccess(A.fDoc).fPrinterPxPerInch.X = 0 then
+      TPdfDocumentAccess(A.fDoc).fPrinterPxPerInch := CurrentPrinterRes; // caching for major speedup
+    A.fPrinterPxPerInch := TPdfDocumentAccess(A.fDoc).fPrinterPxPerInch;
+    Int64(E.DC[0].WinSize) := PInt64(@R.Right)^;
+    E.DC[0].ViewSize := E.DC[0].WinSize;
     C.GSave;
     try
       {$ifdef FPC}
@@ -2896,19 +2848,18 @@ begin
   SelectObject(dest, old);
   DeleteObject(hf);
   if aLogFont^.ihFont - 1 < cardinal(length(Obj)) then
-    with Obj[aLogFont^.ihFont - 1] do
-    begin
-      kind := OBJ_FONT;
-      MoveFast(aLogFont^.elfw.elfLogFont, LogFont, SizeOf(LogFont));
-      LogFont.lfPitchAndFamily := tm.tmPitchAndFamily;
-      if LogFont.lfOrientation <> 0 then
-        FontSpec.angle := LogFont.lfOrientation div 10 // -360..+360
-      else
-        FontSpec.angle := LogFont.lfEscapement div 10;
-      FontSpec.ascent := tm.tmAscent;
-      FontSpec.descent := tm.tmDescent;
-      FontSpec.cell := tm.tmHeight - tm.tmInternalLeading;
-    end;
+  begin
+    Obj[aLogFont^.ihFont - 1].kind := OBJ_FONT;
+    MoveFast(aLogFont^.elfw.elfLogFont, Obj[aLogFont^.ihFont - 1].LogFont, SizeOf(Obj[aLogFont^.ihFont - 1].LogFont));
+    Obj[aLogFont^.ihFont - 1].LogFont.lfPitchAndFamily := tm.tmPitchAndFamily;
+    if Obj[aLogFont^.ihFont - 1].LogFont.lfOrientation <> 0 then
+      Obj[aLogFont^.ihFont - 1].FontSpec.angle := Obj[aLogFont^.ihFont - 1].LogFont.lfOrientation div 10 // -360..+360
+    else
+      Obj[aLogFont^.ihFont - 1].FontSpec.angle := Obj[aLogFont^.ihFont - 1].LogFont.lfEscapement div 10;
+    Obj[aLogFont^.ihFont - 1].FontSpec.ascent := tm.tmAscent;
+    Obj[aLogFont^.ihFont - 1].FontSpec.descent := tm.tmDescent;
+    Obj[aLogFont^.ihFont - 1].FontSpec.cell := tm.tmHeight - tm.tmInternalLeading;
+  end;
 end;
 
 procedure TPdfEnum.DrawBitmap(xs, ys, ws, hs, xd, yd, wd, hd, usage: integer;
@@ -2940,22 +2891,19 @@ begin
       bmp.TransparentColor := transparent;
     end;
     // draw the bitmap on the PDF canvas
-    with Canvas do
-    begin
-      R := TRect(Rect(xd, yd, wd + xd, hd + yd));
-      NormalizeRect(R);
-      inc(R.Bottom);
-      inc(R.Right);
-      box := BoxI(R, true);
-      clp := GetClipRect;
-      if (clp.Width > 0) and
-         (clp.Height > 0) then
-        CreateOrGetBitmapImage(Doc, bmp, @box, @clp) // use cliping
-      else
-        CreateOrGetBitmapImage(Doc, bmp, @box, nil);
-      // CreateOrGetBitmapImage() will reuse any matching TPdfImage
-      // don't send bmi and bits parameters here, because of StretchDIBits above
-    end;
+    R := TRect(Rect(xd, yd, wd + xd, hd + yd));
+    NormalizeRect(R);
+    inc(R.Bottom);
+    inc(R.Right);
+    box := Canvas.BoxI(R, true);
+    clp := GetClipRect;
+    if (clp.Width > 0) and
+       (clp.Height > 0) then
+      CreateOrGetBitmapImage(Canvas.Doc, bmp, @box, @clp) // use cliping
+    else
+      CreateOrGetBitmapImage(Canvas.Doc, bmp, @box, nil);
+    // CreateOrGetBitmapImage() will reuse any matching TPdfImage
+    // don't send bmi and bits parameters here, because of StretchDIBits above
   finally
     bmp.Free;
   end;
@@ -3000,40 +2948,32 @@ begin
           if data^.ulMode = GRADIENT_FILL_RECT_V then
             Direction := gdVertical; }
           for i := 1 to data^.nTri do
-            with r[i - 1] do
-            begin
-              pt1 := @vertex[UpperLeft];
-              pt2 := @vertex[LowerRight];
-              Canvas.MoveToI(pt1.X, pt1.Y);
-              Canvas.LineToI(pt1.X, pt2.Y);
-              Canvas.LineToI(pt2.X, pt2.Y);
-              Canvas.LineToI(pt2.X, pt1.Y);
-              Canvas.Closepath;
-              Canvas.Fill;
-            end;
+          begin
+            pt1 := @vertex[r[i - 1].UpperLeft];
+            pt2 := @vertex[r[i - 1].LowerRight];
+            Canvas.MoveToI(pt1.X, pt1.Y);
+            Canvas.LineToI(pt1.X, pt2.Y);
+            Canvas.LineToI(pt2.X, pt2.Y);
+            Canvas.LineToI(pt2.X, pt1.Y);
+            Canvas.Closepath;
+            Canvas.Fill;
+          end;
         end;
       GRADIENT_FILL_TRIANGLE:
         begin
           Canvas.NewPath;
           tri := @vertex[data^.nVer];
           for i := 1 to data^.nTri do
-            with tri[i - 1] do
-            begin
-              with vertex[Vertex1] do
-              begin
-                FillColor := RGBA(Red, Green, Blue, 0); // ignore Alpha
-                Canvas.MoveToI(X, Y);
-              end;
-              with vertex[Vertex2] do
-                Canvas.LineToI(X, Y);
-              with vertex[Vertex3] do
-                Canvas.LineToI(X, Y);
-              with vertex[Vertex1] do
-                Canvas.LineToI(X, Y);
-              // DC[nDC].Moved := Point(pt1.X, pt1.Y);
-              Canvas.Closepath;
-              Canvas.Fill;
-            end;
+          begin
+            FillColor := RGBA(vertex[tri[i - 1].Vertex1].Red, vertex[tri[i - 1].Vertex1].Green, vertex[tri[i - 1].Vertex1].Blue, 0); // ignore Alpha
+            Canvas.MoveToI(vertex[tri[i - 1].Vertex1].X, vertex[tri[i - 1].Vertex1].Y);
+            Canvas.LineToI(vertex[tri[i - 1].Vertex2].X, vertex[tri[i - 1].Vertex2].Y);
+            Canvas.LineToI(vertex[tri[i - 1].Vertex3].X, vertex[tri[i - 1].Vertex3].Y);
+            Canvas.LineToI(vertex[tri[i - 1].Vertex1].X, vertex[tri[i - 1].Vertex1].Y);
+            // DC[nDC].Moved := Point(pt1.X, pt1.Y);
+            Canvas.Closepath;
+            Canvas.Fill;
+          end;
         end;
     end;
   end;
@@ -3127,13 +3067,15 @@ begin
 end;
 
 procedure TPdfEnum.FillRectangle(const Rect: TRect; ResetNewPath: boolean);
+var
+  box: TPdfBox;
 begin
   if DC[nDC].brush.null then
     exit;
   Canvas.NewPath;
   FillColor := DC[nDC].brush.color;
-  with Canvas.BoxI(Rect, true) do
-    Canvas.Rectangle(Left, Top, Width, Height);
+  box := Canvas.BoxI(Rect, true);
+  Canvas.Rectangle(box.Left, box.Top, box.Width, box.Height);
   Canvas.Fill;
   if ResetNewPath then
     Canvas.fNewPath := false;
@@ -3141,97 +3083,90 @@ end;
 
 procedure TPdfEnum.FlushPenBrush;
 begin
-  with DC[nDC] do
+  if DC[nDC].brush.null then
   begin
-    if brush.null then
-    begin
-      if not pen.null then
-        Canvas.Stroke
-      else
-        Canvas.NewPath;
-    end
-    else if pen.null then
-      Canvas.Fill
+    if not DC[nDC].pen.null then
+      Canvas.Stroke
     else
-      Canvas.FillStroke;
-  end;
+      Canvas.NewPath;
+  end
+  else if DC[nDC].pen.null then
+    Canvas.Fill
+  else
+    Canvas.FillStroke;
 end;
 
 procedure TPdfEnum.SelectObjectFromIndex(iObject: integer);
 begin
-  with DC[nDC] do
-  begin
-    if iObject < 0 then
-    begin // stock object?
-      iObject := iObject and $7fffffff;
-      case iObject of
-        NULL_BRUSH:
-          brush.null := true;
-        WHITE_BRUSH..BLACK_BRUSH:
-          begin
-            brush.color := STOCKBRUSHCOLOR[iObject];
-            brush.null := false;
-          end;
-        NULL_PEN:
-          begin
-            if fInLined and
-               ((pen.style <> PS_NULL) or not pen.null) then
-            begin
-              fInLined := false;
-              if not pen.null then
-                Canvas.Stroke;
-            end;
-            pen.style := PS_NULL;
-            pen.null := true;
-          end;
-        WHITE_PEN,
-        BLACK_PEN:
-          begin
-            if fInLined and
-               ((pen.color <> STOCKPENCOLOR[iObject]) or not pen.null) then
-            begin
-              fInLined := false;
-              if not pen.null then
-                Canvas.Stroke;
-            end;
-            pen.color := STOCKPENCOLOR[iObject];
-            pen.null := false;
-          end;
-      end;
-    end
-    else if cardinal(iObject - 1) < cardinal(length(Obj)) then // avoid GPF
-      with Obj[iObject - 1] do
-        case Kind of // ignore any invalid reference
-          OBJ_PEN:
-            begin
-              if fInLined and
-                 ((pen.color <> PenColor) or
-                  (pen.width <> PenWidth) or
-                  (pen.style <> PenStyle)) then
-              begin
-                fInLined := false;
-                if not pen.null then
-                  Canvas.Stroke;
-              end;
-              pen.null := (PenWidth < 0) or
-                          (PenStyle = PS_NULL); // !! 0 means as thick as possible
-              pen.color := PenColor;
-              pen.width := PenWidth;
-              pen.style := PenStyle;
-            end;
-          OBJ_BRUSH:
-            begin
-              brush.null := BrushNull;
-              brush.color := BrushColor;
-              brush.style := BrushStyle;
-            end;
-          OBJ_FONT:
-            begin
-              Font.spec := FontSpec;
-              MoveFast(LogFont, Font.LogFont, SizeOf(LogFont));
-            end;
+  if iObject < 0 then
+  begin // stock object?
+    iObject := iObject and $7fffffff;
+    case iObject of
+      NULL_BRUSH:
+        DC[nDC].brush.null := true;
+      WHITE_BRUSH..BLACK_BRUSH:
+        begin
+          DC[nDC].brush.color := STOCKBRUSHCOLOR[iObject];
+          DC[nDC].brush.null := false;
         end;
-  end;
+      NULL_PEN:
+        begin
+          if fInLined and
+             ((DC[nDC].pen.style <> PS_NULL) or not DC[nDC].pen.null) then
+          begin
+            fInLined := false;
+            if not DC[nDC].pen.null then
+              Canvas.Stroke;
+          end;
+          DC[nDC].pen.style := PS_NULL;
+          DC[nDC].pen.null := true;
+        end;
+      WHITE_PEN,
+      BLACK_PEN:
+        begin
+          if fInLined and
+             ((DC[nDC].pen.color <> STOCKPENCOLOR[iObject]) or not DC[nDC].pen.null) then
+          begin
+            fInLined := false;
+            if not DC[nDC].pen.null then
+              Canvas.Stroke;
+          end;
+          DC[nDC].pen.color := STOCKPENCOLOR[iObject];
+          DC[nDC].pen.null := false;
+        end;
+    end;
+  end
+  else if cardinal(iObject - 1) < cardinal(length(Obj)) then // avoid GPF
+    case Obj[iObject - 1].Kind of // ignore any invalid reference
+      OBJ_PEN:
+        begin
+          if fInLined and
+             ((DC[nDC].pen.color <> Obj[iObject - 1].PenColor) or
+              (DC[nDC].pen.width <> Obj[iObject - 1].PenWidth) or
+              (DC[nDC].pen.style <> Obj[iObject - 1].PenStyle)) then
+          begin
+            fInLined := false;
+            if not DC[nDC].pen.null then
+              Canvas.Stroke;
+          end;
+          DC[nDC].pen.null := (Obj[iObject - 1].PenWidth < 0) or
+                      (Obj[iObject - 1].PenStyle = PS_NULL); // !! 0 means as thick as possible
+          DC[nDC].pen.color := Obj[iObject - 1].PenColor;
+          DC[nDC].pen.width := Obj[iObject - 1].PenWidth;
+          DC[nDC].pen.style := Obj[iObject - 1].PenStyle;
+        end;
+      OBJ_BRUSH:
+        begin
+          DC[nDC].brush.null := Obj[iObject - 1].BrushNull;
+          DC[nDC].brush.color := Obj[iObject - 1].BrushColor;
+          DC[nDC].brush.style := Obj[iObject - 1].BrushStyle;
+        end;
+      OBJ_FONT:
+        begin
+          DC[nDC].Font.spec := Obj[iObject - 1].FontSpec;
+          MoveFast(Obj[iObject - 1].LogFont, DC[nDC].Font.LogFont, SizeOf(Obj[iObject - 1].LogFont));
+        end;
+    end;
 end;
 
 procedure TPdfEnum.HandleComment(Kind: TPdfGdiComment; P: PAnsiChar; Len: integer);
@@ -3301,57 +3236,55 @@ begin
     Canvas.Stroke;
   end;
   NeedPen;
-  with DC[nDC] do
-    if not brush.null then
-      FillColor := brush.color;
+  if not DC[nDC].brush.null then
+    FillColor := DC[nDC].brush.color;
 end;
 
 procedure TPdfEnum.NeedPen;
 begin
-  with DC[nDC] do
-    if not pen.null then
+  if not DC[nDC].pen.null then
+  begin
+    StrokeColor := DC[nDC].pen.color;
+    if DC[nDC].pen.style <> fPenStyle then
     begin
-      StrokeColor := pen.color;
-      if pen.style <> fPenStyle then
-      begin
-        case pen.style and PS_STYLE_MASK of
-          PS_DASH:
-            Canvas.SetDash([4, 4]);
-          PS_DOT:
-            Canvas.SetDash([1, 1]);
-          PS_DASHDOT:
-            Canvas.SetDash([4, 1, 1, 1]);
-          PS_DASHDOTDOT:
-            Canvas.SetDash([4, 1, 1, 1, 1, 1]);
-        else
-          Canvas.SetDash([]);
-        end;
-        case Pen.style and PS_ENDCAP_MASK of
-          PS_ENDCAP_ROUND:
-            Canvas.SetLineCap(lcRound_End);
-          PS_ENDCAP_SQUARE:
-            Canvas.SetLineCap(lcProjectingSquareEnd);
-          PS_ENDCAP_FLAT:
-            Canvas.SetLineCap(lcButt_End);
-        end;
-        fPenStyle := pen.style;
+      case DC[nDC].pen.style and PS_STYLE_MASK of
+        PS_DASH:
+          Canvas.SetDash([4, 4]);
+        PS_DOT:
+          Canvas.SetDash([1, 1]);
+        PS_DASHDOT:
+          Canvas.SetDash([4, 1, 1, 1]);
+        PS_DASHDOTDOT:
+          Canvas.SetDash([4, 1, 1, 1, 1, 1]);
+      else
+        Canvas.SetDash([]);
       end;
-      if pen.width * Canvas.fWorldFactorX * Canvas.fDevScaleX <> fPenWidth then
-      begin
-        if pen.width = 0 then
-          fPenWidth := Canvas.fWorldFactorX * Canvas.fDevScaleX
-        else
-          fPenWidth := pen.width * Canvas.fWorldFactorX * Canvas.fDevScaleX;
-        Canvas.SetLineWidth(fPenWidth * Canvas.fFactorX);
+      case DC[nDC].Pen.style and PS_ENDCAP_MASK of
+        PS_ENDCAP_ROUND:
+          Canvas.SetLineCap(lcRound_End);
+        PS_ENDCAP_SQUARE:
+          Canvas.SetLineCap(lcProjectingSquareEnd);
+        PS_ENDCAP_FLAT:
+          Canvas.SetLineCap(lcButt_End);
       end;
-    end
-    else
-    begin
-      // pen.null need reset values
-      fStrokeColor := -1;
-      fPenWidth := -1;
-      fPenStyle := -1;
+      fPenStyle := DC[nDC].pen.style;
     end;
+    if DC[nDC].pen.width * Canvas.fWorldFactorX * Canvas.fDevScaleX <> fPenWidth then
+    begin
+      if DC[nDC].pen.width = 0 then
+        fPenWidth := Canvas.fWorldFactorX * Canvas.fDevScaleX
+      else
+        fPenWidth := DC[nDC].pen.width * Canvas.fWorldFactorX * Canvas.fDevScaleX;
+      Canvas.SetLineWidth(fPenWidth * Canvas.fFactorX);
+    end;
+  end
+  else
+  begin
+    // pen.null need reset values
+    fStrokeColor := -1;
+    fPenWidth := -1;
+    fPenStyle := -1;
+  end;
 end;
 
 procedure TPdfEnum.RestoreDC;
@@ -3379,142 +3312,139 @@ begin
     if not DC[nDC].pen.null then
       Canvas.Stroke;
   end;
-  with DC[nDC], Canvas do
-  begin
-    fViewSize := ViewSize;
-    fViewOrg := ViewOrg;
-    fWinSize := WinSize;
-    fWinOrg := WinOrg;
-    case MappingMode of
-      MM_TEXT:
-        begin
-          fViewSize.cx := 1;
-          fViewSize.cy := 1;
-          fWinSize.cx := 1;
-          fWinSize.cy := 1;
-        end;
-      MM_LOMETRIC:
-        begin
-          fViewSize.cx := fPrinterPxPerInch.X;
-          fViewSize.cy := -fPrinterPxPerInch.Y;
-          fWinSize.cx := WinSize.cx * 10;
-          fWinSize.cy := WinSize.cy * 10;
-        end;
-      MM_HIMETRIC:
-        begin
-          fViewSize.cx := fPrinterPxPerInch.X;
-          fViewSize.cy := -fPrinterPxPerInch.Y;
-          fWinSize.cx := WinSize.cx * 100;
-          fWinSize.cy := WinSize.cy * 100;
-        end;
-      MM_LOENGLISH:
-        begin
-          fViewSize.cx := fPrinterPxPerInch.X;
-          fViewSize.cy := -fPrinterPxPerInch.Y;
-          fWinSize.cx := MulDiv(1000, WinSize.cx, 254);
-          fWinSize.cy := MulDiv(1000, WinSize.cy, 254);
-        end;
-      MM_HIENGLISH:
-        begin
-          fViewSize.cx := fPrinterPxPerInch.X;
-          fViewSize.cy := -fPrinterPxPerInch.Y;
-          fWinSize.cx := MulDiv(10000, WinSize.cx, 254);
-          fWinSize.cy := MulDiv(10000, WinSize.cy, 254);
-        end;
-      MM_TWIPS:
-        begin
-          fViewSize.cx := fPrinterPxPerInch.X;
-          fViewSize.cy := -fPrinterPxPerInch.Y;
-          fWinSize.cx := MulDiv(14400, WinSize.cx, 254);
-          fWinSize.cy := MulDiv(14400, WinSize.cy, 254);
-        end;
-      MM_ISOTROPIC:
-        begin
-          fViewSize.cx := fPrinterPxPerInch.X;
-          fViewSize.cy := -fPrinterPxPerInch.Y;
-          fWinSize.cx := WinSize.cx * 10;
-          fWinSize.cy := WinSize.cy * 10;
-          xdim := abs(fViewSize.cx * WinSize.cx / (fPrinterPxPerInch.X * fWinSize.cx));
-          ydim := abs(fViewSize.cy * WinSize.cy / (fPrinterPxPerInch.Y * fWinSize.cy));
-          if xdim > ydim then
-          begin
-            if fViewSize.cx >= 0 then
-              mx := 1
-            else
-              mx := -1;
-            fViewSize.cx := trunc(fViewSize.cx * ydim / xdim + 0.5);
-            if fViewSize.cx = 0 then
-              fViewSize.cx := mx;
-          end
-          else
-          begin
-            if fViewSize.cy >= 0 then
-              my := 1
-            else
-              my := -1;
-            fViewSize.cy := trunc(fViewSize.cy * xdim / ydim + 0.5);
-            if fViewSize.cy = 0 then
-              fViewSize.cy := my;
-          end;
-        end;
-      MM_ANISOTROPIC:
-        ;  // TBD
-    end;
-    if fWinSize.cx = 0 then // avoid EZeroDivide
-      fFactorX := 1.0
-    else
-      fFactorX := abs(fViewSize.cx / fWinSize.cx);
-    if fWinSize.cy = 0 then // avoid EZeroDivide
-      fFactorY := 1.0
-    else
-      fFactorY := abs(fViewSize.cy / fWinSize.cy);
-    if Custom <> nil then
-    begin
-      // S.eM11=fFactorX S.eM12=0 S.eM21=0 S.eM22=fFactorY multiplied by Custom^
-      case iMode of
-        MWT_IDENTITY: // reset identity matrix
-          WorldTransform := DefaultIdentityMatrix;
-        MWT_LEFTMULTIPLY:
-          WorldTransform := CombineTransform(Custom^, WorldTransform);
-        MWT_RIGHTMULTIPLY:
-          WorldTransform := CombineTransform(WorldTransform, Custom^);
-        MWT_SET:
-          WorldTransform := Custom^;
+  Canvas.fViewSize := DC[nDC].ViewSize;
+  Canvas.fViewOrg := DC[nDC].ViewOrg;
+  Canvas.fWinSize := DC[nDC].WinSize;
+  Canvas.fWinOrg := DC[nDC].WinOrg;
+  case DC[nDC].MappingMode of
+    MM_TEXT:
+      begin
+        Canvas.fViewSize.cx := 1;
+        Canvas.fViewSize.cy := 1;
+        Canvas.fWinSize.cx := 1;
+        Canvas.fWinSize.cy := 1;
       end;
+    MM_LOMETRIC:
+      begin
+        Canvas.fViewSize.cx := Canvas.fPrinterPxPerInch.X;
+        Canvas.fViewSize.cy := -Canvas.fPrinterPxPerInch.Y;
+        Canvas.fWinSize.cx := DC[nDC].WinSize.cx * 10;
+        Canvas.fWinSize.cy := DC[nDC].WinSize.cy * 10;
+      end;
+    MM_HIMETRIC:
+      begin
+        Canvas.fViewSize.cx := Canvas.fPrinterPxPerInch.X;
+        Canvas.fViewSize.cy := -Canvas.fPrinterPxPerInch.Y;
+        Canvas.fWinSize.cx := DC[nDC].WinSize.cx * 100;
+        Canvas.fWinSize.cy := DC[nDC].WinSize.cy * 100;
+      end;
+    MM_LOENGLISH:
+      begin
+        Canvas.fViewSize.cx := Canvas.fPrinterPxPerInch.X;
+        Canvas.fViewSize.cy := -Canvas.fPrinterPxPerInch.Y;
+        Canvas.fWinSize.cx := MulDiv(1000, DC[nDC].WinSize.cx, 254);
+        Canvas.fWinSize.cy := MulDiv(1000, DC[nDC].WinSize.cy, 254);
+      end;
+    MM_HIENGLISH:
+      begin
+        Canvas.fViewSize.cx := Canvas.fPrinterPxPerInch.X;
+        Canvas.fViewSize.cy := -Canvas.fPrinterPxPerInch.Y;
+        Canvas.fWinSize.cx := MulDiv(10000, DC[nDC].WinSize.cx, 254);
+        Canvas.fWinSize.cy := MulDiv(10000, DC[nDC].WinSize.cy, 254);
+      end;
+    MM_TWIPS:
+      begin
+        Canvas.fViewSize.cx := Canvas.fPrinterPxPerInch.X;
+        Canvas.fViewSize.cy := -Canvas.fPrinterPxPerInch.Y;
+        Canvas.fWinSize.cx := MulDiv(14400, DC[nDC].WinSize.cx, 254);
+        Canvas.fWinSize.cy := MulDiv(14400, DC[nDC].WinSize.cy, 254);
+      end;
+    MM_ISOTROPIC:
+      begin
+        Canvas.fViewSize.cx := Canvas.fPrinterPxPerInch.X;
+        Canvas.fViewSize.cy := -Canvas.fPrinterPxPerInch.Y;
+        Canvas.fWinSize.cx := DC[nDC].WinSize.cx * 10;
+        Canvas.fWinSize.cy := DC[nDC].WinSize.cy * 10;
+        xdim := abs(Canvas.fViewSize.cx * DC[nDC].WinSize.cx / (Canvas.fPrinterPxPerInch.X * Canvas.fWinSize.cx));
+        ydim := abs(Canvas.fViewSize.cy * DC[nDC].WinSize.cy / (Canvas.fPrinterPxPerInch.Y * Canvas.fWinSize.cy));
+        if xdim > ydim then
+        begin
+          if Canvas.fViewSize.cx >= 0 then
+            mx := 1
+          else
+            mx := -1;
+          Canvas.fViewSize.cx := trunc(Canvas.fViewSize.cx * ydim / xdim + 0.5);
+          if Canvas.fViewSize.cx = 0 then
+            Canvas.fViewSize.cx := mx;
+        end
+        else
+        begin
+          if Canvas.fViewSize.cy >= 0 then
+            my := 1
+          else
+            my := -1;
+          Canvas.fViewSize.cy := trunc(Canvas.fViewSize.cy * xdim / ydim + 0.5);
+          if Canvas.fViewSize.cy = 0 then
+            Canvas.fViewSize.cy := my;
+        end;
+      end;
+    MM_ANISOTROPIC:
+      ;  // TBD
+  end;
+  if Canvas.fWinSize.cx = 0 then // avoid EZeroDivide
+    Canvas.fFactorX := 1.0
+  else
+    Canvas.fFactorX := abs(Canvas.fViewSize.cx / Canvas.fWinSize.cx);
+  if Canvas.fWinSize.cy = 0 then // avoid EZeroDivide
+    Canvas.fFactorY := 1.0
+  else
+    Canvas.fFactorY := abs(Canvas.fViewSize.cy / Canvas.fWinSize.cy);
+  if Custom <> nil then
+  begin
+    // S.eM11=fFactorX S.eM12=0 S.eM21=0 S.eM22=fFactorY multiplied by Custom^
+    case iMode of
+      MWT_IDENTITY: // reset identity matrix
+        DC[nDC].WorldTransform := DefaultIdentityMatrix;
+      MWT_LEFTMULTIPLY:
+        DC[nDC].WorldTransform := CombineTransform(Custom^, DC[nDC].WorldTransform);
+      MWT_RIGHTMULTIPLY:
+        DC[nDC].WorldTransform := CombineTransform(DC[nDC].WorldTransform, Custom^);
+      MWT_SET:
+        DC[nDC].WorldTransform := Custom^;
     end;
-    // use transformation
-    xf := WorldTransform;
-    if (xf.eM11 > 0) and
-       (xf.eM22 > 0) and
-       (xf.eM12 = 0) and
-       (xf.eM21 = 0) then
-    begin // Scale
-      fWorldFactorX := xf.eM11;
-      fWorldFactorY := xf.eM22;
-      fWorldOffsetX := WorldTransform.eDx;
-      fWorldOffsetY := WorldTransform.eDy;
-    end
-    else if (xf.eM22 = xf.eM11) and
-            (xf.eM21 = -xf.eM12) then
-    begin // Rotate
-      fAngle := ArcSin(xf.eM12) * c180divPI;
-      fWorldOffsetCos := xf.eM11;
-      fWorldOffsetSin := xf.eM12;
-    end
-    else if (xf.eM11 = 0) and
-            (xf.eM22 = 0) and
-            ((xf.eM12 <> 0) or
-             (xf.eM21 <> 0)) then
-    begin //Shear
+  end;
+  // use transformation
+  xf := DC[nDC].WorldTransform;
+  if (xf.eM11 > 0) and
+     (xf.eM22 > 0) and
+     (xf.eM12 = 0) and
+     (xf.eM21 = 0) then
+  begin // Scale
+    Canvas.fWorldFactorX := xf.eM11;
+    Canvas.fWorldFactorY := xf.eM22;
+    Canvas.fWorldOffsetX := DC[nDC].WorldTransform.eDx;
+    Canvas.fWorldOffsetY := DC[nDC].WorldTransform.eDy;
+  end
+  else if (xf.eM22 = xf.eM11) and
+          (xf.eM21 = -xf.eM12) then
+  begin // Rotate
+    Canvas.fAngle := ArcSin(xf.eM12) * c180divPI;
+    Canvas.fWorldOffsetCos := xf.eM11;
+    Canvas.fWorldOffsetSin := xf.eM12;
+  end
+  else if (xf.eM11 = 0) and
+          (xf.eM22 = 0) and
+          ((xf.eM12 <> 0) or
+           (xf.eM21 <> 0)) then
+  begin //Shear
 
-    end
-    else if ((xf.eM11 < 0) or
-             (xf.eM22 < 0)) and
-            (xf.eM12 = 0) and
-            (xf.eM21 = 0) then
-    begin //Reflection
+  end
+  else if ((xf.eM11 < 0) or
+           (xf.eM22 < 0)) and
+          (xf.eM12 = 0) and
+          (xf.eM21 = 0) then
+  begin //Reflection
 
-    end;
   end;
 end;
 
@@ -3528,13 +3458,12 @@ end;
 procedure TPdfEnum.SetMetaRgn;
 begin
   try
-    with DC[nDC] do
-      if not ClipRgnNull then
-      begin
-        MetaRgn := IntersectClipRect(ClipRgn, MetaRgn);
-        FillCharFast(ClipRgn, SizeOf(ClipRgn), 0);
-        ClipRgnNull := true;
-      end;
+    if not DC[nDC].ClipRgnNull then
+    begin
+      DC[nDC].MetaRgn := IntersectClipRect(DC[nDC].ClipRgn, DC[nDC].MetaRgn);
+      FillCharFast(DC[nDC].ClipRgn, SizeOf(DC[nDC].ClipRgn), 0);
+      DC[nDC].ClipRgnNull := true;
+    end;
   except
     on e: Exception do
       ; // ignore any error (continue EMF enumeration)
@@ -3566,6 +3495,7 @@ end;
 
 procedure TPdfEnum.ExtSelectClipRgn(data: PEMRExtSelectClipRgn);
 var
+  box: TPdfBox;
   i: integer;
   d: PRgnData;
   pr: PRect;
@@ -3594,8 +3524,8 @@ begin
       r := pr^;
       inc(r.Bottom);
       inc(r.Right);
-      with Canvas.BoxI(r, false) do
-        Canvas.Rectangle(Left, Top, Width, Height);
+      box := Canvas.BoxI(r, false);
+      Canvas.Rectangle(box.Left, box.Top, box.Width, box.Height);
       inc(pr);
     end;
     Canvas.Closepath;
@@ -3607,11 +3537,10 @@ end;
 
 function TPdfEnum.GetClipRect: TPdfBox;
 begin // get current clip area
-  with DC[nDC] do
-    if ClipRgnNull then
-      result := MetaRgn
-    else
-      result := ClipRgn;
+  if DC[nDC].ClipRgnNull then
+    result := DC[nDC].MetaRgn
+  else
+    result := DC[nDC].ClipRgn;
 end;
 
 procedure TPdfEnum.SetFillColor(Value: integer);
@@ -3664,345 +3593,338 @@ var
   var
     tmp: TPdfEnumStatePen;
   begin
-    with DC[nDC] do
+    tmp := DC[nDC].Pen;
+    DC[nDC].pen.color := DC[nDC].Font.color;
+    DC[nDC].pen.width := ss / (fscaleY * 15);
+    DC[nDC].pen.style := PS_SOLID;
+    DC[nDC].pen.null := false;
+    NeedPen;
+    if DC[nDC].Font.spec.angle = 0 then
     begin
-      tmp := Pen;
-      pen.color := Font.color;
-      pen.width := ss / (fscaleY * 15);
-      pen.style := PS_SOLID;
-      pen.null := false;
-      NeedPen;
-      if Font.spec.angle = 0 then
-      begin
-        // P = textout original coords
-        // (-w,-h) = delta to text start pos (at baseline)
-        // ww = text width
-        // aH = delta h for drawed line (from baseline)
-        Canvas.MoveToS(P.X - w, (P.Y - (h - aH)));
-        //  deltax := -w     deltaY := (-h+aH)
-        Canvas.LineToS(P.X - w + ww, (P.Y - (h - aH)));
-        //  deltax := -w+ww  deltaY := (-h+aH)
-      end
-      else
-      begin
-        // rotation pattern:
-        //   rdx = deltax * acos + deltay * asin
-        //   rdy = deltay * acos - deltax * asin
-        Canvas.MoveToS(P.X + ((-w) * acos + (-h + aH) * asin),
-                       P.Y + ((-h + aH) * acos - (-w) * asin));
-        Canvas.LineToS(P.X + ((-w + ww) * acos + (-h + aH) * asin),
-                       P.Y + ((-h + aH) * acos - (-w + ww) * asin));
-      end;
-      Canvas.Stroke;
-      Pen := tmp;
-      NeedPen;
+      // P = textout original coords
+      // (-w,-h) = delta to text start pos (at baseline)
+      // ww = text width
+      // aH = delta h for drawed line (from baseline)
+      Canvas.MoveToS(P.X - w, (P.Y - (h - aH)));
+      //  deltax := -w     deltaY := (-h+aH)
+      Canvas.LineToS(P.X - w + ww, (P.Y - (h - aH)));
+      //  deltax := -w+ww  deltaY := (-h+aH)
+    end
+    else
+    begin
+      // rotation pattern:
+      //   rdx = deltax * acos + deltay * asin
+      //   rdy = deltay * acos - deltax * asin
+      Canvas.MoveToS(P.X + ((-w) * acos + (-h + aH) * asin),
+                     P.Y + ((-h + aH) * acos - (-w) * asin));
+      Canvas.LineToS(P.X + ((-w + ww) * acos + (-h + aH) * asin),
+                     P.Y + ((-h + aH) * acos - (-w + ww) * asin));
     end;
+    Canvas.Stroke;
+    DC[nDC].Pen := tmp;
+    NeedPen;
   end;
 
 begin
   if R.emrtext.nChars > 0 then
-    with DC[nDC] do
+  begin
+    SetLength(tmp, R.emrtext.nChars + 1); // faster than WideString for our purpose
+    MoveFast(pointer(PtrUInt(@R) + R.emrtext.offString)^, tmp[0], R.emrtext.nChars * 2);
+    sy := 1;
+    sx := 1;
+    if (Canvas.fWorldFactorY) < 0 then
+      sy := -1;
+    if (Canvas.fWorldFactorX) < 0 then
+      sx := -1;
+    fscaleY := abs(Canvas.fFactorY * Canvas.fWorldFactorY * Canvas.fDevScaleY);
+    fscaleX := abs(Canvas.fFactorX * Canvas.fWorldFactorX * Canvas.fDevScaleX);
+    // guess the font size
+    if DC[nDC].Font.LogFont.lfHeight < 0 then
+      ss := abs(DC[nDC].Font.LogFont.lfHeight) * fscaleY
+    else
+      ss := abs(DC[nDC].Font.spec.cell) * fscaleY;
+    // ensure this font is selected (very fast if was already selected)
+    {$ifdef USE_UNISCRIBE}fnt :={$endif} Canvas.SetFont(TPdfDocumentAccess(Canvas.fDoc).EmfDC, DC[nDC].Font.LogFont, ss);
+    // calculate coordinates
+    po := Canvas.fUseMetaFileTextPositioning;
+    if (R.emrtext.fOptions and ETO_GLYPH_INDEX <> 0) then
+      mw := 0
+    else
     begin
-      SetLength(tmp, R.emrtext.nChars + 1); // faster than WideString for our purpose
-      MoveFast(pointer(PtrUInt(@R) + R.emrtext.offString)^, tmp[0], R.emrtext.nChars * 2);
-      sy := 1;
-      sx := 1;
-      if (Canvas.fWorldFactorY) < 0 then
-        sy := -1;
-      if (Canvas.fWorldFactorX) < 0 then
-        sx := -1;
-      fscaleY := abs(Canvas.fFactorY * Canvas.fWorldFactorY * Canvas.fDevScaleY);
-      fscaleX := abs(Canvas.fFactorX * Canvas.fWorldFactorX * Canvas.fDevScaleX);
-      // guess the font size
-      if Font.LogFont.lfHeight < 0 then
-        ss := abs(Font.LogFont.lfHeight) * fscaleY
-      else
-        ss := abs(Font.spec.cell) * fscaleY;
-      // ensure this font is selected (very fast if was already selected)
-      {$ifdef USE_UNISCRIBE}fnt :={$endif} Canvas.SetFont(TPdfDocumentAccess(Canvas.fDoc).EmfDC, Font.LogFont, ss);
-      // calculate coordinates
-      po := Canvas.fUseMetaFileTextPositioning;
-      if (R.emrtext.fOptions and ETO_GLYPH_INDEX <> 0) then
-        mw := 0
-      else
-      begin
-        ws := 0;
-        {$ifdef USE_UNISCRIBE}
-        if Assigned(fnt) and Canvas.fDoc.UseUniScribe and
-           fnt.InheritsFrom(TPdfFontTrueType) then
-        begin
-          // the face's HFONT, selected for this measure only
-          dest := TPdfDocumentAccess(Canvas.fDoc).EmfDC;
-          old := SelectObject(dest,
-            HGDIOBJ(TPdfFontTrueTypeAccess(fnt).fFace.Handle));
-          if GetTextExtentPoint32W(dest, pointer(tmp), R.emrtext.nChars, siz) then
-            ws := (siz.cX * Canvas.fPage.FontSize) / 1000;
-          SelectObject(dest, old);
-        end;
-        {$endif USE_UNISCRIBE}
-        if ws = 0 then
-          ws := Canvas.UnicodeTextWidth(pointer(tmp));
-        mw := round(ws / fscaleX);
-      end;
-      hasdx := R.emrtext.offDx > 0;
+      ws := 0;
       {$ifdef USE_UNISCRIBE}
-      if Canvas.fDoc.UseUniScribe then
-        hasdx := hasdx and (R.emrtext.fOptions and ETO_GLYPH_INDEX <> 0);
+      if Assigned(fnt) and Canvas.fDoc.UseUniScribe and
+         fnt.InheritsFrom(TPdfFontTrueType) then
+      begin
+        // the face's HFONT, selected for this measure only
+        dest := TPdfDocumentAccess(Canvas.fDoc).EmfDC;
+        old := SelectObject(dest,
+          HGDIOBJ(TPdfFontTrueTypeAccess(fnt).fFace.Handle));
+        if GetTextExtentPoint32W(dest, pointer(tmp), R.emrtext.nChars, siz) then
+          ws := (siz.cX * Canvas.fPage.FontSize) / 1000;
+        SelectObject(dest, old);
+      end;
       {$endif USE_UNISCRIBE}
-      if hasdx then
-      begin
-        dx := pointer(PtrUInt(@R) + R.emrtext.offDx);
-        w := DXTextWidth(dx, R.emrText.nChars);
-        if w < trunc((R.rclBounds.Right - R.rclBounds.Left) / Canvas.fFactorX) then
-          dx := nil; // offDX=0 or within box
-      end
-      else
-        dx := nil;
-      if dx = nil then
-      begin
-        w := mw;
-        if po = tpExactTextCharacterPositining then
-          po := tpSetTextJustification; // exact position expects dx
-      end;
-      nspace := 0;
-      hscale := 100;
-      if mw <> 0 then
-      begin
-        for i := 0 to R.emrtext.nChars - 1 do
-          if tmp[i] = ' ' then
-            inc(nspace);
-        if (po = tpSetTextJustification) and
-           ((nspace = 0) or (({%H-}w - mw) < nspace)) then
-          po := tpKerningFromAveragePosition;
-        if (po = tpExactTextCharacterPositining) and
-           (Font.spec.angle <> 0) then
-          po := tpKerningFromAveragePosition;
-        case po of
-          tpSetTextJustification:
-            // we should have had a SetTextJustification() call -> modify word space
-            with Canvas do
-              SetWordSpace(((w - mw) * fscaleX) / nspace);
-          tpKerningFromAveragePosition:
-            begin
-              // check if dx[] width differs from PDF width
-              hscale := (w * 100) / mw;
-              // implement some global kerning if needed (allow hysteresis around 100%)
-              if (hscale < Canvas.fKerningHScaleBottom) or
-                 (hscale > Canvas.fKerningHScaleTop) then
-                if Font.spec.angle = 0 then
-                  Canvas.SetHorizontalScaling(hscale)
-                else
-                  hscale := 100
-              else
-                hscale := 100;
-            end;
-        end;
-      end
-      else
-        po := tpSetTextJustification;
-      ww := w;                                    // right x
-      // h Align Mask = TA_CENTER or TA_RIGHT or TA_LEFT = TA_CENTER
-      if (Font.Align and TA_CENTER) = TA_CENTER then
-        w := w / 2  // center x
-      else if (Font.Align and TA_CENTER) = TA_LEFT then
-        w := 0;     // left x
-      // V Align mask = TA_BASELINE or TA_BOTTOM or TA_TOP = TA_BASELINE
-      if (Font.Align and TA_BASELINE) = TA_BASELINE then
-      // always zero ?
-        h := abs(Font.LogFont.lfHeight) - abs(Font.spec.cell)  // center y
-      else if (Font.Align and TA_BASELINE) = TA_BOTTOM then
-        h := abs(Font.spec.descent)  // bottom y
-      else
-        // needs - vertical coords of baseline from top
-        h := -abs(Font.spec.ascent); // top
-      if sy < 0 then // inverted coordinates
-        h := abs(Font.LogFont.lfHeight) + h;
-      if sx < 0 then
-        w := w + ww;
-      if (Font.align and TA_UPDATECP) = TA_UPDATECP then
-        posi := position
-      else
-        posi := R.emrtext.ptlReference;
-      // detect clipping
-      if Canvas.fUseMetaFileTextClipping <> tcNeverClip then
-      begin
-        with R.emrtext.rcl do
-          clipped := (Right > Left) and (Bottom > Top);
-        if clipped then
-          clip := Canvas.BoxI(TRect(R.emrtext.rcl), true)
-        else
-        begin
-          if Canvas.fUseMetaFileTextClipping = tcClipExplicit then
-            with R.rclBounds do
-              clipped := (Right > Left) and (Bottom > Top);
-          if clipped then
-            clip := Canvas.BoxI(TRect(R.rclBounds), true)
-          else
-          begin
-            clipped := not ClipRgnNull and
-                        (Canvas.fUseMetaFileTextClipping = tcAlwaysClip);
-            if clipped then
-              clip := GetClipRect;
-          end;
-        end;
-      end
-      else
-        clipped := false;
-      isopaque := not brush.null and
-                 (brush.Color <> clWhite) and
-                 ((R.emrtext.fOptions and ETO_OPAQUE <> 0) or
-                  ((Font.BkMode = OPAQUE) and
-                   (Font.BkColor = brush.color)));
-      if isopaque then
-        if clipped then
-          back := TRect(R.emrtext.rcl)
-        else
-        begin
-          back.TopLeft := posi;
-          back.BottomRight := posi;
-          inc(back.Right, trunc(ww));
-          inc(back.Bottom, abs(Font.LogFont.lfHeight));
-        end;
-      NormalizeRect(back);
-      if clipped then
-      begin
-        Canvas.GSave;
-        Canvas.NewPath;
-        Canvas.Rectangle({%H-}clip.Left, {%H-}clip.Top,
-          {%H-}clip.Width, {%H-}clip.Height);
-        Canvas.ClosePath;
-        Canvas.Clip;
-        if isopaque then
-        begin
-          FillRectangle(back, false);
-          isopaque := false; //do not handle more
-        end
-        else
-          Canvas.NewPath;
-        Canvas.fNewPath := false;
-      end;
-      // draw background (if any)
-      if isopaque then
-        // don't handle BkMode, since global to the page, but only specific text
-        // don't handle rotation here, since should not be used much
-        FillRectangle(back, true);
-      // draw text
-      FillColor := Font.color;
-      {$ifdef USE_UNISCRIBE}
-      Canvas.RightToLeftText := (R.emrtext.fOptions and ETO_RTLREADING) <> 0;
-      {$endif USE_UNISCRIBE}
-      Canvas.BeginText;
-      if Font.spec.angle <> 0 then
-      begin
-        a := Font.spec.angle * cPIdiv180;
-        acos := cos(a);
-        asin := sin(a);
-        xs := 0;
-        ys := 0;
-        Canvas.SetTextMatrix(acos, asin, -asin, acos,
-          Canvas.I2X(posi.X - round(w * acos + h * asin)),
-          Canvas.I2Y(posi.Y - round(h * acos - w * asin)));
-      end
-      else if (WorldTransform.eM11 = WorldTransform.eM22) and
-              (WorldTransform.eM12 = -WorldTransform.eM21) and
-              not SameValue(ArcCos(WorldTransform.eM11), 0, 0.0001) then
-      begin
-        xs := 0;
-        ys := 0;
-        if SameValue(ArcCos(WorldTransform.eM11), 0, 0.0001) or      // 0 grad
-           SameValue(ArcCos(WorldTransform.eM11), cPI, 0.0001) then  // 180 grad
-          Canvas.SetTextMatrix(WorldTransform.eM11, WorldTransform.eM12,
-            WorldTransform.eM21, WorldTransform.eM22,
-            Canvas.S2X(posi.X * WorldTransform.eM11 +
-              posi.Y * WorldTransform.eM21 + WorldTransform.eDx),
-            Canvas.S2Y(posi.X * WorldTransform.eM12 +
-              posi.Y * WorldTransform.eM22 + WorldTransform.eDy))
-        else
-          Canvas.SetTextMatrix(-WorldTransform.eM11, -WorldTransform.eM12, -
-            WorldTransform.eM21, -WorldTransform.eM22,
-            Canvas.S2X(posi.X * WorldTransform.eM11 +
-              posi.Y * WorldTransform.eM21 + WorldTransform.eDx),
-            Canvas.S2Y(posi.X * WorldTransform.eM12 +
-              posi.Y * WorldTransform.eM22 + WorldTransform.eDy));
-      end
-      else
-      begin
-        acos := 0;
-        asin := 0;
-        if Canvas.fViewSize.cx > 0 then
-          xs := posi.X - w   // zero point left
-        else
-          xs := posi.X + w;  // right
-        if Canvas.fViewSize.cy > 0 then
-          ys := posi.Y - h   // zero point beyond
-        else
-          ys := posi.Y + h;  // above
-        Canvas.MoveTextPoint(Canvas.S2X(xs), Canvas.S2Y(ys));
-      end;
-      if (R.emrtext.fOptions and ETO_GLYPH_INDEX) <> 0 then
-        Canvas.ShowGlyph(pointer(tmp), R.emrtext.nChars)
-      else if po = tpExactTextCharacterPositining then
-      begin
-        cur := 0;
-        tmp2[1] := #0;
-        repeat
-          tmp2[0] := tmp[cur];
-          Canvas.ShowText(@tmp2, false);
-          if cur = R.emrtext.nChars - 1 then
-            break;
-          xs := xs + dx^[cur];
-          Canvas.EndText;
-          Canvas.BeginText;
-          Canvas.MoveTextPoint(Canvas.S2X(xs), Canvas.S2Y(ys));
-          inc(cur);
-        until false;
-      end
-      else
-        Canvas.ShowText(pointer(tmp));
-      Canvas.EndText;
-      // handle underline or strike out styles (direct draw PDF lines on canvas)
-      if Font.LogFont.lfUnderline <> 0 then
-        DrawLine(posi, ss / (fScaleY * 8));
-      if Font.LogFont.lfStrikeOut <> 0 then
-        DrawLine(posi, -ss / (fScaleY * 4));
-      // end any pending clipped TextRect() region
-      if clipped then
-      begin
-        Canvas.GRestore;
-        fFillColor := -1; // force set drawing color
-      end;
-      // restore previous text justification (after GRestore if clipped)
+      if ws = 0 then
+        ws := Canvas.UnicodeTextWidth(pointer(tmp));
+      mw := round(ws / fscaleX);
+    end;
+    hasdx := R.emrtext.offDx > 0;
+    {$ifdef USE_UNISCRIBE}
+    if Canvas.fDoc.UseUniScribe then
+      hasdx := hasdx and (R.emrtext.fOptions and ETO_GLYPH_INDEX <> 0);
+    {$endif USE_UNISCRIBE}
+    if hasdx then
+    begin
+      dx := pointer(PtrUInt(@R) + R.emrtext.offDx);
+      w := DXTextWidth(dx, R.emrText.nChars);
+      if w < trunc((R.rclBounds.Right - R.rclBounds.Left) / Canvas.fFactorX) then
+        dx := nil; // offDX=0 or within box
+    end
+    else
+      dx := nil;
+    if dx = nil then
+    begin
+      w := mw;
+      if po = tpExactTextCharacterPositining then
+        po := tpSetTextJustification; // exact position expects dx
+    end;
+    nspace := 0;
+    hscale := 100;
+    if mw <> 0 then
+    begin
+      for i := 0 to R.emrtext.nChars - 1 do
+        if tmp[i] = ' ' then
+          inc(nspace);
+      if (po = tpSetTextJustification) and
+         ((nspace = 0) or (({%H-}w - mw) < nspace)) then
+        po := tpKerningFromAveragePosition;
+      if (po = tpExactTextCharacterPositining) and
+         (DC[nDC].Font.spec.angle <> 0) then
+        po := tpKerningFromAveragePosition;
       case po of
         tpSetTextJustification:
-          if nspace > 0 then
-            Canvas.SetWordSpace(0);
+          // we should have had a SetTextJustification() call -> modify word space
+          Canvas.SetWordSpace(((w - mw) * fscaleX) / nspace);
         tpKerningFromAveragePosition:
-          if hscale <> 100 then
-            Canvas.SetHorizontalScaling(100); // reset horizontal scaling
-      end;
-      if not Canvas.fNewPath then
-      begin
-        if clipped then
-          if not DC[nDC].ClipRgnNull then
           begin
-            clip := GetClipRect;
-            Canvas.GSave;
-            Canvas.Rectangle(
-              clip.Left, clip.Top, clip.Width, clip.Height);
-            Canvas.Clip;
-            Canvas.GRestore;
-            Canvas.NewPath;
-            Canvas.fNewPath := false;
+            // check if dx[] width differs from PDF width
+            hscale := (w * 100) / mw;
+            // implement some global kerning if needed (allow hysteresis around 100%)
+            if (hscale < Canvas.fKerningHScaleBottom) or
+               (hscale > Canvas.fKerningHScaleTop) then
+              if DC[nDC].Font.spec.angle = 0 then
+                Canvas.SetHorizontalScaling(hscale)
+              else
+                hscale := 100
+            else
+              hscale := 100;
           end;
+      end;
+    end
+    else
+      po := tpSetTextJustification;
+    ww := w;                                    // right x
+    // h Align Mask = TA_CENTER or TA_RIGHT or TA_LEFT = TA_CENTER
+    if (DC[nDC].Font.Align and TA_CENTER) = TA_CENTER then
+      w := w / 2  // center x
+    else if (DC[nDC].Font.Align and TA_CENTER) = TA_LEFT then
+      w := 0;     // left x
+    // V Align mask = TA_BASELINE or TA_BOTTOM or TA_TOP = TA_BASELINE
+    if (DC[nDC].Font.Align and TA_BASELINE) = TA_BASELINE then
+    // always zero ?
+      h := abs(DC[nDC].Font.LogFont.lfHeight) - abs(DC[nDC].Font.spec.cell)  // center y
+    else if (DC[nDC].Font.Align and TA_BASELINE) = TA_BOTTOM then
+      h := abs(DC[nDC].Font.spec.descent)  // bottom y
+    else
+      // needs - vertical coords of baseline from top
+      h := -abs(DC[nDC].Font.spec.ascent); // top
+    if sy < 0 then // inverted coordinates
+      h := abs(DC[nDC].Font.LogFont.lfHeight) + h;
+    if sx < 0 then
+      w := w + ww;
+    if (DC[nDC].Font.align and TA_UPDATECP) = TA_UPDATECP then
+      posi := DC[nDC].position
+    else
+      posi := R.emrtext.ptlReference;
+    // detect clipping
+    if Canvas.fUseMetaFileTextClipping <> tcNeverClip then
+    begin
+      clipped := (R.emrtext.rcl.Right > R.emrtext.rcl.Left) and (R.emrtext.rcl.Bottom > R.emrtext.rcl.Top);
+      if clipped then
+        clip := Canvas.BoxI(TRect(R.emrtext.rcl), true)
+      else
+      begin
+        if Canvas.fUseMetaFileTextClipping = tcClipExplicit then
+          clipped := (R.rclBounds.Right > R.rclBounds.Left) and (R.rclBounds.Bottom > R.rclBounds.Top);
+        if clipped then
+          clip := Canvas.BoxI(TRect(R.rclBounds), true)
+        else
+        begin
+          clipped := not DC[nDC].ClipRgnNull and
+                      (Canvas.fUseMetaFileTextClipping = tcAlwaysClip);
+          if clipped then
+            clip := GetClipRect;
+        end;
+      end;
+    end
+    else
+      clipped := false;
+    isopaque := not DC[nDC].brush.null and
+               (DC[nDC].brush.Color <> clWhite) and
+               ((R.emrtext.fOptions and ETO_OPAQUE <> 0) or
+                ((DC[nDC].Font.BkMode = OPAQUE) and
+                 (DC[nDC].Font.BkColor = DC[nDC].brush.color)));
+    if isopaque then
+      if clipped then
+        back := TRect(R.emrtext.rcl)
+      else
+      begin
+        back.TopLeft := posi;
+        back.BottomRight := posi;
+        inc(back.Right, trunc(ww));
+        inc(back.Bottom, abs(DC[nDC].Font.LogFont.lfHeight));
+      end;
+    NormalizeRect(back);
+    if clipped then
+    begin
+      Canvas.GSave;
+      Canvas.NewPath;
+      Canvas.Rectangle({%H-}clip.Left, {%H-}clip.Top,
+        {%H-}clip.Width, {%H-}clip.Height);
+      Canvas.ClosePath;
+      Canvas.Clip;
+      if isopaque then
+      begin
+        FillRectangle(back, false);
+        isopaque := false; //do not handle more
       end
       else
-        Canvas.fNewPath := false;
-      if (Font.align and TA_UPDATECP) = TA_UPDATECP then
-      begin
-        position.X := posi.X + trunc(ww);
-        position.Y := posi.Y;
-      end;
+        Canvas.NewPath;
+      Canvas.fNewPath := false;
     end;
+    // draw background (if any)
+    if isopaque then
+      // don't handle BkMode, since global to the page, but only specific text
+      // don't handle rotation here, since should not be used much
+      FillRectangle(back, true);
+    // draw text
+    FillColor := DC[nDC].Font.color;
+    {$ifdef USE_UNISCRIBE}
+    Canvas.RightToLeftText := (R.emrtext.fOptions and ETO_RTLREADING) <> 0;
+    {$endif USE_UNISCRIBE}
+    Canvas.BeginText;
+    if DC[nDC].Font.spec.angle <> 0 then
+    begin
+      a := DC[nDC].Font.spec.angle * cPIdiv180;
+      acos := cos(a);
+      asin := sin(a);
+      xs := 0;
+      ys := 0;
+      Canvas.SetTextMatrix(acos, asin, -asin, acos,
+        Canvas.I2X(posi.X - round(w * acos + h * asin)),
+        Canvas.I2Y(posi.Y - round(h * acos - w * asin)));
+    end
+    else if (DC[nDC].WorldTransform.eM11 = DC[nDC].WorldTransform.eM22) and
+            (DC[nDC].WorldTransform.eM12 = -DC[nDC].WorldTransform.eM21) and
+            not SameValue(ArcCos(DC[nDC].WorldTransform.eM11), 0, 0.0001) then
+    begin
+      xs := 0;
+      ys := 0;
+      if SameValue(ArcCos(DC[nDC].WorldTransform.eM11), 0, 0.0001) or      // 0 grad
+         SameValue(ArcCos(DC[nDC].WorldTransform.eM11), cPI, 0.0001) then  // 180 grad
+        Canvas.SetTextMatrix(DC[nDC].WorldTransform.eM11, DC[nDC].WorldTransform.eM12,
+          DC[nDC].WorldTransform.eM21, DC[nDC].WorldTransform.eM22,
+          Canvas.S2X(posi.X * DC[nDC].WorldTransform.eM11 +
+            posi.Y * DC[nDC].WorldTransform.eM21 + DC[nDC].WorldTransform.eDx),
+          Canvas.S2Y(posi.X * DC[nDC].WorldTransform.eM12 +
+            posi.Y * DC[nDC].WorldTransform.eM22 + DC[nDC].WorldTransform.eDy))
+      else
+        Canvas.SetTextMatrix(-DC[nDC].WorldTransform.eM11, -DC[nDC].WorldTransform.eM12, -
+          DC[nDC].WorldTransform.eM21, -DC[nDC].WorldTransform.eM22,
+          Canvas.S2X(posi.X * DC[nDC].WorldTransform.eM11 +
+            posi.Y * DC[nDC].WorldTransform.eM21 + DC[nDC].WorldTransform.eDx),
+          Canvas.S2Y(posi.X * DC[nDC].WorldTransform.eM12 +
+            posi.Y * DC[nDC].WorldTransform.eM22 + DC[nDC].WorldTransform.eDy));
+    end
+    else
+    begin
+      acos := 0;
+      asin := 0;
+      if Canvas.fViewSize.cx > 0 then
+        xs := posi.X - w   // zero point left
+      else
+        xs := posi.X + w;  // right
+      if Canvas.fViewSize.cy > 0 then
+        ys := posi.Y - h   // zero point beyond
+      else
+        ys := posi.Y + h;  // above
+      Canvas.MoveTextPoint(Canvas.S2X(xs), Canvas.S2Y(ys));
+    end;
+    if (R.emrtext.fOptions and ETO_GLYPH_INDEX) <> 0 then
+      Canvas.ShowGlyph(pointer(tmp), R.emrtext.nChars)
+    else if po = tpExactTextCharacterPositining then
+    begin
+      cur := 0;
+      tmp2[1] := #0;
+      repeat
+        tmp2[0] := tmp[cur];
+        Canvas.ShowText(@tmp2, false);
+        if cur = R.emrtext.nChars - 1 then
+          break;
+        xs := xs + dx^[cur];
+        Canvas.EndText;
+        Canvas.BeginText;
+        Canvas.MoveTextPoint(Canvas.S2X(xs), Canvas.S2Y(ys));
+        inc(cur);
+      until false;
+    end
+    else
+      Canvas.ShowText(pointer(tmp));
+    Canvas.EndText;
+    // handle underline or strike out styles (direct draw PDF lines on canvas)
+    if DC[nDC].Font.LogFont.lfUnderline <> 0 then
+      DrawLine(posi, ss / (fScaleY * 8));
+    if DC[nDC].Font.LogFont.lfStrikeOut <> 0 then
+      DrawLine(posi, -ss / (fScaleY * 4));
+    // end any pending clipped TextRect() region
+    if clipped then
+    begin
+      Canvas.GRestore;
+      fFillColor := -1; // force set drawing color
+    end;
+    // restore previous text justification (after GRestore if clipped)
+    case po of
+      tpSetTextJustification:
+        if nspace > 0 then
+          Canvas.SetWordSpace(0);
+      tpKerningFromAveragePosition:
+        if hscale <> 100 then
+          Canvas.SetHorizontalScaling(100); // reset horizontal scaling
+    end;
+    if not Canvas.fNewPath then
+    begin
+      if clipped then
+        if not DC[nDC].ClipRgnNull then
+        begin
+          clip := GetClipRect;
+          Canvas.GSave;
+          Canvas.Rectangle(
+            clip.Left, clip.Top, clip.Width, clip.Height);
+          Canvas.Clip;
+          Canvas.GRestore;
+          Canvas.NewPath;
+          Canvas.fNewPath := false;
+        end;
+    end
+    else
+      Canvas.fNewPath := false;
+    if (DC[nDC].Font.align and TA_UPDATECP) = TA_UPDATECP then
+    begin
+      DC[nDC].position.X := posi.X + trunc(ww);
+      DC[nDC].position.Y := posi.Y;
+    end;
+  end;
 end;
 
 {$endif USE_METAFILE}
