@@ -157,6 +157,7 @@ var
   success: boolean;
   assertions, failed, i: integer;
   summary: RawUtf8;
+  family: TSynLogFamily;
 begin
   success := false;
   tests := nil;
@@ -165,13 +166,11 @@ begin
   // an unconfigured family crashed in TSynLog.FillInfo on Android; the log
   // file goes next to LOG_NAME, the app folder being read-only
   RunFromSynTests := true;
-  with TSynLogTestLog.Family do
-  begin
-    PerThreadLog := ptIdentifiedInOneFile;
-    HighResolutionTimestamp := true;
-    DestinationPath := TPath.GetDocumentsPath;
-    Level := LOG_FILTER[lfExceptions]; // better be set last
-  end;
+  family := TSynLogTestLog.Family;
+  family.PerThreadLog := ptIdentifiedInOneFile;
+  family.HighResolutionTimestamp := true;
+  family.DestinationPath := TPath.GetDocumentsPath;
+  family.Level := LOG_FILTER[lfExceptions]; // better be set last
   try
     try
       tests := TIntegrationTests.Create('mORMot2 PDF and Report Tests');
@@ -187,8 +186,8 @@ begin
       begin
         Output(CRLF + 'Failures:' + CRLF);
         for i := 0 to tests.FailedCount - 1 do
-          with tests.Failed[i] do
-            Output(FormatUtf8('- %: %' + CRLF, [IdentTestName, Error]));
+          Output(FormatUtf8('- %: %' + CRLF,
+            [tests.Failed[i].IdentTestName, tests.Failed[i].Error]));
       end;
       summary := FormatUtf8('RESULT: % - % assertions, % failed, % failures',
         [BOOL_STR[success], assertions, failed, tests.FailedCount]);

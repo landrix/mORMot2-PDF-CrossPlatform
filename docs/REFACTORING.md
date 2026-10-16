@@ -892,8 +892,12 @@ Process, agreed in the forum:
 
     The eight `with` left in the test units (Martin, #57) are written out
     in the follow-up to #57 and #58, by hand: record copies and prefixes.
-    Two remain in the Android host form `tests/delphi13/android`, which
-    only builds for Android64 (FMX): for the next Delphi 13 run there.
+    The two of the Android host form `tests/delphi13/android` followed;
+    not built for Android64 here. The unit does not compile for Win64
+    (`LoadFreeType` is POSIX-only; E2250 on its `Synchronize` and `Queue`
+    calls): Delphi 13 Win64 stops on the same three errors before
+    and after, none in the changed lines. The six `with` of the trunk
+    copies in `src/core` stay, as the trunk has them.
 
     **Exceptions, done** (branch `pr/exceptions`, on `pr/no-with`): the
     report's 10 `raise Exception.Create` and 4 `ESynException` raises are
