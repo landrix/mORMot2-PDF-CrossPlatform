@@ -65,6 +65,7 @@ const
   TEST_SYMBOL_LOW = 'mORMot Test Symbol Low';
   TEST_SYMBOL_F2 = 'mORMot Test Symbol F2';
   TEST_UNICODE_ONLY = 'mORMot Test Unicode Only';
+  TEST_FORMAT12 = 'mORMot Test Format12';
   TEST_CJK_GLYF = 'mORMot Test CJK Glyf';
   TEST_TTC_A = 'mORMot Test TTC A';
   TEST_TTC_B = 'mORMot Test TTC B';
@@ -169,16 +170,18 @@ end;
 
 function EnsureTestFonts: boolean;
 const
-  FILES: array[0..9] of TFileName = (
+  FILES: array[0..10] of TFileName = (
     'mORMotTestSans-Regular.ttf', 'mORMotTestArabic-Regular.ttf',
     'mORMotTestCJK-Regular.otf', 'mORMotTestSymbol-Regular.ttf',
     'mORMotTestSymbolLow-Regular.ttf', 'mORMotTestSymbolF2-Regular.ttf',
     'mORMotTestCJKGlyf-Regular.ttf', 'mORMotTestUnicodeOnly-Regular.ttf',
+    'mORMotTestFormat12-Regular.ttf',
     'mORMotTestCollection.ttc', 'mORMotTestCollection.ttc');
-  FACES: array[0..9] of integer = (0, 0, 0, 0, 0, 0, 0, 0, 0, 1);
-  FAMILIES: array[0..9] of RawUtf8 = (
+  FACES: array[0..10] of integer = (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1);
+  FAMILIES: array[0..10] of RawUtf8 = (
     TEST_SANS, TEST_ARABIC, TEST_CJK, TEST_SYMBOL, TEST_SYMBOL_LOW,
-    TEST_SYMBOL_F2, TEST_CJK_GLYF, TEST_UNICODE_ONLY, TEST_TTC_A, TEST_TTC_B);
+    TEST_SYMBOL_F2, TEST_CJK_GLYF, TEST_UNICODE_ONLY, TEST_FORMAT12,
+    TEST_TTC_A, TEST_TTC_B);
 var
   req: TFontRequest;
   data: RawByteString;
@@ -1123,18 +1126,19 @@ end;
 
 procedure TPdfCrossPlatTests.TestTestFontFiles;
 const
-  FILES: array[0..9] of TFileName = (
+  FILES: array[0..10] of TFileName = (
     'mORMotTestSans-Regular.ttf', 'mORMotTestArabic-Regular.ttf',
     'mORMotTestCJK-Regular.otf', 'mORMotTestSymbol-Regular.ttf',
     'mORMotTestSymbolLow-Regular.ttf', 'mORMotTestSymbolF2-Regular.ttf',
     'mORMotTestCJKGlyf-Regular.ttf', 'mORMotTestUnicodeOnly-Regular.ttf',
+    'mORMotTestFormat12-Regular.ttf',
     'mORMotTestCollection.ttc', 'mORMotTestCollection.ttc');
-  FACES: array[0..9] of integer = (0, 0, 0, 0, 0, 0, 0, 0, 0, 1);
-  FAMILIES: array[0..9] of RawUtf8 = (
+  FACES: array[0..10] of integer = (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1);
+  FAMILIES: array[0..10] of RawUtf8 = (
     'mORMot Test Sans', 'mORMot Test Arabic', 'mORMot Test CJK',
     'mORMot Test Symbol', 'mORMot Test Symbol Low', 'mORMot Test Symbol F2',
-    'mORMot Test CJK Glyf', 'mORMot Test Unicode Only', 'mORMot Test TTC A',
-    'mORMot Test TTC B');
+    'mORMot Test CJK Glyf', 'mORMot Test Unicode Only', 'mORMot Test Format12',
+    'mORMot Test TTC A', 'mORMot Test TTC B');
 var
   data: RawByteString;
   i: PtrInt;
