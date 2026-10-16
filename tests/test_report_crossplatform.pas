@@ -526,6 +526,7 @@ var
   Layout: TTableLayout;
   MS: TMemoryStream;
   i, p, Footers, HeaderBk, FooterBk, LastTR: Integer;
+  Cmd: TDrawCommand;
 begin
   Report := TGDIPages.Create(nil);
   MS := TMemoryStream.Create;
@@ -557,20 +558,22 @@ begin
     FooterBk := -1;
     for p := 0 to Report.PageCount - 1 do
       for i := 0 to High(Report.Pages[p].Commands) do
-        with Report.Pages[p].Commands[i] do
-          if Kind = dckBeginTR then
-          begin
-            LastTR := Color;
-            if Color = 3 then
-              inc(Footers);
-          end
-          else if Kind = dckFillRect then
-          begin
-            if (LastTR = 1) and (HeaderBk = 0) then
-              HeaderBk := Color;
-            if (LastTR = 3) and (FooterBk < 0) then
-              FooterBk := Color;
-          end;
+      begin
+        Cmd := Report.Pages[p].Commands[i];
+        if Cmd.Kind = dckBeginTR then
+        begin
+          LastTR := Cmd.Color;
+          if Cmd.Color = 3 then
+            inc(Footers);
+        end
+        else if Cmd.Kind = dckFillRect then
+        begin
+          if (LastTR = 1) and (HeaderBk = 0) then
+            HeaderBk := Cmd.Color;
+          if (LastTR = 3) and (FooterBk < 0) then
+            FooterBk := Cmd.Color;
+        end;
+      end;
     CheckEqual(1, Footers, 'one footer row');
     CheckEqual(3, LastTR, 'the footer is the last row of the table');
     CheckEqual(HeaderBk, FooterBk, 'an unset footer style follows the header');
@@ -591,6 +594,7 @@ procedure TReportTests.TestTableGridColor;
     Report: TGDIPages;
     Layout: TTableLayout;
     i: Integer;
+    Cmd: TDrawCommand;
   begin
     result := -1;
     Report := TGDIPages.Create(nil);
@@ -609,12 +613,14 @@ procedure TReportTests.TestTableGridColor;
       Report.EndTable;
       Report.EndDoc;
       for i := 0 to High(Report.Pages[0].Commands) do
-        with Report.Pages[0].Commands[i] do
-          if Kind = dckDrawRect then
-            if result = -1 then
-              result := Color
-            else if result <> Color then
-              result := -2;
+      begin
+        Cmd := Report.Pages[0].Commands[i];
+        if Cmd.Kind = dckDrawRect then
+          if result = -1 then
+            result := Cmd.Color
+          else if result <> Cmd.Color then
+            result := -2;
+      end;
     finally
       Report.Free;
     end;
@@ -1040,7 +1046,6 @@ begin
     DeleteFile(ro);
   end;
 end;
-
 
 // Params[0]: the case - one misuse each, on a report of its own
 procedure TReportTests.RunMisuse(const Params: array of const);

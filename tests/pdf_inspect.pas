@@ -1204,8 +1204,8 @@ begin
             Emit(#10'endstream');
             inStm := fStreamSpans <> nil;
             for k := 0 to high(fStreamSpans) do
-              with fStreamSpans[k] do
-                AddSpan(fSpans, Num, Gen, dataOut + Start, dataOut + Stop);
+              AddSpan(fSpans, fStreamSpans[k].Num, fStreamSpans[k].Gen,
+                dataOut + fStreamSpans[k].Start, dataOut + fStreamSpans[k].Stop);
             fStreamSpans := nil;
             i := after;
           end

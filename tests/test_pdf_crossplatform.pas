@@ -419,8 +419,8 @@ var
 
   function Advance(aCode: cardinal): integer;
   begin
-    with abc[aCode - 32] do
-      result := abcA + integer(abcB) + abcC;
+    result := abc[aCode - 32].abcA + integer(abc[aCode - 32].abcB) +
+      abc[aCode - 32].abcC;
   end;
 
 begin
@@ -694,23 +694,24 @@ begin
   Check(FontShaper.Shape(@BISMI[0], length(BISMI), face.Handle, true, runs) and
     (length(runs) = 1), 'one run');
   if length(runs) = 1 then
-    with runs[0] do
+  begin
+    Check((runs[0].Kind = fskShaped) and
+          (runs[0].Outcome = fsoDone), 'shaped, done');
+    CheckEqual(runs[0].TextLen, length(BISMI), 'the run covers the whole text');
+    if runs[0].Advances = nil then
     begin
-      Check((Kind = fskShaped) and (Outcome = fsoDone), 'shaped, done');
-      CheckEqual(TextLen, length(BISMI), 'the run covers the whole text');
-      if Advances = nil then
-      begin
-        // a shaper of glyphs only (Uniscribe): the font places them
-        Check(YOffsets = nil, 'no positions, no y offsets');
-        exit;
-      end;
-      CheckEqual(length(YOffsets), length(Glyphs), 'one y offset per glyph');
-      moved := 0;
-      for i := 0 to high(YOffsets) do
-        if YOffsets[i] <> 0 then
-          inc(moved);
-      Check(moved > 0, 'a mark is placed vertically');
+      // a shaper of glyphs only (Uniscribe): the font places them
+      Check(runs[0].YOffsets = nil, 'no positions, no y offsets');
+      exit;
     end;
+    CheckEqual(length(runs[0].YOffsets), length(runs[0].Glyphs),
+      'one y offset per glyph');
+    moved := 0;
+    for i := 0 to high(runs[0].YOffsets) do
+      if runs[0].YOffsets[i] <> 0 then
+        inc(moved);
+    Check(moved > 0, 'a mark is placed vertically');
+  end;
 end;
 
 {$ifndef OSWINDOWS}

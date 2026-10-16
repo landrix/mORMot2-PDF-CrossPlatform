@@ -152,6 +152,7 @@ var
   Report: TGDIPages;
   Source, Joined: RawUtf8;
   i, Lines, Unmeasured, W, Widest: Integer;
+  Cmd: TDrawCommand;
 begin
   Source := SENTENCE + ' ' + SENTENCE + ' ' + SENTENCE + ' ' + SENTENCE;
   Report := TGDIPages.Create(nil);
@@ -171,21 +172,23 @@ begin
     Widest := 0;
     Joined := '';
     for i := 0 to High(Report.Pages[0].Commands) do
-      with Report.Pages[0].Commands[i] do
-        if Kind = dckDrawText then
-        begin
-          Inc(Lines);
-          { TextWidthMM is measured when the line is recorded, with the
-            metrics the layout wrapped it with }
-          if TextWidthMM <= 0 then
-            Inc(Unmeasured);
-          W := X + TextWidthMM;
-          if W > Widest then
-            Widest := W;
-          if Joined <> '' then
-            Joined := Joined + ' ';
-          Joined := Joined + Trim(Text);
-        end;
+    begin
+      Cmd := Report.Pages[0].Commands[i];
+      if Cmd.Kind = dckDrawText then
+      begin
+        Inc(Lines);
+        { TextWidthMM is measured when the line is recorded, with the
+          metrics the layout wrapped it with }
+        if Cmd.TextWidthMM <= 0 then
+          Inc(Unmeasured);
+        W := Cmd.X + Cmd.TextWidthMM;
+        if W > Widest then
+          Widest := W;
+        if Joined <> '' then
+          Joined := Joined + ' ';
+        Joined := Joined + Trim(Cmd.Text);
+      end;
+    end;
     Check(Lines > 1, 'the paragraph wraps');
     CheckEqual(0, Unmeasured, 'every line has its width recorded');
     Check(Widest <= Report.PageWidth, 'no line reaches past the right margin');
