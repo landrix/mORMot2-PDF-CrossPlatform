@@ -4139,11 +4139,10 @@ procedure TPdfObject.InternalWriteTo(W: TPdfWrite);
 begin
   {$ifdef USE_PDFSECURITY}
   if fObjectNumber > 0 then
-    with W.fDoc do
-    begin
-      fCurrentObjectNumber := fObjectNumber;
-      fCurrentGenerationNumber := fGenerationNumber;
-    end;
+  begin
+    W.fDoc.fCurrentObjectNumber := fObjectNumber;
+    W.fDoc.fCurrentGenerationNumber := fGenerationNumber;
+  end;
   {$endif USE_PDFSECURITY}
 end;
 
@@ -4391,17 +4390,18 @@ end;
 procedure TPdfArray.InternalWriteTo(W: TPdfWrite);
 var
   i: PtrInt;
+  obj: TPdfObject;
 begin
   inherited;
   W.Add('[');
   for i := 0 to fArray.Count - 1 do
-    with TPdfObject(fArray.List[i]) do
-    begin
-      if (i <> 0) and
-         not SpaceNotNeeded then
-        W.Add(' ');
-      WriteTo(W);
-    end;
+  begin
+    obj := fArray.List[i];
+    if (i <> 0) and
+       not obj.SpaceNotNeeded then
+      W.Add(' ');
+    obj.WriteTo(W);
+  end;
   W.Add(']');
 end;
 
@@ -4616,20 +4616,23 @@ end;
 function TPdfDictionary.ValueByName(const AKey: PdfString): TPdfObject;
 var
   i: PtrInt;
+  elem: TPdfDictionaryElement;
 begin
   if self <> nil then
     for i := 0 to fArray.Count - 1 do
-      with TPdfDictionaryElement(fArray.List[i]) do
-        if fKey.Value = AKey then
-        begin
-          result := Value;
-          if result.ObjectType = otVirtualObject then
-            if fObjectMgr <> nil then
-              result := fObjectMgr.GetObject(result.ObjectNumber)
-            else
-              result := nil;
-          exit;
-        end;
+    begin
+      elem := fArray.List[i];
+      if elem.fKey.Value = AKey then
+      begin
+        result := elem.Value;
+        if result.ObjectType = otVirtualObject then
+          if fObjectMgr <> nil then
+            result := fObjectMgr.GetObject(result.ObjectNumber)
+          else
+            result := nil;
+        exit;
+      end;
+    end;
   result := nil;
 end;
 
@@ -4935,8 +4938,7 @@ var
 begin
   Attributes.AddItem('N', fObjectCount);
   for i := 0 to fObjectCount - 1 do
-    with fObject[i] do
-      Writer.Add(Number).Add(' ').Add(Position).Add(' ');
+    Writer.Add(fObject[i].Number).Add(' ').Add(fObject[i].Position).Add(' ');
   Attributes.AddItem('First', Writer.Position);
   Writer.Add(fAddingStream.ToPdfString);
   inherited;
@@ -5569,6 +5571,7 @@ function TPdfWrite.AddUnicodeHexTextShaped(PW: PWideChar; PWLen: integer;
   WinAnsiTtf: TPdfFontTrueType; NextLine: boolean; Canvas: TPdfCanvas): boolean;
 var
   Runs: TFontShapedRuns;
+  run: ^TFontShapedRun;
   i, covered: integer;
   tmp: TSynTempBuffer;
 begin
@@ -5585,20 +5588,20 @@ begin
   // text, or arrays this writer cannot draw, leave it to the simple path
   covered := 0;
   for i := 0 to high(Runs) do
-    with Runs[i] do
-    begin
-      if (TextStart < 0) or
-         (TextLen <= 0) or // a run covers at least one code unit
-         (TextStart + TextLen > PWLen) or
-         ((Kind = fskShaped) and
-          (((Advances <> nil) and
-            (length(Advances) <> length(Glyphs))) or
-           ((Offsets <> nil) and
-            ((Advances = nil) or // offsets are drawn with the advances only
-             (length(Offsets) <> length(Glyphs)))))) then
-        exit;
-      inc(covered, TextLen);
-    end;
+  begin
+    run := @Runs[i];
+    if (run^.TextStart < 0) or
+       (run^.TextLen <= 0) or // a run covers at least one code unit
+       (run^.TextStart + run^.TextLen > PWLen) or
+       ((run^.Kind = fskShaped) and
+        (((run^.Advances <> nil) and
+          (length(run^.Advances) <> length(run^.Glyphs))) or
+         ((run^.Offsets <> nil) and
+          ((run^.Advances = nil) or // offsets are drawn with the advances only
+           (length(run^.Offsets) <> length(run^.Glyphs)))))) then
+      exit;
+    inc(covered, run^.TextLen);
+  end;
   if covered <> PWLen then
     exit;
   result := true;
@@ -5651,6 +5654,7 @@ var
   fnt: TPdfFontTrueType;
   Glyph: word;
   idx: integer;
+  doc: TPdfDocument;
 begin
   assert((Ttf <> nil) and not Ttf.Unicode);
   changed := fAddGlyphFont = fNone;
@@ -5662,36 +5666,36 @@ begin
   if (Glyph = 0) and
      IsDefaultIgnorable(ord(Char)) then
     exit; // no glyph for a control: nothing to draw, nor to fall back for
-  with Canvas.fDoc do
-    if (Glyph = 0) and
-       fUseFontFallBack and
-       (fFontFallBackIndex >= 0) then
+  doc := Canvas.fDoc;
+  if (Glyph = 0) and
+     doc.fUseFontFallBack and
+     (doc.fFontFallBackIndex >= 0) then
+  begin
+    if fAddGlyphFont = fMain then
     begin
-      if fAddGlyphFont = fMain then
-      begin
-        AddGlyphFlush(Canvas, Ttf, NextLine);
-        changed := true; // the fallback string is a new one
-      end;
-      fAddGlyphFont := fFallBack;
-      fnt := Canvas.SetFont('', Canvas.fPage.FontSize, Ttf.fStyle, -1,
-        fFontFallBackIndex) as TPdfFontTrueType;
-      assert(not fnt.Unicode);
-      idx := fnt.FindOrAddUsedWideChar(Char);
-      if idx < length(fnt.fUsedWide) then
-        Glyph := fnt.fUsedWide[idx].Glyph
-      else
-        Glyph := 0;
-    end
-    else
-    begin
-      if fAddGlyphFont = fFallBack then
-      begin
-        AddGlyphFlush(Canvas, Ttf, NextLine);
-        changed := true;
-      end;
-      fAddGlyphFont := fMain;
-      fnt := Ttf;
+      AddGlyphFlush(doc.Canvas, Ttf, NextLine);
+      changed := true; // the fallback string is a new one
     end;
+    fAddGlyphFont := fFallBack;
+    fnt := doc.Canvas.SetFont('', doc.Canvas.fPage.FontSize, Ttf.fStyle, -1,
+      doc.fFontFallBackIndex) as TPdfFontTrueType;
+    assert(not fnt.Unicode);
+    idx := fnt.FindOrAddUsedWideChar(Char);
+    if idx < length(fnt.fUsedWide) then
+      Glyph := fnt.fUsedWide[idx].Glyph
+    else
+      Glyph := 0;
+  end
+  else
+  begin
+    if fAddGlyphFont = fFallBack then
+    begin
+      AddGlyphFlush(doc.Canvas, Ttf, NextLine);
+      changed := true;
+    end;
+    fAddGlyphFont := fMain;
+    fnt := Ttf;
+  end;
   // PDF/A forbids a reference to .notdef (ISO 19005-2 6.2.11.8)
   if (Glyph = 0) and
      (Canvas.fDoc.fPdfA <> pdfaNone) then
@@ -5843,11 +5847,10 @@ var
 begin
   if PW <> nil then
   begin
-    with Canvas.fPage do
-      if fFont.FTrueTypeFontsIndex = 0 then
-        ttf := nil
-      else
-        ttf := TPdfFontTrueType(fFont);
+    if Canvas.fPage.fFont.FTrueTypeFontsIndex = 0 then
+      ttf := nil
+    else
+      ttf := TPdfFontTrueType(Canvas.fPage.fFont);
     // UseUniscribe is the one shaping switch; the shaper decides which text
     // needs shaping and leaves a Latin text to the simple path
     shaped := Canvas.fDoc.UseUniScribe and
@@ -5864,10 +5867,9 @@ function TPdfWrite.AddGlyphs(Glyphs: PWord; GlyphsCount: integer;
 begin
   if (Glyphs <> nil) and
      (GlyphsCount > 0) then
-    with Canvas.fPage do
-      if fFont.FTrueTypeFontsIndex <> 0 then // we need a ttf font
-        AddGlyphsOf(TPdfFontTrueType(fFont), Glyphs, GlyphsCount, Canvas,
-          AVisAttrsPtr);
+    if Canvas.fPage.fFont.FTrueTypeFontsIndex <> 0 then // we need a ttf font
+      AddGlyphsOf(TPdfFontTrueType(Canvas.fPage.fFont), Glyphs, GlyphsCount,
+        Canvas, AVisAttrsPtr);
   result := self;
 end;
 
@@ -6014,6 +6016,7 @@ const
 var
   offsetWidth, genWidth, i: integer;
   WR: TPdfWrite;
+  e: TPdfXrefEntry;
 begin
   if fCrossReference = nil then
   begin
@@ -6042,22 +6045,22 @@ begin
        AddIntegerBin(0, offsetWidth).
        AddIntegerBin(-1, genWidth);
     for i := 1 to fXRef.ItemCount - 1 do
-      with fXRef.Items[i] do
+    begin
+      e := fXRef.Items[i];
+      if e.ObjectStreamIndex >= 0 then
       begin
-        if ObjectStreamIndex >= 0 then
-        begin
-          assert(fObjectStream <> nil);
-          WR.AddIntegerBin(ord(xrefInUseCompressed), TYPEWIDTH).
-             AddIntegerBin(fObjectStream.ObjectNumber, offsetWidth).
-             AddIntegerBin(ObjectStreamIndex, genWidth);
-        end
-        else
-        begin
-          WR.AddIntegerBin(ord(xrefInUse), TYPEWIDTH).
-            AddIntegerBin(ByteOffset, offsetWidth).
-            AddIntegerBin(GenerationNumber, genWidth);
-        end;
+        assert(fObjectStream <> nil);
+        WR.AddIntegerBin(ord(xrefInUseCompressed), TYPEWIDTH).
+           AddIntegerBin(fObjectStream.ObjectNumber, offsetWidth).
+           AddIntegerBin(e.ObjectStreamIndex, genWidth);
+      end
+      else
+      begin
+        WR.AddIntegerBin(ord(xrefInUse), TYPEWIDTH).
+          AddIntegerBin(e.ByteOffset, offsetWidth).
+          AddIntegerBin(e.GenerationNumber, genWidth);
       end;
+    end;
     fCrossReference.WriteValueTo(W);
   end;
   W.Add(CRLF + 'startxref' + CRLF).
@@ -6074,6 +6077,7 @@ end;
 procedure TPdfTrailer.ToCrossReference(Doc: TPdfDocument);
 var
   i: integer;
+  e: TPdfXrefEntry;
   {$ifdef USE_PDFSECURITY}
   enc: TPdfEncryption;
   {$endif USE_PDFSECURITY}
@@ -6095,12 +6099,14 @@ begin
     Doc.fEncryption := nil; // force /ObjStm content not encrypted
   {$endif USE_PDFSECURITY}
     for i := 1 to fXRef.ItemCount - 1 do
-      with fXRef.Items[i] do
-        if (ByteOffset <= 0) and Value.InheritsFrom(TPdfDictionary) then
-        begin
-          fByteOffset := maxInt; // mark already handled
-          fObjectStreamIndex := fObjectStream.AddObject(Value);
-        end;
+    begin
+      e := fXRef.Items[i];
+      if (e.ByteOffset <= 0) and e.Value.InheritsFrom(TPdfDictionary) then
+      begin
+        e.fByteOffset := maxInt; // mark already handled
+        e.fObjectStreamIndex := fObjectStream.AddObject(e.Value);
+      end;
+    end;
   {$ifdef USE_PDFSECURITY}
   finally
     Doc.fEncryption := enc;
@@ -6337,30 +6343,29 @@ begin
   off := 0;
   uni := 0;
   for i := 0 to Header^.numberSubtables - 1 do
-    with SubTable^[i] do
-      if platformID = TTFCFP_MS_PLATFORMID then
+    if SubTable^[i].platformID = TTFCFP_MS_PLATFORMID then
+    begin
+      if SubTable^[i].platformSpecificID = TTFCFP_SYMBOL_CHAR_SET then
       begin
-        if platformSpecificID = TTFCFP_SYMBOL_CHAR_SET then
-        begin
-          Symbol := true;
-          off := offset;
-        end
-        else if platformSpecificID = TTFCFP_UNICODE_CHAR_SET then
-        begin
-          Symbol := false;
-          off := offset;
-          break; // preferred specific ID
-        end;
+        Symbol := true;
+        off := SubTable^[i].offset;
       end
-      else if platformID = TTFCFP_UNICODE_PLATFORMID then
-        // Apple fonts may expose no Microsoft subtable at all - e.g. the first
-        // faces of macOS GeezaPro.ttc only have (0,3) - so keep the Unicode
-        // platform map as a fallback, its format 4 layout being identical
-        if platformSpecificID = TTFCFP_UNICODE_BMP then
-          uni := offset // preferred: the BMP map is the format 4 one
-        else if (platformSpecificID = TTFCFP_UNICODE_FULL) and
-                (uni = 0) then
-          uni := offset;
+      else if SubTable^[i].platformSpecificID = TTFCFP_UNICODE_CHAR_SET then
+      begin
+        Symbol := false;
+        off := SubTable^[i].offset;
+        break; // preferred specific ID
+      end;
+    end
+    else if SubTable^[i].platformID = TTFCFP_UNICODE_PLATFORMID then
+      // Apple fonts may expose no Microsoft subtable at all - e.g. the first
+      // faces of macOS GeezaPro.ttc only have (0,3) - so keep the Unicode
+      // platform map as a fallback, its format 4 layout being identical
+      if SubTable^[i].platformSpecificID = TTFCFP_UNICODE_BMP then
+        uni := SubTable^[i].offset // preferred: the BMP map is the format 4 one
+      else if (SubTable^[i].platformSpecificID = TTFCFP_UNICODE_FULL) and
+              (uni = 0) then
+        uni := SubTable^[i].offset;
   if off = 0 then
   begin
     off := uni; // no Microsoft subtable: fall back to the Unicode platform
@@ -6387,19 +6392,16 @@ begin
       (cardinal(length(fcmap) * 2) - off) shr 1);  // swap at the odd boundary
   end;
   fmt4 := pointer(PtrUInt(fcmap) + off);
-  with fmt4^ do
+  if fmt4^.format <> 4 then
   begin
-    if format <> 4 then
-    begin
-      fmt4 := nil;
-      exit; // we handle only cmap table format 4
-    end;
-    endCode := pointer(PtrUInt(@format) + SizeOf(TCmapFmt4));
-    startCode := pointer(PtrUInt(endCode) + segCountX2 + 2); // +2 = reservedPad
-    idDelta := pointer(PtrUInt(startCode) + segCountX2);
-    idRangeOffset := pointer(PtrUInt(idDelta) + segCountX2);
-    glyphIndexArray := pointer(PtrUInt(idRangeOffset) + segCountX2);
+    fmt4 := nil;
+    exit; // we handle only cmap table format 4
   end;
+  endCode := pointer(PtrUInt(@fmt4^.format) + SizeOf(TCmapFmt4));
+  startCode := pointer(PtrUInt(endCode) + fmt4^.segCountX2 + 2); // +2 = reservedPad
+  idDelta := pointer(PtrUInt(startCode) + fmt4^.segCountX2);
+  idRangeOffset := pointer(PtrUInt(idDelta) + fmt4^.segCountX2);
+  glyphIndexArray := pointer(PtrUInt(idRangeOffset) + fmt4^.segCountX2);
   result := true;
 end;
 
@@ -6468,13 +6470,10 @@ begin
     exit;
   // fill aUnicodeTtf.fUsedWide[] and aUnicodeTtf.fUsedWideChar data
   n := fmt4^.segCountX2 shr 1;
-  with aUnicodeTtf.fUsedWideChar do
-  begin
-    for i := 0 to n - 1 do
-      inc(Count, endCode[i] - startCode[i] + 1);
-    SetLength(Values, Count);
-    SetLength(aUnicodeTtf.fUsedWide, Count);
-  end;
+  for i := 0 to n - 1 do
+    inc(aUnicodeTtf.fUsedWideChar.Count, endCode[i] - startCode[i] + 1);
+  SetLength(aUnicodeTtf.fUsedWideChar.Values, aUnicodeTtf.fUsedWideChar.Count);
+  SetLength(aUnicodeTtf.fUsedWide, aUnicodeTtf.fUsedWideChar.Count);
   ndx := 0;
   for i := 0 to n - 1 do
   begin
@@ -6510,12 +6509,13 @@ begin
     begin
       numOfLongHorMetrics := fhhea[17];
       for i := 0 to aUnicodeTtf.fUsedWideChar.Count - 1 do
-        with aUnicodeTtf.fUsedWide[i] do
-          if Glyph <> 0 then
-            if Glyph <= numOfLongHorMetrics then
-              Width := (int64(fhmtx[Glyph * 2]) * 1000) div head^.UnitsPerEm
-            else
-              Width := W;
+        if aUnicodeTtf.fUsedWide[i].Glyph <> 0 then
+          if aUnicodeTtf.fUsedWide[i].Glyph <= numOfLongHorMetrics then
+            aUnicodeTtf.fUsedWide[i].Width :=
+              (int64(fhmtx[aUnicodeTtf.fUsedWide[i].Glyph * 2]) * 1000) div
+              head^.UnitsPerEm
+          else
+            aUnicodeTtf.fUsedWide[i].Width := W;
     end;
   end;
 end;
@@ -6612,34 +6612,29 @@ function TPdfFontTrueType.GetAndMarkGlyphAsUsed(aGlyph: word): word;
 var
   i: PtrInt;
   idx, w: integer;
+  wa, uni: TPdfFontTrueType;
 begin
   result := aGlyph; // fallback to raw glyph index if nothing explicit
   // 1. check if not already registered as used
-  with WinAnsiFont do // WinAnsiFont.fUsedWide[] = glyphs used by ShowText
-  begin
-    for i := 0 to fUsedWideChar.Count - 1 do
-      if fUsedWide[i].Glyph = aGlyph then
-        exit; // fast return already existing glyph index
-    if fShapedGlyph.IndexOf(aGlyph) >= 0 then
-      exit;
-  end;
-  // 2. register this glyph, and return Ttf glyph
-  // WinAnsiFont.FindOrAddUsedWideChar must be called explicitly: inside
-  // "with UnicodeFont do", an unqualified call would resolve to
-  // UnicodeFont.FindOrAddUsedWideChar, returning an index into UnicodeFont's
-  // large CMAP array - using that index on the much smaller WinAnsiFont.fUsedWide
-  // causes an out-of-bounds read and returns Glyph=0 (notdef box).
-  with UnicodeFont do // UnicodeFont.fUsedWide[] = available glyphs from TPdfTtf
-    for i := 0 to fUsedWideChar.Count - 1 do
-      if fUsedWide[i].Glyph = aGlyph then
-      begin
-        // split to avoid evaluation-order AV: FindOrAddUsedWideChar may call
-        // SetLength(fUsedWide,...) which moves the array; pre-loading the base
-        // pointer before the call would leave a stale reference (see Fix C).
-        idx := WinAnsiFont.FindOrAddUsedWideChar(WideChar(fUsedWideChar.Values[i]));
-        result := WinAnsiFont.fUsedWide[idx].Glyph;
-        exit; // result may be 0 if this glyph doesn't exist in the CMAP content
-      end;
+  wa := WinAnsiFont; // wa.fUsedWide[] = glyphs used by ShowText
+  for i := 0 to wa.fUsedWideChar.Count - 1 do
+    if wa.fUsedWide[i].Glyph = aGlyph then
+      exit; // fast return already existing glyph index
+  if wa.fShapedGlyph.IndexOf(aGlyph) >= 0 then
+    exit;
+  // 2. register this glyph, and return Ttf glyph - the index is one of the
+  // WinAnsi instance's small fUsedWide[], not of the Unicode one's CMAP array
+  uni := UnicodeFont; // uni.fUsedWide[] = available glyphs from TPdfTtf
+  for i := 0 to uni.fUsedWideChar.Count - 1 do
+    if uni.fUsedWide[i].Glyph = aGlyph then
+    begin
+      // split to avoid evaluation-order AV: FindOrAddUsedWideChar may call
+      // SetLength(fUsedWide,...) which moves the array; pre-loading the base
+      // pointer before the call would leave a stale reference (see Fix C).
+      idx := uni.WinAnsiFont.FindOrAddUsedWideChar(WideChar(uni.fUsedWideChar.Values[i]));
+      result := uni.WinAnsiFont.fUsedWide[idx].Glyph;
+      exit; // result may be 0 if this glyph doesn't exist in the CMAP content
+    end;
   // 3. GSUB-substituted glyph (Arabic contextual form, ligature, etc.):
   // not in CMAP after step 2 -> look up advance width by glyph index and
   // register it so /W has correct widths instead of /DW
@@ -6667,27 +6662,26 @@ begin
 end;
 
 function TPdfFontTrueType.GetCff: TPdfCffKind;
+var
+  wa: TPdfFontTrueType;
 begin
-  with WinAnsiFont do
+  wa := WinAnsiFont;
+  if not wa.fCffRead then
   begin
-    if not fCffRead then
-    begin
-      PdfFaceCffInfo(fFace, fCff);
-      fCffRead := true;
-    end;
-    result := fCff.Kind;
+    PdfFaceCffInfo(wa.fFace, wa.fCff);
+    wa.fCffRead := true;
   end;
+  result := wa.fCff.Kind;
 end;
 
 function TPdfFontTrueType.GlyphCode(aGlyph: word): word;
 begin
   result := aGlyph;
   if GetCff = pcCidKeyed then
-    with WinAnsiFont.fCff do
-      if aGlyph < length(Cid) then
-        result := Cid[aGlyph]
-      else
-        result := 0; // no such glyph in the face: .notdef
+    if aGlyph < length(WinAnsiFont.fCff.Cid) then
+      result := WinAnsiFont.fCff.Cid[aGlyph]
+    else
+      result := 0; // no such glyph in the face: .notdef
 end;
 
 destructor TPdfFontTrueType.Destroy;
@@ -6774,6 +6768,7 @@ procedure TPdfFontTrueType.GetAndMarkGlyphAsUsedWithWidth(aGlyph: word; aWidth: 
 // instead of falling back to /DW.
 var
   i: PtrInt;
+  uni: TPdfFontTrueType;
   idx: integer;
   w: integer;
 begin
@@ -6784,14 +6779,14 @@ begin
   if fShapedGlyph.IndexOf(aGlyph) >= 0 then
     exit;
   // Step 2: reverse CMAP lookup (same logic as GetAndMarkGlyphAsUsed Step 2)
-  if UnicodeFont <> nil then
-    with UnicodeFont do
-      for i := 0 to fUsedWideChar.Count - 1 do
-        if fUsedWide[i].Glyph = aGlyph then
-        begin
-          idx := WinAnsiFont.FindOrAddUsedWideChar(WideChar(fUsedWideChar.Values[i]));
-          exit; // width from CMAP hmtx data
-        end;
+  uni := UnicodeFont;
+  if uni <> nil then
+    for i := 0 to uni.fUsedWideChar.Count - 1 do
+      if uni.fUsedWide[i].Glyph = aGlyph then
+      begin
+        idx := uni.WinAnsiFont.FindOrAddUsedWideChar(WideChar(uni.fUsedWideChar.Values[i]));
+        exit; // width from CMAP hmtx data
+      end;
   // Step 3: GSUB-only glyph not in CMAP - register it by its index.
   // The width must come from the font's 'hmtx' table, NOT from the shaper:
   // HarfBuzz returns the *positioned* advance, which for a glyph carrying a
@@ -6908,8 +6903,7 @@ begin
       W := nil; // zero widths, as GDI left them on failure
       SetLength(W, 224);
     end;
-    with W[0] do
-      fDefaultWidth := cardinal(abcA + integer(abcB) + abcC);
+    fDefaultWidth := cardinal(W[0].abcA + integer(W[0].abcB) + W[0].abcC);
     if fM.tmPitchAndFamily and TMPF_FIXED_PITCH = 0 then
     begin
       fFixedWidth := true;
@@ -6918,8 +6912,8 @@ begin
     end
     else
       for c := #32 to #255 do
-        with W[ord(c) - 32] do
-          fWinAnsiWidth[c] := integer(abcA + integer(abcB) + abcC);
+        fWinAnsiWidth[c] := integer(W[ord(c) - 32].abcA +
+          integer(W[ord(c) - 32].abcB) + W[ord(c) - 32].abcC);
     // create font descriptor (the WinAnsi one is used also for unicode)
     FFontDescriptor := TPdfDictionary.Create(ADoc.fXRef);
     FFontDescriptor.fSaveAtTheEnd := true;
@@ -6943,9 +6937,9 @@ begin
     else
       flags := PDF_FONT_STD_CHARSET;
     FFontDescriptor.AddItem('Flags', flags);
-    with fOTM.otmrcFontBox do
-      FFontDescriptor.AddItem('FontBBox', TPdfArray.Create(fDoc.fXRef, [Left,
-        Bottom, Right, Top]));
+    FFontDescriptor.AddItem('FontBBox', TPdfArray.Create(fDoc.fXRef, [
+      fOTM.otmrcFontBox.Left, fOTM.otmrcFontBox.Bottom,
+      fOTM.otmrcFontBox.Right, fOTM.otmrcFontBox.Top]));
     Data.AddItem('FontDescriptor', fFontDescriptor);
   end;
   fAscent := fOTM.otmAscent;
@@ -6962,19 +6956,18 @@ end;
 procedure TPdfFontTrueType.AddShapedGlyph(aGlyph: word; aWidth: integer);
 var
   i, n: PtrInt;
+  wa: TPdfFontTrueType;
 begin
-  with WinAnsiFont do
-  begin
-    i := fShapedGlyph.Add(aGlyph);
-    if i < 0 then
-      exit; // already registered
-    n := fShapedGlyph.Count;
-    if length(fShapedWidth) < n then
-      SetLength(fShapedWidth, n + 64);
-    if i < n - 1 then
-      MoveFast(fShapedWidth[i], fShapedWidth[i + 1], (n - 1 - i) * SizeOf(word));
-    fShapedWidth[i] := aWidth;
-  end;
+  wa := WinAnsiFont;
+  i := wa.fShapedGlyph.Add(aGlyph);
+  if i < 0 then
+    exit; // already registered
+  n := wa.fShapedGlyph.Count;
+  if length(wa.fShapedWidth) < n then
+    SetLength(wa.fShapedWidth, n + 64);
+  if i < n - 1 then
+    MoveFast(wa.fShapedWidth[i], wa.fShapedWidth[i + 1], (n - 1 - i) * SizeOf(word));
+  wa.fShapedWidth[i] := aWidth;
 end;
 
 procedure TPdfFontTrueType.GetUsedGlyphs(out aKeys: TWordDynArray;
@@ -7618,13 +7611,12 @@ begin
   SetLength(result, length(keys));
   n := 0;
   for i := 0 to high(keys) do
-    with used[i] do
-      if Used <> 0 then
-      begin
-        result[n] := Int64(WinAnsi.GlyphCode(Glyph)) shl 32 +
-                     Int64(keys[i]) shl 16 + Width;
-        inc(n);
-      end;
+    if used[i].Used <> 0 then
+    begin
+      result[n] := Int64(WinAnsi.GlyphCode(used[i].Glyph)) shl 32 +
+                   Int64(keys[i]) shl 16 + used[i].Width;
+      inc(n);
+    end;
   if n > 1 then
     QuickSortInt64(pointer(result), 0, n - 1);
   SetLength(result, n);
@@ -7652,6 +7644,7 @@ var
   sub: PPdfFontSubset;
   codes: TInt64DynArray;
   code: cardinal;
+  fontname: TPdfName;
   cff: PdfString;
   prog: TPdfCffInfo;
 begin
@@ -7686,19 +7679,18 @@ begin
       // the ROS of a CID-keyed face, whose CIDs the codes are (9.7.3);
       // Adobe-Identity-0 for glyph indexes
       info := TPdfDictionary.Create(fDoc.fXRef);
-      with WinAnsiFont do
-        if GetCff = pcCidKeyed then
-        begin
-          info.AddItem('Supplement', fCff.Supplement);
-          info.AddItemTextUtf8('Ordering', fCff.Ordering);
-          info.AddItemTextUtf8('Registry', fCff.Registry);
-        end
-        else
-        begin
-          info.AddItem('Supplement', 0);
-          info.AddItemText('Ordering', 'Identity');
-          info.AddItemText('Registry', 'Adobe');
-        end;
+      if WinAnsiFont.GetCff = pcCidKeyed then
+      begin
+        info.AddItem('Supplement', WinAnsiFont.fCff.Supplement);
+        info.AddItemTextUtf8('Ordering', WinAnsiFont.fCff.Ordering);
+        info.AddItemTextUtf8('Registry', WinAnsiFont.fCff.Registry);
+      end
+      else
+      begin
+        info.AddItem('Supplement', 0);
+        info.AddItemText('Ordering', 'Identity');
+        info.AddItemText('Registry', 'Adobe');
+      end;
       font.AddItem('CIDSystemInfo', info);
       codes := PdfUsedCodes(WinAnsiFont);
       n := length(codes);
@@ -7815,8 +7807,8 @@ begin
         begin
           ttf := sub^.Subset;
           // see 9.6.4 Font Subsets: begins with a tag followed by a +
-          with TPdfName(fFontDescriptor.ValueByName('FontName')) do
-            Value := sub^.Tag + Value;
+          fontname := TPdfName(fFontDescriptor.ValueByName('FontName'));
+          fontname.Value := sub^.Tag + fontname.Value;
           TPdfName(Data.ValueByName('BaseFont')).Value :=
             TPdfName(fFontDescriptor.ValueByName('FontName')).Value;
         end
@@ -8044,62 +8036,59 @@ begin
   // create TPdfArray object from the specified values.
   // the values which are not used are ignored.
   result := TPdfArray.Create(fDoc.fXRef);
-  with result do
-  begin
-    AddItem(fPage);
-    AddItem(TPdfName.Create(PDF_DESTINATION_TYPE_NAMES[fType]));
-    case fType of
-      // if the type is dtXYZ, only Left, Top and Zoom values are used,
-      // other properties are ignored.
-      dtXYZ:
-        begin
-          if fValues[0] >= -DEST_MAX_VALUE then
-            AddItem(TPdfNumber.Create(Left))
-          else
-            AddItem(TPdfNull.Create);
-          if fValues[1] >= -DEST_MAX_VALUE then
-            AddItem(TPdfNumber.Create(Top))
-          else
-            AddItem(TPdfNull.Create);
-          if fZoom < 0 then
-            fZoom := 0;
-          AddItem(TPdfReal.Create(fZoom));
-        end;
-      // if the type is dtFitR, all values except Zoom are used.
-      dtFitR:
-        begin
-          if fValues[0] >= -DEST_MAX_VALUE then
-            AddItem(TPdfNumber.Create(Left))
-          else
-            AddItem(TPdfNull.Create);
-          if fValues[1] >= -DEST_MAX_VALUE then
-            AddItem(TPdfNumber.Create(Bottom))
-          else
-            AddItem(TPdfNull.Create);
-          if fValues[2] >= 0 then
-            AddItem(TPdfNumber.Create(Right))
-          else
-            AddItem(TPdfNull.Create);
-          if fValues[3] >= 0 then
-            AddItem(TPdfNumber.Create(Top))
-          else
-            AddItem(TPdfNull.Create);
-        end;
-      // if the type is dtFitH or dtFitBH, only Top property is used.
-      dtFitH,
-      dtFitBH:
-        if fValues[1] >= -DEST_MAX_VALUE then
-          AddItem(TPdfNumber.Create(Top))
-        else
-          AddItem(TPdfNull.Create);
-      // if the type is dtFitV or dtFitBV, only Top property is used.
-      dtFitV,
-      dtFitBV:
+  result.AddItem(fPage);
+  result.AddItem(TPdfName.Create(PDF_DESTINATION_TYPE_NAMES[fType]));
+  case fType of
+    // if the type is dtXYZ, only Left, Top and Zoom values are used,
+    // other properties are ignored.
+    dtXYZ:
+      begin
         if fValues[0] >= -DEST_MAX_VALUE then
-          AddItem(TPdfNumber.Create(Left))
+          result.AddItem(TPdfNumber.Create(Left))
         else
-          AddItem(TPdfNull.Create);
-    end;
+          result.AddItem(TPdfNull.Create);
+        if fValues[1] >= -DEST_MAX_VALUE then
+          result.AddItem(TPdfNumber.Create(Top))
+        else
+          result.AddItem(TPdfNull.Create);
+        if fZoom < 0 then
+          fZoom := 0;
+        result.AddItem(TPdfReal.Create(fZoom));
+      end;
+    // if the type is dtFitR, all values except Zoom are used.
+    dtFitR:
+      begin
+        if fValues[0] >= -DEST_MAX_VALUE then
+          result.AddItem(TPdfNumber.Create(Left))
+        else
+          result.AddItem(TPdfNull.Create);
+        if fValues[1] >= -DEST_MAX_VALUE then
+          result.AddItem(TPdfNumber.Create(Bottom))
+        else
+          result.AddItem(TPdfNull.Create);
+        if fValues[2] >= 0 then
+          result.AddItem(TPdfNumber.Create(Right))
+        else
+          result.AddItem(TPdfNull.Create);
+        if fValues[3] >= 0 then
+          result.AddItem(TPdfNumber.Create(Top))
+        else
+          result.AddItem(TPdfNull.Create);
+      end;
+    // if the type is dtFitH or dtFitBH, only Top property is used.
+    dtFitH,
+    dtFitBH:
+      if fValues[1] >= -DEST_MAX_VALUE then
+        result.AddItem(TPdfNumber.Create(Top))
+      else
+        result.AddItem(TPdfNull.Create);
+    // if the type is dtFitV or dtFitBV, only Top property is used.
+    dtFitV,
+    dtFitBV:
+      if fValues[0] >= -DEST_MAX_VALUE then
+        result.AddItem(TPdfNumber.Create(Left))
+      else
+        result.AddItem(TPdfNull.Create);
   end;
 end;
 
@@ -8371,12 +8360,9 @@ begin
   result := TPdfDictionary.Create(fXRef);
   result.fSaveAtTheEnd := true;
   fXRef.AddObject(result);
-  with result do
-  begin
-    AddItem('Type', 'Pages');
-    AddItem('Kids', TPdfArray.Create(fXRef));
-    AddItem('Count', 0);
-  end;
+  result.AddItem('Type', 'Pages');
+  result.AddItem('Kids', TPdfArray.Create(fXRef));
+  result.AddItem('Count', 0);
   if (Parent <> nil) and
      (Parent.TypeOf = 'Pages') then
     AddKids(Parent, result)
@@ -8385,13 +8371,17 @@ begin
 end;
 
 function TPdfDocument.GetXObjectIndex(const AName: PdfString): integer;
+var
+  xo: TPdfXObject;
 begin
   for result := 0 to fXObjectList.ItemCount - 1 do
-    with TPdfXObject(fXObjectList.fArray.List[result]) do
-      if (fObjectType <> otVirtualObject) and
-         (Attributes <> nil) and
-         (TPdfName(Attributes.ValueByName('Name')).Value = AName) then
-        exit;
+  begin
+    xo := fXObjectList.fArray.List[result];
+    if (xo.fObjectType <> otVirtualObject) and
+       (xo.Attributes <> nil) and
+       (TPdfName(xo.Attributes.ValueByName('Name')).Value = AName) then
+      exit;
+  end;
   result := -1;
 end;
 
@@ -8472,8 +8462,8 @@ begin
       bs.AddItem('W', BorderWidth);
     ann.AddItem('BS', bs);
   end;
-  with ARect do
-    ann.AddItem('Rect', TPdfArray.CreateReals(fXRef, [Left, Top, Right, Bottom]));
+  ann.AddItem('Rect', TPdfArray.CreateReals(fXRef,
+    [ARect.Left, ARect.Top, ARect.Right, ARect.Bottom]));
   // adding annotation to the current page
   p := fCanvas.Page;
   a := p.PdfArrayByName('Annots');
@@ -8539,13 +8529,12 @@ begin
   aDest.Left := 0; // go to left side of the page
   aDest.Top := round(TopPosition);
   fBookMarks.AddObject(aBookmarkName, aDest);
-  with fMissingBookmarks do
-    for i := Count - 1 downto 0 do
-      if Strings[i] = aBookmarkName then
-      begin
-        TPdfDictionary(Objects[i]).AddItem('Dest', aDest.GetValue);
-        Delete(i);
-      end;
+  for i := fMissingBookmarks.Count - 1 downto 0 do
+    if fMissingBookmarks.Strings[i] = aBookmarkName then
+    begin
+      TPdfDictionary(fMissingBookmarks.Objects[i]).AddItem('Dest', aDest.GetValue);
+      fMissingBookmarks.Delete(i);
+    end;
 end;
 
 procedure TPdfDocument.NewDoc;
@@ -9053,6 +9042,7 @@ end;
 procedure TPdfDocument.SaveToStreamDirectPageFlush(FlushCurrentPageNow: boolean);
 var
   i: integer;
+  e: TPdfXrefEntry;
 begin
   if (self = nil) or
      (fSaveToStreamWriter = nil) or
@@ -9061,18 +9051,22 @@ begin
   if FlushCurrentPageNow then
     fCanvas.fPage.fSaveAtTheEnd := false;
   for i := 1 to fXRef.ItemCount - 1 do  // ignore fXRef[0] = root PDF_FREE_ENTRY
-    with fXRef.Items[i] do
-      if (ByteOffset <= 0) and
-         not Value.fSaveAtTheEnd then
-      begin
-        fByteOffset := fSaveToStreamWriter.Position;
-        Value.WriteValueTo(fSaveToStreamWriter);
-      end;
+  begin
+    e := fXRef.Items[i];
+    if (e.ByteOffset <= 0) and
+       not e.Value.fSaveAtTheEnd then
+    begin
+      e.fByteOffset := fSaveToStreamWriter.Position;
+      e.Value.WriteValueTo(fSaveToStreamWriter);
+    end;
+  end;
 end;
 
 procedure TPdfDocument.SaveToStreamDirectEnd;
 var
   i: PtrInt;
+  fnt: TPdfFontTrueType;
+  e: TPdfXrefEntry;
 begin
   if (self = nil) or
      (fSaveToStreamWriter = nil) then
@@ -9084,9 +9078,11 @@ begin
     // update font details after all the pages are drawn
     PrepareFontSubsets;
     for i := 0 to fFontList.Count - 1 do
-      with TPdfFontTrueType(fFontList.List[i]) do
-        if fTrueTypeFontsIndex <> 0 then
-          PrepareForSaving;
+    begin
+      fnt := fFontList.List[i];
+      if fnt.fTrueTypeFontsIndex <> 0 then
+        fnt.PrepareForSaving;
+    end;
     fFontSubsets := nil;
     // serialize Tagged PDF structure tree before writing pending objects
     if fTagged and (fStructTree <> nil) then
@@ -9102,13 +9098,15 @@ begin
     if fFileFormat >= pdf15 then
       fTrailer.ToCrossReference(self);
     for i := 1 to fXRef.ItemCount - 1 do
-      with fXRef.Items[i] do
-        if (fByteOffset <= 0) and
-           (Value <> fTrailer.fCrossReference) then
-        begin
-          fByteOffset := fSaveToStreamWriter.Position;
-          Value.WriteValueTo(fSaveToStreamWriter);
-        end;
+    begin
+      e := fXRef.Items[i];
+      if (e.fByteOffset <= 0) and
+         (e.Value <> fTrailer.fCrossReference) then
+      begin
+        e.fByteOffset := fSaveToStreamWriter.Position;
+        e.Value.WriteValueTo(fSaveToStreamWriter);
+      end;
+    end;
     fTrailer.XrefAddress := fSaveToStreamWriter.Position;
     if Assigned(fTrailer.fCrossReference) and
       (fTrailer.fCrossReference.ObjectNumber > 0) then
@@ -9492,14 +9490,13 @@ var
   i: PtrInt;
 begin
   // if specified standard font exists in fontlist, returns it
-  with fFontList do
-    for i := 0 to Count - 1 do
-    begin
-      result := TPdfFont(List[i]);
-      if (result.FTrueTypeFontsIndex = 0) and
-         (result.Name = APdfFontName) then
-        exit;
-    end;
+  for i := 0 to fFontList.Count - 1 do
+  begin
+    result := TPdfFont(fFontList.List[i]);
+    if (result.FTrueTypeFontsIndex = 0) and
+       (result.Name = APdfFontName) then
+      exit;
+  end;
   result := nil;
 end;
 
@@ -9510,16 +9507,15 @@ var
 begin
   // if specified font exists in fontlist, returns the WinAnsi version
   if AFontIndex >= 0 then
-    with fFontList do
-      for i := 0 to Count - 1 do
-      begin
-        result := TPdfFont(List[i]);
-        if (result.FTrueTypeFontsIndex = AFontIndex) and
-           not TPdfFontTrueType(result).Unicode and
-           (TPdfFontTrueType(result).Style = AStyle) and
-           (TPdfFontTrueType(result).fLogFont.CharSet = ACharSet) then
-          exit;
-      end;
+    for i := 0 to fFontList.Count - 1 do
+    begin
+      result := TPdfFont(fFontList.List[i]);
+      if (result.FTrueTypeFontsIndex = AFontIndex) and
+         not TPdfFontTrueType(result).Unicode and
+         (TPdfFontTrueType(result).Style = AStyle) and
+         (TPdfFontTrueType(result).fLogFont.CharSet = ACharSet) then
+        exit;
+    end;
   result := nil;
 end;
 
@@ -9547,14 +9543,13 @@ var
 begin
   h := crc32c(0, pointer(aTtf), length(aTtf));
   for i := 0 to high(fFontFile2) do
-    with fFontFile2[i] do
-      if (Hash = h) and
-         (Subtype = aSubtype) and
-         (Data = aTtf) then // crc32c is only a pre-filter: compare the bytes
-      begin
-        result := Stream; // already embedded by another style or instance
-        exit;
-      end;
+    if (fFontFile2[i].Hash = h) and
+       (fFontFile2[i].Subtype = aSubtype) and
+       (fFontFile2[i].Data = aTtf) then // crc32c is only a pre-filter: compare the bytes
+    begin
+      result := fFontFile2[i].Stream; // already embedded by another style or instance
+      exit;
+    end;
   result := TPdfStream.Create(self);
   result.Writer.Add(aTtf);
   if aSubtype <> '' then
@@ -9565,13 +9560,10 @@ begin
     result.fAttributes.AddItem('Length1', length(aTtf));
   n := length(fFontFile2);
   SetLength(fFontFile2, n + 1);
-  with fFontFile2[n] do
-  begin
-    Hash := h;
-    Subtype := aSubtype;
-    Data := aTtf;
-    Stream := result;
-  end;
+  fFontFile2[n].Hash := h;
+  fFontFile2[n].Subtype := aSubtype;
+  fFontFile2[n].Data := aTtf;
+  fFontFile2[n].Stream := result;
 end;
 
 // deterministic 'ABCDEF+' tag, so that identical input gives identical output
@@ -9665,12 +9657,15 @@ var
   face: PdfString;
   h: cardinal;
   ok: boolean;
+  sub: PPdfFontSubset;
 begin
   fFontSubsets := nil;
   for i := 0 to fFontList.Count - 1 do
-    with TPdfFontTrueType(fFontList.List[i]) do
-      if fTrueTypeFontsIndex <> 0 then // not a TPdfFontTrueType otherwise
-        fSubsetIndex := 0;
+  begin
+    fnt := fFontList.List[i];
+    if fnt.fTrueTypeFontsIndex <> 0 then // not a TPdfFontTrueType otherwise
+      fnt.fSubsetIndex := 0;
+  end;
   // PDF/A-1 (6.3.5) requires a /CIDSet for every subset CIDFont, which this
   // engine does not write: such documents keep embedding the whole face
   if not PdfCanSubsetRetainingGids or
@@ -9708,23 +9703,23 @@ begin
   // 2. subset each face once: all its fonts then share the same bytes, and
   // GetOrCreateFontFile2() still embeds them as a single stream
   for j := 0 to high(fFontSubsets) do
-    with fFontSubsets[j] do
-    begin
-      ok := FontSubsetter.Subset(Face, Request,
-        TPdfFontTrueType(Font).fFace.Handle, Subset);
-      // a subset of a CID-keyed face has to keep its CIDs: the content
-      // was written with them
-      if ok and
-         (TPdfFontTrueType(Font).GetCff = pcCidKeyed) and
-         not PdfSubsetKeepsCids(Subset, TPdfFontTrueType(Font).fCff,
-           Request.Glyphs) then
-        ok := false;
-      if ok then
-        Tag := SubsetTag(Subset)
-      else
-        Subset := ''; // e.g. a face hb-subset refuses: embed the whole one
-      Face := '';
-    end;
+  begin
+    sub := @fFontSubsets[j];
+    ok := FontSubsetter.Subset(sub^.Face, sub^.Request,
+      TPdfFontTrueType(sub^.Font).fFace.Handle, sub^.Subset);
+    // a subset of a CID-keyed face has to keep its CIDs: the content
+    // was written with them
+    if ok and
+       (TPdfFontTrueType(sub^.Font).GetCff = pcCidKeyed) and
+       not PdfSubsetKeepsCids(sub^.Subset, TPdfFontTrueType(sub^.Font).fCff,
+         sub^.Request.Glyphs) then
+      ok := false;
+    if ok then
+      sub^.Tag := SubsetTag(sub^.Subset)
+    else
+      sub^.Subset := ''; // e.g. a face hb-subset refuses: embed the whole one
+    sub^.Face := '';
+  end;
 end;
 
 {$ifdef OSWINDOWS}
@@ -9745,15 +9740,14 @@ var
   i: PtrInt;
 begin
   // if specified font exists in fontlist, returns the WinAnsi version
-  with fFontList do
-    for i := 0 to Count - 1 do
-    begin
-      result := TPdfFont(List[i]);
-      if (result.FTrueTypeFontsIndex <> 0) and
-         not TPdfFontTrueType(result).Unicode and
-         CompareLogFontW(TPdfFontTrueType(result).fLogFont, AFontLog) then
-        exit;
-    end;
+  for i := 0 to fFontList.Count - 1 do
+  begin
+    result := TPdfFont(fFontList.List[i]);
+    if (result.FTrueTypeFontsIndex <> 0) and
+       not TPdfFontTrueType(result).Unicode and
+       CompareLogFontW(TPdfFontTrueType(result).fLogFont, AFontLog) then
+      exit;
+  end;
   result := nil;
 end;
 {$endif OSWINDOWS}
@@ -10075,12 +10069,12 @@ procedure TPdfDocument.DrawImage(const AName: PdfString;
 begin
   if DrawAt <> nil then
     if ClipRc <> nil then
-      with DrawAt^ do
-        Canvas.DrawXObjectEx(Left, Top, Width, Height,
-          ClipRc^.Left, ClipRc^.Top, ClipRc^.Width, ClipRc^.Height, AName)
+      Canvas.DrawXObjectEx(DrawAt^.Left, DrawAt^.Top, DrawAt^.Width,
+        DrawAt^.Height, ClipRc^.Left, ClipRc^.Top, ClipRc^.Width,
+        ClipRc^.Height, AName)
     else
-      with DrawAt^ do
-        Canvas.DrawXObject(Left, Top, Width, Height, AName);
+      Canvas.DrawXObject(DrawAt^.Left, DrawAt^.Top, DrawAt^.Width,
+        DrawAt^.Height, AName);
 end;
 
 function TPdfDocument.CreateOptionalContentGroup(
@@ -10857,8 +10851,7 @@ begin
   if not fFace.GetCharAbcWidths(32, 255, abc) or
      (length(abc) < 224) then
     exit;
-  with abc[0] do
-    fDefaultWidth := abcA + integer(abcB) + abcC; // the space character
+  fDefaultWidth := abc[0].abcA + integer(abc[0].abcB) + abc[0].abcC; // the space character
   fFixedWidth := fFace.GetTextMetrics(tm) and
                  (tm.tmPitchAndFamily and 1 {TMPF_FIXED_PITCH} = 0);
   if fFixedWidth then
@@ -10866,8 +10859,8 @@ begin
       fWidth[ord(c)] := fDefaultWidth
   else
     for c := #32 to #255 do
-      with abc[ord(c) - 32] do
-        fWidth[ord(c)] := abcA + integer(abcB) + abcC;
+      fWidth[ord(c)] := abc[ord(c) - 32].abcA + integer(abc[ord(c) - 32].abcB) +
+        abc[ord(c) - 32].abcC;
   result := true;
 end;
 
@@ -10962,8 +10955,8 @@ function TPdfCanvas.SetFont(const AName: RawUtf8; ASize: single;
     result := fDoc.GetRegisteredNotTrueTypeFont(STANDARDFONTS[base].name);
     if result = nil then
     begin // font not already registered -> add now
-      with STANDARDFONTS[base] do
-        result := TPdfFontType1.Create(fDoc.fXRef, name, Widths);
+      result := TPdfFontType1.Create(fDoc.fXRef, STANDARDFONTS[base].name,
+        STANDARDFONTS[base].Widths);
       fDoc.RegisterFont(result);
     end;
     SetPdfFont(result, ASize);
@@ -11128,13 +11121,10 @@ begin
   if Clipping then
   begin
     GSave;
-    with ARect do
-    begin
-      MoveTo(Left, Top);
-      LineTo(Left, Bottom);
-      LineTo(Right, Bottom);
-      LineTo(Right, Top);
-    end;
+    MoveTo(ARect.Left, ARect.Top);
+    LineTo(ARect.Left, ARect.Bottom);
+    LineTo(ARect.Right, ARect.Bottom);
+    LineTo(ARect.Right, ARect.Top);
     ClosePath;
     Clip;
     NewPath;
@@ -11214,7 +11204,7 @@ end;
 procedure TPdfCanvas.DrawXObjectPrepare(const AXObjectName: PdfString);
 var
   x: TPdfXObject;
-  o: TPdfDictionary;
+  o, fonts: TPdfDictionary;
   i: integer;
 begin
   // drawing object must be registered. check object name
@@ -11227,11 +11217,12 @@ begin
   if o.ValueByName(AXObjectName) = nil then
     o.AddItem(AXObjectName, x);
   if x.InheritsFrom(TPdfFormXObject) then
-    with TPdfFormXObject(x).fFontList do
-      for i := 0 to ItemCount - 1 do
-        with Items[i] do
-          if fPageFontList.ValueByName(Key) = nil then
-            fPageFontList.AddItem(Key, Value);
+  begin
+    fonts := TPdfFormXObject(x).fFontList;
+    for i := 0 to fonts.ItemCount - 1 do
+      if fPageFontList.ValueByName(fonts.Items[i].Key) = nil then
+        fPageFontList.AddItem(fonts.Items[i].Key, fonts.Items[i].Value);
+  end;
 end;
 
 procedure TPdfCanvas.DrawXObject(X, Y, AWidth, AHeight: single;
@@ -11264,21 +11255,21 @@ end;
 // Special Graphics State
 
 procedure TPdfCanvas.GSave;
+var
+  ts: ^TPdfTextStateSaved;
 begin
   if fPage <> nil then
   begin
     if fGStateDepth >= length(fTextStateSaved) then
       SetLength(fTextStateSaved, fGStateDepth + 8);
-    with fTextStateSaved[fGStateDepth] do
-    begin
-      Font := fPage.fFont;
-      FontSize := fPage.fFontSize;
-      WordSpace := fPage.fWordSpace;
-      CharSpace := fPage.fCharSpace;
-      HorizontalScaling := fPage.fHorizontalScaling;
-      Leading := fPage.fLeading;
-      FontReselect := fFontReselect;
-    end;
+    ts := @fTextStateSaved[fGStateDepth];
+    ts^.Font := fPage.fFont;
+    ts^.FontSize := fPage.fFontSize;
+    ts^.WordSpace := fPage.fWordSpace;
+    ts^.CharSpace := fPage.fCharSpace;
+    ts^.HorizontalScaling := fPage.fHorizontalScaling;
+    ts^.Leading := fPage.fLeading;
+    ts^.FontReselect := fFontReselect;
   end;
   inc(fGStateDepth);
   if fContents <> nil then
@@ -11286,28 +11277,30 @@ begin
 end;
 
 procedure TPdfCanvas.GRestore;
+var
+  ts: ^TPdfTextStateSaved;
 begin
   if fGStateDepth > 0 then
   begin
     dec(fGStateDepth);
     if (fPage <> nil) and
        (fGStateDepth < length(fTextStateSaved)) then
-      with fTextStateSaved[fGStateDepth] do
       begin
+        ts := @fTextStateSaved[fGStateDepth];
         // as Q restores Tf, Tw, Tc, Tz and TL - but no font: text drawn
         // without one keeps the font of before, as it did
-        if Font <> nil then
+        if ts^.Font <> nil then
         begin
-          fPage.fFont := Font;
-          fPage.fFontSize := FontSize;
-          fFontReselect := FontReselect; // a Tf owed before the q is again
+          fPage.fFont := ts^.Font;
+          fPage.fFontSize := ts^.FontSize;
+          fFontReselect := ts^.FontReselect; // a Tf owed before the q is again
         end
         else
           fFontReselect := fPage.fFont <> nil;
-        fPage.fWordSpace := WordSpace;
-        fPage.fCharSpace := CharSpace;
-        fPage.fHorizontalScaling := HorizontalScaling;
-        fPage.fLeading := Leading;
+        fPage.fWordSpace := ts^.WordSpace;
+        fPage.fCharSpace := ts^.CharSpace;
+        fPage.fHorizontalScaling := ts^.HorizontalScaling;
+        fPage.fLeading := ts^.Leading;
       end;
   end;
   if fCTMDepth > fGStateDepth + 1 then
@@ -11788,6 +11781,7 @@ function TPdfCanvas.UnicodeTextWidth(PW: PWideChar): single;
 var
   s: PdfString;
   i, w, w2: integer;
+  wa: TPdfFontTrueType;
 begin
   w := 0;
   if PW <> nil then
@@ -11805,20 +11799,22 @@ begin
       end;
     end
     else
-      with TPdfFontTrueType(fPage.fFont).WinAnsiFont do
-        while PW^ <> #0 do
-        begin
-          w2 := GetWideCharWidth(PW^);
-          // a character the font lacks: where it is drawn - the fallback
-          // font, or glyph 0 of this font, whose advance is its /DW
-          if w2 = 0 then
-            if FallbackOn then
-              w2 := FallbackCharWidth(PW^)
-            else
-              w2 := fDefaultWidth;
-          inc(w, w2);
-          inc(PW);
-        end;
+    begin
+      wa := TPdfFontTrueType(fPage.fFont).WinAnsiFont;
+      while PW^ <> #0 do
+      begin
+        w2 := wa.GetWideCharWidth(PW^);
+        // a character the font lacks: where it is drawn - the fallback
+        // font, or glyph 0 of this font, whose advance is its /DW
+        if w2 = 0 then
+          if wa.FallbackOn then
+            w2 := wa.FallbackCharWidth(PW^)
+          else
+            w2 := wa.fDefaultWidth;
+        inc(w, w2);
+        inc(PW);
+      end;
+    end;
   result := (w * fPage.fFontSize) / 1000;
 end;
 
@@ -11989,21 +11985,21 @@ begin
   if CalcCurveArcData(
        centerx, centery, W, H, Sx, Sy, Ex, Ey, clockwise, arctype, res) then
     for i := 0 to high(res) do
-      with res[i] do
-        case res of
-          caMoveto:
-            MoveTo(S2X(pts[0].x), S2Y(pts[0].Y));
-          caLine:
-            LineTo(S2X(pts[0].x), S2Y(pts[0].Y));
-          caCurve:
-            CurveToC(S2X(pts[0].x), S2Y(pts[0].Y), S2X(pts[1].x), S2Y(pts[1].Y),
-              S2X(pts[2].x), S2Y(pts[2].Y));
-          caPosition:
-            begin
-              position.x := round(pts[0].x);
-              position.y := round(pts[0].Y);
-            end;
-        end;
+      case res[i].res of
+        caMoveto:
+          MoveTo(S2X(res[i].pts[0].x), S2Y(res[i].pts[0].Y));
+        caLine:
+          LineTo(S2X(res[i].pts[0].x), S2Y(res[i].pts[0].Y));
+        caCurve:
+          CurveToC(S2X(res[i].pts[0].x), S2Y(res[i].pts[0].Y),
+            S2X(res[i].pts[1].x), S2Y(res[i].pts[1].Y),
+            S2X(res[i].pts[2].x), S2Y(res[i].pts[2].Y));
+        caPosition:
+          begin
+            position.x := round(res[i].pts[0].x);
+            position.y := round(res[i].pts[0].Y);
+          end;
+      end;
 end;
 
 procedure TPdfCanvas.PointI(x, y: single);
@@ -12660,11 +12656,10 @@ begin
       inc(row, aPixels.Stride);
     end;
     if aPixels.HasColorKey then
-      with aPixels do
-        fAttributes.AddItem('Mask', TPdfArray.CreateReals(nil,
-          [(ColorKey and $ff), (ColorKey and $ff),
-           (ColorKey shr 8 and $ff), (ColorKey shr 8 and $ff),
-           (ColorKey shr 16 and $ff), (ColorKey shr 16 and $ff)]));
+      fAttributes.AddItem('Mask', TPdfArray.CreateReals(nil,
+        [(aPixels.ColorKey and $ff), (aPixels.ColorKey and $ff),
+         (aPixels.ColorKey shr 8 and $ff), (aPixels.ColorKey shr 8 and $ff),
+         (aPixels.ColorKey shr 16 and $ff), (aPixels.ColorKey shr 16 and $ff)]));
   end;
   fAttributes.AddItem('Width', fPixelWidth);
   fAttributes.AddItem('Height', fPixelHeight);
@@ -12932,16 +12927,15 @@ begin
   // add encryption dictionary object
   if aDoc.fEncryptionObject = nil then
     aDoc.fEncryptionObject := TPdfDictionary.Create(aDoc.fXRef);
-  with aDoc.fEncryptionObject, DICT[fLevel] do
-  begin
-    AddItem('Filter', 'Standard');
-    AddItem('V', v);
-    AddItem('R', r);
-    AddItem('Length', L);
-    AddItem('P', fFlags); // expected to be written as signed integer
-    AddItem('O', TPdfClearText.Create(@fOwnerPass, SizeOf(fOwnerPass)));
-    AddItem('U', TPdfClearText.Create(@fUserPass, SizeOf(fUserPass)));
-  end;
+  aDoc.fEncryptionObject.AddItem('Filter', 'Standard');
+  aDoc.fEncryptionObject.AddItem('V', DICT[fLevel].v);
+  aDoc.fEncryptionObject.AddItem('R', DICT[fLevel].r);
+  aDoc.fEncryptionObject.AddItem('Length', DICT[fLevel].L);
+  aDoc.fEncryptionObject.AddItem('P', fFlags); // expected to be written as signed integer
+  aDoc.fEncryptionObject.AddItem('O',
+    TPdfClearText.Create(@fOwnerPass, SizeOf(fOwnerPass)));
+  aDoc.fEncryptionObject.AddItem('U',
+    TPdfClearText.Create(@fUserPass, SizeOf(fUserPass)));
   aDoc.fTrailer.Attributes.AddItem('Encrypt', aDoc.fEncryptionObject);
 end;
 
@@ -13073,19 +13067,16 @@ begin
   stdCf.AddItem('CFM', 'AESV2');
   stdCf.AddItem('Length', 16);
   cfDict.AddItem('StdCF', stdCf);
-  with aDoc.fEncryptionObject do
-  begin
-    AddItem('Filter', 'Standard');
-    AddItem('V', 4);
-    AddItem('R', 4);
-    AddItem('Length', 128);
-    AddItem('CF', cfDict);
-    AddItem('StmF', 'StdCF');
-    AddItem('StrF', 'StdCF');
-    AddItem('P', fFlags);
-    AddItem('O', TPdfClearText.Create(@fOwnerPass, SizeOf(fOwnerPass)));
-    AddItem('U', TPdfClearText.Create(@fUserPass, SizeOf(fUserPass)));
-  end;
+  aDoc.fEncryptionObject.AddItem('Filter', 'Standard');
+  aDoc.fEncryptionObject.AddItem('V', 4);
+  aDoc.fEncryptionObject.AddItem('R', 4);
+  aDoc.fEncryptionObject.AddItem('Length', 128);
+  aDoc.fEncryptionObject.AddItem('CF', cfDict);
+  aDoc.fEncryptionObject.AddItem('StmF', 'StdCF');
+  aDoc.fEncryptionObject.AddItem('StrF', 'StdCF');
+  aDoc.fEncryptionObject.AddItem('P', fFlags);
+  aDoc.fEncryptionObject.AddItem('O', TPdfClearText.Create(@fOwnerPass, SizeOf(fOwnerPass)));
+  aDoc.fEncryptionObject.AddItem('U', TPdfClearText.Create(@fUserPass, SizeOf(fUserPass)));
   aDoc.fTrailer.Attributes.AddItem('Encrypt', aDoc.fEncryptionObject);
 end;
 
