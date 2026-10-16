@@ -870,6 +870,23 @@ Process, agreed in the forum:
     not squashed or rebased, or the list must follow. Left for their own
     PRs: `with` (122) and the fields without `f`; `raise Exception` in the
     report (10) and `zugferd_demo` (1)
+
+    **No `with`, done** (branch `pr/no-with`, one commit per unit, on the
+    fallback step's bug-fix PR): the 122 `with` of the report (2),
+    `mormot.pdf` (56) and `mormot.pdf.canvas` (64) written out, then the
+    seven fields renamed: `TPdfWrite.fB`, `fBEnd`, `fBEnd4`, `TPdfEnum.fCanvas`,
+    `fObj`, `fDC`, `fDCIndex`. A scanner listed for each `with` the names
+    bound to its object - from the type declarations of the unit, of
+    `mormot.pdf`, `mormot.lib.core`, `mormot.core.data` and FPC's Windows
+    records - and those a member of Self, a local or a parameter shadows;
+    the canvas unit was rewritten by a token-aware tool from those lists,
+    function results as locals. The renames went through the compiler:
+    the declaration first, then each use FPC reported. Object code is no
+    proof here (a `with` evaluates its object once): tests and golden
+    files unchanged on every compiler, the EMF ones on Windows. Found on
+    the way, kept as it was: `TPdfWrite.AddGlyphFromChar` selects the
+    fallback font on `TPdfDocument.Canvas`, the page canvas, not on the
+    canvas it draws on - they differ for a form XObject; a fix of its own
 - **Into the trunk after mORMot 2.5** (Arnaud, gist, 2026-10-11): the trunk
   is in its 2.5 release cycle, so the work stays in the branches until 2.5
   is out and merges then; the trunk's old `mormot.ui.pdf` and
