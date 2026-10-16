@@ -292,6 +292,9 @@ v0.10.0 (2026-09-30).
   compares the class exactly does not. `zugferd_demo` now reports the
   export's own error (`ExportPdfStream(Stream, true)`) instead of "PDF
   export failed"
+- **Fixed: fallback text in a form XObject** (`TPdfFormWithCanvas`)
+  drawn before the first `AddPage` raised an access violation: the fallback
+  font was chosen through the document's canvas, which has no page yet
 - **Changed under PDF/A:** a character neither the font nor the fallback
   font has raises `EPdfInvalidOperation` (was `Exception`, and only when no
   fallback font was registered at all): PDF/A forbids the box glyph
