@@ -761,7 +761,7 @@ type
   /// buffered writer class, specialized for PDF encoding
   TPdfWrite = class
   protected
-    B, BEnd, BEnd4: PAnsiChar;
+    fB, fBEnd, fBEnd4: PAnsiChar;
     fDestStream: TStream;
     fDestStreamPosition: integer;
     fAddGlyphFont: (fNone, fMain, fFallBack);
@@ -4949,10 +4949,10 @@ end;
 
 function TPdfWrite.Add(c: AnsiChar): TPdfWrite;
 begin
-  if B >= BEnd then // avoid GPF
+  if fB >= fBEnd then // avoid GPF
     Save;
-  B^ := c;
-  inc(B);
+  fB^ := c;
+  inc(fB);
   result := self;
 end;
 
@@ -4961,29 +4961,29 @@ var
   t: TTemp24;
   P: PAnsiChar;
 begin
-  if BEnd - B <= 24 then
+  if fBEnd - fB <= 24 then
     Save;
   if cardinal(Value) < 1000 then
     if cardinal(Value) < 10 then
     begin
-      B^ := AnsiChar(Value + 48);
-      inc(B);
+      fB^ := AnsiChar(Value + 48);
+      inc(fB);
     end
     else if cardinal(Value) < 100 then
     begin
-      PWord(B)^ := TwoDigitLookupW[Value];
-      inc(B, 2);
+      PWord(fB)^ := TwoDigitLookupW[Value];
+      inc(fB, 2);
     end
     else
     begin
-      PCardinal(B)^ := UINT_999[Value].TextLo;
-      inc(B, 3);
+      PCardinal(fB)^ := UINT_999[Value].TextLo;
+      inc(fB, 3);
     end
   else
   begin
     P := StrInt32(@t[23], Value);
-    MoveFast(P^, B^, @t[23] - P);
-    inc(B, @t[23] - P);
+    MoveFast(P^, fB^, @t[23] - P);
+    inc(fB, @t[23] - P);
   end;
   result := self;
 end;
@@ -5001,7 +5001,7 @@ end;
 
 function TPdfWrite.Add(Text: PAnsiChar; Len: PtrInt): TPdfWrite;
 begin
-  if BEnd - B <= Len then
+  if fBEnd - fB <= Len then
   begin
     Save;
     inc(fDestStreamPosition, Len);
@@ -5009,8 +5009,8 @@ begin
   end
   else
   begin
-    MoveFast(Text^, B^, Len);
-    inc(B, Len);
+    MoveFast(Text^, fB^, Len);
+    inc(fB, Len);
   end;
   result := self;
 end;
@@ -5021,7 +5021,7 @@ var
   i64: array[0..1] of Int64 absolute t;
 begin
 //  assert(DigitCount<high(t));
-  if BEnd - B <= 16 then
+  if fBEnd - fB <= 16 then
     Save;
   i64[0] := $3030303030303030; // t[0..14]='0'
   i64[1] := $2030303030303030; // t[15]=' '
@@ -5029,8 +5029,8 @@ begin
     Value := 0;
   StrUInt32(@t[15], Value);
   inc(DigitCount); // append trailing t[15]=' '
-  MoveFast(t[16 - DigitCount], B^, DigitCount);
-  inc(B, DigitCount);
+  MoveFast(t[16 - DigitCount], fB^, DigitCount);
+  inc(fB, DigitCount);
   result := self;
 end;
 
@@ -5039,7 +5039,7 @@ var
   Buffer: ShortString;
   L: PtrInt;
 begin
-  if BEnd - B <= 32 then
+  if fBEnd - fB <= 32 then
     Save;
   {$ifdef DOUBLETOSHORT_USEGRISU}
   DoubleToAscii(0, 2, Value, @Buffer);
@@ -5053,8 +5053,8 @@ begin
       dec(L, 3)
     else
       dec(L); // '3.40' -> '3.4'
-  MoveFast(Buffer[1], B^, L);
-  inc(B, L);
+  MoveFast(Buffer[1], fB^, L);
+  inc(fB, L);
   result := self;
 end;
 
@@ -5095,35 +5095,35 @@ begin
   textend := Text + TextLen;
   while Text < textend do
   begin
-    if B >= BEnd4 then
+    if fB >= fBEnd4 then
       Save;
     case Text^ of
       '(', ')', '\':
-        PWord(B)^ := ord('\') + ord(Text^) shl 8;
+        PWord(fB)^ := ord('\') + ord(Text^) shl 8;
       #0:
         begin
-          PInteger(B)^ := ord('\') + ord('0') shl 8 + ord('0') shl 16 + ord('0') shl 24;
-          inc(B, 2);
+          PInteger(fB)^ := ord('\') + ord('0') shl 8 + ord('0') shl 16 + ord('0') shl 24;
+          inc(fB, 2);
         end;
       #8:
-        PWord(B)^ := ord('\') + ord('B') shl 8;
+        PWord(fB)^ := ord('\') + ord('B') shl 8;
       #9:
-        PWord(B)^ := ord('\') + ord('t') shl 8;
+        PWord(fB)^ := ord('\') + ord('t') shl 8;
       #10:
-        PWord(B)^ := ord('\') + ord('n') shl 8;
+        PWord(fB)^ := ord('\') + ord('n') shl 8;
       #12:
-        PWord(B)^ := ord('\') + ord('f') shl 8;
+        PWord(fB)^ := ord('\') + ord('f') shl 8;
       #13:
-        PWord(B)^ := ord('\') + ord('r') shl 8;
+        PWord(fB)^ := ord('\') + ord('r') shl 8;
     else
       begin
-        B^ := Text^;
-        inc(B);
+        fB^ := Text^;
+        inc(fB);
         inc(Text);
         continue;
       end;
     end;
-    inc(B, 2);
+    inc(fB, 2);
     inc(Text);
   end;
   result := self;
@@ -5142,23 +5142,23 @@ var
 begin
   if Text <> nil then
     repeat
-      if B >= BEnd4 then
+      if fB >= fBEnd4 then
         Save;
       c := ord(Text^);
       if c = 0 then
         break
       else if AnsiChar(c) in ESCAPENAME then
       begin
-        B[0] := '#';
-        B[1] := HexChars[c shr 4];
-        B[2] := HexChars[c and $F];
-        inc(B, 3);
+        fB[0] := '#';
+        fB[1] := HexChars[c shr 4];
+        fB[2] := HexChars[c and $F];
+        inc(fB, 3);
         inc(Text);
       end
       else
       begin
-        B^ := AnsiChar(c);
-        inc(B);
+        fB^ := AnsiChar(c);
+        inc(fB);
         inc(Text);
       end;
     until false;
@@ -5169,7 +5169,7 @@ function TPdfWrite.AddEscapeText(Text: PAnsiChar; Font: TPdfFont): TPdfWrite;
 begin // this function is intented to use with Tj or '
   if Text <> nil then
     repeat
-      if B >= BEnd4 then
+      if fB >= fBEnd4 then
         Save;
       if Font <> nil then
         include(Font.fWinAnsiUsed, Text^);
@@ -5178,21 +5178,21 @@ begin // this function is intented to use with Tj or '
           break;
         #160:
           begin        // fixed space is written as normal space
-            B^ := ' ';
-            inc(B);
+            fB^ := ' ';
+            inc(fB);
             inc(Text);
           end;
         #40, #41, #92:
           begin // see PDF 2nd ed. p. 290
-            B[1] := Text^;
-            B[0] := '\';
-            inc(B, 2);
+            fB[1] := Text^;
+            fB[0] := '\';
+            inc(fB, 2);
             inc(Text);
           end;
       else
         begin
-          B^ := Text^;
-          inc(B);
+          fB^ := Text^;
+          inc(fB);
           inc(Text);
         end;
       end;
@@ -5209,15 +5209,15 @@ begin
   PW := pointer(Bin);
   repeat
     L := len;
-    if PtrInt(BEnd - B) <= L * 2 then // note: PtrInt(BEnd - B) could be < 0
+    if PtrInt(fBEnd - fB) <= L * 2 then // note: PtrInt(BEnd - B) could be < 0
     begin
       Save;
       if L > high(fTmp) shr 1 then
         L := high(fTmp) shr 1;
     end;
-    mormot.core.text.BinToHex(PW, B, L);
+    mormot.core.text.BinToHex(PW, fB, L);
     inc(PByte(PW), L);
-    inc(B, L * 2);
+    inc(fB, L * 2);
     dec(len, L);
   until len = 0;
   result := self;
@@ -5227,15 +5227,15 @@ function TPdfWrite.AddHex4(aWordValue: cardinal): TPdfWrite;
 var
   v: cardinal;
 begin
-  if B >= BEnd4 then
+  if fB >= fBEnd4 then
     Save;
   v := aWordValue shr 8;
   aWordValue := aWordValue and $ff;
-  B[0] := HexChars[v shr 4];            // MSB stored first (BigEndian)
-  B[1] := HexChars[v and $F];
-  B[2] := HexChars[aWordValue shr 4];   // LSB stored last (BigEndian)
-  B[3] := HexChars[aWordValue and $F];
-  inc(B, 4);
+  fB[0] := HexChars[v shr 4];            // MSB stored first (BigEndian)
+  fB[1] := HexChars[v and $F];
+  fB[2] := HexChars[aWordValue shr 4];   // LSB stored last (BigEndian)
+  fB[3] := HexChars[aWordValue and $F];
+  inc(fB, 4);
   result := self;
 end;
 
@@ -5244,12 +5244,12 @@ begin
   while Count > 0 do
   begin
     dec(Count);
-    if B >= BEnd4 then
+    if fB >= fBEnd4 then
       Save;
-    B[0] := P[2];  // write the RGB value in expected order
-    B[1] := P[1];
-    B[2] := P[0];
-    inc(B, 3);
+    fB[0] := P[2];  // write the RGB value in expected order
+    fB[1] := P[1];
+    fB[2] := P[0];
+    inc(fB, 3);
     inc(P, PInc);
   end;
 end;
@@ -5264,7 +5264,7 @@ var
   tmp: ShortString;
   L: integer;
 begin
-  if BEnd - B <= 32 then
+  if fBEnd - fB <= 32 then
     Save;
   // Value := Trunc(Value * 100 + 0.5) / 100; // 2 decim rounding done by str()
   if abs(Value) < 1E-2 then
@@ -5284,8 +5284,8 @@ begin
     else
       inc(L);  // '3.45' -> '3.45 '
     tmp[L] := ' '; // append space at the end
-    MoveFast(tmp[1], B^, L);
-    inc(B, L);
+    MoveFast(tmp[1], fB^, L);
+    inc(fB, L);
   end;
   result := self;
 end;
@@ -5294,11 +5294,11 @@ function TPdfWrite.AddIntegerBin(value: integer; bytesize: cardinal): TPdfWrite;
 var
   i: cardinal;
 begin
-  if BEnd - B <= 4 then
+  if fBEnd - fB <= 4 then
     Save;
   for i := 1 to bytesize do
-    B[i - 1] := PAnsiChar(@value)[bytesize - i];
-  inc(B, bytesize);
+    fB[i - 1] := PAnsiChar(@value)[bytesize - i];
+  inc(fB, bytesize);
   result := self;
 end;
 
@@ -5307,7 +5307,7 @@ var
   tmp: ShortString;
   L: integer;
 begin
-  if BEnd - B <= 32 then
+  if fBEnd - fB <= 32 then
     Save;
   {$ifdef DOUBLETOSHORT_USEGRISU}
   DoubleToAscii(0, Decimals, Value, @tmp);
@@ -5316,8 +5316,8 @@ begin
   {$endif DOUBLETOSHORT_USEGRISU}
   L := ord(tmp[0]) + 1;
   tmp[L] := ' '; // append space at the end
-  MoveFast(tmp[1], B^, L);
-  inc(B, L);
+  MoveFast(tmp[1], fB^, L);
+  inc(fB, L);
   result := self;
 end;
 
@@ -5325,7 +5325,7 @@ function TPdfWrite.AddFrom(source: TStream): TPdfWrite;
 begin
   if Assigned(source) then
   begin
-    if B <> @fTmp then
+    if fB <> @fTmp then
       Save; // flush pending data from buffer
     if (fDestStreamPosition = 0) and
        fDestStream.InheritsFrom(TMemoryStream) then
@@ -5408,15 +5408,15 @@ begin
     {$endif USE_PDFSECURITY}
     repeat
       L := WideCharCount;
-      if BEnd - B <= L * 4 then
+      if fBEnd - fB <= L * 4 then
       begin
         Save;
         if L > high(fTmp) shr 2 then
           L := high(fTmp) shr 2; // max WideCharCount allowed in Tmp[]
       end;
-      BinToHex4(pointer(PW), B, L);
+      BinToHex4(pointer(PW), fB, L);
       inc(PByte(PW), L * 2);
-      inc(B, L * 4);
+      inc(fB, L * 4);
       dec(WideCharCount, L);
     until WideCharCount = 0;
     {$ifdef USE_PDFSECURITY}
@@ -5928,31 +5928,31 @@ var
   P: PAnsiChar;
   L: integer;
 begin
-  if BEnd - B <= 16 then
+  if fBEnd - fB <= 16 then
     Save;
   if cardinal(Value) < 1000 then
     if cardinal(Value) < 10 then
     begin
-      PWord(B)^ := Value + (48 + 32 shl 8);
-      inc(B, 2);
+      PWord(fB)^ := Value + (48 + 32 shl 8);
+      inc(fB, 2);
     end
     else if cardinal(Value) < 100 then
     begin
-      PCardinal(B)^ := TwoDigitLookupW[Value] + 32 shl 16;
-      inc(B, 3);
+      PCardinal(fB)^ := TwoDigitLookupW[Value] + 32 shl 16;
+      inc(fB, 3);
     end
     else
     begin
-      PCardinal(B)^ := UINT_999[Value].TextLo + 32 shl 24;
-      inc(B, 4);
+      PCardinal(fB)^ := UINT_999[Value].TextLo + 32 shl 24;
+      inc(fB, 4);
     end
   else
   begin
     t[24] := ' ';
     P := StrInt32(@t[24], Value);
     L := @t[25] - P;
-    MoveFast(P^, B^, L);
-    inc(B, @t[25] - P);
+    MoveFast(P^, fB^, L);
+    inc(fB, @t[25] - P);
   end;
   result := self;
 end;
@@ -5962,31 +5962,31 @@ begin
   fDoc := Destination;
   fDestStream := DestStream;
   fDestStreamPosition := fDestStream.Position;
-  B := @fTmp;
-  BEnd := B + high(fTmp);
-  BEnd4 := BEnd - 4;
+  fB := @fTmp;
+  fBEnd := fB + high(fTmp);
+  fBEnd4 := fBEnd - 4;
 end;
 
 function TPdfWrite.Position: integer;
 begin
-  result := fDestStreamPosition + PtrInt((PtrUInt(B) - PtrUInt(@fTmp)));
+  result := fDestStreamPosition + PtrInt((PtrUInt(fB) - PtrUInt(@fTmp)));
 end;
 
 procedure TPdfWrite.Save;
 var
   L: integer;
 begin
-  L := PtrUInt(B) - PtrUInt(@fTmp);
+  L := PtrUInt(fB) - PtrUInt(@fTmp);
   inc(fDestStreamPosition, L);
   fDestStream.WriteBuffer(fTmp, L);
-  B := @fTmp;
+  fB := @fTmp;
 end;
 
 function TPdfWrite.ToPdfString: PdfString;
 begin
   if fDestStreamPosition = 0 then
     // we remained in the internal buffer -> not necessary to use stream
-    FastSetRawByteString(result, @fTmp, PtrUInt(B) - PtrUInt(@fTmp))
+    FastSetRawByteString(result, @fTmp, PtrUInt(fB) - PtrUInt(@fTmp))
   else
   begin
     // we used the stream -> flush remaining, and get whole data at once
