@@ -26,10 +26,14 @@ uses
   {$ifndef FPC}
   windows,       // MulDiv - before Graphics: its record TBitmap would hide the class
   {$endif FPC}
-  classes, sysutils, types, math,
+  classes,
+  sysutils,
+  types,
+  math,
   graphics,
   {$ifdef FPC}
-  lcltype, lclintf,
+  lcltype,
+  lclintf,
   {$endif FPC}
   contnrs,       // TObjectList
   mormot.core.base,
@@ -738,7 +742,8 @@ end;
 
 function PixelsToMM(Pixels: integer; DPI: integer): integer;
 begin
-  if DPI <= 0 then DPI := 96;
+  if DPI <= 0 then
+    DPI := 96;
   result := MulDiv(Pixels, 2540, DPI);
 end;
 
@@ -1155,7 +1160,8 @@ begin
     width measurements: text wraps too early, inline positions drift, and
     right-aligned text is shifted. }
   result := fMeasureBitmap.Canvas.Font.PixelsPerInch;
-  if result <= 0 then result := 96;
+  if result <= 0 then
+    result := 96;
 end;
 
 { =========================================================================
@@ -1208,7 +1214,8 @@ end;
 
 procedure TGDIPages.RestoreLayout;
 begin
-  if fSavedCount <= 0 then exit;
+  if fSavedCount <= 0 then
+    exit;
   dec(fSavedCount);
   fFontName := fSavedStates[fSavedCount].FontName;
   fFontSize := fSavedStates[fSavedCount].FontSize;
@@ -1292,8 +1299,10 @@ var
   HeadingRec: THeadingInfo;
   YInPoints: single;
 begin
-  if PDF = nil then exit;
-  if fHeadingCount = 0 then exit;
+  if PDF = nil then
+    exit;
+  if fHeadingCount = 0 then
+    exit;
 
   { Process each heading and add to PDF outline }
   for i := 0 to fHeadingCount - 1 do
@@ -1902,7 +1911,8 @@ begin
     LineW := 0;
     for i := 0 to high(Words) do
     begin
-      if Words[i] = '' then continue;
+      if Words[i] = '' then
+        continue;
       WordW := MeasureTextWidthPt(Words[i]);
       if WordW < 0 then
         WordW := PixelsToMM(fMeasureBitmap.Canvas.TextWidth(Utf8ToString(Words[i])),
@@ -2563,9 +2573,11 @@ begin
     Bridge := TPdfVclCanvas(ACanvas)
   else
     Bridge := nil;
-  if (PageIndex < 0) or (PageIndex >= fPageCount) then exit;
+  if (PageIndex < 0) or (PageIndex >= fPageCount) then
+    exit;
   Page := fPages[PageIndex];
-  if (Page.PageWidth <= 0) or (Page.PageHeight <= 0) then exit;
+  if (Page.PageWidth <= 0) or (Page.PageHeight <= 0) then
+    exit;
 
   { === cache the rendering parameters once === }
   fRenderScaleX := DestWidth / (Page.PageWidth + Page.MarginLeft + Page.MarginRight);
@@ -2917,9 +2929,11 @@ begin
       // Resolve author/subject: use dedicated export fields when set,
       // otherwise fall back to the report-level Author/Subject properties.
       PdfAuthor := fExportPdfAuthor;
-      if PdfAuthor = '' then PdfAuthor := fAuthor;
+      if PdfAuthor = '' then
+        PdfAuthor := fAuthor;
       PdfSubject := fExportPdfSubject;
-      if PdfSubject = '' then PdfSubject := fSubject;
+      if PdfSubject = '' then
+        PdfSubject := fSubject;
       PDF.Info.Title := Utf8ToString(TrimU(fTitle));
       { PDF/UA needs a title (dc:title, DisplayDocTitle): without one, the
         first H1 names the document }

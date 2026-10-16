@@ -176,9 +176,12 @@ begin
     for x := 0 to w - 1 do
     begin
       col := fImage.Colors[x, y];
-      p^ := col.red shr 8; inc(p);   // R (16-bit -> 8-bit)
-      p^ := col.green shr 8; inc(p); // G
-      p^ := col.blue shr 8; inc(p);  // B
+      p^ := col.red shr 8; // R (16-bit -> 8-bit)
+      inc(p);
+      p^ := col.green shr 8; // G
+      inc(p);
+      p^ := col.blue shr 8; // B
+      inc(p);
     end;
 end;
 

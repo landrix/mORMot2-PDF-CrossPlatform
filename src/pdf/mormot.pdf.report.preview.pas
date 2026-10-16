@@ -145,8 +145,10 @@ begin
   fPaintBox.Height := ZH;
   CX := (fScrollBox.ClientWidth - ZW) div 2;
   CY := (fScrollBox.ClientHeight - ZH) div 2;
-  if CX < GRAY_MARGIN then CX := GRAY_MARGIN;
-  if CY < GRAY_MARGIN then CY := GRAY_MARGIN;
+  if CX < GRAY_MARGIN then
+    CX := GRAY_MARGIN;
+  if CY < GRAY_MARGIN then
+    CY := GRAY_MARGIN;
   fPaintBox.Left := CX;
   fPaintBox.Top := CY;
   if fEdtZoom <> nil then
@@ -253,7 +255,8 @@ var
   ZoomVal: double;
   Code: integer;
 begin
-  if fEdtZoom = nil then exit;
+  if fEdtZoom = nil then
+    exit;
   S := Trim(fEdtZoom.Text);
   if (length(S) > 0) and (S[length(S)] = '%') then
     S := Trim(Copy(S, 1, length(S) - 1));
@@ -264,8 +267,10 @@ begin
     exit;
   end;
   ZoomVal := ZoomVal / 100.0;
-  if ZoomVal < 0.25 then ZoomVal := 0.25;
-  if ZoomVal > 4.0 then ZoomVal := 4.0;
+  if ZoomVal < 0.25 then
+    ZoomVal := 0.25;
+  if ZoomVal > 4.0 then
+    ZoomVal := 4.0;
   fZoom := ZoomVal;
   ApplyZoom;
 end;

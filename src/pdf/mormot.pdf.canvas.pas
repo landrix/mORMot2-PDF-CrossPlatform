@@ -598,10 +598,14 @@ begin
   fLastFontStyle := Font.Style;
   fLastFontColor := Font.Color;
   byte(style) := 0;
-  if fsBold in Font.Style then include(style, pfsBold);
-  if fsItalic in Font.Style then include(style, pfsItalic);
-  if fsUnderline in Font.Style then include(style, pfsUnderline);
-  if fsStrikeOut in Font.Style then include(style, pfsStrikeOut);
+  if fsBold in Font.Style then
+    include(style, pfsBold);
+  if fsItalic in Font.Style then
+    include(style, pfsItalic);
+  if fsUnderline in Font.Style then
+    include(style, pfsUnderline);
+  if fsStrikeOut in Font.Style then
+    include(style, pfsStrikeOut);
   fPdfCanvas.SetFont(StringToUtf8(Font.Name), abs(Font.Size), style, Font.Charset);
   fPdfCanvas.SetRGBFillColor(ColorToRGB(Font.Color));
   fStateValid := true;
