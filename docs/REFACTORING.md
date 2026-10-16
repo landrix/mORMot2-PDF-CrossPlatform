@@ -1150,6 +1150,21 @@ Process, agreed in the forum:
   Unicode instance exists. `test_runner` 1135/1135 on Windows, 1137 on
   Linux, 1170 on macOS
 
+  **Bug fixes** (the fallback step's bug-fix PR, branch
+  `pr/fallback-fixes`, on the formatting PR): Martin's two notes on #53.
+  `TPdfTtf.GlyphOf` bounds `length(fcmap) * 2`: right, `fcmap` is a
+  `TWordDynArray`. `GetWideCharWidth` gives 0 for a character the font
+  lacks; its callers measure such a character where it is drawn
+  (`FallbackCharWidth`): in the fallback font, or - lacking there too -
+  as glyph 0, whose advance is the `/DW` of the font drawing it, since
+  `/W` leaves glyph 0 out. Before, `GetAnsiCharWidth` (`TextWidth` of a
+  `PdfString`) kept the 0 for a CFF face (`Type0Only`, found by Fable)
+  and for a character the fallback lacks too, and `UnicodeTextWidth`
+  took `DEFAULT_PDF_WIDTH` (600) where the viewer advanced the `/DW` (the
+  space: 260 in the test fonts). `TestPlainFallback` (U+2122, in neither
+  test font) and `Type0Routing` (a WinAnsi letter the fake CFF face
+  lacks) fail without the fix; no golden file changed
+
 ## Open Decisions
 
 - ~~Golden files in `mormot2tests`~~ decided 2026-10-13: compared by

@@ -1323,7 +1323,9 @@ var
   s: RawByteString;
   raised: boolean;
   PDF: TPdfDocument;
-  arabic, sans: single;
+  arabic, sans, space: single;
+  tm: PdfString;
+  tmw: array[0..1] of WideChar;
 begin
   { a WinAnsi character the main face lacks went out in its simple font as
     .notdef: it is drawn by glyph now, where it falls back - read from the
@@ -1373,12 +1375,24 @@ begin
     PDF.AddPage;
     PDF.Canvas.SetFont(TEST_SANS, 24, [], PDF_DEFAULT_CHARSET);
     sans := PDF.Canvas.UnicodeTextWidth('Ab');
+    space := PDF.Canvas.UnicodeTextWidth(' '); // the /DW of Test Sans
     PDF.Canvas.SetFont(ARABIC_FONT, 24, [], PDF_DEFAULT_CHARSET);
     arabic := PDF.Canvas.UnicodeTextWidth('Ab');
     Check((sans > 0) and
           (abs(arabic - sans) < 0.01), 'measured with the fallback font');
     arabic := PDF.Canvas.TextWidth('Ab');
     Check(abs(arabic - sans) < 0.01, 'TextWidth of a PdfString too');
+    // TRADE MARK SIGN, WinAnsi $99, which neither font has: drawn as glyph 0
+    // of the fallback font, which advances its /DW - measured so by both
+    // APIs; TextWidth gave 0 (Martin, #53), UnicodeTextWidth 600 (Fable)
+    tm := AnsiChar($99);
+    tmw[0] := WideChar($2122);
+    tmw[1] := #0;
+    sans := PDF.Canvas.UnicodeTextWidth(@tmw);
+    arabic := PDF.Canvas.TextWidth(tm);
+    Check((space > 0) and
+          (abs(sans - space) < 0.01) and
+          (abs(arabic - space) < 0.01), 'a character no font has: the /DW');
   finally
     PDF.Free;
   end;
