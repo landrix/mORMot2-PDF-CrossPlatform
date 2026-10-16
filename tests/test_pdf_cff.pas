@@ -1400,6 +1400,20 @@ begin
   Pdf.Canvas.EndText;
 end;
 
+var
+  // the width of 'A' in the fallback font, for Type0Routing
+  RoutedFallbackWidth: single;
+
+// 'A', which the routing face lacks, measured in it and in its fallback font
+procedure DrawRoutedFallback(Pdf: TPdfDocument);
+begin
+  Pdf.FontFallBackName := TEST_SANS;
+  Pdf.Canvas.SetFont(TEST_SANS, 12, [], PDF_DEFAULT_CHARSET);
+  RoutedFallbackWidth := Pdf.Canvas.TextWidth('A');
+  Pdf.Canvas.SetFont(FAKE_FACE, 12, [], PDF_DEFAULT_CHARSET);
+  RoutedWidth := Pdf.Canvas.TextWidth('A');
+end;
+
 // after Unicode text the page font is the Unicode font of the face
 procedure DrawUnicodeThenMeasure(Pdf: TPdfDocument);
 begin
@@ -1523,6 +1537,15 @@ begin
     [1, 5, 6, 7, 2, 3, 7, 41], ''), '', nil, DrawUnicodeThenMeasure);
   CheckSame(RoutedWidth, (440 + 400 + 340 + 440 + 400) * 12 / 1000, 1E-4,
     'TextWidth on the Unicode font');
+  // a WinAnsi character the CFF face lacks is drawn by the fallback font:
+  // TextWidth measures it there - it gave 0 (Fable, on Martin's #53 note)
+  Check(EnsureTestFonts, 'the test fonts registered');
+  RoutedWidth := 0;
+  RoutedFallbackWidth := 0;
+  FakeFacePdf(face, '', nil, DrawRoutedFallback);
+  Check((RoutedFallbackWidth > 0) and
+        (abs(RoutedWidth - RoutedFallbackWidth) < 1E-4),
+    'a character the CFF face lacks: measured in the fallback font');
 end;
 
 procedure TPdfCffTests.WinAnsiFontNotWritten;
