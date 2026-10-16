@@ -281,6 +281,17 @@ v0.10.0 (2026-09-30).
   macOS HarfBuzz now shapes a mixed line script by script: `Ab` followed by
   Arabic left the Arabic unjoined, and `RightToLeftText` turned Latin around
   as well - it is the base direction of the line now, as on Windows
+- **Changed: `TGDIPages` raises `EPdfReport`** (`ESynException`'s
+  descendant, new in `mormot.pdf.report`) for every error of its own:
+  drawing before `NewPage` or after `EndDoc`, a heading level outside 1..6
+  or an empty heading, a table call out of order (were `Exception`), and
+  `ExportPdfTagged` after the first page, `Protect`/`Encrypt` or no page at
+  export (were `ESynException`). The messages start with the class name,
+  as in the trunk: `TGDIPages.EndTable: BeginTable not called`. A handler
+  `on ESynException` or `on Exception` still catches them; one that
+  compares the class exactly does not. `zugferd_demo` now reports the
+  export's own error (`ExportPdfStream(Stream, true)`) instead of "PDF
+  export failed"
 - **Changed under PDF/A:** a character neither the font nor the fallback
   font has raises `EPdfInvalidOperation` (was `Exception`, and only when no
   fallback font was registered at all): PDF/A forbids the box glyph
@@ -294,7 +305,7 @@ v0.10.0 (2026-09-30).
   tests get fonts of their own this way, so that they stop depending on the
   fonts a machine has installed - a first test now, the font tests to follow
 - **Changed: `TGDIPages.ExportPDF` raises** (R-28 Phase 4 bug fixes) when
-  the export fails, and `ESynException` when there is no page and when
+  the export fails, and `EPdfReport` when there is no page and when
   `Protect` or `Encrypt` is true - both were ignored, the file came out
   unprotected; encryption comes after R-28 with the trunk's
   `ExportPdfEncryption*` properties. It builds the PDF in memory and writes
