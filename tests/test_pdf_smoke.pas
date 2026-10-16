@@ -1518,7 +1518,11 @@ begin
         (PosEx('> Tj', xobj) > 0), 'the glyphs in the form stream');
   CheckEqual(CountOccurrences(' 24 Tf', xobj), 2,
     'its font and the fallback font selected there');
-  Check(Pos(RawByteString('/Font<<>>'), s) > 0, 'no font on the page');
+  // the page object, up to its endobj, lists no font
+  i := Pos(RawByteString('/Type/Page/'), s);
+  Check((i > 0) and
+        (PosEx('/Font<<>>', Copy(s, i, PosEx('endobj', s, i) - i)) > 0),
+    'no font on the page');
 end;
 
 // Text in the test face whose only cmap is (0,3), by both text APIs

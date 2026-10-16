@@ -589,13 +589,12 @@ begin
   try
     for y := 0 to B.Height - 1 do
       for x := 0 to B.Width - 1 do
-        with img.Colors[x, y] do
-        begin
-          d[0] := AnsiChar(red shr 8);
-          d[1] := AnsiChar(green shr 8);
-          d[2] := AnsiChar(blue shr 8);
-          inc(d, 3);
-        end;
+      begin
+        d[0] := AnsiChar(img.Colors[x, y].red shr 8);
+        d[1] := AnsiChar(img.Colors[x, y].green shr 8);
+        d[2] := AnsiChar(img.Colors[x, y].blue shr 8);
+        inc(d, 3);
+      end;
   finally
     img.Free;
   end;
@@ -1251,7 +1250,7 @@ var
   rtl: boolean;
   previous: IFontProvider;
   text: PdfString;
-  saved: TPdfTextStateSavedDynArray;
+  saved, cur: TPdfTextStateSavedDynArray;
   depth, i: integer;
   kept: boolean;
 begin
@@ -1339,13 +1338,13 @@ begin
     depth := TPdfCanvasPeek(doc.Canvas).fGStateDepth;
     doc.AddXObject('FrmW', TPdfForm.Create(doc, mf));
     kept := length(TPdfCanvasPeek(doc.Canvas).fTextStateSaved) >= depth;
+    cur := TPdfCanvasPeek(doc.Canvas).fTextStateSaved;
     for i := 0 to depth - 1 do
-      with TPdfCanvasPeek(doc.Canvas).fTextStateSaved[i] do
-        if kept and
-           ((Font <> saved[i].Font) or
-            (FontSize <> saved[i].FontSize) or
-            (WordSpace <> saved[i].WordSpace)) then
-          kept := false;
+      if kept and
+         ((cur[i].Font <> saved[i].Font) or
+          (cur[i].FontSize <> saved[i].FontSize) or
+          (cur[i].WordSpace <> saved[i].WordSpace)) then
+        kept := false;
     doc.Canvas.GRestore;
     doc.Canvas.BeginText;
     doc.Canvas.MoveTextPoint(40, 700);

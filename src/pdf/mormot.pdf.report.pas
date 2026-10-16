@@ -417,8 +417,6 @@ type
       AFontStyle: TFontStyles; ABkColor: TColor);
     procedure InitializeFormatRegistry;
     procedure AddHeadingsToOutline(PDF: TPdfDocumentVcl);
-    function NormalizeX(X: integer): integer;
-    function NormalizeY(Y: integer): integer;
     /// 1/100mm -> render pixels, without the integer rounding of ScaleX/ScaleY
     function ScaleXF(V: integer): single;
     function ScaleYF(V: integer): single;
@@ -1341,16 +1339,6 @@ begin
   end;
 end;
 
-function TGDIPages.NormalizeX(X: integer): integer;
-begin
-  result := X;
-end;
-
-function TGDIPages.NormalizeY(Y: integer): integer;
-begin
-  result := Y;
-end;
-
 procedure TGDIPages.EmitCanvasText(ACanvas: TCanvas; X, Y: integer;
   const S: RawUtf8);
 begin
@@ -1776,8 +1764,8 @@ begin
     // 0 = left - no adjustment
   end;
 
-  Cmd.X := NormalizeX(AdjustedX);
-  Cmd.Y := NormalizeY(Y);
+  Cmd.X := AdjustedX;
+  Cmd.Y := Y;
   AddCommand(Cmd);
 end;
 
@@ -1853,10 +1841,10 @@ var
 begin
   Cmd := NewCommand;
   Cmd.Kind := dckDrawLine;
-  Cmd.X := NormalizeX(X1);
-  Cmd.Y := NormalizeY(Y1);
-  Cmd.X2 := NormalizeX(X2);
-  Cmd.Y2 := NormalizeY(Y2);
+  Cmd.X := X1;
+  Cmd.Y := Y1;
+  Cmd.X2 := X2;
+  Cmd.Y2 := Y2;
   Cmd.LineWidth := Width;
   Cmd.Color := Color;
   AddCommand(Cmd);
@@ -1868,10 +1856,10 @@ var
 begin
   Cmd := NewCommand;
   Cmd.Kind := dckFillRect;
-  Cmd.X := NormalizeX(X1);
-  Cmd.Y := NormalizeY(Y1);
-  Cmd.X2 := NormalizeX(X2);
-  Cmd.Y2 := NormalizeY(Y2);
+  Cmd.X := X1;
+  Cmd.Y := Y1;
+  Cmd.X2 := X2;
+  Cmd.Y2 := Y2;
   Cmd.Color := Color;
   AddCommand(Cmd);
 end;
@@ -1932,7 +1920,7 @@ begin
           NewPage;
           Y := 0;
         end;
-        EmitTextCmd(NormalizeX(X), NormalizeY(Y), Line, 0);
+        EmitTextCmd(X, Y, Line, 0);
         inc(Y, LH);
         Line := Words[i];
         LineW := WordW;
@@ -1956,7 +1944,7 @@ begin
         NewPage;
         Y := 0;
       end;
-      EmitTextCmd(NormalizeX(X), NormalizeY(Y), Line, 0);
+      EmitTextCmd(X, Y, Line, 0);
       inc(Y, LH);
     end;
   finally
@@ -2061,20 +2049,20 @@ begin
     { Fill header background }
     Cmd := NewCommand;
     Cmd.Kind := dckFillRect;
-    Cmd.X := NormalizeX(CellX);
-    Cmd.Y := NormalizeY(fCurrentY);
-    Cmd.X2 := NormalizeX(CellX + CellWidth);
-    Cmd.Y2 := NormalizeY(fCurrentY + CellHeight);
+    Cmd.X := CellX;
+    Cmd.Y := fCurrentY;
+    Cmd.X2 := CellX + CellWidth;
+    Cmd.Y2 := fCurrentY + CellHeight;
     Cmd.Color := ABkColor;
     AddCommand(Cmd);
 
     { Draw header border }
     Cmd := NewCommand;
     Cmd.Kind := dckDrawRect;
-    Cmd.X := NormalizeX(CellX);
-    Cmd.Y := NormalizeY(fCurrentY);
-    Cmd.X2 := NormalizeX(CellX + CellWidth);
-    Cmd.Y2 := NormalizeY(fCurrentY + CellHeight);
+    Cmd.X := CellX;
+    Cmd.Y := fCurrentY;
+    Cmd.X2 := CellX + CellWidth;
+    Cmd.Y2 := fCurrentY + CellHeight;
     Cmd.Color := fTableLayout.GridColor;
     Cmd.LineWidth := 1;
     AddCommand(Cmd);
@@ -2097,12 +2085,12 @@ begin
       { right alignment: the text width has to be in the X position already }
       case AlignValue of
         1: { Right: X = right_edge - text_width, then the text is drawn left-aligned }
-          EmitTextCmd(NormalizeX(CellX + CellWidth - CELL_PADDING - MeasureTextWidthMM(Cells[i])), NormalizeY(CellY), Cells[i], 0);
+          EmitTextCmd(CellX + CellWidth - CELL_PADDING - MeasureTextWidthMM(Cells[i]), CellY, Cells[i], 0);
         2: { Center: use middle of cell }
-          EmitTextCmd(NormalizeX(CellX + CellWidth div 2), NormalizeY(CellY), Cells[i], AlignValue);
+          EmitTextCmd(CellX + CellWidth div 2, CellY, Cells[i], AlignValue);
       else
         { Left: normal left-aligned }
-        EmitTextCmd(NormalizeX(CellX + CELL_PADDING), NormalizeY(CellY), Cells[i], AlignValue);
+        EmitTextCmd(CellX + CELL_PADDING, CellY, Cells[i], AlignValue);
       end;
     finally
       fEmitRowHeader := false;
@@ -2251,20 +2239,20 @@ begin
     { Fill body background }
     Cmd := NewCommand;
     Cmd.Kind := dckFillRect;
-    Cmd.X := NormalizeX(CellX);
-    Cmd.Y := NormalizeY(fCurrentY);
-    Cmd.X2 := NormalizeX(CellX + CellWidth);
-    Cmd.Y2 := NormalizeY(fCurrentY + RowHeight);
+    Cmd.X := CellX;
+    Cmd.Y := fCurrentY;
+    Cmd.X2 := CellX + CellWidth;
+    Cmd.Y2 := fCurrentY + RowHeight;
     Cmd.Color := BgColor;
     AddCommand(Cmd);
 
     { Draw body border }
     Cmd := NewCommand;
     Cmd.Kind := dckDrawRect;
-    Cmd.X := NormalizeX(CellX);
-    Cmd.Y := NormalizeY(fCurrentY);
-    Cmd.X2 := NormalizeX(CellX + CellWidth);
-    Cmd.Y2 := NormalizeY(fCurrentY + RowHeight);
+    Cmd.X := CellX;
+    Cmd.Y := fCurrentY;
+    Cmd.X2 := CellX + CellWidth;
+    Cmd.Y2 := fCurrentY + RowHeight;
     Cmd.Color := fTableLayout.GridColor;
     Cmd.LineWidth := 1;
     AddCommand(Cmd);
@@ -2282,12 +2270,12 @@ begin
     { right alignment: the text width has to be in the X position already }
     case AlignValue of
       1: { Right: X = right_edge - text_width, then the text is drawn left-aligned }
-        EmitTextCmd(NormalizeX(CellX + CellWidth - CELL_PADDING - MeasureTextWidthMM(Values[i])), NormalizeY(CellY), Values[i], 0);
+        EmitTextCmd(CellX + CellWidth - CELL_PADDING - MeasureTextWidthMM(Values[i]), CellY, Values[i], 0);
       2: { Center: use middle of cell }
-        EmitTextCmd(NormalizeX(CellX + CellWidth div 2), NormalizeY(CellY), Values[i], AlignValue);
+        EmitTextCmd(CellX + CellWidth div 2, CellY, Values[i], AlignValue);
     else
       { Left: normal left-aligned }
-      EmitTextCmd(NormalizeX(CellX + CELL_PADDING), NormalizeY(CellY), Values[i], AlignValue);
+      EmitTextCmd(CellX + CELL_PADDING, CellY, Values[i], AlignValue);
     end;
 
     CellX := CellX + CellWidth;
@@ -2359,10 +2347,10 @@ begin
     // Draw cell background
     Cmd := NewCommand;
     Cmd.Kind := dckFillRect;
-    Cmd.X := NormalizeX(CellX);
-    Cmd.Y := NormalizeY(fCurrentY);
-    Cmd.X2 := NormalizeX(CellX + CellWidth);
-    Cmd.Y2 := NormalizeY(fCurrentY + RowHeight);
+    Cmd.X := CellX;
+    Cmd.Y := fCurrentY;
+    Cmd.X2 := CellX + CellWidth;
+    Cmd.Y2 := fCurrentY + RowHeight;
     if IsHeader then
       Cmd.Color := HEADER_COLOR
     else
@@ -2372,10 +2360,10 @@ begin
     // Draw cell border
     Cmd := NewCommand;
     Cmd.Kind := dckDrawRect;
-    Cmd.X := NormalizeX(CellX);
-    Cmd.Y := NormalizeY(fCurrentY);
-    Cmd.X2 := NormalizeX(CellX + CellWidth);
-    Cmd.Y2 := NormalizeY(fCurrentY + RowHeight);
+    Cmd.X := CellX;
+    Cmd.Y := fCurrentY;
+    Cmd.X2 := CellX + CellWidth;
+    Cmd.Y2 := fCurrentY + RowHeight;
     Cmd.Color := clBlack;
     Cmd.LineWidth := 1;
     AddCommand(Cmd);
@@ -2394,12 +2382,12 @@ begin
     { right alignment: the text width has to be in the X position already }
     case AlignValue of
       1: { Right: X = right_edge - text_width, then the text is drawn left-aligned }
-        EmitTextCmd(NormalizeX(CellX + CellWidth - CELL_PADDING - MeasureTextWidthMM(CellText)), NormalizeY(CellY), CellText, 0);
+        EmitTextCmd(CellX + CellWidth - CELL_PADDING - MeasureTextWidthMM(CellText), CellY, CellText, 0);
       2: { Center: use middle of cell }
-        EmitTextCmd(NormalizeX(CellX + CellWidth div 2), NormalizeY(CellY), CellText, AlignValue);
+        EmitTextCmd(CellX + CellWidth div 2, CellY, CellText, AlignValue);
     else
       { Left: normal left-aligned }
-      EmitTextCmd(NormalizeX(CellX + CELL_PADDING), NormalizeY(CellY), CellText, AlignValue);
+      EmitTextCmd(CellX + CELL_PADDING, CellY, CellText, AlignValue);
     end;
 
     CellX := CellX + CellWidth;

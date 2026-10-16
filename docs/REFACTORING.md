@@ -888,7 +888,12 @@ Process, agreed in the forum:
     the way, kept as it was: `TPdfWrite.AddGlyphFromChar` selects the
     fallback font on `TPdfDocument.Canvas`, the page canvas, not on the
     canvas it draws on - they differ for a form XObject; a fix of its own
-    (done, below)
+    (done, below).
+
+    The eight `with` left in the test units (Martin, #57) are written out
+    in the follow-up to #57 and #58, by hand: record copies and prefixes.
+    Two remain in the Android host form `tests/delphi13/android`, which
+    only builds for Android64 (FMX): for the next Delphi 13 run there.
 
     **Exceptions, done** (branch `pr/exceptions`, on `pr/no-with`): the
     report's 10 `raise Exception.Create` and 4 `ESynException` raises are
@@ -900,7 +905,8 @@ Process, agreed in the forum:
     has a `CheckRaised` in `TestMisuseRaises`. `zugferd_demo` passes
     `aRaiseException` instead of raising `Exception` itself. The two
     `{$IFDEF DEBUG}` asserts of `NormalizeX`/`NormalizeY` are gone (they
-    never ran in a release build, through the RTL's `Format`); the two
+    never ran in a release build, through the RTL's `Format`; the two
+    functions followed in the follow-up to #57 and #58); the two
     `Assert` in `TPdfEnum` (`mormot.pdf.canvas`) are the trunk's code and
     stay - the rule covers the errors a caller sees, not internal checks.
     `on E: Exception` handlers only catch and stay as they are
