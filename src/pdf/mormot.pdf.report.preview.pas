@@ -7,10 +7,10 @@ unit mormot.pdf.report.preview;
   *****************************************************************************
 
    Preview Window and Printing for TGDIPages (LCL)
-   - ShowReportPreview: the preview window
-   - PrintReport: printing through the LCL printer
-   - Kept apart from mormot.pdf.report, so that a console program records,
-     lays out and exports a report without forms or printer
+   - Report Preview and Printing
+   (ShowReportPreview: the preview window; PrintReport: printing through the
+   LCL printer; kept apart from mormot.pdf.report, so that a console program
+   records, lays out and exports a report without forms or printer)
 
   *****************************************************************************
 }
@@ -36,6 +36,9 @@ uses
   mormot.core.unicode,
   mormot.pdf.report;
 
+
+{ ************ Report Preview and Printing }
+
 /// show the pages of Report in a modal preview window
 // - zoom (buttons, edit field, Ctrl+wheel, Ctrl +/-/0), page navigation
 // (buttons, PgUp/PgDn/Home/End)
@@ -48,6 +51,9 @@ procedure PrintReport(Report: TGDIPages; From: integer = 0;
 
 
 implementation
+
+
+{ ************ Report Preview and Printing }
 
 const
   /// U+2212 MINUS SIGN

@@ -7,11 +7,12 @@ unit mormot.pdf.canvas;
   *****************************************************************************
 
     VCL/LCL Adapter of the PDF Engine
-    - TPdfVclCanvas, TPdfDocumentVcl: the TCanvas bridge, on every platform
-    - TBitmap/TGraphic images: CreateOrGetBitmapImage, CreateGraphicImage
-    - TPdfDocumentGdi for GDI/TCanvas rendering support (Windows)
-    - the paper size and resolution of the current printer (Windows)
-    - needs the VCL or the LCL: not for Delphi on Linux or Android
+    - TPdfVclCanvas: the TCanvas bridge
+    - TPdfDocumentGdi for GDI/TCanvas rendering support
+    (the bridge with TPdfDocumentVcl and the TBitmap/TGraphic images on every
+    platform; TPdfDocumentGdi and the paper size and resolution of the
+    current printer on Windows; needs the VCL or the LCL: not for Delphi on
+    Linux or Android)
 
   *****************************************************************************
 }
@@ -74,7 +75,7 @@ uses
   mormot.pdf;
 
 
-{************ TPdfVclCanvas: the TCanvas bridge }
+{ ************ TPdfVclCanvas: the TCanvas bridge }
 
 {$ifdef USE_GRAPHICS_UNIT}
 
@@ -131,10 +132,13 @@ type
     {$else}
     procedure DoLineTo(X, Y: integer);
   public
+    /// move the pen to X, Y, in canvas pixels - static in Delphi 7's TCanvas
     procedure MoveTo(X, Y: integer); reintroduce;
+    /// draw a line with the current Pen to X, Y, in canvas pixels
     procedure LineTo(X, Y: integer); reintroduce;
     {$endif PDF_CANVASVIRTUAL}
   public
+    /// draw AText at X, Y in canvas pixels, with the current Font
     procedure TextOut(X, Y: integer; const AText: string);
       {$ifdef PDF_CANVASVIRTUAL}override{$else}reintroduce{$endif};
     /// TextOut at a sub-pixel position
@@ -161,30 +165,42 @@ type
     // below the requested top, plus the descender of the current face
     function TextHeightFrac(const AText: string): single;
     /// integer TextExtent, rounded from TextWidthFrac/TextHeightFrac
-    // - TCanvas.TextWidth and TextHeight route through this method
+    // - TextWidth and TextHeight below do not call it: they round
+    // TextWidthFrac and TextHeightFrac themselves
     function TextExtent(const AText: string): TSize;
       {$ifdef PDF_CANVASVIRTUAL}override{$else}reintroduce{$endif};
+    /// TextWidthFrac, rounded
     function TextWidth(const AText: string): integer;
       {$ifdef PDF_CANVASVIRTUAL}override{$else}reintroduce{$endif};
+    /// TextHeightFrac, rounded
     function TextHeight(const AText: string): integer;
       {$ifdef PDF_CANVASVIRTUAL}override{$else}reintroduce{$endif};
+    /// draw a rectangle with the current Pen and Brush, in canvas pixels
     procedure Rectangle(X1, Y1, X2, Y2: integer);
       {$ifdef PDF_CANVASVIRTUAL}override{$else}reintroduce{$endif};
     /// Rectangle at sub-pixel coordinates
     // - TCanvas.Rectangle only takes integers, so an edge derived from
     // TextWidthFrac would be snapped back to the 1 px grid
     procedure RectangleFrac(X1, Y1, X2, Y2: single);
+    /// draw the ellipse inside a rectangle with the current Pen and Brush
     procedure Ellipse(X1, Y1, X2, Y2: integer);
       {$ifdef PDF_CANVASVIRTUAL}override{$else}reintroduce{$endif};
+    /// draw a rectangle with corners rounded by an X3 x Y3 ellipse
     procedure RoundRect(X1, Y1, X2, Y2, X3, Y3: integer);
       {$ifdef PDF_CANVASVIRTUAL}override{$else}reintroduce{$endif};
+    /// fill ARect with the current Brush, without border
     procedure FillRect(const ARect: TRect); reintroduce;
+    /// draw the connected lines through Points with the current Pen
     procedure Polyline(const Points: array of TPoint); reintroduce;
+    /// draw the closed polygon of Points with the current Pen and Brush
     procedure Polygon(const Points: array of TPoint); reintroduce;
+    /// draw AGraphic at X, Y in its own size, as a PDF image
     procedure Draw(X, Y: integer; AGraphic: TGraphic);
       {$ifdef PDF_CANVASVIRTUAL}override{$else}reintroduce{$endif};
+    /// draw AGraphic scaled into ARect, as a PDF image
     procedure StretchDraw(const ARect: TRect; AGraphic: TGraphic); reintroduce;
   public
+    /// create the bridge drawing on APdfCanvas, at the resolution of APdfDoc
     constructor Create(APdfDoc: TPdfDocumentVcl; APdfCanvas: TPdfCanvas);
     destructor Destroy; override;
     /// reset all cached state (call when switching to a new page)
@@ -302,7 +318,7 @@ function CurrentPrinterRes: TPoint;
 {$endif OSWINDOWS}
 
 
-{************ TPdfDocumentGdi for GDI/TCanvas rendering support }
+{ ************ TPdfDocumentGdi for GDI/TCanvas rendering support }
 
 
 {$ifdef USE_METAFILE}
@@ -494,7 +510,7 @@ type
 {$endif FPC}
 
 
-{************ TPdfVclCanvas: the TCanvas bridge }
+{ ************ TPdfVclCanvas: the TCanvas bridge }
 
 {$ifdef USE_GRAPHICS_UNIT}
 
@@ -1591,7 +1607,7 @@ begin
 end;
 {$endif USE_GRAPHICS_UNIT}
 
-{************ TPdfDocumentGdi for GDI/TCanvas rendering support }
+{ ************ TPdfDocumentGdi for GDI/TCanvas rendering support }
 
 {$ifdef USE_METAFILE}
 

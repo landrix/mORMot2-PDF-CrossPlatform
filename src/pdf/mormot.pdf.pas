@@ -10,8 +10,9 @@ unit mormot.pdf;
     - Shared types and functions
     - Internal classes mapping PDF objects
     - TPdfDocument TPdfPage main rendering classes
-    - platform backends: GDI on Windows, FreeType and HarfBuzz on POSIX
-    (TBitmap/TGraphic images and TPdfDocumentGdi: mormot.pdf.canvas)
+    - TPdfFontMeasurer Document-Independent Text Metrics
+    (platform backends: GDI on Windows, FreeType and HarfBuzz on POSIX;
+    TBitmap/TGraphic images and TPdfDocumentGdi: mormot.pdf.canvas)
 
   *****************************************************************************
 }
@@ -54,7 +55,7 @@ uses
 
 
 
-{************ Shared types and functions }
+{ ************ Shared types and functions }
 
 type
   // the types of mormot.pdf.types, so that "uses mormot.pdf" is enough for a
@@ -114,8 +115,8 @@ type
 
 {$ifndef OSWINDOWS}
 
-{ Windows charset/font constants - defined here for cross-platform compilation }
 const
+  /// Windows charset/font constants - defined here for cross-platform compilation
   ANSI_CHARSET         = 0;
   DEFAULT_CHARSET      = 1;
   SYMBOL_CHARSET       = 2;
@@ -132,7 +133,7 @@ const
 { some FPC/Delphi LCL/VCL compatibility definitions }
 
 type
-  // FPC wrappers are just pointless and confusing here
+  /// the VCL TPoint and TRect - FPC wrappers are just pointless and confusing here
   {$ifdef OSWINDOWS}
   TPoint = TPOINTL;
   PPoint = PPOINTL;
@@ -150,8 +151,11 @@ type
   end;
   PRect = ^TRect;
 
+/// a TRect from its four coordinates, as the VCL Rect() function
 function Rect(ALeft, ATop, ARight, ABottom: integer): TRect;
   {$ifdef HASINLINE} inline; {$endif}
+
+/// a TPoint from its two coordinates, as the VCL Point() function
 function Point(X, Y: integer): TPoint;
   {$ifdef HASINLINE} inline; {$endif}
 
@@ -502,18 +506,24 @@ const
   /// the "pure/posix" Line Feed value
   LF = #10;
 
+  /// range of the horizontal scaling, in percent - TPdfPage clips to it
   PDF_MIN_HORIZONTALSCALING = 10;
   PDF_MAX_HORIZONTALSCALING = 300;
 
+  /// upper bound of the word spacing - not checked
   PDF_MAX_WORDSPACE = 300;
 
+  /// range of the character spacing - TPdfPage raises outside it
   PDF_MIN_CHARSPACE = -30;
   PDF_MAX_CHARSPACE = 300;
 
+  /// upper bound of a font size, in points - TPdfPage raises above it
   PDF_MAX_FONTSIZE  = 2000;
 
+  /// upper bound of the zoom factor of a TPdfDestination
   PDF_MAX_ZOOMSIZE  = 10;
 
+  /// upper bound of the text leading - TPdfPage raises above it
   PDF_MAX_LEADING   = 300;
 
   /// list of common fonts available by default since Windows 2000
@@ -624,7 +634,7 @@ function PdfFaceCffInfo(const Face: IFontFace; out Info: TPdfCffInfo): TPdfCffKi
 
 
 
-{************ Internal classes mapping PDF objects }
+{ ************ Internal classes mapping PDF objects }
 
 type
   TPdfObject = class;
@@ -741,7 +751,9 @@ type
     fUserPass, fOwnerPass: TPdfBuffer32;
     procedure EncodeBuffer(const BufIn; var BufOut; Count: cardinal); override;
   public
+    /// the size of InSize bytes once encrypted: the IV and the PKCS#7 blocks
     function GetEncryptedSize(InSize: cardinal): cardinal; override;
+    /// derive the keys from the passwords, add /Encrypt to the trailer
     procedure AttachDocument(aDoc: TPdfDocument); override;
   end;
 {$endif USE_PDFSECURITY}
@@ -898,7 +910,9 @@ type
   /// object manager is a virtual class to manage instance of indirect PDF objects
   TPdfObjectMgr = class
   public
+    /// register an indirect object, giving it its object number
     procedure AddObject(AObject: TPdfObject); virtual; abstract;
+    /// the indirect object of this number, nil if there is none
     function GetObject(ObjectID: integer): TPdfObject; virtual; abstract;
   end;
 
@@ -942,6 +956,7 @@ type
   /// a virtual PDF object, with an associated PDF Object Number
   TPdfVirtualObject = class(TPdfObject)
   public
+    /// create the object with this object number
     constructor Create(AObjectId: integer); reintroduce;
   end;
 
@@ -951,7 +966,9 @@ type
     fValue: boolean;
     procedure InternalWriteTo(W: TPdfWrite); override;
   public
+    /// create the object with its value
     constructor Create(AValue: boolean); reintroduce;
+    /// the stored value
     property Value: boolean
       read fValue write fValue;
   end;
@@ -968,7 +985,9 @@ type
     fValue: integer;
     procedure InternalWriteTo(W: TPdfWrite); override;
   public
+    /// create the object with its value
     constructor Create(AValue: integer); reintroduce;
+    /// the stored value
     property Value: integer
       read fValue write fValue;
   end;
@@ -979,7 +998,9 @@ type
     fValue: double;
     procedure InternalWriteTo(W: TPdfWrite); override;
   public
+    /// create the object with its value
     constructor Create(AValue: double); reintroduce;
+    /// the stored value
     property Value: double
       read fValue write fValue;
   end;
@@ -995,7 +1016,9 @@ type
     procedure InternalWriteTo(W: TPdfWrite); override;
     function SpaceNotNeeded: boolean; override;
   public
+    /// create the object with its value
     constructor Create(const AValue: RawByteString); reintroduce;
+    /// the stored value
     property Value: RawByteString
       read fValue write fValue;
   end;
@@ -1012,7 +1035,9 @@ type
     procedure InternalWriteTo(W: TPdfWrite); override;
     function SpaceNotNeeded: boolean; override;
   public
+    /// create the object with its value
     constructor Create(const AValue: RawUtf8); reintroduce;
+    /// the stored value
     property Value: RawUtf8
       read fValue write fValue;
   end;
@@ -1027,7 +1052,9 @@ type
     function GetValue: string;
     procedure SetValue(const Value: string);
   public
+    /// create the object with its value
     constructor Create(const AValue: string); reintroduce;
+    /// the stored value, converted from and to UTF-8
     property Value: string
       read GetValue write SetValue;
   end;
@@ -1047,6 +1074,7 @@ type
   protected
     procedure InternalWriteTo(W: TPdfWrite); override;
   public
+    /// create the object with a copy of Len bytes at Buffer
     constructor Create(Buffer: pointer; Len: integer); reintroduce;
   end;
 
@@ -1300,11 +1328,17 @@ type
     fXRef: TPdfXref;
     procedure WriteTo(var W: TPdfWrite);
   public
+    /// create the trailer of the objects AObjectMgr numbers
     constructor Create(AObjectMgr: TPdfObjectMgr);
+    /// release the trailer and its dictionary
     destructor Destroy; override;
+    /// switch to a cross-reference stream (PDF 1.5) holding the trailer
+    // entries, and to object streams unless the document is encrypted
     procedure ToCrossReference(Doc: TPdfDocument);
+    /// file offset of the cross-reference table or stream
     property XrefAddress: integer
       read fXrefAddress write fXrefAddress;
+    /// the trailer dictionary
     property Attributes: TPdfDictionary
       read fAttributes;
   end;
@@ -1375,7 +1409,7 @@ type
   end;
 
 
-{************ TPdfDocument TPdfPage main rendering classes }
+{ ************ TPdfDocument TPdfPage main rendering classes }
 
     /// any object stored to the PDF file
   // - these objects are the main unit of the PDF file content
@@ -1765,7 +1799,7 @@ type
     /// retrieve the PDF information, associated to the PDF document
     property Info: TPdfInfo
       read GetInfo;
-    // retrieve the PDF Document Catalog, as root of the document's object hierarchy
+    /// retrieve the PDF Document Catalog, as root of the document's object hierarchy
     property Root: TPdfCatalog
       read fRoot;
     /// retrieve the PDF Outline, associated to the PDF document
@@ -1812,7 +1846,7 @@ type
     // - must be set to true before any use of the OutlineRoot property
     property UseOutlines: boolean
       read fUseOutlines write fUseOutlines;
-    // used to define if the PDF document will use optional content (layers)
+    /// used to define if the PDF document will use optional content (layers)
     // - will also force PDF 1.5 as minimal file format
     // - must be set to true before calling NewDoc
     // - warning: setting a value to this propery after creation will call the
@@ -2756,9 +2790,11 @@ type
     { TODO: implement standard TPdfFontCIDFontType2 MBCS font }
   end;
 
+  /// the points of a metafile record, for indexed access
   TPointArray = array[word] of TPoint;
   PPointArray = ^TPointArray;
 
+  /// the 16-bit points of a metafile record, for indexed access
   TSmallPointArray = array[word] of TSmallPoint;
   PSmallPointArray = ^TSmallPointArray;
 
@@ -2771,7 +2807,6 @@ type
     numberSubtables: word;
   end;
   /// points to every 'cmap' encoding subtables
-
   TCmapSubTableArray = packed array[byte] of packed record
     /// Platform identifier
     platformID: word;
@@ -3342,7 +3377,7 @@ function PdfMetadataFacturX(const ConformanceLevel: RawUtf8;
   const Version: RawUtf8 = '1.0'; const DocumentType: RawUtf8 = 'INVOICE'): RawUtf8;
 
 
-{************ TPdfFontMeasurer Document-Independent Text Metrics }
+{ ************ TPdfFontMeasurer Document-Independent Text Metrics }
 
 type
   /// the metrics of one resolved face, in 1000-per-em PDF units
@@ -3425,7 +3460,7 @@ implementation
 
 
 
-{************ Shared types and functions }
+{ ************ Shared types and functions }
 
 procedure GetPdfFonts(Embedded: boolean;
   out SansFont, SerifFont, MonoFont: string);
@@ -3675,7 +3710,7 @@ end;
 
 type
   /// the face of a font the backend could not resolve: every query fails,
-  // as the FreeType backend answered a nil font before Phase 1b
+  // as the FreeType backend answered a nil font before IFontFace
   TPdfNoFace = class(TInterfacedObject, IFontFace)
   public
     function Handle: TFontHandle;
@@ -4076,7 +4111,7 @@ begin
 end;
 
 
-{************ Internal classes mapping PDF objects }
+{ ************ Internal classes mapping PDF objects }
 
 { TPdfObject }
 
@@ -8138,7 +8173,7 @@ begin
 end;
 
 
-{************ TPdfDocument TPdfPage main rendering classes }
+{ ************ TPdfDocument TPdfPage main rendering classes }
 
 { TPdfDocument }
 
@@ -10695,7 +10730,7 @@ const
     'TIMES', 'HELVETICA', 'COURIER');
 
 
-{************ TPdfFontMeasurer Document-Independent Text Metrics }
+{ ************ TPdfFontMeasurer Document-Independent Text Metrics }
 
 { TPdfFaceMetrics }
 

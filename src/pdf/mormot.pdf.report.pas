@@ -7,10 +7,12 @@ unit mormot.pdf.report;
   *****************************************************************************
 
    Cross-Platform Report Engine
-   - TGDIPages: records drawing commands, lays out pages, exports PDF
-   - Rendered on any TCanvas, and into PDF through TPdfDocumentVcl
-   - No forms and no printer: preview and printing are in
-     mormot.pdf.report.preview
+   - Report Types and Constants
+   - TGDIPages Report Engine
+   - Unit Conversion and Factur-X Helpers
+   (TGDIPages records drawing commands, lays out pages and exports PDF; it
+   renders on any TCanvas, and into PDF through TPdfDocumentVcl; no forms
+   and no printer: preview and printing are in mormot.pdf.report.preview)
 
   *****************************************************************************
 }
@@ -42,6 +44,9 @@ uses
   mormot.core.unicode,
   mormot.pdf.types,     // PDF_FONT_STD_* + TPdfStructRole (Tagged PDF)
   mormot.pdf.canvas;    // TPdfDocumentVcl, TPdfVclCanvas
+
+
+{ ************ Report Types and Constants }
 
 { what the ExportPdf* options take, re-exported: a report program uses this
   unit only - mormot.pdf beside it hides psA4 or TRect, depending on the
@@ -76,10 +81,6 @@ const
   pmUseThumbs = mormot.pdf.pmUseThumbs;
   pmFullScreen = mormot.pdf.pmFullScreen;
   pmUseAttachments = mormot.pdf.pmUseAttachments;
-
-{ =========================================================================
-  Phase 1 - Types and structure
-  ========================================================================= }
 
 const
   /// minimum gray border around preview page (in pixels)
@@ -253,8 +254,10 @@ type
     Relationship: TPdfAFRelationship;
   end;
 
-  { TGDIPages }
 
+{ ************ TGDIPages Report Engine }
+
+type
   /// cross-platform report engine
   // - records drawing operations as TDrawCommand lists (one list per page)
   // - renders on any TCanvas via RenderPageToCanvas
@@ -293,11 +296,11 @@ type
     fAuthor: RawUtf8;
     fSubject: RawUtf8;
 
-    { --- Phase 3: Header and Footer --- }
+    { --- header and footer --- }
     fHeaderText: RawUtf8;
     fFooterText: RawUtf8;
 
-    { --- Phase 4: Table state --- }
+    { --- table state --- }
     fTableStartY: integer;                       // Y position where table started
     fTableColWidths: array of integer;           // column widths in 1/100 mm
     fTableColAligns: array of TTableColumnAlign; // column alignments
@@ -316,7 +319,7 @@ type
     fInList: boolean;            // true between dckBeginList and dckEndList
     fRecordingListItem: boolean; // true while DrawListItem records its text
 
-    { --- Phase 2: 1x1 bitmap for LCL text measurement (preview fallback) --- }
+    { --- 1x1 bitmap for LCL text measurement (preview fallback) --- }
     fMeasureBitmap: TBitmap;
 
     { --- layout metrics taken from the PDF engine, not from the LCL --- }
@@ -326,7 +329,7 @@ type
     fSavedStates: array of TSavedState;
     fSavedCount: integer;
 
-    { --- Phase 5: Format registry (Markdown-style) --- }
+    { --- format registry (Markdown-style) --- }
     fFormatNames: TRawUtf8DynArray;   // H1..H6, Strong, Em, Code, etc.
     fFormats: array of TReportFormat; // same index as fFormatNames
     fHeadings: array of THeadingInfo; // stores heading metadata for PDF outlines
@@ -345,7 +348,7 @@ type
     fEmitRowHeader: boolean;        // true while a row-heading cell is emitted
     fInParagraph: integer;          // depth counter for nested paragraph begin/end
 
-    { --- Phase 6: PDF export options --- }
+    { --- PDF export options --- }
     fUseOutlines: boolean;
     fExportPdfLevel: TPdfALevel;
     fExportPdfEmbeddedTTF: boolean;
@@ -430,16 +433,23 @@ type
     procedure SetMarginBottom(Value: integer);
     procedure SetExportPdfTagged(Value: boolean);
   public
+    /// create an empty report: REPORT_FONT_SANS at 10 pt, A4, no page yet
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
 
-    { --- page management (Phase 3) --- }
+    { --- page management --- }
+    /// start a new page: the drawing calls after it record onto it
     procedure NewPage;
+    /// close the document: close an open list, refuse further drawing
+    // - call it before RenderPageToCanvas or an export
     procedure EndDoc;
 
-    { --- layout (Phase 1/2) --- }
+    { --- layout --- }
+    /// push the font name, size, style and TextColor - not the cursor
     procedure SaveLayout;
+    /// pop what the last SaveLayout pushed
     procedure RestoreLayout;
+    /// the font of the following text: a face name and a size in points
     procedure SetFont(const Name: RawUtf8; Size: integer);
     /// font styling (bold, italic, underline, strikethrough)
     property FontStyle: TFontStyles read fFontStyle write SetFontStyleProperty;
@@ -472,13 +482,13 @@ type
     /// bottom margin in 1/100 mm units - default 2000 (20mm) - updates page dimensions
     property MarginBottom: integer read fMarginBottom write SetMarginBottom;
 
-    { --- header/footer (Phase 3) --- }
+    { --- header/footer --- }
     /// set page header text with placeholders: {#} = page number (1-based), {total} = total pages
     procedure SetHeader(const AText: RawUtf8);
     /// set page footer text with placeholders: {#} = page number (1-based), {total} = total pages
     procedure SetFooter(const AText: RawUtf8);
 
-    { --- Phase 5: Format registry (Markdown-style) --- }
+    { --- format registry (Markdown-style) --- }
     /// define or override a named text format (H1, H2, P, Strong, Em, Code, etc.)
     // - used to customize the appearance of headings and text elements
     // - predefined formats: H1, H2, H3, H4, H5, H6 (headings with auto PDF bookmarks)
@@ -503,7 +513,7 @@ type
     // - raises exception if ALevel not in 1..6 or ATitle is empty
     procedure DrawHeading(ALevel: integer; const ATitle: RawUtf8);
 
-    { --- Phase 5: Inline text formatting (Markdown-style) --- }
+    { --- inline text formatting (Markdown-style) --- }
     /// draw text in bold (Strong format)
     procedure DrawStrong(X, Y: integer; const AText: RawUtf8); overload;
     /// inline bold: uses CurrentX/CurrentY, advances CurrentX
@@ -548,8 +558,12 @@ type
     procedure DrawCaption(X, MaxWidth, Y: integer; const ACaption: RawUtf8); overload;
 
     { --- metadata --- }
+    /// the document title of an export (/Title)
+    // - empty in a tagged export: the first H1, as PDF/UA needs a title
     property Title: RawUtf8 read fTitle write fTitle;
+    /// the author of an export (/Author) when ExportPdfAuthor is empty
     property Author: RawUtf8 read fAuthor write fAuthor;
+    /// the subject of an export (/Subject) when ExportPdfSubject is empty
     property Subject: RawUtf8 read fSubject write fSubject;
 
     { --- page geometry (read-only) --- }
@@ -559,6 +573,7 @@ type
     property PageHeight: integer read fPageHeight;
     /// current Y cursor within the printable area (1/100 mm)
     property CurrentY: integer read fCurrentY;
+    /// current X cursor within the printable area (1/100 mm)
     property CurrentX: integer read fCurrentX write fCurrentX;
     /// 1-based index of the last page (0 = no pages yet)
     property CurrentPageIndex: integer read GetCurrentPageIndex;
@@ -567,20 +582,28 @@ type
     /// direct access to page data by index - mainly for unit tests
     property Pages[Index: integer]: TPageData read GetPage;
 
-    { --- drawing (Phase 3) --- }
+    { --- drawing --- }
+    /// draw S at X, Y (1/100 mm), left-aligned; the cursor does not move
     procedure DrawText(X, Y: integer; const S: RawUtf8); overload;
     /// Draw text without coordinates: uses CurrentX/CurrentY, advances CurrentX by text width
     procedure DrawText(const S: RawUtf8); overload;
+    /// draw S right-aligned at X, Y (1/100 mm)
     procedure DrawTextRight(X, Y: integer; const S: RawUtf8);
+    /// draw S at X, Y (1/100 mm), left-aligned - the same as DrawText(X, Y, S)
     procedure DrawTextAt(X, Y: integer; const S: RawUtf8);
+    /// draw S centred at X, Y (1/100 mm)
     procedure DrawTextCenter(X, Y: integer; const S: RawUtf8);
     /// draw text with automatic word wrapping at MaxWidth (in 1/100 mm); updates CurrentY
     procedure DrawTextWrapped(X, MaxWidth, Y: integer; const AText: RawUtf8);
+    /// draw a line (1/100 mm); Width in screen pixels, 1 = hairline
     procedure DrawLine(X1, Y1, X2, Y2, Width: integer; Color: TColor);
+    /// fill a rectangle (1/100 mm) with Color, without border
     procedure DrawFilledRect(X1, Y1, X2, Y2: integer; Color: TColor);
+    /// two wrapped columns of the printable width, Gap (1/100 mm) between
+    // them, from CurrentY; CurrentY moves below the longer one
     procedure Columns2(Gap: integer; const Text1, Text2: RawUtf8);
 
-    { --- tables (Phase 4) --- }
+    { --- tables --- }
     /// begin table with TTableLayout definition (column widths, fonts, colors, alignment)
     // - TTableLayout defines all formatting; type-safe and explicit
     // - recommended primary API for new code
@@ -605,7 +628,7 @@ type
     /// end table block and finalize layout
     procedure EndTable;
 
-    { --- rendering (Phase 3) --- }
+    { --- rendering --- }
     /// render a page to a target canvas with optional DPI (for PDF export consistency)
     // - ACanvas: target canvas to render to (must be valid before call)
     // - PageIndex: 0-based page number to render (must be < PageCount)
@@ -618,7 +641,7 @@ type
                                  PageIndex, DestWidth, DestHeight: integer;
                                  SourceDPI: integer = 0);
 
-    { --- output (Phase 6) --- }
+    { --- output --- }
     /// export all pages as PDF to an existing stream; returns false on error
     // - uses ExportPdfLevel, ExportPdfEmbeddedTTF, ExportPdfAuthor/Subject
     // - IMPORTANT: uses PDF.ScreenLogPixels for MMToPixels (not the screen DPI)
@@ -637,7 +660,7 @@ type
                         Protect, Encrypt: boolean;
                         const ATitle, ACompany: RawUtf8);
 
-    { --- Phase 6: PDF export options --- }
+    { --- PDF export options --- }
     /// include PDF outlines/bookmarks (default: false)
     property UseOutlines: boolean read fUseOutlines write fUseOutlines;
     /// PDF/A compliance level; pdfaNone = standard PDF 1.x (default)
@@ -688,6 +711,9 @@ type
     procedure GetExportFonts(out SansFont, SerifFont, MonoFont: RawUtf8);
   end;
 
+
+{ ************ Unit Conversion and Factur-X Helpers }
+
 /// convert 1/100-mm value to pixels at the given DPI
 function MMToPixels(Value100: integer; DPI: integer): integer;
 /// convert pixels to 1/100-mm at the given DPI
@@ -703,9 +729,7 @@ function PdfMetadataFacturX(const ConformanceLevel: RawUtf8;
 implementation
 
 
-{ =========================================================================
-  Constants
-  ========================================================================= }
+{ ************ Report Types and Constants }
 
 const
   /// paper widths (portrait) in 1/100 mm
@@ -724,9 +748,7 @@ const
   LIST_BULLET: RawUtf8 =
     {$ifdef HASCODEPAGE} #$2022' ' {$else} #$E2#$80#$A2' ' {$endif};
 
-{ =========================================================================
-  Helper functions
-  ========================================================================= }
+{ ************ Unit Conversion and Factur-X Helpers }
 
 function MMToPixels(Value100: integer; DPI: integer): integer;
 begin
@@ -773,9 +795,9 @@ begin
   MonoFont := StringToUtf8(mono);
 end;
 
-{ =========================================================================
-  TGDIPages - construction
-  ========================================================================= }
+{ ************ TGDIPages Report Engine }
+
+{ TGDIPages }
 
 constructor TGDIPages.Create(AOwner: TComponent);
 begin
@@ -795,7 +817,7 @@ begin
   fMeasureBitmap.Width := 1;
   fMeasureBitmap.Height := 1;
   fMeasurer := TPdfFontMeasurer.Create;
-  // Phase 6 defaults
+  // PDF export defaults
   fUseOutlines := false;
   fExportPdfLevel := pdfaNone;
   fExportPdfEmbeddedTTF := true;
@@ -806,7 +828,7 @@ begin
   fExportPdfLanguage := 'en';
   fExportPdfPageMode := pmUseNone;
 
-  // Phase 5: Initialize format registry with default Markdown-style formats
+  // the format registry, with the default Markdown-style formats
   fHeadingCount := 0;
   SetLength(fHeadings, 0);
   fCurrentHeadingLevel := 0;
@@ -846,9 +868,7 @@ begin
   inherited;
 end;
 
-{ =========================================================================
-  Internal helpers - format registry initialization
-  ========================================================================= }
+{ --- format registry initialization --- }
 
 procedure TGDIPages.InitializeFormatRegistry;
 var
@@ -1009,9 +1029,7 @@ begin
   DefineFormat('Caption', Fmt);
 end;
 
-{ =========================================================================
-  Internal helpers - page geometry
-  ========================================================================= }
+{ --- page geometry --- }
 
 procedure TGDIPages.UpdatePageDimensions;
 var
@@ -1074,16 +1092,14 @@ begin
   result := fPages[Index];
 end;
 
-{ =========================================================================
-  Phase 2 - Text measurement
+{ --- text measurement --- }
 
-  Layout is measured with the PDF font engine, not with the LCL: the glyphs are
+{ Layout is measured with the PDF font engine, not with the LCL: the glyphs are
   placed by TPdfCanvas later on, so measuring with a widgetset canvas made the
   two disagree - every advance was rounded to a whole screen pixel and each
   platform returned a different text height for the same nominal font.
   The LCL canvas remains as an explicit fallback for fonts the
-  PDF engine cannot resolve, and for the on-screen preview.
-  ========================================================================= }
+  PDF engine cannot resolve, and for the on-screen preview. }
 
 procedure TGDIPages.SetupMeasureFont;
 begin
@@ -1164,9 +1180,7 @@ begin
     result := 96;
 end;
 
-{ =========================================================================
-  Phase 3 - Page recording
-  ========================================================================= }
+{ --- page recording --- }
 
 procedure TGDIPages.NewPage;
 begin
@@ -1869,7 +1883,7 @@ begin
   AddCommand(Cmd);
 end;
 
-{ --- Phase 3: word-wrap helper for Columns2 --- }
+{ --- word-wrap helper for Columns2 --- }
 
 procedure TGDIPages.RecordWrappedText(X: integer; var Y: integer;
   const S: RawUtf8; MaxWidthMM: integer);
@@ -1984,9 +1998,7 @@ begin
   fCurrentY := 0;
 end;
 
-{ ========================================================================
-  Phase 4: Table rendering with flexible TTableLayout
-  ======================================================================== }
+{ --- tables with TTableLayout --- }
 
 procedure TGDIPages.BeginTable(const Layout: TTableLayout);
 var
@@ -2420,9 +2432,7 @@ begin
   RestoreLayout;
 end;
 
-{ =========================================================================
-  Phase 3 - RenderPageToCanvas
-  ========================================================================= }
+{ --- RenderPageToCanvas --- }
 
 procedure TGDIPages.RenderPageToCanvas(ACanvas: TCanvas;
   PageIndex, DestWidth, DestHeight: integer;
@@ -2856,9 +2866,7 @@ begin
   end;
 end;
 
-{ =========================================================================
-  Phase 6 - ExportPdfStream / ExportPDF via TPdfDocumentVcl
-  ========================================================================= }
+{ --- ExportPdfStream and ExportPdf through TPdfDocumentVcl --- }
 
 procedure TGDIPages.SetExportPdfTagged(Value: boolean);
 begin
