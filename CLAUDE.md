@@ -83,7 +83,7 @@ examples/
   (each demo folder carries a short README.md; the source header of its .lpr
    (`layer1_demo`: .dpr) says the same thing in two sentences)
 tests/
-  test_runner.lpr              runs every suite below (green: 1138 assertions on Windows with FPC, Delphi 13 and Delphi 7 - Delphi 2010 last measured at 1135 (#53); 1173 on macOS, 1140 on Linux. The font tests assert on the test fonts of tests/fonts everywhere; a test that also needs an installed face (Hiragino Sans GB, Geeza Pro, Nirmala UI, the OS collections, the faces of cjk_system and arabic_system) asks SystemFaceExtra first - one assertion either way, a missing face of this OS's list reported, a failure with --require-fonts; only a missing shaper or subsetter library skips; the golden files add two per case with or without a baseline. Delphi 13, measured before the golden files: 259 on Windows, 171 on Linux64, 129 on Android64, layer 1 only)
+  test_runner.lpr              runs every suite below (green: 1154 assertions on Windows with FPC, Delphi 13 and Delphi 7 - Delphi 2010 last measured at 1135 (#53); 1189 on macOS, 1156 on Linux. The font tests assert on the test fonts of tests/fonts everywhere; a test that also needs an installed face (Hiragino Sans GB, Geeza Pro, Nirmala UI, the OS collections, the faces of cjk_system and arabic_system) asks SystemFaceExtra first - one assertion either way, a missing face of this OS's list reported, a failure with --require-fonts; only a missing shaper or subsetter library skips; the golden files add two per case with or without a baseline. Delphi 13, measured before the golden files: 259 on Windows, 171 on Linux64, 129 on Android64, layer 1 only)
   test_defines.inc             PDF_HASVCLCANVAS: the TCanvas bridge suites (all compilers since R-20)
   build_delphi7.bat            dcc32 build of one project (R-19)
   build_delphi2010.bat         the same with Delphi 2010, warnings on (R-25, Unicode Delphi)
@@ -194,7 +194,7 @@ fonts. The faces are subset on every platform — `libharfbuzz-subset` on
 Linux/macOS, `CreateFontPackage` with a glyph keep list on Windows (R-15) —
 both keeping glyph IDs, so `/ToUnicode` stays valid. Both
 have to be set **before the first page is drawn** — the font flags decide which
-metrics the layout is measured with — and both raise `ESynException` if set later.
+metrics the layout is measured with — and both raise `ESynException` if set later (`EPdfReport`, its descendant, from the report).
 
 Full details including dual-instance model, CMAP loading, text rendering chains, and RTL/Arabic limitations: `.claude/skills/fonts.md`
 

@@ -820,7 +820,8 @@ Process, agreed in the forum:
     of `mormot.pdf`; `raise Exception.Create` 10 times in
     `mormot.pdf.report`, once in `mormot.pdf` (the PDF/A font fallback,
     gone with the fallback step: `EPdfInvalidOperation` since 2026-10-15) and
-    once in `zugferd_demo` (`ESynException` instead - a change for callers
+    once in `zugferd_demo` (`EPdfReport` in the report, `aRaiseException`
+    in the demo: "Exceptions, done" below - a change for callers
     that catch by class, so "To Announce"); `with` outside comments and
     strings 57 times in `mormot.pdf`, 64 in `mormot.pdf.canvas` (mostly
     from the trunk's original), twice in `mormot.pdf.report`, 10 times in
@@ -887,6 +888,21 @@ Process, agreed in the forum:
     the way, kept as it was: `TPdfWrite.AddGlyphFromChar` selects the
     fallback font on `TPdfDocument.Canvas`, the page canvas, not on the
     canvas it draws on - they differ for a form XObject; a fix of its own
+
+    **Exceptions, done** (branch `pr/exceptions`, on `pr/no-with`): the
+    report's 10 `raise Exception.Create` and 4 `ESynException` raises are
+    `EPdfReport.RaiseUtf8('%.Method: reason', [self])`, the trunk's form;
+    `EPdfReport = class(ESynException)` is new in `mormot.pdf.report` -
+    decided with Codex and Fable: the trunk's `mormot.ui.report` has
+    `EReport`, but both units exist until the 2.5 merge, and a caller
+    catching the old unit's class would not catch the new one. Each misuse
+    has a `CheckRaised` in `TestMisuseRaises`. `zugferd_demo` passes
+    `aRaiseException` instead of raising `Exception` itself. The two
+    `{$IFDEF DEBUG}` asserts of `NormalizeX`/`NormalizeY` are gone (they
+    never ran in a release build, through the RTL's `Format`); the two
+    `Assert` in `TPdfEnum` (`mormot.pdf.canvas`) are the trunk's code and
+    stay - the rule covers the errors a caller sees, not internal checks.
+    `on E: Exception` handlers only catch and stay as they are
 - **Into the trunk after mORMot 2.5** (Arnaud, gist, 2026-10-11): the trunk
   is in its 2.5 release cycle, so the work stays in the branches until 2.5
   is out and merges then; the trunk's old `mormot.ui.pdf` and

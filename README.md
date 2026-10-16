@@ -158,7 +158,8 @@ Two rules:
   so tagging turns `EmbeddedTTF` on and `StandardFontsReplace` off. Ask for the
   font names *after* that, with `GetExportFonts` / `GetPdfFonts`.
 - **Switch it on before the first page.** The font flags decide which metrics
-  the layout is measured with; setting them later raises an exception.
+  the layout is measured with; setting them later raises `ESynException`
+  (`EPdfReport` from the report).
 
 ```pascal
 // Report engine

@@ -289,7 +289,7 @@ the footer is never orphaned on a page of its own.
 - `LineHeightMM` is `FontSize * LineHeightFactor` converted to 1/100 mm — no canvas involved, identical on every platform.
 - Column loop in both `DrawTableHeader` and `DrawTableRow`: `for i := 0 to Min(High(Cells), High(fTableColWidths))`.
 - `fTableColWidths`/`fTableColAligns` are populated from `Length(Layout.ColumnWidths)` / `Length(Layout.ColumnAligns)`. If `TTableLayout` typed constants have dynamic array fields that aren't properly initialized by the FPC version in use, `Length()` returns 0 and NO cells are drawn (not even the header). See note below.
-- `AddCommand` raises an exception ("call NewPage before drawing") if `fCurrCmds = nil` — i.e. if `NewPage` was not called before any draw method, or after `EndDoc`.
+- `AddCommand` raises `EPdfReport` ("call NewPage before drawing") if `fCurrCmds = nil` — i.e. if `NewPage` was not called before any draw method, or after `EndDoc`.
 
 **FPC typed constants with dynamic array fields:** `TTableLayout.ColumnWidths` and `ColumnAligns` are `array of Integer` / `array of TTableColumnAlign` (dynamic arrays). Initializing them via typed-constant syntax `(ColumnWidths: [1000, 2500, ...])` requires FPC ≥ 3.2. With FPC 3.0/3.1 the arrays may have `Length = 0`, making all table cells invisible. **Workaround for older FPC:** build the layout in a function or `initialization` block using `SetLength` + direct assignment instead of a typed constant.
 
@@ -360,11 +360,20 @@ Report.ExportPdfPageMode := pmUseAttachments; // opens the attachments panel;
                                      // pmUseNone (default) writes no /PageMode
 ```
 
-**Errors** (Phase 4's bug-fix PR): `ExportPdfStream` catches every exception
+**Errors:** the unit raises `EPdfReport = class(ESynException)` - the
+trunk's `mormot.ui.report` has `EReport` for the same; a name of its own,
+because both units exist until the 2.5 merge. Misuse raises it: drawing
+before `NewPage` or after `EndDoc`, `DrawHeading` with a level outside
+1..6 or an empty title, a table call without `BeginTable`, `BeginTable`
+twice, `ExportPdfTagged` after the first page (`TestMisuseRaises`, one
+`CheckRaised` each, exact class). Errors of the engine and of the file
+pass through with their own class.
+
+Phase 4's bug-fix PR: `ExportPdfStream` catches every exception
 and returns false, unless `aRaiseException` is true (the trunk's parameter);
 either way it resets `fActivePdfDoc`, which otherwise kept pointing at the
 freed document for the next `RenderPageToCanvas`. `ExportPDF` raises on
-every error: `ESynException` when there is no page and when `Protect` or
+every error: `EPdfReport` when there is no page and when `Protect` or
 `Encrypt` is true - neither is implemented, and a protection asked for must
 not silently give an open file (the trunk's `ExportPdfEncryption*`
 properties come after R-28; `TPdfDocumentVcl.Create` already takes a

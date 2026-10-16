@@ -705,8 +705,7 @@ begin
     end;
     Stream := TFileStream.Create(FileName, fmCreate);
     try
-      if not Report.ExportPdfStream(Stream) then
-        raise Exception.Create('PDF export failed');
+      Report.ExportPdfStream(Stream, {aRaiseException=}true);
     finally
       Stream.Free;
     end;
