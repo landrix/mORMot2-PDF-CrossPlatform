@@ -69,9 +69,13 @@ type
     procedure TestFormFallback;
     /// a face whose only cmap is (0,3) draws its WinAnsi text as glyphs
     procedure TestUnicodeOnlyCmap;
+    /// a face whose only cmap is (3,10) format 12 is read, and drawn by glyph
+    procedure TestFormat12Cmap;
     procedure TestShapedFallback;
     procedure TestShapedRunOutcomeUnset;
     procedure TestZeroRealIsWritten;
+  private
+    procedure CheckNoSimpleCmap(const aFamily, aCmap: RawUtf8);
   end;
 
 implementation
@@ -1525,9 +1529,9 @@ begin
     'no font on the page');
 end;
 
-// Text in the test face whose only cmap is (0,3), by both text APIs
-function UnicodeOnlyPdf(aEmbedded: boolean; aPdfA: TPdfALevel = pdfaNone;
-  aWordSpace: single = 0): RawByteString;
+// Text in a test face without a (3,1) or (3,0) cmap, by both text APIs
+function NoSimpleCmapPdf(const aFamily: RawUtf8; aEmbedded: boolean;
+  aPdfA: TPdfALevel = pdfaNone; aWordSpace: single = 0): RawByteString;
 var
   PDF: TPdfDocument;
   Stream: TMemoryStream;
@@ -1539,7 +1543,7 @@ begin
       PDF.CompressionMethod := cmNone;
       PDF.EmbeddedTTF := aEmbedded;
       PDF.AddPage;
-      PDF.Canvas.SetFont(TEST_UNICODE_ONLY, 24, [], TEST_FONT_CHARSET);
+      PDF.Canvas.SetFont(aFamily, 24, [], TEST_FONT_CHARSET);
       PDF.Canvas.SetWordSpace(aWordSpace);
       PDF.Canvas.TextOut(40, 650, 'Ab c');
       DrawUtf8Text(PDF, 40, 600, 'Ab c');
@@ -1554,21 +1558,32 @@ begin
 end;
 
 procedure TPdfSmokeTests.TestUnicodeOnlyCmap;
+begin
+  CheckNoSimpleCmap(TEST_UNICODE_ONLY, '(0,3)');
+end;
+
+procedure TPdfSmokeTests.TestFormat12Cmap;
+begin
+  CheckNoSimpleCmap(TEST_FORMAT12, '(3,10) format 12');
+end;
+
+// a face whose cmap is no (3,1) or (3,0) one: its WinAnsi text goes by
+// glyph, as a simple TrueType font reaches its glyphs through those only
+procedure TPdfSmokeTests.CheckNoSimpleCmap(const aFamily, aCmap: RawUtf8);
 var
   face: IFontFace;
   cmap: RawByteString;
   n: cardinal;
-  i: integer;
+  i, plat, enc: integer;
   loaded: boolean;
   s: RawByteString;
   raised: boolean;
+  PDF: TPdfDocument;
 begin
-  { a simple TrueType font reaches its glyphs through a (3,1) or (1,0) cmap
-    only: the WinAnsi text of a face whose only cmap is (0,3) goes by glyph }
   Check(EnsureTestFonts, 'the test fonts registered');
   // GDI loads no face without a Microsoft cmap: it gives another font, one
   // with (3,1), whose text stays in the simple font
-  face := TestFace(TEST_UNICODE_ONLY, TEST_FONT_CHARSET);
+  face := TestFace(aFamily, TEST_FONT_CHARSET);
   loaded := false;
   if Check(face <> nil, 'the face') then
   begin
@@ -1580,12 +1595,17 @@ begin
       face.GetFontData(PCardinal(PAnsiChar('cmap'))^, 0, pointer(cmap), n);
       loaded := true;
       for i := 0 to (ord(cmap[3]) shl 8 + ord(cmap[4])) - 1 do
-        if (4 + i * 8 + 2 <= integer(n)) and
-           (cmap[6 + i * 8] <> #0) then // the low byte of platformID
-          loaded := false; // a (1,x) or (3,x) record: not the test face
+        if 4 + i * 8 + 4 <= integer(n) then
+        begin
+          plat := ord(cmap[5 + i * 8]) shl 8 + ord(cmap[6 + i * 8]);
+          enc := ord(cmap[7 + i * 8]) shl 8 + ord(cmap[8 + i * 8]);
+          if (plat = 1) or
+             ((plat = 3) and (enc <= 1)) then
+            loaded := false; // a (1,x), (3,0) or (3,1): not the test face
+        end;
     end;
   end;
-  s := UnicodeOnlyPdf(true);
+  s := NoSimpleCmapPdf(aFamily, true);
   {$ifdef OSWINDOWS}
   if not loaded then
   begin
@@ -1594,7 +1614,7 @@ begin
     exit;
   end;
   {$else}
-  Check(loaded, 'the test face, (0,3) only');
+  Check(loaded, 'the test face, ' + aCmap + ' only');
   {$endif OSWINDOWS}
   Check(PosEx('(Ab c) Tj', s) = 0, 'not in the simple font');
   Check(PosEx('/Subtype/TrueType', s) = 0, 'no simple font written');
@@ -1609,16 +1629,27 @@ begin
   CheckEqual(CountOccurrences('<0022004300010044> Tj', s), 2,
     'both APIs by glyph');
   Check(PosEx('/ToUnicode', s) > 0, 'the text extractable');
+  // measured with the advances of the face: 639 + 615 + 260 + 480 units
+  PDF := TPdfDocument.Create;
+  try
+    PDF.EmbeddedTTF := true; // the Type0 path: the widths of the cmap read
+    PDF.AddPage;
+    PDF.Canvas.SetFont(aFamily, 24, [], TEST_FONT_CHARSET);
+    CheckSame(PDF.Canvas.UnicodeTextWidth('Ab c'), 1994 * 24 / 1000, 0.01,
+      'the widths of the face');
+  finally
+    PDF.Free;
+  end;
   // word spacing on 2-byte codes: a TJ adjustment after the space
-  s := UnicodeOnlyPdf(true, pdfaNone, 5);
+  s := NoSimpleCmapPdf(aFamily, true, pdfaNone, 5);
   CheckEqual(CountOccurrences('] TJ', s), 2, 'word spacing in a TJ array');
   // not embedded: glyph indexes would mean nothing - the simple font
-  s := UnicodeOnlyPdf(false);
+  s := NoSimpleCmapPdf(aFamily, false);
   CheckEqual(CountOccurrences('(Ab c) Tj', s), 2, 'not embedded: simple font');
   // PDF/A embeds: no simple font left for a rule to fail
   raised := false;
   try
-    s := UnicodeOnlyPdf(false, pdfa3U);
+    s := NoSimpleCmapPdf(aFamily, false, pdfa3U);
   except
     raised := true;
   end;

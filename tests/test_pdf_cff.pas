@@ -52,6 +52,9 @@ type
     procedure SystemFaceCids; // the CID-keyed face of RegisteredFaceCids, measured
     {$endif OSDARWIN}
     procedure RegisteredFaceCids;
+    /// the format 12 reader on every system: a glyf face served by the fake
+    // provider, which GDI would replace
+    procedure Format12CmapFace;
   end;
 
 /// a bare 'CFF ' table of Glyphs glyphs
@@ -1477,6 +1480,42 @@ function SwapInFakeFace(const Face: IFontFace): IFontProvider;
 begin
   result := FontProvider;
   FontProvider := TFakeProvider.Create(result, Face, FAKE_FACE);
+end;
+
+// the tables of Test Format12 - a (3,10) format 12 cmap alone - through the
+// fake provider: GDI gives another face for it, so only this way the format
+// 12 reader runs on Windows and with Delphi
+procedure TPdfCffTests.Format12CmapFace;
+const
+  TAGS: array[0..9] of RawUtf8 = (
+    'cmap', 'head', 'hhea', 'hmtx', 'maxp', 'loca', 'glyf', 'post', 'OS/2',
+    'name');
+var
+  font: RawByteString;
+  off, len: cardinal;
+  fake: TFakeFace;
+  face: IFontFace;
+  i: PtrInt;
+  s, txt: RawUtf8;
+begin
+  font := StringFromFile(TestFontFile('mORMotTestFormat12-Regular.ttf'));
+  if not Check(font <> '', 'the test font') then
+    exit;
+  fake := TFakeFace.Create;
+  face := fake; // the reference owns it
+  for i := 0 to high(TAGS) do
+    if Check(SfntFindTable(font, TAGS[i], off, len), TAGS[i]) then
+      fake.AddTable(TAGS[i], copy(font, off + 1, len));
+  fake.Seal(#0#1#0#0);
+  FakeEmbedded := true;
+  try
+    s := FakeFacePdf(face, 'Ab c');
+  finally
+    FakeEmbedded := false;
+  end;
+  Check(TextObjectOfType0(s, txt), 'only the Type0 font selected');
+  Check(PosEx('<0022004300010044> Tj', txt) > 0, 'A b space c by glyph');
+  Check(PosEx('/FontFile2', s) > 0, 'the glyf program embedded');
 end;
 
 procedure TPdfCffTests.Type0Routing;

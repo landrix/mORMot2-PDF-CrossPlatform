@@ -16,7 +16,7 @@ from fontTools.otlLib.builder import (buildAnchor, buildCursivePosSubtable,
                                       buildLookup)
 from fontTools.ttLib import TTCollection, TTFont, newTable
 from fontTools.ttLib.tables import otTables as ot
-from fontTools.ttLib.tables._c_m_a_p import cmap_format_4
+from fontTools.ttLib.tables._c_m_a_p import cmap_format_4, cmap_format_12
 from fontTools.ttLib.tables._g_l_y_f import Glyph
 
 # report punctuation: dashes, quotes, bullet, ellipsis, euro
@@ -118,6 +118,21 @@ def make_unicode_only(font):
     font["cmap"] = table
 
 
+def make_format12_only(font):
+    """Keep one cmap, (3,10) format 12: no format 4 at all, as macOS Hiragino
+    Kaku Gothic, STHeiti and Geneva have. U+1F600 maps to the glyph of 'A',
+    a character beyond the BMP for the reader to leave out."""
+    best = font.getBestCmap()
+    sub = cmap_format_12(12)
+    sub.platformID, sub.platEncID, sub.language = 3, 10, 0
+    sub.cmap = dict(best)
+    sub.cmap[0x1F600] = best[0x41]
+    table = newTable("cmap")
+    table.tableVersion = 0
+    table.tables = [sub]
+    font["cmap"] = table
+
+
 def pad_glyphs(font, count=4200):
     """Put count empty glyphs out of the cmap after .notdef: the glyphs drawn
     get IDs above 4096 - two glyphs 4096 apart with no character, and a keep
@@ -188,6 +203,12 @@ FONTS = [
          family="mORMot Test Unicode Only", ps="mORMotTestUnicodeOnly-Regular",
          unicodes=ASCII + list(range(0xA0, 0x100)) + PUNCT,
          post=make_unicode_only),
+    # the Latin and Greek of Test Sans with a (3,10) format 12 cmap only
+    dict(src="NotoSans-Regular.ttf", index=0,
+         dst="mORMotTestFormat12-Regular.ttf",
+         family="mORMot Test Format12", ps="mORMotTestFormat12-Regular",
+         unicodes=ASCII + list(range(0xA0, 0x100)) + PUNCT + GREEK,
+         post=make_format12_only),
     # a CJK face with TrueType outlines (FontSub subsets glyf only), its
     # glyphs drawn above glyph 4096
     dict(src="DroidSansFallbackFull.ttf", index=0,

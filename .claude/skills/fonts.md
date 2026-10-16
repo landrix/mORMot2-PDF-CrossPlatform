@@ -134,17 +134,18 @@ a viewer reaches the glyphs of a simple TrueType font through its (3,1) or
 (1,0) cmap only (ISO 32000-1 9.6.6.4); macOS Geeza Pro (the first faces of
 `GeezaPro.ttc`) has (0,3) alone, so its space in the simple font was
 `.notdef` (Martin, `arabic_system`). `LoadCmap` falls back to the Unicode
-platform then and sets `TPdfTtf.UnicodePlatform`; an embedded `glyf` face
-with it is `Type0Only` (`FaceHasUnicodeCmapOnly`, beside `PdfFaceCffInfo` in
-the constructor) - CIDFontType2 in `/FontFile2`, Identity, `/ToUnicode`.
+platform then and sets `TPdfTtf.NoSimpleCmap`, as does the format 12
+reader (below); an embedded `glyf` face with it is `Type0Only`
+(`FaceLacksSimpleCmap`, beside `PdfFaceCffInfo` in the constructor) -
+CIDFontType2 in `/FontFile2`, Identity, `/ToUnicode`.
 A (1,0) does not count: hb-subset drops it (it keeps (0,3), (0,4), (3,1),
 (3,10) and format 14, filtered, and adds none). Not embedded, the simple
 font stays, as for a name-keyed CFF face; embedding switched on after the
-face was created keeps it too, with its gap - set `EmbeddedTTF` first. A face whose only cmap is format
-12 is not read at all (`LoadCmap` reads format 4) and keeps the simple
-font. GDI loads no face without a Microsoft cmap - it gives another font -
-so `TestUnicodeOnlyCmap` (Test Unicode Only, (0,3) alone) checks the path on
-Linux and macOS and the replacement on Windows.
+face was created keeps it too, with its gap - set `EmbeddedTTF` first.
+GDI loads no face without a (3,1) or (3,0) cmap - it gives another font -
+so `TestUnicodeOnlyCmap` (Test Unicode Only, (0,3) alone) and
+`TestFormat12Cmap` (Test Format12, (3,10) format 12 alone) check the path
+on Linux and macOS and the replacement on Windows.
 - **Codes:** `GlyphCode(glyph)` is the CID of a CID-keyed face (`fCff.Cid`,
   read once by `GetCff` on the WinAnsi font), the glyph index otherwise.
   Every writer of Type0 codes goes through it - the three branches of
@@ -356,7 +357,7 @@ Phase 1b it read the document DC and relied on the font its caller had
 selected):
 
 1. **`head` + `hhea`** — provides `UnitsPerEm` and `numOfLongHorMetrics`
-2. **`cmap`** — Format 4 segment map: populates
+2. **`cmap`** — Format 4 segment map, or the BMP groups of format 12: populates
    - `UnicodeFont.fUsedWideChar.Values[]` — one entry per code point in the CMAP
    - `UnicodeFont.fUsedWide[].Glyph` — glyph ID per code point
 3. **`hmtx`** — Horizontal metrics: sets `UnicodeFont.fUsedWide[].Width` per glyph
@@ -377,11 +378,24 @@ Preference order, in `TPdfTtf.Create`:
    macOS `GeezaPro.ttc` expose *only* `(0,3)`, and before this fallback the
    parser returned an empty CMAP, so every Arabic glyph came out `.notdef` and
    the document silently fell back to `FontFallBackName` (Arial Unicode MS).
-   It sets `UnicodePlatform`: embedded, such a face draws through its Type0
+   It sets `NoSimpleCmap`: embedded, such a face draws through its Type0
    font (R-31, "CFF Faces: Type0 Only").
+4. **Format 12, `(3,10)` then `(0,4)`** - when none of the above is a format
+   4 table (`LoadCmap12`, 2026-10-16). Measured on macOS 26: 33 of 788
+   faces have format 12 and no format 4 - Hiragino Kaku Gothic (Hiragino
+   Sans, every weight), STHeiti, Geneva, Big Caslon, Apple Symbols, Apple
+   Color Emoji; none on Windows (641 faces) or Linux (348). Before, their
+   table was empty: all their text came from the fallback font (Hiragino
+   Sans drew `Abc` and kana in Arial Unicode MS, 36 KB; now in itself,
+   5.7 KB). Read from the raw bytes (`GetFontData`, all fields 32-bit, so
+   not through `GetTtfData`'s 16-bit swap) into `TPdfTtf.Groups`, **clipped
+   to the BMP**: the engine keys characters by UTF-16 code unit, so a
+   character beyond the BMP is unsupported in the plain path for every
+   face (ROADMAP "Supplementary-Plane Text"). Groups out of order or
+   overlapping, or a glyph beyond 65535, make the cmap unreadable rather
+   than guessed. Sets `NoSimpleCmap` unless a (3,0)/(3,1) record exists.
 
-Only **format 4** is parsed. A `(0,4)`/`(3,10)` format 12 subtable is selected
-only when nothing else exists, and then rejected by the format check.
+Formats 4 and 12 are parsed; `HasCmap` says whether one was read.
 
 ### Odd subtable offsets
 

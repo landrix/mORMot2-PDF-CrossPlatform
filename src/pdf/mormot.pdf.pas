@@ -2869,6 +2869,12 @@ type
     rangeShift: word;
   end;
 
+  /// the groups of a 'cmap' format 12 table, clipped to the BMP: each maps
+  // FirstCode..LastCode to FirstGlyph and the glyphs after it
+  TCmapGroups = array of packed record
+    FirstCode, LastCode, FirstGlyph: word;
+  end;
+
   /// handle Unicode glyph description for a true Type Font
   // - cf http://www.microsoft.com/typography/OTSPEC/otff.htm#otttables
   // - handle Microsoft cmap format 4 encoding (i.e. most used
@@ -2900,12 +2906,16 @@ type
     glyphIndexArray: PWordArray;
     /// true if the cmap read is the (3,0) one of a symbol font
     Symbol: boolean;
-    /// true if the cmap read is of the Unicode platform: the face has no
-    // (3,1) and no (3,0) one
-    UnicodePlatform: boolean;
+    /// the BMP part of a format 12 cmap, read when the face has no format 4
+    Groups: TCmapGroups;
+    /// true if the face has no (3,1) and no (3,0) cmap: a simple TrueType
+    // font cannot reach its glyphs (ISO 32000-1 9.6.6.4)
+    NoSimpleCmap: boolean;
   protected
-    // read the cmap of aFace: true with fmt4 and its arrays set
+    // read the cmap of aFace: true with fmt4 and its arrays set, or Groups
     function LoadCmap(const aFace: IFontFace): boolean;
+    // read the (3,10) or (0,4) format 12 cmap of aFace into Groups
+    function LoadCmap12(const aFace: IFontFace): boolean;
   public
     /// create Unicode glyph description for a supplied true Type Font
     // - reads the tables of its face (aUnicodeTtf.fFace)
@@ -2914,8 +2924,10 @@ type
     constructor Create(aUnicodeTtf: TPdfFontTrueType); reintroduce;
     /// read the cmap of a face only, for GlyphOf
     constructor CreateCmap(const aFace: IFontFace);
-    /// the glyph a code point has in the format 4 cmap, 0 if none
+    /// the glyph a code point has in the cmap read, 0 if none
     function GlyphOf(aCode: cardinal): integer;
+    /// true if a cmap was read: format 4 or the BMP part of format 12
+    function HasCmap: boolean;
   end;
 
   /// this dynamic array stores details about used unicode characters
@@ -6265,6 +6277,7 @@ const
   TTFCFP_MS_PLATFORMID = 3;
   TTFCFP_SYMBOL_CHAR_SET = 0;
   TTFCFP_UNICODE_CHAR_SET = 1;
+  TTFCFP_UNICODE_FULL_MS = 10; // (3,10): full repertoire, format 12
   // encoding IDs of the Unicode platform (0) cmap subtables
   TTFCFP_UNICODE_BMP = 3;  // BMP only, i.e. the format 4 map we can parse
   TTFCFP_UNICODE_FULL = 4; // full repertoire, usually format 12
@@ -6375,15 +6388,21 @@ begin
   begin
     off := uni; // no Microsoft subtable: fall back to the Unicode platform
     Symbol := false;
-    UnicodePlatform := true;
+    NoSimpleCmap := true;
   end;
   if off = 0 then
-    exit; // no subtable we could use
+  begin
+    result := LoadCmap12(aFace); // no format 4 subtable: macOS Hiragino Sans
+    exit;
+  end;
   i := LongRec(off).Lo; // offset swap to bswap conversion :)
   LongRec(off).Lo := LongRec(off).Hi;
   LongRec(off).Hi := i;
   if off > cardinal(Length(fcmap) * 2) then
-    exit; // avoid GPF
+  begin
+    result := LoadCmap12(aFace); // a broken offset: maybe a format 12 one
+    exit;
+  end;
   if off and 1 <> 0 then
   begin
     // odd offset: GetTtfData() applied SwapBuffer() on even-aligned 16-bit
@@ -6401,7 +6420,8 @@ begin
   if fmt4^.format <> 4 then
   begin
     fmt4 := nil;
-    exit; // we handle only cmap table format 4
+    result := LoadCmap12(aFace); // the (0,4) one, usually format 12
+    exit;
   end;
   endCode := pointer(PtrUInt(@fmt4^.format) + SizeOf(TCmapFmt4));
   startCode := pointer(PtrUInt(endCode) + fmt4^.segCountX2 + 2); // +2 = reservedPad
@@ -6411,6 +6431,112 @@ begin
   result := true;
 end;
 
+function TPdfTtf.LoadCmap12(const aFace: IFontFace): boolean;
+const
+  TAG_CMAP = ord('c') + ord('m') shl 8 + ord('a') shl 16 + ord('p') shl 24;
+var
+  raw: RawByteString;
+  P: PByteArray;
+  i, k, n, ms, uni: PtrInt;
+  L, off, len, count: Int64; // 32-bit fields: compared before any narrowing
+  plat, enc, size: cardinal;
+  first, last, glyph, prev: Int64;
+
+  function U16(o: PtrInt): cardinal;
+  begin
+    result := P[o] shl 8 + P[o + 1];
+  end;
+
+  function U32(o: PtrInt): cardinal;
+  begin
+    result := U16(o) shl 16 + U16(o + 2);
+  end;
+
+begin
+  // the raw bytes: GetTtfData() swaps them as 16-bit words, and a format 12
+  // table is all 32-bit fields
+  result := false;
+  Groups := nil;
+  size := FONT_DATA_ERROR;
+  if aFace <> nil then
+    size := aFace.GetFontData(TAG_CMAP, 0, nil, 0);
+  if (size = FONT_DATA_ERROR) or
+     (size < 4) or
+     (size > cardinal(MaxInt)) then
+    exit;
+  L := size;
+  SetLength(raw, PtrInt(size));
+  if aFace.GetFontData(TAG_CMAP, 0, pointer(raw), size) = FONT_DATA_ERROR then
+    exit;
+  P := pointer(raw);
+  n := U16(2);
+  if 4 + n * 8 > L then
+    exit;
+  ms := 0;
+  uni := 0;
+  NoSimpleCmap := true;
+  for i := 0 to n - 1 do
+  begin
+    plat := U16(4 + i * 8);
+    enc := U16(6 + i * 8);
+    off := U32(8 + i * 8);
+    if (plat = TTFCFP_MS_PLATFORMID) and
+       (enc <= TTFCFP_UNICODE_CHAR_SET) then
+      NoSimpleCmap := false; // a (3,0) or (3,1) of another format
+    if (off + 16 > L) or
+       (U16(PtrInt(off)) <> 12) then
+      continue;
+    if (plat = TTFCFP_MS_PLATFORMID) and
+       (enc = TTFCFP_UNICODE_FULL_MS) then
+      ms := PtrInt(off)
+    else if (plat = TTFCFP_UNICODE_PLATFORMID) and
+            (enc = TTFCFP_UNICODE_FULL) then
+      uni := PtrInt(off);
+  end;
+  if ms = 0 then
+    ms := uni;
+  if ms = 0 then
+    exit;
+  len := U32(ms + 4); // the subtable's own length bounds its groups
+  if (len < 16) or
+     (len > L - ms) then
+    exit;
+  count := U32(ms + 12);
+  if count > (len - 16) div 12 then
+    exit;
+  n := PtrInt(count);
+  SetLength(Groups, n);
+  k := 0;
+  prev := -1;
+  for i := 0 to n - 1 do
+  begin
+    first := U32(ms + 16 + i * 12);
+    last := U32(ms + 20 + i * 12);
+    glyph := U32(ms + 24 + i * 12);
+    // every group checked, beyond the BMP too: not in order, overlapping or
+    // past glyph 65535 is no cmap rather than a guess
+    if (last < first) or
+       (first <= prev) or
+       (glyph + last - first > $ffff) then
+    begin
+      Groups := nil;
+      exit;
+    end;
+    prev := last;
+    if first > $ffff then
+      continue; // beyond the BMP: unsupported (ROADMAP R-32)
+    if last > $ffff then
+      last := $ffff;
+    Groups[k].FirstCode := first;
+    Groups[k].LastCode := last;
+    Groups[k].FirstGlyph := glyph;
+    inc(k);
+  end;
+  SetLength(Groups, k);
+  Symbol := false;
+  result := k > 0;
+end;
+
 constructor TPdfTtf.CreateCmap(const aFace: IFontFace);
 begin
   inherited Create;
@@ -6418,18 +6544,24 @@ begin
     fmt4 := nil;
 end;
 
+function TPdfTtf.HasCmap: boolean;
+begin
+  result := (fmt4 <> nil) or
+            (Groups <> nil);
+end;
+
 // a viewer reaches the glyphs of a simple TrueType font through its (3,1) or
 // (1,0) cmap only (ISO 32000-1 9.6.6.4), and hb-subset drops a (1,0): a face
-// without a (3,1) or (3,0) cmap - macOS Geeza Pro has (0,3) only - is drawn
-// by glyph
-function FaceHasUnicodeCmapOnly(const aFace: IFontFace): boolean;
+// without a (3,1) or (3,0) cmap - macOS Geeza Pro has (0,3) only, Hiragino
+// Sans (3,10) - is drawn by glyph
+function FaceLacksSimpleCmap(const aFace: IFontFace): boolean;
 var
   ttf: TPdfTtf;
 begin
   ttf := TPdfTtf.CreateCmap(aFace);
   try
-    result := (ttf.fmt4 <> nil) and
-              ttf.UnicodePlatform;
+    result := ttf.HasCmap and
+              ttf.NoSimpleCmap;
   finally
     ttf.Free;
   end;
@@ -6437,12 +6569,30 @@ end;
 
 function TPdfTtf.GlyphOf(aCode: cardinal): integer;
 var
-  i, n, ndx: PtrInt;
+  i, n, ndx, lo, hi: PtrInt;
 begin
   result := 0;
-  if (fmt4 = nil) or
-     (aCode > $ffff) then
+  if aCode > $ffff then
     exit;
+  if fmt4 = nil then
+  begin
+    lo := 0; // the groups of format 12, ordered: a binary search
+    hi := high(Groups);
+    while lo <= hi do
+    begin
+      i := (lo + hi) shr 1;
+      if aCode < Groups[i].FirstCode then
+        hi := i - 1
+      else if aCode > Groups[i].LastCode then
+        lo := i + 1
+      else
+      begin
+        result := Groups[i].FirstGlyph + integer(aCode) - Groups[i].FirstCode;
+        exit;
+      end;
+    end;
+    exit;
+  end;
   n := fmt4^.segCountX2 shr 1;
   for i := 0 to n - 1 do
     if endCode[i] >= aCode then
@@ -6492,31 +6642,52 @@ begin
   if hhea = nil then
     exit;
   // fill aUnicodeTtf.fUsedWide[] and aUnicodeTtf.fUsedWideChar data
-  n := fmt4^.segCountX2 shr 1;
-  for i := 0 to n - 1 do
-    inc(aUnicodeTtf.fUsedWideChar.Count, endCode[i] - startCode[i] + 1);
-  SetLength(aUnicodeTtf.fUsedWideChar.Values, aUnicodeTtf.fUsedWideChar.Count);
-  SetLength(aUnicodeTtf.fUsedWide, aUnicodeTtf.fUsedWideChar.Count);
-  ndx := 0;
-  for i := 0 to n - 1 do
+  if fmt4 = nil then
   begin
-    delta := idDelta[i];
-    offs := idRangeOffset[i];
-    if offs <> 0 then
-      offs := offs shr 1 + i - n - startCode[i];
-    for code := startCode[i] to endCode[i] do
-    begin
-      aUnicodeTtf.fUsedWideChar.Values[ndx] := code;
-      if offs = 0 then
-        glyph := code + delta
-      else
+    // the BMP groups of format 12: one glyph after the other
+    for i := 0 to high(Groups) do
+      inc(aUnicodeTtf.fUsedWideChar.Count,
+        Groups[i].LastCode - Groups[i].FirstCode + 1);
+    SetLength(aUnicodeTtf.fUsedWideChar.Values, aUnicodeTtf.fUsedWideChar.Count);
+    SetLength(aUnicodeTtf.fUsedWide, aUnicodeTtf.fUsedWideChar.Count);
+    ndx := 0;
+    for i := 0 to high(Groups) do
+      for code := Groups[i].FirstCode to Groups[i].LastCode do
       begin
-        glyph := glyphIndexArray[offs + code];
-        if glyph <> 0 then
-          inc(glyph, delta);
+        aUnicodeTtf.fUsedWideChar.Values[ndx] := code;
+        aUnicodeTtf.fUsedWide[ndx].Glyph :=
+          Groups[i].FirstGlyph + code - Groups[i].FirstCode;
+        inc(ndx);
       end;
-      aUnicodeTtf.fUsedWide[ndx].Glyph := glyph;
-      inc(ndx);
+  end
+  else
+  begin
+    n := fmt4^.segCountX2 shr 1;
+    for i := 0 to n - 1 do
+      inc(aUnicodeTtf.fUsedWideChar.Count, endCode[i] - startCode[i] + 1);
+    SetLength(aUnicodeTtf.fUsedWideChar.Values, aUnicodeTtf.fUsedWideChar.Count);
+    SetLength(aUnicodeTtf.fUsedWide, aUnicodeTtf.fUsedWideChar.Count);
+    ndx := 0;
+    for i := 0 to n - 1 do
+    begin
+      delta := idDelta[i];
+      offs := idRangeOffset[i];
+      if offs <> 0 then
+        offs := offs shr 1 + i - n - startCode[i];
+      for code := startCode[i] to endCode[i] do
+      begin
+        aUnicodeTtf.fUsedWideChar.Values[ndx] := code;
+        if offs = 0 then
+          glyph := code + delta
+        else
+        begin
+          glyph := glyphIndexArray[offs + code];
+          if glyph <> 0 then
+            inc(glyph, delta);
+        end;
+        aUnicodeTtf.fUsedWide[ndx].Glyph := glyph;
+        inc(ndx);
+      end;
     end;
   end;
   // UnitsPerEm is typically a power of 2 but may be any value 16..16384
@@ -6888,7 +7059,7 @@ begin
         fInternal := ADoc.FontEmbedded(AFontIndex);
       pcNone:
         fInternal := ADoc.FontEmbedded(AFontIndex) and
-                     FaceHasUnicodeCmapOnly(fFace);
+                     FaceLacksSimpleCmap(fFace);
     end;
   end;
   inherited Create(ADoc.fXRef, nam, not fInternal);
@@ -7984,7 +8155,7 @@ begin
     fWinAnsiMissingRead := true;
     ttf := TPdfTtf.CreateCmap(fFace);
     try
-      if (ttf.fmt4 <> nil) and // an unreadable cmap: no check
+      if ttf.HasCmap and // an unreadable cmap: no check
          not ttf.Symbol then
         for c := #32 to #255 do
           if ttf.GlyphOf(WinAnsiConvert.AnsiToWide[ord(c)]) = 0 then

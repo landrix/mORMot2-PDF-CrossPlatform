@@ -295,6 +295,13 @@ v0.10.0 (2026-09-30).
 - **Fixed: fallback text in a form XObject** (`TPdfFormWithCanvas`)
   drawn before the first `AddPage` raised an access violation: the fallback
   font was chosen through the document's canvas, which has no page yet
+- **Fixed: faces whose only cmap is format 12** were read as having no
+  characters, so all their text came from the fallback font: on macOS
+  Hiragino Sans (Hiragino Kaku Gothic, every weight), STHeiti, Geneva, Big
+  Caslon and Apple Symbols. The engine reads format 12 now, the BMP part;
+  characters beyond the BMP stay unsupported in plain text (R-32). Faces
+  with a format 4 cmap - every face of Windows and Linux measured - are
+  unchanged
 - **Fixed: the WinAnsi text of a face without a (3,1) cmap** (R-31): macOS
   Geeza Pro has only a (0,3) cmap, which a viewer does not use for a simple
   TrueType font - the space of an Arabic line came out as `.notdef`. Such
@@ -1043,6 +1050,29 @@ row. Let the row split: partial cell content on the current page, the rest on
 the next. The split row's cells have to stay inside **one** `TR` element
 referencing both pages — `TPdfDocumentVcl.ResumeStructContent` does this for
 text blocks (B-2) and is the model to follow.
+
+### R-32 — Supplementary-Plane Text — after R-28
+
+**Effort:** several PRs | **File:** `src/pdf/mormot.pdf.pas`
+
+The engine keys characters by UTF-16 code unit (`fUsedWideChar` is a
+`TSortedWordArray`, `FindOrAddUsedWideChar` takes a `WideChar`), so a
+character beyond the BMP - emoji, CJK Extension B, mathematical
+alphanumerics - is never found in the plain path, on any face: each
+surrogate is looked up alone, then in the fallback font the same way, then
+`.notdef` (a raise under PDF/A). The format 12 reader keeps only the BMP
+part of a cmap for this reason. Shaped text may draw such glyphs, without a
+real `/ToUnicode` ("Shaped Text: Real /ToUnicode"). Discussed with Codex and
+Fable (2026-10-16), in this order, each byte-equal for the output of today
+but the last: (1) code points as keys - `TSortedIntegerArray`, cardinal
+lookups with the `WideChar` methods as wrappers, the packing of
+`PdfUsedCodes` (16 bits of Unicode today) and `GetUsedGlyphs` widened;
+(2) the supplementary groups of format 12 into the Unicode instance's
+table (the BMP still from format 4, never "prefer format 12" for it),
+surrogate pairs combined in `AddUnicodeHexTextNoUniScribe` and
+`UnicodeTextWidth`, the fallback and the PDF/A message by code point,
+`/ToUnicode` destinations as UTF-16BE pairs; (3) shaped source text.
+PDFBox and iText read format 12 and encode by code point the same way.
 
 ### R-11 — TTC Face Index — unprioritised
 

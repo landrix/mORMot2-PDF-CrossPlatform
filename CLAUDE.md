@@ -83,7 +83,7 @@ examples/
   (each demo folder carries a short README.md; the source header of its .lpr
    (`layer1_demo`: .dpr) says the same thing in two sentences)
 tests/
-  test_runner.lpr              runs every suite below (green: 1166 assertions on Windows with FPC, Delphi 13 and Delphi 7 - Delphi 2010 last measured at 1160 (#58); 1213 on macOS, 1180 on Linux. The font tests assert on the test fonts of tests/fonts everywhere; a test that also needs an installed face (Hiragino Sans GB, Geeza Pro, Nirmala UI, the OS collections, the faces of cjk_system and arabic_system) asks SystemFaceExtra first - one assertion either way, a missing face of this OS's list reported, a failure with --require-fonts; only a missing shaper or subsetter library skips; the golden files add two per case with or without a baseline. Delphi 13, measured before the golden files: 259 on Windows, 171 on Linux64, 129 on Android64, layer 1 only)
+  test_runner.lpr              runs every suite below (green: 1186 assertions on Windows with FPC, Delphi 13 and Delphi 7 - Delphi 2010 last measured at 1160 (#58); 1247 on macOS, 1214 on Linux. The font tests assert on the test fonts of tests/fonts everywhere; a test that also needs an installed face (Hiragino Sans GB, Geeza Pro, Nirmala UI, the OS collections, the faces of cjk_system and arabic_system) asks SystemFaceExtra first - one assertion either way, a missing face of this OS's list reported, a failure with --require-fonts; only a missing shaper or subsetter library skips; the golden files add two per case with or without a baseline. Delphi 13, measured before the golden files: 259 on Windows, 171 on Linux64, 129 on Android64, layer 1 only)
   test_defines.inc             PDF_HASVCLCANVAS: the TCanvas bridge suites (all compilers since R-20)
   build_delphi7.bat            dcc32 build of one project (R-19)
   build_delphi2010.bat         the same with Delphi 2010, warnings on (R-25, Unicode Delphi)
@@ -102,7 +102,7 @@ tests/
   test_pdf_cff.pas             the CFF reader on tables built in code, and every CFF path through a synthetic face swapped into FontProvider (codes, /W, /ToUnicode, routing, word spacing, programs, names)
   test_pdf_images.pas          golden files of the image paths (raw pixels on every compiler; TBitmap formats, reuse, color key, JPEG) and of EMF (TPdfDocumentGdi, RenderMetaFile; Windows)
   test_report_golden.pas       the same for TGDIPages (layer 3)
-  fonts/                       test fonts the tests register (RegisterFontData): renamed OFL subsets of Noto (Latin, Arabic, CJK, symbol, a (0,3) cmap only, a collection) and an Apache 2.0 subset of Droid Sans Fallback (CJK with TrueType outlines), their licences, sources and generator
+  fonts/                       test fonts the tests register (RegisterFontData): renamed OFL subsets of Noto (Latin, Arabic, CJK, symbol, a (0,3) cmap only, a format 12 cmap only, a collection) and an Apache 2.0 subset of Droid Sans Fallback (CJK with TrueType outlines), their licences, sources and generator
   test_coordinates.pas         page geometry
   test_report_coordinates.pas  report geometry
 reference/
