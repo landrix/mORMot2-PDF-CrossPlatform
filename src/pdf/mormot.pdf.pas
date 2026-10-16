@@ -2900,6 +2900,9 @@ type
     glyphIndexArray: PWordArray;
     /// true if the cmap read is the (3,0) one of a symbol font
     Symbol: boolean;
+    /// true if the cmap read is of the Unicode platform: the face has no
+    // (3,1) and no (3,0) one
+    UnicodePlatform: boolean;
   protected
     // read the cmap of aFace: true with fmt4 and its arrays set
     function LoadCmap(const aFace: IFontFace): boolean;
@@ -6372,6 +6375,7 @@ begin
   begin
     off := uni; // no Microsoft subtable: fall back to the Unicode platform
     Symbol := false;
+    UnicodePlatform := true;
   end;
   if off = 0 then
     exit; // no subtable we could use
@@ -6412,6 +6416,22 @@ begin
   inherited Create;
   if not LoadCmap(aFace) then
     fmt4 := nil;
+end;
+
+// a viewer reaches the glyphs of a simple TrueType font through its (3,1) or
+// (1,0) cmap only (ISO 32000-1 9.6.6.4), and hb-subset drops a (1,0): a face
+// with no Microsoft cmap - macOS Geeza Pro has (0,3) only - is drawn by glyph
+function FaceHasUnicodeCmapOnly(const aFace: IFontFace): boolean;
+var
+  ttf: TPdfTtf;
+begin
+  ttf := TPdfTtf.CreateCmap(aFace);
+  try
+    result := (ttf.fmt4 <> nil) and
+              ttf.UnicodePlatform;
+  finally
+    ttf.Free;
+  end;
 end;
 
 function TPdfTtf.GlyphOf(aCode: cardinal): integer;
@@ -6856,14 +6876,18 @@ begin
   else
   begin
     nam := ADoc.TtfFontPostcriptName(AFontIndex, AStyle, self);
-    // a CFF face drawing through its Type0 font only (Type0Only): its WinAnsi
-    // font is internal - metrics, descriptor, subset - and not written
+    // a CFF face, or one without a Microsoft cmap, drawing through its Type0
+    // font only (Type0Only): its WinAnsi font is internal - metrics,
+    // descriptor, subset - and not written
     fCffRead := true;
     case PdfFaceCffInfo(fFace, fCff) of
       pcCidKeyed:
         fInternal := true;
       pcNameKeyed, pcInvalid:
         fInternal := ADoc.FontEmbedded(AFontIndex);
+      pcNone:
+        fInternal := ADoc.FontEmbedded(AFontIndex) and
+                     FaceHasUnicodeCmapOnly(fFace);
     end;
   end;
   inherited Create(ADoc.fXRef, nam, not fInternal);
@@ -7793,8 +7817,9 @@ begin
         WR.Add('[').AddWithSpace(fWinAnsiWidth[' ']);
         fData.AddItem('Widths', TPdfRawText.Create(WR.Add(']').ToPdfString));
       end;
-      // a name-keyed face drew its text as glyph indexes when it was created
-      // embedded: without its program they would mean nothing
+      // a name-keyed CFF face, or one without a Microsoft cmap, drew its text
+      // as glyph indexes when it was created embedded: without its program
+      // they would mean nothing
       if fInternal and
          (GetCff <> pcCidKeyed) and
          not IsEmbedded then
