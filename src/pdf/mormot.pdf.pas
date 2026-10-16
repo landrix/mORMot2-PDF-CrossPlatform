@@ -10,8 +10,9 @@ unit mormot.pdf;
     - Shared types and functions
     - Internal classes mapping PDF objects
     - TPdfDocument TPdfPage main rendering classes
-    - platform backends: GDI on Windows, FreeType and HarfBuzz on POSIX
-    (TBitmap/TGraphic images and TPdfDocumentGdi: mormot.pdf.canvas)
+    - TPdfFontMeasurer Document-Independent Text Metrics
+    (platform backends: GDI on Windows, FreeType and HarfBuzz on POSIX;
+    TBitmap/TGraphic images and TPdfDocumentGdi: mormot.pdf.canvas)
 
   *****************************************************************************
 }
@@ -50,11 +51,11 @@ uses
   mormot.core.datetime,
   mormot.core.buffers,
   mormot.core.data,
-  Contnrs;  // TObjectList (for fStructElems)
+  contnrs;  // TObjectList (for fStructElems)
 
 
 
-{************ Shared types and functions }
+{ ************ Shared types and functions }
 
 type
   // the types of mormot.pdf.types, so that "uses mormot.pdf" is enough for a
@@ -114,8 +115,8 @@ type
 
 {$ifndef OSWINDOWS}
 
-{ Windows charset/font constants - defined here for cross-platform compilation }
 const
+  /// Windows charset/font constants - defined here for cross-platform compilation
   ANSI_CHARSET         = 0;
   DEFAULT_CHARSET      = 1;
   SYMBOL_CHARSET       = 2;
@@ -132,7 +133,7 @@ const
 { some FPC/Delphi LCL/VCL compatibility definitions }
 
 type
-  // FPC wrappers are just pointless and confusing here
+  /// the VCL TPoint and TRect - FPC wrappers are just pointless and confusing here
   {$ifdef OSWINDOWS}
   TPoint = TPOINTL;
   PPoint = PPOINTL;
@@ -146,12 +147,15 @@ type
     case integer of
       0: (Left, Top, Right, Bottom: integer);
       1: (TopLeft, BottomRight: TPoint);
-      2: (Rect: Types.TRect);
+      2: (Rect: types.TRect);
   end;
   PRect = ^TRect;
 
+/// a TRect from its four coordinates, as the VCL Rect() function
 function Rect(ALeft, ATop, ARight, ABottom: integer): TRect;
   {$ifdef HASINLINE} inline; {$endif}
+
+/// a TPoint from its two coordinates, as the VCL Point() function
 function Point(X, Y: integer): TPoint;
   {$ifdef HASINLINE} inline; {$endif}
 
@@ -449,7 +453,7 @@ const
   /// allow all actions for a pdf encrypted file
   // - to be used as parameter for TPdfEncryption.New() class method
   PDF_PERMISSION_ALL: TPdfEncryptionPermissions =
-    [Low(TPdfEncryptionPermission)..high(TPdfEncryptionPermission)];
+    [low(TPdfEncryptionPermission)..high(TPdfEncryptionPermission)];
 
   /// disable modification and annotation of a pdf encrypted file
   // - to be used as parameter for TPdfEncryption.New() class method
@@ -502,18 +506,24 @@ const
   /// the "pure/posix" Line Feed value
   LF = #10;
 
+  /// range of the horizontal scaling, in percent - TPdfPage clips to it
   PDF_MIN_HORIZONTALSCALING = 10;
   PDF_MAX_HORIZONTALSCALING = 300;
 
+  /// upper bound of the word spacing - not checked
   PDF_MAX_WORDSPACE = 300;
 
+  /// range of the character spacing - TPdfPage raises outside it
   PDF_MIN_CHARSPACE = -30;
   PDF_MAX_CHARSPACE = 300;
 
+  /// upper bound of a font size, in points - TPdfPage raises above it
   PDF_MAX_FONTSIZE  = 2000;
 
+  /// upper bound of the zoom factor of a TPdfDestination
   PDF_MAX_ZOOMSIZE  = 10;
 
+  /// upper bound of the text leading - TPdfPage raises above it
   PDF_MAX_LEADING   = 300;
 
   /// list of common fonts available by default since Windows 2000
@@ -624,7 +634,7 @@ function PdfFaceCffInfo(const Face: IFontFace; out Info: TPdfCffInfo): TPdfCffKi
 
 
 
-{************ Internal classes mapping PDF objects }
+{ ************ Internal classes mapping PDF objects }
 
 type
   TPdfObject = class;
@@ -741,7 +751,9 @@ type
     fUserPass, fOwnerPass: TPdfBuffer32;
     procedure EncodeBuffer(const BufIn; var BufOut; Count: cardinal); override;
   public
+    /// the size of InSize bytes once encrypted: the IV and the PKCS#7 blocks
     function GetEncryptedSize(InSize: cardinal): cardinal; override;
+    /// derive the keys from the passwords, add /Encrypt to the trailer
     procedure AttachDocument(aDoc: TPdfDocument); override;
   end;
 {$endif USE_PDFSECURITY}
@@ -898,7 +910,9 @@ type
   /// object manager is a virtual class to manage instance of indirect PDF objects
   TPdfObjectMgr = class
   public
+    /// register an indirect object, giving it its object number
     procedure AddObject(AObject: TPdfObject); virtual; abstract;
+    /// the indirect object of this number, nil if there is none
     function GetObject(ObjectID: integer): TPdfObject; virtual; abstract;
   end;
 
@@ -942,6 +956,7 @@ type
   /// a virtual PDF object, with an associated PDF Object Number
   TPdfVirtualObject = class(TPdfObject)
   public
+    /// create the object with this object number
     constructor Create(AObjectId: integer); reintroduce;
   end;
 
@@ -951,7 +966,9 @@ type
     fValue: boolean;
     procedure InternalWriteTo(W: TPdfWrite); override;
   public
+    /// create the object with its value
     constructor Create(AValue: boolean); reintroduce;
+    /// the stored value
     property Value: boolean
       read fValue write fValue;
   end;
@@ -968,7 +985,9 @@ type
     fValue: integer;
     procedure InternalWriteTo(W: TPdfWrite); override;
   public
+    /// create the object with its value
     constructor Create(AValue: integer); reintroduce;
+    /// the stored value
     property Value: integer
       read fValue write fValue;
   end;
@@ -979,7 +998,9 @@ type
     fValue: double;
     procedure InternalWriteTo(W: TPdfWrite); override;
   public
+    /// create the object with its value
     constructor Create(AValue: double); reintroduce;
+    /// the stored value
     property Value: double
       read fValue write fValue;
   end;
@@ -995,7 +1016,9 @@ type
     procedure InternalWriteTo(W: TPdfWrite); override;
     function SpaceNotNeeded: boolean; override;
   public
+    /// create the object with its value
     constructor Create(const AValue: RawByteString); reintroduce;
+    /// the stored value
     property Value: RawByteString
       read fValue write fValue;
   end;
@@ -1012,7 +1035,9 @@ type
     procedure InternalWriteTo(W: TPdfWrite); override;
     function SpaceNotNeeded: boolean; override;
   public
+    /// create the object with its value
     constructor Create(const AValue: RawUtf8); reintroduce;
+    /// the stored value
     property Value: RawUtf8
       read fValue write fValue;
   end;
@@ -1027,7 +1052,9 @@ type
     function GetValue: string;
     procedure SetValue(const Value: string);
   public
+    /// create the object with its value
     constructor Create(const AValue: string); reintroduce;
+    /// the stored value, converted from and to UTF-8
     property Value: string
       read GetValue write SetValue;
   end;
@@ -1047,6 +1074,7 @@ type
   protected
     procedure InternalWriteTo(W: TPdfWrite); override;
   public
+    /// create the object with a copy of Len bytes at Buffer
     constructor Create(Buffer: pointer; Len: integer); reintroduce;
   end;
 
@@ -1300,11 +1328,17 @@ type
     fXRef: TPdfXref;
     procedure WriteTo(var W: TPdfWrite);
   public
+    /// create the trailer of the objects AObjectMgr numbers
     constructor Create(AObjectMgr: TPdfObjectMgr);
+    /// release the trailer and its dictionary
     destructor Destroy; override;
+    /// switch to a cross-reference stream (PDF 1.5) holding the trailer
+    // entries, and to object streams unless the document is encrypted
     procedure ToCrossReference(Doc: TPdfDocument);
+    /// file offset of the cross-reference table or stream
     property XrefAddress: integer
       read fXrefAddress write fXrefAddress;
+    /// the trailer dictionary
     property Attributes: TPdfDictionary
       read fAttributes;
   end;
@@ -1375,7 +1409,7 @@ type
   end;
 
 
-{************ TPdfDocument TPdfPage main rendering classes }
+{ ************ TPdfDocument TPdfPage main rendering classes }
 
     /// any object stored to the PDF file
   // - these objects are the main unit of the PDF file content
@@ -1765,7 +1799,7 @@ type
     /// retrieve the PDF information, associated to the PDF document
     property Info: TPdfInfo
       read GetInfo;
-    // retrieve the PDF Document Catalog, as root of the document's object hierarchy
+    /// retrieve the PDF Document Catalog, as root of the document's object hierarchy
     property Root: TPdfCatalog
       read fRoot;
     /// retrieve the PDF Outline, associated to the PDF document
@@ -1812,7 +1846,7 @@ type
     // - must be set to true before any use of the OutlineRoot property
     property UseOutlines: boolean
       read fUseOutlines write fUseOutlines;
-    // used to define if the PDF document will use optional content (layers)
+    /// used to define if the PDF document will use optional content (layers)
     // - will also force PDF 1.5 as minimal file format
     // - must be set to true before calling NewDoc
     // - warning: setting a value to this propery after creation will call the
@@ -2174,7 +2208,7 @@ type
     // approximation constructed from straight line segments
     // - Flatness is a number in the range 0 to 100; a value of 0 specifies
     // the output device's default flatness tolerance
-    procedure SetFlat(flatness: Byte);                           {  i   }
+    procedure SetFlat(flatness: byte);                           {  i   }
     /// Set the line cap style in the graphics state
     // - The line cap style specifies the shape to be used at the
     // ends of open subpaths (and dashes, if any) when they are stroked
@@ -2756,9 +2790,11 @@ type
     { TODO: implement standard TPdfFontCIDFontType2 MBCS font }
   end;
 
+  /// the points of a metafile record, for indexed access
   TPointArray = array[word] of TPoint;
   PPointArray = ^TPointArray;
 
+  /// the 16-bit points of a metafile record, for indexed access
   TSmallPointArray = array[word] of TSmallPoint;
   PSmallPointArray = ^TSmallPointArray;
 
@@ -2771,7 +2807,6 @@ type
     numberSubtables: word;
   end;
   /// points to every 'cmap' encoding subtables
-
   TCmapSubTableArray = packed array[byte] of packed record
     /// Platform identifier
     platformID: word;
@@ -3342,7 +3377,7 @@ function PdfMetadataFacturX(const ConformanceLevel: RawUtf8;
   const Version: RawUtf8 = '1.0'; const DocumentType: RawUtf8 = 'INVOICE'): RawUtf8;
 
 
-{************ TPdfFontMeasurer Document-Independent Text Metrics }
+{ ************ TPdfFontMeasurer Document-Independent Text Metrics }
 
 type
   /// the metrics of one resolved face, in 1000-per-em PDF units
@@ -3425,7 +3460,7 @@ implementation
 
 
 
-{************ Shared types and functions }
+{ ************ Shared types and functions }
 
 procedure GetPdfFonts(Embedded: boolean;
   out SansFont, SerifFont, MonoFont: string);
@@ -3562,7 +3597,7 @@ begin
   if Value <> nil then
     while true do
       if Value^ = #0 then
-        Break
+        break
       else if not (Value^ in LeadBytes) then
         inc(Value)
       else
@@ -3675,7 +3710,7 @@ end;
 
 type
   /// the face of a font the backend could not resolve: every query fails,
-  // as the FreeType backend answered a nil font before Phase 1b
+  // as the FreeType backend answered a nil font before IFontFace
   TPdfNoFace = class(TInterfacedObject, IFontFace)
   public
     function Handle: TFontHandle;
@@ -4076,7 +4111,7 @@ begin
 end;
 
 
-{************ Internal classes mapping PDF objects }
+{ ************ Internal classes mapping PDF objects }
 
 { TPdfObject }
 
@@ -4373,7 +4408,7 @@ var
   i: PtrInt;
 begin
   Create(AObjectMgr);
-  for i := 0 to High(AArray) do
+  for i := 0 to high(AArray) do
     AddItem(TPdfNumber.Create(AArray[i]));
 end;
 
@@ -4702,7 +4737,7 @@ var
   i: PtrInt;
   e: TPdfDictionaryElement;
 begin
-  if Self <> nil then
+  if self <> nil then
     for i := 0 to fArray.Count - 1 do
     begin
       e := fArray.List[i];
@@ -4710,7 +4745,7 @@ begin
       begin
         fArray.Remove(e);
         e.Free;
-        Break;
+        break;
       end;
     end;
 end;
@@ -5128,7 +5163,7 @@ begin // this function is intented to use with Tj or '
         include(Font.fWinAnsiUsed, Text^);
       case Text^ of
         #0:
-          Break;
+          break;
         #160:
           begin        // fixed space is written as normal space
             B^ := ' ';
@@ -5220,7 +5255,7 @@ begin
   if BEnd - B <= 32 then
     Save;
   // Value := Trunc(Value * 100 + 0.5) / 100; // 2 decim rounding done by str()
-  if Abs(Value) < 1E-2 then
+  if abs(Value) < 1E-2 then
     Add('0 ')
   else
   begin
@@ -5793,7 +5828,7 @@ end;
 function TPdfWrite.AddUnicodeHexText(PW: PWideChar; PWLen: integer; NextLine: boolean;
   Canvas: TPdfCanvas): TPdfWrite;
 var
-  ttf:    TPdfFontTrueType;
+  ttf: TPdfFontTrueType;
   shaped: boolean;
 begin
   if PW <> nil then
@@ -6177,7 +6212,7 @@ end;
 
 procedure TPdfFont.AddUsedWinAnsiChar(aChar: AnsiChar);
 begin
-  if Self <> nil then
+  if self <> nil then
     include(fWinAnsiUsed, aChar);
 end;
 
@@ -6721,9 +6756,9 @@ procedure TPdfFontTrueType.GetAndMarkGlyphAsUsedWithWidth(aGlyph: word; aWidth: 
 // registers a GSUB-substituted glyph so that the /W array gets a width
 // instead of falling back to /DW.
 var
-  i:       PtrInt;
-  idx:     integer;
-  w:       integer;
+  i: PtrInt;
+  idx: integer;
+  w: integer;
 begin
   // Step 1: already registered in WinAnsi tracking arrays - nothing to do
   for i := 0 to fUsedWideChar.Count - 1 do
@@ -7716,13 +7751,13 @@ begin
         if c in fWinAnsiUsed then
         begin
           fFirstChar := ord(c);
-          Break;
+          break;
         end;
       for c := #255 downto #32 do
         if c in fWinAnsiUsed then
         begin
           fLastChar := ord(c);
-          Break;
+          break;
         end;
       if fFirstChar <> 0 then
       begin
@@ -8044,7 +8079,7 @@ begin
   fDoc := AParent.Doc;
   Data := TPdfDictionary.Create(fDoc.fXRef);
   fDoc.fXRef.AddObject(Data);
-  fDoc.fObjectList.Add(Self);
+  fDoc.fObjectList.Add(self);
   if TopPosition >= 0 then
   begin
     if fDoc.Canvas.fPage = nil then
@@ -8076,7 +8111,7 @@ begin
     TmpEntry.fCount := TmpEntry.fCount + 1;
     TmpEntry := TmpEntry.Parent;
   end;
-  result := TPdfOutlineEntry.Create(Self, TopPosition);
+  result := TPdfOutlineEntry.Create(self, TopPosition);
   if fFirst = nil then
     fFirst := result;
   if fLast <> nil then
@@ -8122,7 +8157,7 @@ begin
   Data := TPdfDictionary.Create(ADoc.fXRef);
   fDoc.fXRef.AddObject(Data);
   Data.AddItem('Type', 'Outlines');
-  fDoc.fObjectList.Add(Self);
+  fDoc.fObjectList.Add(self);
 end;
 
 procedure TPdfOutlineRoot.Save;
@@ -8138,7 +8173,7 @@ begin
 end;
 
 
-{************ TPdfDocument TPdfPage main rendering classes }
+{ ************ TPdfDocument TPdfPage main rendering classes }
 
 { TPdfDocument }
 
@@ -8168,7 +8203,7 @@ begin
       'ensure libfreetype is installed and mormot.lib.freetype is used');
   // no screen here: the canvas adapters set the screen's resolution
   fScreenLogPixels := 96;
-  fCanvas := TPdfCanvas.Create(Self); // need fScreenLogPixels
+  fCanvas := TPdfCanvas.Create(self); // need fScreenLogPixels
   // retrieve true type fonts available for all charsets (via platform backend)
   FontEnumerator.EnumTrueTypeFonts(fTrueTypeFonts);
   QuickSortRawUtf8(fTrueTypeFonts, length(fTrueTypeFonts), nil, @StrIComp);
@@ -8446,7 +8481,7 @@ end;
 
 function TPdfDocument.CreateDestination: TPdfDestination;
 begin
-  result := TPdfDestination.Create(Self);
+  result := TPdfDestination.Create(self);
   fObjectList.Add(result);
 end;
 
@@ -8466,7 +8501,7 @@ begin
   aDest.DestinationType := dtXYZ;
   aDest.Zoom := 0; // will leave Zoom factor unchanged
   aDest.Left := 0; // go to left side of the page
-  aDest.Top := Round(TopPosition);
+  aDest.Top := round(TopPosition);
   fBookMarks.AddObject(aBookmarkName, aDest);
   with fMissingBookmarks do
     for i := Count - 1 downto 0 do
@@ -8533,7 +8568,7 @@ begin
   fObjectList.Add(fRoot);
   if UseOutlines then
   begin
-    fOutlineRoot := TPdfOutlineRoot.Create(Self);
+    fOutlineRoot := TPdfOutlineRoot.Create(self);
     fRoot.Data.AddItem('Outlines', fOutlineRoot.Data);
   end;
   CreateInfo;
@@ -8589,7 +8624,7 @@ begin
     dic.AddItem('DestOutputProfile', rgb);
     fOutputIntents.AddItem(dic);
     cat.AddItem('OutputIntents', fOutputIntents);
-    fMetaData := TPdfStream.Create(Self);
+    fMetaData := TPdfStream.Create(self);
     fMetaData.Attributes.AddItem('Subtype', 'XML');
     fMetaData.Attributes.AddItem('Type', 'Metadata');
     fMetaData.fFilter := '';
@@ -8686,7 +8721,7 @@ begin
       // XMP metadata stream (PDF/UA-1) - only when PDF/A has not already set it
       if (fPdfA = pdfaNone) and (fMetaData = nil) then
       begin
-        fMetaData := TPdfStream.Create(Self);
+        fMetaData := TPdfStream.Create(self);
         fMetaData.Attributes.AddItem('Subtype', 'XML');
         fMetaData.Attributes.AddItem('Type', 'Metadata');
         fMetaData.fFilter := '';
@@ -9861,7 +9896,7 @@ begin
           (result.Parent <> nil) do
       result := result.Parent;
   end;
-  result := result.AddChild(Trunc(TopPosition));
+  result := result.AddChild(trunc(TopPosition));
   result.Title := Title;
   result.Level := Level;
   fLastOutline := result;
@@ -9914,12 +9949,12 @@ begin
   if P.Height > 1 then
   begin
     // divided before multiplied: (Height - 1) * stride + row cannot overflow
-    if P.Stride <> Low(PtrInt) then
-      stride := Abs(Int64(P.Stride));
+    if P.Stride <> low(PtrInt) then
+      stride := abs(Int64(P.Stride));
     if stride < row then
       EPdfInvalidValue.RaiseUtf8('TPdfImagePixels: Stride % below a row of %',
         [P.Stride, row]);
-    if stride > (High(Int64) - row) div (P.Height - 1) then
+    if stride > (high(Int64) - row) div (P.Height - 1) then
       EPdfInvalidValue.RaiseUtf8('TPdfImagePixels: Stride % too big', [P.Stride]);
   end;
   if Int64(P.Size) < Int64(P.Height - 1) * stride + row then
@@ -10103,7 +10138,7 @@ begin
         if arr <> nil then
         begin
           rad := TPdfArray.Create(fXRef);
-          for i := Low(ContentGroups) to High(ContentGroups) do
+          for i := low(ContentGroups) to high(ContentGroups) do
             if ContentGroups[i] <> nil then
               rad.AddItem(ContentGroups[i]);
           if rad.ItemCount > 0 then
@@ -10152,7 +10187,7 @@ var
   mime: RawUtf8;
 begin
   // create embedded file stream with main attributes
-  str := TPdfStream.Create(Self);
+  str := TPdfStream.Create(self);
   if pointer(Buffer) <> nil then
     str.Writer.Add(pointer(Buffer), length(Buffer));
   if Assigned(Stream) then
@@ -10361,7 +10396,7 @@ begin
       w := w + fWordSpace;
     tot := tot + w;
     if tot > Width then
-      Break;
+      break;
     if SysLocale.FarEast then
       i := NextCharIndex(Text, i)
     else
@@ -10695,7 +10730,7 @@ const
     'TIMES', 'HELVETICA', 'COURIER');
 
 
-{************ TPdfFontMeasurer Document-Independent Text Metrics }
+{ ************ TPdfFontMeasurer Document-Independent Text Metrics }
 
 { TPdfFaceMetrics }
 
@@ -10973,7 +11008,7 @@ begin
       lf.Weight := FW_BOLD
     else
       lf.Weight := FW_NORMAL;
-    lf.Italic := Byte(pfsItalic in AStyle);
+    lf.Italic := byte(pfsItalic in AStyle);
     lf.CharSet := ACharSet;
     lf.PitchAndFamily := 0;
     // we register now the WinAnsi font to the associated fDoc
@@ -11047,9 +11082,9 @@ begin
   w := TextWidth(Text);
   case Alignment of
     paCenter:
-      x := Round((ARect.Right - ARect.Left - w) / 2);
+      x := round((ARect.Right - ARect.Left - w) / 2);
     paRightJustify:
-      x := ARect.Right - ARect.Left - Round(w);
+      x := ARect.Right - ARect.Left - round(w);
   else
     x := 0;
   end;
@@ -11126,7 +11161,7 @@ begin
       MoveToNextLine;
       ARect.Top := ARect.Top - fPage.Leading;
       if ARect.Top < ARect.Bottom + fPage.FontSize then
-        Break;
+        break;
       xp := ARect.Left;
     end;
     xp := xp + w;
@@ -11268,7 +11303,7 @@ end;
 
 // General Graphics State
 
-procedure TPdfCanvas.SetFlat(flatness: Byte);
+procedure TPdfCanvas.SetFlat(flatness: byte);
 begin
   if fContents <> nil then
     fContents.Writer.Add(flatness).Add(' i'#10);
@@ -11287,9 +11322,9 @@ begin
   if fContents = nil then
     exit;
   fContents.Writer.Add('[');
-  if (High(aarray) >= 0) and
+  if (high(aarray) >= 0) and
      (aarray[0] <> 0) then
-    for i := 0 to High(aarray) do
+    for i := 0 to high(aarray) do
       fContents.Writer.AddWithSpace(aarray[i]);
   fContents.Writer.Add('] ').Add(phase).Add(' d'#10);
 end;
@@ -11659,7 +11694,7 @@ begin
     Value := 0
   else if Value > 1 then
     Value := 1;
-  intVal := Round(Value * 100);
+  intVal := round(Value * 100);
   gsName := 'Fca' + PdfString(IntToStr(intVal));
   extGs := fPage.GetResources('ExtGState');
   if extGs = nil then
@@ -11690,7 +11725,7 @@ begin
     Value := 0
   else if Value > 1 then
     Value := 1;
-  intVal := Round(Value * 100);
+  intVal := round(Value * 100);
   gsName := 'SCA' + PdfString(IntToStr(intVal));
   extGs := fPage.GetResources('ExtGState');
   if extGs = nil then
@@ -11917,7 +11952,7 @@ var
 begin
   if CalcCurveArcData(
        centerx, centery, W, H, Sx, Sy, Ex, Ey, clockwise, arctype, res) then
-    for i := 0 to High(res) do
+    for i := 0 to high(res) do
       with res[i] do
         case res of
           caMoveto:
@@ -11929,8 +11964,8 @@ begin
               S2X(pts[2].x), S2Y(pts[2].Y));
           caPosition:
             begin
-              position.x := Round(pts[0].x);
-              position.y := Round(pts[0].Y);
+              position.x := round(pts[0].x);
+              position.y := round(pts[0].Y);
             end;
         end;
 end;
@@ -12023,7 +12058,7 @@ begin
   if PDF_STRUCT_CONTAINER[ARole] then
     exit; // a container groups kids only: no marked-content region, no MCID
   mcid := fPage.fCurrentMCID;
-  Inc(fPage.fCurrentMCID);
+  inc(fPage.fCurrentMCID);
   elem.AddMCID(mcid, fPage.fStructParents);
   elem.RegionOpen := true;
   fContents.Writer.Add('/').Add(PDF_STRUCT_ROLE[ARole]).
@@ -12083,7 +12118,7 @@ begin
      PDF_STRUCT_CONTAINER[elem.Role] then
     exit;
   mcid := fPage.fCurrentMCID;
-  Inc(fPage.fCurrentMCID);
+  inc(fPage.fCurrentMCID);
   elem.AddMCID(mcid, fPage.fStructParents);
   elem.RegionOpen := true;
   fContents.Writer.Add('/').Add(PDF_STRUCT_ROLE[elem.Role]).
@@ -12135,7 +12170,7 @@ begin
   if not AOpenRegion then
     exit;
   mcid := fPage.fCurrentMCID;
-  Inc(fPage.fCurrentMCID);
+  inc(fPage.fCurrentMCID);
   elem.AddMCID(mcid, fPage.fStructParents);
   elem.RegionOpen := true;
   fContents.Writer.Add('/').Add(PDF_STRUCT_ROLE[elem.Role]).
@@ -12394,7 +12429,7 @@ begin
      not (m is TPdfName) then
     exit;
   s := m.Value;
-  for result := Low(TPdfPageMode) to High(TPdfPageMode) do
+  for result := low(TPdfPageMode) to high(TPdfPageMode) do
     if PDF_PAGE_MODE_NAMES[result] = s then
       exit;
   result := pmUseNone;
@@ -12503,7 +12538,7 @@ begin
      not m.InheritsFrom(TPdfName) then
     exit;
   s := m.Value;
-  for result := Low(PDF_PAGE_MODE_NAMES) to High(PDF_PAGE_MODE_NAMES) do
+  for result := low(PDF_PAGE_MODE_NAMES) to high(PDF_PAGE_MODE_NAMES) do
     if PDF_PAGE_MODE_NAMES[result] = s then
       exit;
   result := pmUseNone;

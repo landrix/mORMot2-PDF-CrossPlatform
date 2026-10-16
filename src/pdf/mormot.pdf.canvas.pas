@@ -7,11 +7,12 @@ unit mormot.pdf.canvas;
   *****************************************************************************
 
     VCL/LCL Adapter of the PDF Engine
-    - TPdfVclCanvas, TPdfDocumentVcl: the TCanvas bridge, on every platform
-    - TBitmap/TGraphic images: CreateOrGetBitmapImage, CreateGraphicImage
-    - TPdfDocumentGdi for GDI/TCanvas rendering support (Windows)
-    - the paper size and resolution of the current printer (Windows)
-    - needs the VCL or the LCL: not for Delphi on Linux or Android
+    - TPdfVclCanvas: the TCanvas bridge
+    - TPdfDocumentGdi for GDI/TCanvas rendering support
+    (the bridge with TPdfDocumentVcl and the TBitmap/TGraphic images on every
+    platform; TPdfDocumentGdi and the paper size and resolution of the
+    current printer on Windows; needs the VCL or the LCL: not for Delphi on
+    Linux or Android)
 
   *****************************************************************************
 }
@@ -74,7 +75,7 @@ uses
   mormot.pdf;
 
 
-{************ TPdfVclCanvas: the TCanvas bridge }
+{ ************ TPdfVclCanvas: the TCanvas bridge }
 
 {$ifdef USE_GRAPHICS_UNIT}
 
@@ -131,10 +132,13 @@ type
     {$else}
     procedure DoLineTo(X, Y: integer);
   public
+    /// move the pen to X, Y, in canvas pixels - static in Delphi 7's TCanvas
     procedure MoveTo(X, Y: integer); reintroduce;
+    /// draw a line with the current Pen to X, Y, in canvas pixels
     procedure LineTo(X, Y: integer); reintroduce;
     {$endif PDF_CANVASVIRTUAL}
   public
+    /// draw AText at X, Y in canvas pixels, with the current Font
     procedure TextOut(X, Y: integer; const AText: string);
       {$ifdef PDF_CANVASVIRTUAL}override{$else}reintroduce{$endif};
     /// TextOut at a sub-pixel position
@@ -161,30 +165,42 @@ type
     // below the requested top, plus the descender of the current face
     function TextHeightFrac(const AText: string): single;
     /// integer TextExtent, rounded from TextWidthFrac/TextHeightFrac
-    // - TCanvas.TextWidth and TextHeight route through this method
+    // - TextWidth and TextHeight below do not call it: they round
+    // TextWidthFrac and TextHeightFrac themselves
     function TextExtent(const AText: string): TSize;
       {$ifdef PDF_CANVASVIRTUAL}override{$else}reintroduce{$endif};
+    /// TextWidthFrac, rounded
     function TextWidth(const AText: string): integer;
       {$ifdef PDF_CANVASVIRTUAL}override{$else}reintroduce{$endif};
+    /// TextHeightFrac, rounded
     function TextHeight(const AText: string): integer;
       {$ifdef PDF_CANVASVIRTUAL}override{$else}reintroduce{$endif};
+    /// draw a rectangle with the current Pen and Brush, in canvas pixels
     procedure Rectangle(X1, Y1, X2, Y2: integer);
       {$ifdef PDF_CANVASVIRTUAL}override{$else}reintroduce{$endif};
     /// Rectangle at sub-pixel coordinates
     // - TCanvas.Rectangle only takes integers, so an edge derived from
     // TextWidthFrac would be snapped back to the 1 px grid
     procedure RectangleFrac(X1, Y1, X2, Y2: single);
+    /// draw the ellipse inside a rectangle with the current Pen and Brush
     procedure Ellipse(X1, Y1, X2, Y2: integer);
       {$ifdef PDF_CANVASVIRTUAL}override{$else}reintroduce{$endif};
+    /// draw a rectangle with corners rounded by an X3 x Y3 ellipse
     procedure RoundRect(X1, Y1, X2, Y2, X3, Y3: integer);
       {$ifdef PDF_CANVASVIRTUAL}override{$else}reintroduce{$endif};
+    /// fill ARect with the current Brush, without border
     procedure FillRect(const ARect: TRect); reintroduce;
+    /// draw the connected lines through Points with the current Pen
     procedure Polyline(const Points: array of TPoint); reintroduce;
+    /// draw the closed polygon of Points with the current Pen and Brush
     procedure Polygon(const Points: array of TPoint); reintroduce;
+    /// draw AGraphic at X, Y in its own size, as a PDF image
     procedure Draw(X, Y: integer; AGraphic: TGraphic);
       {$ifdef PDF_CANVASVIRTUAL}override{$else}reintroduce{$endif};
+    /// draw AGraphic scaled into ARect, as a PDF image
     procedure StretchDraw(const ARect: TRect; AGraphic: TGraphic); reintroduce;
   public
+    /// create the bridge drawing on APdfCanvas, at the resolution of APdfDoc
     constructor Create(APdfDoc: TPdfDocumentVcl; APdfCanvas: TPdfCanvas);
     destructor Destroy; override;
     /// reset all cached state (call when switching to a new page)
@@ -302,7 +318,7 @@ function CurrentPrinterRes: TPoint;
 {$endif OSWINDOWS}
 
 
-{************ TPdfDocumentGdi for GDI/TCanvas rendering support }
+{ ************ TPdfDocumentGdi for GDI/TCanvas rendering support }
 
 
 {$ifdef USE_METAFILE}
@@ -494,7 +510,7 @@ type
 {$endif FPC}
 
 
-{************ TPdfVclCanvas: the TCanvas bridge }
+{ ************ TPdfVclCanvas: the TCanvas bridge }
 
 {$ifdef USE_GRAPHICS_UNIT}
 
@@ -598,11 +614,15 @@ begin
   fLastFontStyle := Font.Style;
   fLastFontColor := Font.Color;
   byte(style) := 0;
-  if fsBold in Font.Style then include(style, pfsBold);
-  if fsItalic in Font.Style then include(style, pfsItalic);
-  if fsUnderline in Font.Style then include(style, pfsUnderline);
-  if fsStrikeOut in Font.Style then include(style, pfsStrikeOut);
-  fPdfCanvas.SetFont(StringToUtf8(Font.Name), Abs(Font.Size), style, Font.Charset);
+  if fsBold in Font.Style then
+    include(style, pfsBold);
+  if fsItalic in Font.Style then
+    include(style, pfsItalic);
+  if fsUnderline in Font.Style then
+    include(style, pfsUnderline);
+  if fsStrikeOut in Font.Style then
+    include(style, pfsStrikeOut);
+  fPdfCanvas.SetFont(StringToUtf8(Font.Name), abs(Font.Size), style, Font.Charset);
   fPdfCanvas.SetRGBFillColor(ColorToRGB(Font.Color));
   fStateValid := true;
 end;
@@ -676,7 +696,7 @@ begin
     result := inherited TextExtent(Utf8ToString(AText)).cx
   else
     // TPdfFontMeasurer works in PDF points, this canvas in screen pixels
-    result := fMeasurer.TextWidth(AText, Abs(Font.Size)) / fScale.ScaleX;
+    result := fMeasurer.TextWidth(AText, abs(Font.Size)) / fScale.ScaleX;
 end;
 
 function TPdfVclCanvas.TextHeightFrac(const AText: string): single;
@@ -691,8 +711,8 @@ begin
   { TextOutFrac puts the baseline Font.Size below the requested top, so the box
     of that text is Font.Size plus the descender of the face - the ascender is
     not added, it is already covered by the (larger) Font.Size offset }
-  descent := Abs(fMeasurer.Current.Descent) / 1000 * Abs(Font.Size);
-  result := Abs(Font.Size) + descent / fScale.ScaleX;
+  descent := abs(fMeasurer.Current.Descent) / 1000 * abs(Font.Size);
+  result := abs(Font.Size) + descent / fScale.ScaleX;
 end;
 
 function TPdfVclCanvas.TextExtent(const AText: string): TSize;
@@ -827,7 +847,7 @@ procedure TPdfVclCanvas.Polyline(const Points: array of TPoint);
 var
   i: integer;
 begin
-  if Length(Points) < 2 then
+  if length(Points) < 2 then
     exit;
   SyncPen;
   fPdfCanvas.MoveTo(PxToPtX(Points[0].X), PxToPtY(Points[0].Y));
@@ -840,7 +860,7 @@ procedure TPdfVclCanvas.Polygon(const Points: array of TPoint);
 var
   i: integer;
 begin
-  if Length(Points) < 2 then
+  if length(Points) < 2 then
     exit;
   SyncPen;
   SyncBrush;
@@ -959,7 +979,7 @@ begin
   fCurrentPage := result;
   // (Re-)create or reinitialize the recording canvas for this page
   if fVclCanvas = nil then
-    fVclCanvas := TPdfVclCanvas.Create(Self, fCanvas)
+    fVclCanvas := TPdfVclCanvas.Create(self, fCanvas)
   else
     fVclCanvas.ResetState;
   // Switch the underlying PDF canvas to the new page
@@ -1032,7 +1052,7 @@ end;
 function PrinterDriverExists: boolean;
 var
   flags, count, dummy: dword;
-  level: Byte;
+  level: byte;
 begin
   // avoid using fPrinter.printers.count as this will raise an
   // exception if no printer driver is installed...
@@ -1195,10 +1215,10 @@ end;
 
 function ScaleRect(r: TRect; fScaleX, fScaleY: single): TRect;
 begin
-  result.Left   := Trunc(r.Left * fScaleX);
-  result.Top    := Trunc(r.Top * fScaleY);
-  result.Right  := Trunc(r.Right * fScaleX);
-  result.Bottom := Trunc(r.Bottom * fScaleY);
+  result.Left   := trunc(r.Left * fScaleX);
+  result.Top    := trunc(r.Top * fScaleY);
+  result.Right  := trunc(r.Right * fScaleX);
+  result.Bottom := trunc(r.Bottom * fScaleY);
 end;
 
 procedure NormalizeRect(var Rect: TRect); overload;
@@ -1576,7 +1596,7 @@ begin
     if px.Height > 1 then
     begin
       px.Stride := PAnsiChar(bmp.ScanLine[1]) - PAnsiChar(px.Data);
-      px.Size := PtrInt(px.Height - 1) * Abs(px.Stride) + px.Size;
+      px.Size := PtrInt(px.Height - 1) * abs(px.Stride) + px.Size;
     end;
     {$endif FPC}
     result := TPdfImage.CreatePixels(Doc, px, DontAddToFXref);
@@ -1587,7 +1607,7 @@ begin
 end;
 {$endif USE_GRAPHICS_UNIT}
 
-{************ TPdfDocumentGdi for GDI/TCanvas rendering support }
+{ ************ TPdfDocumentGdi for GDI/TCanvas rendering support }
 
 {$ifdef USE_METAFILE}
 
@@ -1601,9 +1621,9 @@ begin
   tmp.Add(data, len);
   tmp.Add(last);
   {$ifdef FPC}
-  Windows.GdiComment(h, tmp.Size, PByte(tmp.Buffer)^);
+  windows.GdiComment(h, tmp.Size, PByte(tmp.Buffer)^);
   {$else}
-  Windows.GdiComment(h, tmp.Size, tmp.Buffer);
+  windows.GdiComment(h, tmp.Size, tmp.Buffer);
   {$endif FPC}
   tmp.Store.Done;
 end;
@@ -1798,7 +1818,7 @@ begin
   str := TRawByteStringStream.Create;
   try
     fVclCurrentMetaFile.SaveToStream(str);
-    len := Length(str.DataString);
+    len := length(str.DataString);
     SetLength(fVclMetaFileCompressed, SynLZcompressdestlen(len));
     SetLength(fVclMetaFileCompressed, SynLZcompress1(
       pointer(str.DataString), len, pointer(fVclMetaFileCompressed)));
@@ -2637,7 +2657,7 @@ begin
             end;
       EMR_GDICOMMENT:
         with PEMRGDIComment(R)^ do
-          if cbData >= 1  then
+          if cbData >= 1 then
             E.HandleComment(
               TPdfGdiComment(Data[0]), PAnsiChar(@Data) + 1, cbData - 1);
       EMR_MODIFYWORLDTRANSFORM:
@@ -2828,7 +2848,7 @@ begin
     C.GSave;
     try
       {$ifdef FPC}
-      EnumEnhMetaFile(TPdfDocumentAccess(A.fDoc).EmfDC, MF.Handle, @EnumEMFFunc, E, Windows.RECT(R));
+      EnumEnhMetaFile(TPdfDocumentAccess(A.fDoc).EmfDC, MF.Handle, @EnumEMFFunc, E, windows.RECT(R));
       {$else}
       EnumEnhMetaFile(TPdfDocumentAccess(A.fDoc).EmfDC, MF.Handle, @EnumEMFFunc, E, TRect(R));
       {$endif FPC}
@@ -2910,8 +2930,8 @@ begin
       bmp.PixelFormat := pf24bit;
     bmp.Width := ws;
     bmp.Height := hs;
-    StretchDIBits(bmp.Canvas.Handle, 0, 0, ws, hs, Trunc(xs + ox),
-      Trunc(ys + oy), Trunc(ws * fx), Trunc(hs * fy),
+    StretchDIBits(bmp.Canvas.Handle, 0, 0, ws, hs, trunc(xs + ox),
+      trunc(ys + oy), trunc(ws * fx), trunc(hs * fy),
       bits, Bmi^, usage, dwRop);
     if transparent <> $FFFFFFFF then
     begin
@@ -3241,14 +3261,14 @@ begin
         end;
       pgcLink,
       pgcLinkNoBorder: // pgc[NoBorder], @aRect, SizeOf(aRect), aBookmarkName
-        if Len > Sizeof(TRect) then
+        if Len > SizeOf(TRect) then
         begin
           FastSetString(Text, P + SizeOf(TRect), Len - SizeOf(TRect));
           Canvas.Doc.CreateLink(
             Canvas.RectI(PRect(P)^, true), Text, abSolid, ord(Kind = pgcLink));
         end;
       pgcJpegDirect: // pgcJpegDirect, @aRect, SizeOf(aRect), aFileName
-        if Len > Sizeof(TRect) then
+        if Len > SizeOf(TRect) then
         begin
           FastSetString(Text, P + SizeOf(TRect), Len - SizeOf(TRect));
           ImgName := 'SynImgJpg' + PdfString(crc32cUtf8ToHex(Text));
@@ -3414,15 +3434,15 @@ begin
           fViewSize.cy := -fPrinterPxPerInch.Y;
           fWinSize.cx := WinSize.cx * 10;
           fWinSize.cy := WinSize.cy * 10;
-          xdim := Abs(fViewSize.cx * WinSize.cx / (fPrinterPxPerInch.X * fWinSize.cx));
-          ydim := Abs(fViewSize.cy * WinSize.cy / (fPrinterPxPerInch.Y * fWinSize.cy));
+          xdim := abs(fViewSize.cx * WinSize.cx / (fPrinterPxPerInch.X * fWinSize.cx));
+          ydim := abs(fViewSize.cy * WinSize.cy / (fPrinterPxPerInch.Y * fWinSize.cy));
           if xdim > ydim then
           begin
             if fViewSize.cx >= 0 then
               mx := 1
             else
               mx := -1;
-            fViewSize.cx := Trunc(fViewSize.cx * ydim / xdim + 0.5);
+            fViewSize.cx := trunc(fViewSize.cx * ydim / xdim + 0.5);
             if fViewSize.cx = 0 then
               fViewSize.cx := mx;
           end
@@ -3432,7 +3452,7 @@ begin
               my := 1
             else
               my := -1;
-            fViewSize.cy := Trunc(fViewSize.cy * xdim / ydim + 0.5);
+            fViewSize.cy := trunc(fViewSize.cy * xdim / ydim + 0.5);
             if fViewSize.cy = 0 then
               fViewSize.cy := my;
           end;
@@ -3443,11 +3463,11 @@ begin
     if fWinSize.cx = 0 then // avoid EZeroDivide
       fFactorX := 1.0
     else
-      fFactorX := Abs(fViewSize.cx / fWinSize.cx);
+      fFactorX := abs(fViewSize.cx / fWinSize.cx);
     if fWinSize.cy = 0 then // avoid EZeroDivide
       fFactorY := 1.0
     else
-      fFactorY := Abs(fViewSize.cy / fWinSize.cy);
+      fFactorY := abs(fViewSize.cy / fWinSize.cy);
     if Custom <> nil then
     begin
       // S.eM11=fFactorX S.eM12=0 S.eM21=0 S.eM22=fFactorY multiplied by Custom^
@@ -3691,13 +3711,13 @@ begin
         sy := -1;
       if (Canvas.fWorldFactorX) < 0 then
         sx := -1;
-      fscaleY := Abs(Canvas.fFactorY * Canvas.fWorldFactorY * Canvas.fDevScaleY);
-      fscaleX := Abs(Canvas.fFactorX * Canvas.fWorldFactorX * Canvas.fDevScaleX);
+      fscaleY := abs(Canvas.fFactorY * Canvas.fWorldFactorY * Canvas.fDevScaleY);
+      fscaleX := abs(Canvas.fFactorX * Canvas.fWorldFactorX * Canvas.fDevScaleX);
       // guess the font size
       if Font.LogFont.lfHeight < 0 then
-        ss := Abs(Font.LogFont.lfHeight) * fscaleY
+        ss := abs(Font.LogFont.lfHeight) * fscaleY
       else
-        ss := Abs(Font.spec.cell) * fscaleY;
+        ss := abs(Font.spec.cell) * fscaleY;
       // ensure this font is selected (very fast if was already selected)
       {$ifdef USE_UNISCRIBE}fnt :={$endif} Canvas.SetFont(TPdfDocumentAccess(Canvas.fDoc).EmfDC, Font.LogFont, ss);
       // calculate coordinates
@@ -3722,7 +3742,7 @@ begin
         {$endif USE_UNISCRIBE}
         if ws = 0 then
           ws := Canvas.UnicodeTextWidth(pointer(tmp));
-        mw := Round(ws / fscaleX);
+        mw := round(ws / fscaleX);
       end;
       hasdx := R.emrtext.offDx > 0;
       {$ifdef USE_UNISCRIBE}
@@ -3733,7 +3753,7 @@ begin
       begin
         dx := pointer(PtrUInt(@R) + R.emrtext.offDx);
         w := DXTextWidth(dx, R.emrText.nChars);
-        if w < Trunc((R.rclBounds.Right - R.rclBounds.Left) / Canvas.fFactorX) then
+        if w < trunc((R.rclBounds.Right - R.rclBounds.Left) / Canvas.fFactorX) then
           dx := nil; // offDX=0 or within box
       end
       else
@@ -3789,14 +3809,14 @@ begin
       // V Align mask = TA_BASELINE or TA_BOTTOM or TA_TOP = TA_BASELINE
       if (Font.Align and TA_BASELINE) = TA_BASELINE then
       // always zero ?
-        h := Abs(Font.LogFont.lfHeight) - Abs(Font.spec.cell)  // center y
+        h := abs(Font.LogFont.lfHeight) - abs(Font.spec.cell)  // center y
       else if (Font.Align and TA_BASELINE) = TA_BOTTOM then
-        h := Abs(Font.spec.descent)  // bottom y
+        h := abs(Font.spec.descent)  // bottom y
       else
         // needs - vertical coords of baseline from top
         h := -abs(Font.spec.ascent); // top
       if sy < 0 then // inverted coordinates
-        h := Abs(Font.LogFont.lfHeight) + h;
+        h := abs(Font.LogFont.lfHeight) + h;
       if sx < 0 then
         w := w + ww;
       if (Font.align and TA_UPDATECP) = TA_UPDATECP then
@@ -3840,8 +3860,8 @@ begin
         begin
           back.TopLeft := posi;
           back.BottomRight := posi;
-          inc(back.Right, Trunc(ww));
-          inc(back.Bottom, Abs(Font.LogFont.lfHeight));
+          inc(back.Right, trunc(ww));
+          inc(back.Bottom, abs(Font.LogFont.lfHeight));
         end;
       NormalizeRect(back);
       if clipped then
@@ -3880,8 +3900,8 @@ begin
         xs := 0;
         ys := 0;
         Canvas.SetTextMatrix(acos, asin, -asin, acos,
-          Canvas.I2X(posi.X - Round(w * acos + h * asin)),
-          Canvas.I2Y(posi.Y - Round(h * acos - w * asin)));
+          Canvas.I2X(posi.X - round(w * acos + h * asin)),
+          Canvas.I2Y(posi.Y - round(h * acos - w * asin)));
       end
       else if (WorldTransform.eM11 = WorldTransform.eM22) and
               (WorldTransform.eM12 = -WorldTransform.eM21) and
@@ -3979,7 +3999,7 @@ begin
         Canvas.fNewPath := false;
       if (Font.align and TA_UPDATECP) = TA_UPDATECP then
       begin
-        position.X := posi.X + Trunc(ww);
+        position.X := posi.X + trunc(ww);
         position.Y := posi.Y;
       end;
     end;

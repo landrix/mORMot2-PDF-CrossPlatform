@@ -7,10 +7,9 @@ unit mormot.pdf.fpimage;
   *****************************************************************************
 
    FPImage Bitmap Adapter (POSIX)
-   - IPdfBitmapAdapter interface definition
-   - TPdfFPImageAdapter: load PNG/JPEG, enumerate pixels, convert to raw bytes
-   - TPdfFPImageAdapter.GetRawRGB: top-to-bottom RGB24 pixel bytes, instead
-     of GDI BitBlt/GetDIBits
+   - FPImage Bitmap Adapter
+   (IPdfBitmapAdapter; TPdfFPImageAdapter loads PNG/JPEG and gives the pixels
+   as top-to-bottom RGB24 bytes, instead of GDI BitBlt/GetDIBits)
 
   *****************************************************************************
 }
@@ -22,13 +21,16 @@ interface
 {$ifndef OSWINDOWS}
 
 uses
-  SysUtils,
-  Classes,
-  FPImage,
-  FPReadPNG,
-  FPReadJPEG,
+  sysutils,
+  classes,
+  fpimage,
+  fpreadpng,
+  fpreadjpeg,
   mormot.core.base,
   mormot.core.unicode;
+
+
+{ ************ FPImage Bitmap Adapter }
 
 type
   /// pixel format for cross-platform bitmap data exchange
@@ -63,13 +65,21 @@ type
     fImage: TFPMemoryImage;
     function DetectAndLoad(AStream: TStream): boolean;
   public
+    /// create the adapter with no image loaded
     constructor Create;
+    /// release the loaded image
     destructor Destroy; override;
+    /// IPdfBitmapAdapter.LoadFromStream: PNG or JPEG, found from the bytes
     function LoadFromStream(AStream: TStream): boolean;
+    /// IPdfBitmapAdapter.LoadFromFile
     function LoadFromFile(const AFileName: string): boolean;
+    /// IPdfBitmapAdapter.GetWidth
     function GetWidth: integer;
+    /// IPdfBitmapAdapter.GetHeight
     function GetHeight: integer;
+    /// IPdfBitmapAdapter.GetRawRGB: 16-bit FPImage channels to 8 bits
     function GetRawRGB: RawByteString;
+    /// IPdfBitmapAdapter.GetJpegBytes
     function GetJpegBytes(AQuality: integer = 75): RawByteString;
   end;
 
@@ -83,11 +93,12 @@ implementation
 {$ifndef OSWINDOWS}
 
 uses
-  FPWriteJPEG;
+  fpwritejpeg;
 
-// ---------------------------------------------------------------------------
-// TPdfFPImageAdapter
-// ---------------------------------------------------------------------------
+
+{ ************ FPImage Bitmap Adapter }
+
+{ TPdfFPImageAdapter }
 
 constructor TPdfFPImageAdapter.Create;
 begin
@@ -103,11 +114,11 @@ end;
 
 function TPdfFPImageAdapter.DetectAndLoad(AStream: TStream): boolean;
 var
-  sig:     array[0..3] of byte;
+  sig: array[0..3] of byte;
   savedPos: int64;
-  reader:   TFPCustomImageReader;
+  reader: TFPCustomImageReader;
 begin
-  result   := false;
+  result := false;
   savedPos := AStream.Position;
   if AStream.Read(sig, 4) < 4 then
     exit;
@@ -162,8 +173,8 @@ end;
 function TPdfFPImageAdapter.GetRawRGB: RawByteString;
 var
   w, h, x, y: integer;
-  p:           PByte;
-  col:         TFPColor;
+  p: PByte;
+  col: TFPColor;
 begin
   result := '';
   w := fImage.Width;
@@ -175,16 +186,19 @@ begin
   for y := 0 to h - 1 do
     for x := 0 to w - 1 do
     begin
-      col  := fImage.Colors[x, y];
-      p^   := col.red shr 8;   inc(p);  // R (16-bit -> 8-bit)
-      p^   := col.green shr 8; inc(p);  // G
-      p^   := col.blue shr 8;  inc(p);  // B
+      col := fImage.Colors[x, y];
+      p^ := col.red shr 8; // R (16-bit -> 8-bit)
+      inc(p);
+      p^ := col.green shr 8; // G
+      inc(p);
+      p^ := col.blue shr 8; // B
+      inc(p);
     end;
 end;
 
 function TPdfFPImageAdapter.GetJpegBytes(AQuality: integer): RawByteString;
 var
-  ms:     TMemoryStream;
+  ms: TMemoryStream;
   writer: TFPWriterJPEG;
 begin
   result := '';
@@ -208,9 +222,6 @@ begin
   end;
 end;
 
-// ---------------------------------------------------------------------------
-// Factory
-// ---------------------------------------------------------------------------
 
 function CreatePdfBitmapAdapter: IPdfBitmapAdapter;
 begin

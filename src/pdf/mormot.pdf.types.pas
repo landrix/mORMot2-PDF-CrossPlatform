@@ -7,10 +7,11 @@ unit mormot.pdf.types;
   *****************************************************************************
 
    Cross-Platform PDF Shared Types
-   - PDF font names for the two embedding modes
-   - PDF file format and Tagged PDF structure roles
-   - transitional aliases of the font types of mormot.lib.core: the font
-     interfaces, their records and their registration live there now
+   - PDF Font Names
+   - PDF File Format and Structure Roles
+   - Former Names of the Font Types of mormot.lib.core
+   (the font interfaces, their records and their registration live in
+   mormot.lib.core now)
 
   *****************************************************************************
 }
@@ -20,10 +21,13 @@ interface
 {$I mormot.defines.inc}
 
 uses
-  SysUtils,
+  sysutils,
   mormot.core.base,
   mormot.core.unicode,
   mormot.lib.core;
+
+
+{ ************ PDF Font Names }
 
 const
   /// PDF standard Type 1 font names - supported by all PDF readers without embedding
@@ -45,6 +49,9 @@ const
 // - Embedded=false: the PDF standard Type1 fonts (PDF_FONT_STD_*)
 procedure GetPdfFonts(Embedded: boolean;
   out SansFont, SerifFont, MonoFont: string);
+
+
+{ ************ PDF File Format and Structure Roles }
 
 type
   /// PDF file format version written to the %PDF-1.x header
@@ -79,12 +86,16 @@ type
   TPdfFontEnumCallback = procedure(const FontName: RawUtf8;
     var List: TRawUtf8DynArray);
 
-  // former names of the font types and interfaces of mormot.lib.core, kept
-  // while the refactoring runs (R-28): the shaper and the subsetter changed
+
+{ ************ Former Names of the Font Types of mormot.lib.core }
+
+type
+  /// former names of the font types and interfaces of mormot.lib.core, kept
+  // while the refactoring runs: the shaper and the subsetter changed
   // their signatures and have no alias, the globals are FontProvider,
   // FontEnumerator, FontShaper, FontSubsetter and FontPlatformRegistered of
   // mormot.lib.core; the device context (TPdfPlatformDC, IPdfPlatformDC) is
-  // gone with Phase 1b, IFontFace replaces it
+  // gone, IFontFace replaces it
   TPdfPlatformFontHandle = TFontHandle;
   TPdfTextMetrics = TFontMetrics;
   TPdfOutlineMetrics = TFontOutlineMetrics;
@@ -97,20 +108,23 @@ type
 
 implementation
 
+
+{ ************ PDF Font Names }
+
 procedure GetPdfFonts(Embedded: boolean;
   out SansFont, SerifFont, MonoFont: string);
 begin
   if Embedded then
   begin
-    SansFont  := PDF_FONT_TTF_SANS;
+    SansFont := PDF_FONT_TTF_SANS;
     SerifFont := PDF_FONT_TTF_SERIF;
-    MonoFont  := PDF_FONT_TTF_MONO;
+    MonoFont := PDF_FONT_TTF_MONO;
   end
   else
   begin
-    SansFont  := PDF_FONT_STD_SANS;
+    SansFont := PDF_FONT_STD_SANS;
     SerifFont := PDF_FONT_STD_SERIF;
-    MonoFont  := PDF_FONT_STD_MONO;
+    MonoFont := PDF_FONT_STD_MONO;
   end;
 end;
 
