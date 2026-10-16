@@ -888,6 +888,7 @@ Process, agreed in the forum:
     the way, kept as it was: `TPdfWrite.AddGlyphFromChar` selects the
     fallback font on `TPdfDocument.Canvas`, the page canvas, not on the
     canvas it draws on - they differ for a form XObject; a fix of its own
+    (done, below)
 
     **Exceptions, done** (branch `pr/exceptions`, on `pr/no-with`): the
     report's 10 `raise Exception.Create` and 4 `ESynException` raises are
@@ -903,6 +904,16 @@ Process, agreed in the forum:
     `Assert` in `TPdfEnum` (`mormot.pdf.canvas`) are the trunk's code and
     stay - the rule covers the errors a caller sees, not internal checks.
     `on E: Exception` handlers only catch and stay as they are
+
+    **`AddGlyphFromChar` on its own canvas, done** (branch
+    `pr/glyph-canvas`, on `pr/exceptions`): the finding of the `with`
+    removal. It chose the fallback font and flushed through
+    `TPdfDocument.Canvas`; `SetFont` with a font index only returns the
+    font, so the output did not depend on it, but it read
+    `doc.Canvas.fPage.FontSize` - nil before the first `AddPage`, so
+    fallback text in a form XObject drawn before the first page raised an
+    access violation (`TestFormFallback`). The drawing canvas now, as
+    `AddShapedFallback` already did
 - **Into the trunk after mORMot 2.5** (Arnaud, gist, 2026-10-11): the trunk
   is in its 2.5 release cycle, so the work stays in the branches until 2.5
   is out and merges then; the trunk's old `mormot.ui.pdf` and

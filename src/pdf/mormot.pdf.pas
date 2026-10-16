@@ -5673,11 +5673,13 @@ begin
   begin
     if fAddGlyphFont = fMain then
     begin
-      AddGlyphFlush(doc.Canvas, Ttf, NextLine);
+      AddGlyphFlush(Canvas, Ttf, NextLine);
       changed := true; // the fallback string is a new one
     end;
     fAddGlyphFont := fFallBack;
-    fnt := doc.Canvas.SetFont('', doc.Canvas.fPage.FontSize, Ttf.fStyle, -1,
+    // the canvas drawn on: a form's has its own page, the document's none
+    // before the first AddPage
+    fnt := Canvas.SetFont('', Canvas.fPage.FontSize, Ttf.fStyle, -1,
       doc.fFontFallBackIndex) as TPdfFontTrueType;
     assert(not fnt.Unicode);
     idx := fnt.FindOrAddUsedWideChar(Char);
@@ -5690,7 +5692,7 @@ begin
   begin
     if fAddGlyphFont = fFallBack then
     begin
-      AddGlyphFlush(doc.Canvas, Ttf, NextLine);
+      AddGlyphFlush(Canvas, Ttf, NextLine);
       changed := true;
     end;
     fAddGlyphFont := fMain;

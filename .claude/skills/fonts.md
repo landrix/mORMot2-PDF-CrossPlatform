@@ -515,6 +515,10 @@ if Glyph = 0 and fPdfA <> pdfaNone: raise EPdfInvalidOperation — PDF/A forbids
 Canvas.SetPdfFont(fnt.UnicodeFont, size)  — switch page font to CID font for output
 Add('<XXXX>')                              — write CID hex
 ```
+`Canvas` is the canvas drawn on, for the fallback font too: a form
+XObject's canvas has a page of its own, the document's canvas none before
+the first `AddPage` (until 2026-10-16 the fallback font was chosen through
+`TPdfDocument.Canvas`, a leftover of the `with` - `TestFormFallback`).
 **A WinAnsi character the face lacks takes this path too** (since the
 fallback step, 2026-10-15): `AddUnicodeHexTextNoUniScribe` writes WinAnsi
 text as a `(...)` string in the simple font only while

@@ -65,6 +65,8 @@ type
     procedure TestShapingSwitch;
     procedure TestShapedAfterFallback;
     procedure TestPlainFallback;
+    /// fallback text in a form XObject drawn before the first page
+    procedure TestFormFallback;
     procedure TestShapedFallback;
     procedure TestShapedRunOutcomeUnset;
     procedure TestZeroRealIsWritten;
@@ -1459,6 +1461,62 @@ begin
     result := -1
   else
     result := 1;
+end;
+
+procedure TPdfSmokeTests.TestFormFallback;
+var
+  PDF: TPdfDocument;
+  form: TPdfFormWithCanvas;
+  W: SynUnicode;
+  s: RawByteString;
+  ok: boolean;
+  Stream: TMemoryStream;
+  i: PtrInt;
+  xobj: RawByteString;
+begin
+  { the fallback font was chosen through the document's page canvas, which
+    has no page before the first AddPage: the form's own canvas draws it }
+  Check(EnsureTestFonts, 'the test fonts registered');
+  ok := true;
+  s := '';
+  PDF := TPdfDocument.Create;
+  try
+    PDF.CompressionMethod := cmNone;
+    PDF.EmbeddedTTF := true;
+    PDF.FontFallBackName := TEST_SANS;
+    PDF.UseFontFallBack := true;
+    try
+      form := TPdfFormWithCanvas.Create(PDF, 200, 100);
+      form.Canvas.SetFont(ARABIC_FONT, 24, [], PDF_DEFAULT_CHARSET);
+      W := 'Ab';
+      form.Canvas.TextOutW(10, 50, pointer(W));
+      form.CloseCanvas;
+      PDF.AddXObject('FormF', form);
+      PDF.AddPage;
+      PDF.Canvas.DrawXObject(40, 600, 1, 1, 'FormF');
+      Stream := TMemoryStream.Create;
+      try
+        PDF.SaveToStream(Stream);
+        s := StreamToRaw(Stream);
+      finally
+        Stream.Free;
+      end;
+    except
+      ok := false;
+    end;
+  finally
+    PDF.Free;
+  end;
+  Check(ok, 'a form drawn before the first page');
+  Check(Pos(RawByteString('mORMotTestSans'), s) > 0, 'the fallback font drew Ab');
+  // drawn in the form, with the fallback font in the form's own resources
+  i := Pos(RawByteString('/Subtype/Form'), s);
+  xobj := Copy(s, i, PosEx('endstream', s, i + 1) - i);
+  Check((i > 0) and
+        (PosEx('> Tj', xobj) > 0), 'the glyphs in the form stream');
+  CheckEqual(CountOccurrences(' 24 Tf', xobj), 2,
+    'its font and the fallback font selected there');
+  Check(Pos(RawByteString('/Font<<>>'), s) > 0, 'no font on the page');
 end;
 
 procedure TPdfSmokeTests.TestShapedFallback;
