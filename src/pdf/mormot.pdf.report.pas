@@ -57,6 +57,10 @@ type
   TPdfAFRelationship = mormot.pdf.TPdfAFRelationship;
   TPdfPageMode = mormot.pdf.TPdfPageMode;
 
+type
+  /// exception class raised by this unit
+  EPdfReport = class(ESynException);
+
 const
   pdfaNone = mormot.pdf.pdfaNone;
   pdfa1A = mormot.pdf.pdfa1A;
@@ -510,7 +514,7 @@ type
     // - automatically sets PDF bookmark at current Y position
     // - automatically uses format 'H{Level}' from registry (H1, H2, ..., H6)
     // - auto-advances CurrentY based on heading format spacing
-    // - raises exception if ALevel not in 1..6 or ATitle is empty
+    // - raises EPdfReport if ALevel is not in 1..6 or ATitle is empty
     procedure DrawHeading(ALevel: integer; const ATitle: RawUtf8);
 
     { --- inline text formatting (Markdown-style) --- }
@@ -650,7 +654,7 @@ type
     function ExportPdfStream(aDest: TStream;
                               aRaiseException: boolean = false): boolean;
     /// export all pages as PDF to a file; calls ExportPdfStream internally
-    // - raises on any error: ESynException when there is no page, otherwise
+    // - raises on any error: EPdfReport when there is no page, otherwise
     //   the error of the export or of writing the file
     // - the PDF is built in memory first: FileName is written only once the
     //   export has succeeded, and a failed export leaves it as it was
@@ -1066,7 +1070,7 @@ var
   n: integer;
 begin
   if fCurrCmds = nil then
-    raise Exception.Create('TGDIPages: call NewPage before drawing');
+    EPdfReport.RaiseUtf8('%.AddCommand: call NewPage before drawing', [self]);
   { consecutive DrawListItem calls share one list: any other command ends it }
   if fInList and
      not fRecordingListItem and
@@ -1340,21 +1344,11 @@ end;
 
 function TGDIPages.NormalizeX(X: integer): integer;
 begin
-  { Validate: X must be relative to printable area [0, fPageWidth] }
-  {$IFDEF DEBUG}
-  Assert((X >= 0) and (X <= fPageWidth),
-    Format('NormalizeX: X=%d out of bounds [0, %d]', [X, fPageWidth]));
-  {$ENDIF}
   result := X;
 end;
 
 function TGDIPages.NormalizeY(Y: integer): integer;
 begin
-  { Validate: Y must be relative to printable area [0, fPageHeight] }
-  {$IFDEF DEBUG}
-  Assert((Y >= 0) and (Y <= fPageHeight),
-    Format('NormalizeY: Y=%d out of bounds [0, %d]', [Y, fPageHeight]));
-  {$ENDIF}
   result := Y;
 end;
 
@@ -1683,10 +1677,10 @@ var
 begin
   { Validate inputs }
   if (ALevel < 1) or (ALevel > 6) then
-    raise Exception.Create('DrawHeading: level must be 1..6');
+    EPdfReport.RaiseUtf8('%.DrawHeading: level must be 1..6', [self]);
 
   if ATitle = '' then
-    raise Exception.Create('DrawHeading: title cannot be empty');
+    EPdfReport.RaiseUtf8('%.DrawHeading: title cannot be empty', [self]);
 
   { Get heading format (H1, H2, ..., H6) }
   Format := GetFormat('H' + Int32ToUtf8(ALevel));
@@ -2006,7 +2000,7 @@ var
   BTCmd: TDrawCommand;
 begin
   if fTableInProgress then
-    raise Exception.Create('BeginTable: table already in progress');
+    EPdfReport.RaiseUtf8('%.BeginTable: table already in progress', [self]);
   fTableInProgress := true;
   SaveLayout;  { Save font/style to restore after EndTable }
   fTableStartY := fCurrentY;
@@ -2133,7 +2127,7 @@ var
   kind: integer;
 begin
   if not fTableInProgress then
-    raise Exception.Create('DrawTableHeader: BeginTable not called');
+    EPdfReport.RaiseUtf8('%.DrawTableHeader: BeginTable not called', [self]);
 
   // Save header content for automatic repetition on continuation pages
   SetLength(fTableSavedHeaders, length(Headers));
@@ -2160,7 +2154,7 @@ var
   RowHeight: integer;
 begin
   if not fTableInProgress then
-    raise Exception.Create('DrawTableFooter: BeginTable not called');
+    EPdfReport.RaiseUtf8('%.DrawTableFooter: BeginTable not called', [self]);
 
   { an unset Footer* set means "look like the header row" }
   nam := fTableLayout.FooterFontName;
@@ -2209,7 +2203,7 @@ var
   RowHeight: integer;
 begin
   if not fTableInProgress then
-    raise Exception.Create('DrawTableRow: BeginTable not called');
+    EPdfReport.RaiseUtf8('%.DrawTableRow: BeginTable not called', [self]);
 
   { Calculate row height with padding above and small padding below text }
   RowHeight := LineHeightMM + CELL_PADDING;
@@ -2316,7 +2310,7 @@ var
   Cmd: TDrawCommand;
 begin
   if fTableInProgress then
-    raise Exception.Create('BeginTable: table already in progress');
+    EPdfReport.RaiseUtf8('%.BeginTable: table already in progress', [self]);
   fTableInProgress := true;
   fTableStartY := fCurrentY;
   fTableRowStartY := fCurrentY;
@@ -2348,7 +2342,7 @@ var
   CellText: RawUtf8;
 begin
   if not fTableInProgress then
-    raise Exception.Create('AddTableRow: BeginTable not called');
+    EPdfReport.RaiseUtf8('%.AddTableRow: BeginTable not called', [self]);
 
   // Calculate row height based on font (including cell padding)
   RowHeight := LineHeightMM + CELL_PADDING;
@@ -2421,7 +2415,7 @@ var
   Cmd: TDrawCommand;
 begin
   if not fTableInProgress then
-    raise Exception.Create('EndTable: BeginTable not called');
+    EPdfReport.RaiseUtf8('%.EndTable: BeginTable not called', [self]);
   fTableInProgress := false;
   fTableSavedHeaders := nil; // release saved headers
   // Emit end table marker
@@ -2877,8 +2871,8 @@ begin
     the text with a face it was not measured with }
   if Value and
      (fPageCount > 0) then
-    raise ESynException.Create('TGDIPages.ExportPdfTagged must be set before ' +
-      'the first page is drawn: it selects the fonts the layout is measured with');
+    EPdfReport.RaiseUtf8('%.ExportPdfTagged: set it before the first page ' +
+      'is drawn - it selects the fonts the layout is measured with', [self]);
   fExportPdfTagged := Value;
   if not Value then
     exit;
@@ -2925,7 +2919,7 @@ begin
   if fPageCount = 0 then
   begin
     if aRaiseException then
-      ESynException.RaiseUtf8('%.ExportPdfStream: no page to export', [self]);
+      EPdfReport.RaiseUtf8('%.ExportPdfStream: no page to export', [self]);
     exit;
   end;
   try
@@ -3029,10 +3023,10 @@ var
 begin
   // a requested protection that is not applied must not pass unnoticed
   if Protect or Encrypt then
-    ESynException.RaiseUtf8('%.ExportPDF: Protect and Encrypt are not ' +
+    EPdfReport.RaiseUtf8('%.ExportPDF: Protect and Encrypt are not ' +
       'implemented', [self]);
   if fPageCount = 0 then
-    ESynException.RaiseUtf8('%.ExportPDF: no page to export', [self]);
+    EPdfReport.RaiseUtf8('%.ExportPDF: no page to export', [self]);
   // Transfer per-call title/company into the export properties so
   // ExportPdfStream picks them up through the unified code path.
   fTitle := ATitle;
