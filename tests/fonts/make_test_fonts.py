@@ -104,6 +104,20 @@ def make_symbol(font, base=0xF000):
             rec.platEncID = 0
 
 
+def make_unicode_only(font):
+    """Keep one cmap, (0,3) Unicode BMP: no (3,1), (3,0) or (1,0), as the
+    first faces of macOS GeezaPro.ttc have - a simple TrueType font cannot
+    reach its glyphs (ISO 32000-1 9.6.6.4)."""
+    best = font.getBestCmap()
+    sub = cmap_format_4(4)
+    sub.platformID, sub.platEncID, sub.language = 0, 3, 0
+    sub.cmap = dict(best)
+    table = newTable("cmap")
+    table.tableVersion = 0
+    table.tables = [sub]
+    font["cmap"] = table
+
+
 def pad_glyphs(font, count=4200):
     """Put count empty glyphs out of the cmap after .notdef: the glyphs drawn
     get IDs above 4096 - two glyphs 4096 apart with no character, and a keep
@@ -168,6 +182,12 @@ FONTS = [
          dst="mORMotTestSymbolF2-Regular.ttf", family="mORMot Test Symbol F2",
          ps="mORMotTestSymbolF2-Regular", unicodes=ASCII,
          post=lambda font: make_symbol(font, 0xF200)),
+    # the Latin of Test Sans with a (0,3) cmap only
+    dict(src="NotoSans-Regular.ttf", index=0,
+         dst="mORMotTestUnicodeOnly-Regular.ttf",
+         family="mORMot Test Unicode Only", ps="mORMotTestUnicodeOnly-Regular",
+         unicodes=ASCII + list(range(0xA0, 0x100)) + PUNCT,
+         post=make_unicode_only),
     # a CJK face with TrueType outlines (FontSub subsets glyf only), its
     # glyphs drawn above glyph 4096
     dict(src="DroidSansFallbackFull.ttf", index=0,
