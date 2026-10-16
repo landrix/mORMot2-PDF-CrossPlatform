@@ -519,7 +519,6 @@ begin
   end;
 end;
 
-
 procedure TReportTests.TestTableFooterRow;
 var
   Report: TGDIPages;
@@ -632,7 +631,6 @@ begin
   CheckEqual($C0C0C0, GridColorOf($C0C0C0),
     'GridColor on the header, data and footer borders');
 end;
-
 
 procedure TReportTests.TestTableGroupsAcrossPages;
 var
