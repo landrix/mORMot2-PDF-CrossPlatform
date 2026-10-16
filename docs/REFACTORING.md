@@ -888,6 +888,7 @@ Process, agreed in the forum:
     the way, kept as it was: `TPdfWrite.AddGlyphFromChar` selects the
     fallback font on `TPdfDocument.Canvas`, the page canvas, not on the
     canvas it draws on - they differ for a form XObject; a fix of its own
+    (done, below)
 
     **Exceptions, done** (branch `pr/exceptions`, on `pr/no-with`): the
     report's 10 `raise Exception.Create` and 4 `ESynException` raises are

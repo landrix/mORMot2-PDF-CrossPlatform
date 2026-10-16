@@ -1471,6 +1471,8 @@ var
   s: RawByteString;
   ok: boolean;
   Stream: TMemoryStream;
+  i: PtrInt;
+  xobj: RawByteString;
 begin
   { the fallback font was chosen through the document's page canvas, which
     has no page before the first AddPage: the form's own canvas draws it }
@@ -1507,6 +1509,14 @@ begin
   end;
   Check(ok, 'a form drawn before the first page');
   Check(Pos(RawByteString('mORMotTestSans'), s) > 0, 'the fallback font drew Ab');
+  // drawn in the form, with the fallback font in the form's own resources
+  i := Pos(RawByteString('/Subtype/Form'), s);
+  xobj := Copy(s, i, PosEx('endstream', s, i + 1) - i);
+  Check((i > 0) and
+        (PosEx('> Tj', xobj) > 0), 'the glyphs in the form stream');
+  CheckEqual(CountOccurrences(' 24 Tf', xobj), 2,
+    'its font and the fallback font selected there');
+  Check(Pos(RawByteString('/Font<<>>'), s) > 0, 'no font on the page');
 end;
 
 procedure TPdfSmokeTests.TestShapedFallback;
