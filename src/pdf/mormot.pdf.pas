@@ -5793,7 +5793,7 @@ end;
 function TPdfWrite.AddUnicodeHexText(PW: PWideChar; PWLen: integer; NextLine: boolean;
   Canvas: TPdfCanvas): TPdfWrite;
 var
-  ttf:    TPdfFontTrueType;
+  ttf: TPdfFontTrueType;
   shaped: boolean;
 begin
   if PW <> nil then
@@ -6721,9 +6721,9 @@ procedure TPdfFontTrueType.GetAndMarkGlyphAsUsedWithWidth(aGlyph: word; aWidth: 
 // registers a GSUB-substituted glyph so that the /W array gets a width
 // instead of falling back to /DW.
 var
-  i:       PtrInt;
-  idx:     integer;
-  w:       integer;
+  i: PtrInt;
+  idx: integer;
+  w: integer;
 begin
   // Step 1: already registered in WinAnsi tracking arrays - nothing to do
   for i := 0 to fUsedWideChar.Count - 1 do

@@ -140,27 +140,27 @@ type
 
   /// one drawing command (all coordinates in 1/100 mm unless noted)
   TDrawCommand = record
-    Kind:        TDrawCmdKind;
+    Kind: TDrawCmdKind;
     X, Y,
-    X2, Y2:      Integer;    // position / extent in 1/100 mm
-    FontName:    RawUtf8;
-    FontSize:    Integer;
-    FontStyle:   TFontStyles;
-    Color:       TColor;     // pen / text / fill color
-    BkColor:     TColor;     // background color (reserved)
-    Text:        RawUtf8;
-    TextWidthMM: Integer;    // pre-measured text width in 1/100 mm (for alignment)
-    BitmapIndex: Integer;    // index into TGDIPages.fBitmaps (-1 = none)
-    LineWidth:   Integer;    // pen width in screen pixels (1 = hairline)
-    Align:       Integer;    // 0=left, 1=right, 2=center (dckDrawText)
-    FormatName:  RawUtf8;     // format registry key (H1, H2, P, Strong, Em, Code, etc. for dckDrawText/dckHeading)
-    HeadingLevel: Integer;   // heading level 1..6 (for dckHeading)
-    HeadingTitle: RawUtf8;    // heading text (for dckHeading)
-    BlockId:     Integer;    // logical block: 0 = standalone, >0 = all lines of
-                             // one wrapped paragraph share the id (Tagged PDF)
-    IsInline:    boolean;    // true = inline run continuing the current line
+    X2, Y2: Integer; // position / extent in 1/100 mm
+    FontName: RawUtf8;
+    FontSize: Integer;
+    FontStyle: TFontStyles;
+    Color: TColor;   // pen / text / fill color
+    BkColor: TColor; // background color (reserved)
+    Text: RawUtf8;
+    TextWidthMM: Integer;  // pre-measured text width in 1/100 mm (for alignment)
+    BitmapIndex: Integer;  // index into TGDIPages.fBitmaps (-1 = none)
+    LineWidth: Integer;    // pen width in screen pixels (1 = hairline)
+    Align: Integer;        // 0=left, 1=right, 2=center (dckDrawText)
+    FormatName: RawUtf8;   // format registry key (H1, H2, P, Strong, Em, Code, etc. for dckDrawText/dckHeading)
+    HeadingLevel: Integer; // heading level 1..6 (for dckHeading)
+    HeadingTitle: RawUtf8; // heading text (for dckHeading)
+    BlockId: Integer;      // logical block: 0 = standalone, >0 = all lines of
+                           // one wrapped paragraph share the id (Tagged PDF)
+    IsInline: boolean;         // true = inline run continuing the current line
     InlineStyle: TInlineStyle; // style of an inline run (Tagged PDF Span role)
-    RowHeader:   boolean;    // dckDrawText: a table cell heading its row (TH)
+    RowHeader: boolean;        // dckDrawText: a table cell heading its row (TH)
   end;
 
   /// ordered list of drawing commands for one page
@@ -168,12 +168,12 @@ type
 
   /// data for one report page
   TPageData = record
-    Commands:    TDrawCommandList;
-    PageWidth:   Integer;  // printable width  in 1/100 mm
-    PageHeight:  Integer;  // printable height in 1/100 mm
-    MarginLeft:  Integer;  // margins active when this page was created (1/100 mm)
+    Commands: TDrawCommandList;
+    PageWidth: Integer;  // printable width  in 1/100 mm
+    PageHeight: Integer; // printable height in 1/100 mm
+    MarginLeft: Integer; // margins active when this page was created (1/100 mm)
     MarginRight: Integer;
-    MarginTop:   Integer;
+    MarginTop: Integer;
     MarginBottom:Integer;
   end;
 
@@ -187,8 +187,8 @@ type
 
   /// font + color state for SaveLayout / RestoreLayout
   TSavedState = record
-    FontName:  RawUtf8;
-    FontSize:  Integer;
+    FontName: RawUtf8;
+    FontSize: Integer;
     FontStyle: TFontStyles;
     TextColor: TColor;
   end;
@@ -197,12 +197,12 @@ type
   // - used for H1..H6 headings, P paragraphs, Strong/Em emphasis, etc.
   // - user can define custom formats via DefineFormat() and override defaults
   TReportFormat = record
-    FontName:    RawUtf8;        // font name (e.g. 'Arial', 'Times New Roman')
-    FontSize:    Integer;       // font size in points (10, 12, 16, 24, etc.)
-    FontStyle:   TFontStyles;   // styling (bold, italic, underline, strikethrough)
-    Color:       TColor;        // text color (RGB)
-    SpaceAfter:  Integer;       // space after text in 1/100 mm (for headings, paragraphs)
-    SpaceBefore: Integer;       // space before text in 1/100 mm
+    FontName: RawUtf8;      // font name (e.g. 'Arial', 'Times New Roman')
+    FontSize: Integer;      // font size in points (10, 12, 16, 24, etc.)
+    FontStyle: TFontStyles; // styling (bold, italic, underline, strikethrough)
+    Color: TColor;          // text color (RGB)
+    SpaceAfter: Integer;    // space after text in 1/100 mm (for headings, paragraphs)
+    SpaceBefore: Integer;   // space before text in 1/100 mm
   end;
 
   /// table layout definition (columns, fonts, colors)
@@ -234,18 +234,18 @@ type
 
   /// heading information tracked for PDF outline generation
   THeadingInfo = record
-    Level:    Integer;  // heading level 1..6
-    Title:    RawUtf8;   // heading text
-    PageNum:  Integer;  // 1-based page number
-    Y:        Integer;  // Y position in 1/100 mm
+    Level: Integer;   // heading level 1..6
+    Title: RawUtf8;   // heading text
+    PageNum: Integer; // 1-based page number
+    Y: Integer;       // Y position in 1/100 mm
   end;
 
   /// a file ExportPdfStream embeds, see TGDIPages.AddExportPdfAttachment
   TReportPdfAttachment = record
-    Content:      RawByteString;
-    Title:        RawUtf8;
-    Description:  RawUtf8;
-    MimeType:     RawUtf8;
+    Content: RawByteString;
+    Title: RawUtf8;
+    Description: RawUtf8;
+    MimeType: RawUtf8;
     Relationship: TPdfAFRelationship;
   end;
 
@@ -259,103 +259,103 @@ type
   TGDIPages = class(TComponent)
   private
     { --- page storage --- }
-    fPages:        array of TPageData;
-    fBitmaps:      TObjectList;          // owns TBitmap objects
-    fPageCount:    Integer;
-    fCurrCmds:     ^TDrawCommandList;    // points to current page's command list
+    fPages: array of TPageData;
+    fBitmaps: TObjectList; // owns TBitmap objects
+    fPageCount: Integer;
+    fCurrCmds: ^TDrawCommandList; // points to current page's command list
 
     { --- current layout state --- }
-    fFontName:     RawUtf8;
-    fFontSize:     Integer;
-    fFontStyle:    TFontStyles;
-    fTextColor:    TColor;
+    fFontName: RawUtf8;
+    fFontSize: Integer;
+    fFontStyle: TFontStyles;
+    fTextColor: TColor;
 
     { --- page geometry (1/100 mm) --- }
-    fPaperSize:    TGdiPagePaperSize;
-    fOrientation:  TReportOrientation;
-    fMarginLeft:   Integer;
-    fMarginRight:  Integer;
-    fMarginTop:    Integer;
+    fPaperSize: TGdiPagePaperSize;
+    fOrientation: TReportOrientation;
+    fMarginLeft: Integer;
+    fMarginRight: Integer;
+    fMarginTop: Integer;
     fMarginBottom: Integer;
-    fPageWidth:    Integer;   // paper - margins (computed by UpdatePageDimensions)
-    fPageHeight:   Integer;
+    fPageWidth: Integer; // paper - margins (computed by UpdatePageDimensions)
+    fPageHeight: Integer;
 
     { --- cursor position --- }
-    fCurrentY:     Integer;   // vertical position within printable area (1/100 mm)
-    fCurrentX:     Integer;   // horizontal position within printable area (1/100 mm)
+    fCurrentY: Integer; // vertical position within printable area (1/100 mm)
+    fCurrentX: Integer; // horizontal position within printable area (1/100 mm)
 
     { --- metadata --- }
-    fTitle:        RawUtf8;
-    fAuthor:       RawUtf8;
-    fSubject:      RawUtf8;
+    fTitle: RawUtf8;
+    fAuthor: RawUtf8;
+    fSubject: RawUtf8;
 
     { --- Phase 3: Header and Footer --- }
-    fHeaderText:   RawUtf8;
-    fFooterText:   RawUtf8;
+    fHeaderText: RawUtf8;
+    fFooterText: RawUtf8;
 
     { --- Phase 4: Table state --- }
-    fTableStartY:      Integer;       // Y position where table started
-    fTableColWidths:   array of Integer;   // column widths in 1/100 mm
-    fTableColAligns:   array of TTableColumnAlign;  // column alignments
-    fTableInProgress:  boolean;       // true if inside BeginTable..EndTable
-    fTableRowStartY:   Integer;       // Y position of current row start
-    fTableLayout:      TTableLayout;  // current table layout (column widths, fonts, colors)
-    fTableRowIndex:    Integer;       // current row number (0-based, for alternating colors)
-    fTableSavedHeaders: TRawUtf8DynArray; // headers saved for continuation-page repetition
-    fTableHeaderRepeat: boolean; // true while DrawTableRow repeats the header row
+    fTableStartY: Integer;                       // Y position where table started
+    fTableColWidths: array of Integer;           // column widths in 1/100 mm
+    fTableColAligns: array of TTableColumnAlign; // column alignments
+    fTableInProgress: boolean;                   // true if inside BeginTable..EndTable
+    fTableRowStartY: Integer;                    // Y position of current row start
+    fTableLayout: TTableLayout;                  // current table layout (column widths, fonts, colors)
+    fTableRowIndex: Integer;                     // current row number (0-based, for alternating colors)
+    fTableSavedHeaders: TRawUtf8DynArray;        // headers saved for continuation-page repetition
+    fTableHeaderRepeat: boolean;                 // true while DrawTableRow repeats the header row
     // open THead/TBody/TFoot of the table being exported, psrTable = none:
     // a field, not a local of RenderPageToCanvas, because a table continues
     // across pages while its row group stays open
-    fRenderRowGroup:   TPdfStructRole;
+    fRenderRowGroup: TPdfStructRole;
 
     { --- List state (Tagged PDF L/LI grouping) --- }
-    fInList:           boolean;       // true between dckBeginList and dckEndList
-    fRecordingListItem: boolean;      // true while DrawListItem records its text
+    fInList: boolean;            // true between dckBeginList and dckEndList
+    fRecordingListItem: boolean; // true while DrawListItem records its text
 
     { --- Phase 2: 1x1 bitmap for LCL text measurement (preview fallback) --- }
     fMeasureBitmap: TBitmap;
 
     { --- layout metrics taken from the PDF engine, not from the LCL --- }
-    fMeasurer:        TPdfFontMeasurer;
+    fMeasurer: TPdfFontMeasurer;
 
     { --- saved state stack --- }
-    fSavedStates:  array of TSavedState;
-    fSavedCount:   Integer;
+    fSavedStates: array of TSavedState;
+    fSavedCount: Integer;
 
     { --- Phase 5: Format registry (Markdown-style) --- }
-    fFormatNames:    TRawUtf8DynArray;      // H1..H6, Strong, Em, Code, etc.
-    fFormats:        array of TReportFormat; // same index as fFormatNames
-    fHeadings:       array of THeadingInfo;  // stores heading metadata for PDF outlines
-    fHeadingCount:   Integer;  // count of headings in fHeadings array
-    fCurrentHeadingLevel: Integer;  // tracks current heading level for auto-spacing in EndHeading
+    fFormatNames: TRawUtf8DynArray;   // H1..H6, Strong, Em, Code, etc.
+    fFormats: array of TReportFormat; // same index as fFormatNames
+    fHeadings: array of THeadingInfo; // stores heading metadata for PDF outlines
+    fHeadingCount: Integer;           // count of headings in fHeadings array
+    fCurrentHeadingLevel: Integer;    // tracks current heading level for auto-spacing in EndHeading
     { --- logical blocks for Tagged PDF (one tag per paragraph, not per line) --- }
-    fNextBlockId:      Integer;  // source of TDrawCommand.BlockId values
-    fCurrentBlockId:   Integer;  // id stamped onto the commands emitted right now
-    fRenderBlockId:    Integer;  // block whose struct element is currently reused
-    fRenderBlockElem:  Integer;  // its index, for TPdfDocumentVcl.ResumeStructContent
-    fRenderBlockOpen:  boolean;  // true while its marked-content region is open
+    fNextBlockId: Integer;     // source of TDrawCommand.BlockId values
+    fCurrentBlockId: Integer;  // id stamped onto the commands emitted right now
+    fRenderBlockId: Integer;   // block whose struct element is currently reused
+    fRenderBlockElem: Integer; // its index, for TPdfDocumentVcl.ResumeStructContent
+    fRenderBlockOpen: boolean; // true while its marked-content region is open
     { --- inline runs sharing one visual line (Tagged PDF) --- }
-    fInlineBlockId:    Integer;  // block id of the line being filled, 0 = none
-    fEmitInline:       boolean;  // true while an inline overload emits
-    fEmitInlineStyle:  TInlineStyle;  // style of the run being emitted
-    fEmitRowHeader:    boolean;  // true while a row-heading cell is emitted
-    fInParagraph:    Integer;  // depth counter for nested paragraph begin/end
+    fInlineBlockId: Integer;        // block id of the line being filled, 0 = none
+    fEmitInline: boolean;           // true while an inline overload emits
+    fEmitInlineStyle: TInlineStyle; // style of the run being emitted
+    fEmitRowHeader: boolean;        // true while a row-heading cell is emitted
+    fInParagraph: Integer;          // depth counter for nested paragraph begin/end
 
     { --- Phase 6: PDF export options --- }
-    fUseOutlines:          boolean;
-    fExportPdfLevel:       TPdfALevel;
+    fUseOutlines: boolean;
+    fExportPdfLevel: TPdfALevel;
     fExportPdfEmbeddedTTF: boolean;
     fExportPdfStandardFonts: boolean;
-    fExportPdfAuthor:      RawUtf8;
-    fExportPdfSubject:     RawUtf8;
-    fExportPdfCreator:     RawUtf8;
-    fExportPdfFileFormat:  TPdfFileFormat;
-    fExportPdfTagged:      boolean;
-    fExportPdfLanguage:    RawUtf8;
+    fExportPdfAuthor: RawUtf8;
+    fExportPdfSubject: RawUtf8;
+    fExportPdfCreator: RawUtf8;
+    fExportPdfFileFormat: TPdfFileFormat;
+    fExportPdfTagged: boolean;
+    fExportPdfLanguage: RawUtf8;
     fExportPdfAttachments: array of TReportPdfAttachment;
     fExportPdfMetadataExtension: RawUtf8;
-    fExportPdfPageMode:    TPdfPageMode;
-    fActivePdfDoc:        TPdfDocumentVcl;  // non-nil during tagged PDF export only
+    fExportPdfPageMode: TPdfPageMode;
+    fActivePdfDoc: TPdfDocumentVcl; // non-nil during tagged PDF export only
 
 
     { === caching: computed once, used often === }
@@ -365,12 +365,12 @@ type
     fWrappingWidthPx: Integer;      { Printable width in pixels @ 96 DPI }
 
     { --- font metrics cache (computed in SetFont) --- }
-    fCachedFontName: RawUtf8;        { Tracked font name for cache validation }
-    fCachedFontSize: Integer;       { Tracked font size for cache validation }
-    fCachedFontStyle: TFontStyles;  { Tracked font style for cache validation }
-    fCachedLineHeightPx: Integer;   { line height in pixels at 96 DPI }
-    fCachedLineHeightMM: Integer;   { line height in 1/100mm }
-    fLineHeightFactor:   single;    { multiplier applied to raw TextHeight - default 1.1 }
+    fCachedFontName: RawUtf8;      { Tracked font name for cache validation }
+    fCachedFontSize: Integer;      { Tracked font size for cache validation }
+    fCachedFontStyle: TFontStyles; { Tracked font style for cache validation }
+    fCachedLineHeightPx: Integer;  { line height in pixels at 96 DPI }
+    fCachedLineHeightMM: Integer;  { line height in 1/100mm }
+    fLineHeightFactor: single;     { multiplier applied to raw TextHeight - default 1.1 }
 
     { --- rendering cache (computed in RenderPageToCanvas) --- }
     fRenderScaleX: Double;          { scaling factor for the pixel conversion }
@@ -383,19 +383,19 @@ type
     /// emit dckEndList if a list is still open (no-op otherwise)
     procedure CloseOpenList;
     procedure UpdatePageDimensions;
-    function  GetPageCount: Integer;
-    function  GetCurrentPageIndex: Integer;
-    function  GetPage(Index: Integer): TPageData;
+    function GetPageCount: Integer;
+    function GetCurrentPageIndex: Integer;
+    function GetPage(Index: Integer): TPageData;
     procedure SetupMeasureFont;
     /// select the current font on fMeasurer; false = fall back to the LCL
-    function  SetupPdfMeasureFont: boolean;
+    function SetupPdfMeasureFont: boolean;
     /// advance width of S in PDF points, or -1 when the PDF metrics are absent
-    function  MeasureTextWidthPt(const S: RawUtf8): single;
-    function  MeasureTextWidthPx(const S: RawUtf8): Integer;
-    function  LineHeightPx: Integer;
-    function  LineHeightMM: Integer;
-    function  MeasureTextWidthMM(const S: RawUtf8): Integer;
-    function  GetMeasureDPI: Integer;
+    function MeasureTextWidthPt(const S: RawUtf8): single;
+    function MeasureTextWidthPx(const S: RawUtf8): Integer;
+    function LineHeightPx: Integer;
+    function LineHeightMM: Integer;
+    function MeasureTextWidthMM(const S: RawUtf8): Integer;
+    function GetMeasureDPI: Integer;
     procedure RecordWrappedText(X: Integer; var Y: Integer;
                                 const S: RawUtf8; MaxWidthMM: Integer);
     procedure EmitTextCmd(X, Y: Integer; const S: RawUtf8; Align: Integer);
@@ -407,17 +407,17 @@ type
       AFontStyle: TFontStyles; ABkColor: TColor);
     procedure InitializeFormatRegistry;
     procedure AddHeadingsToOutline(PDF: TPdfDocumentVcl);
-    function  NormalizeX(X: Integer): Integer;
-    function  NormalizeY(Y: Integer): Integer;
+    function NormalizeX(X: Integer): Integer;
+    function NormalizeY(Y: Integer): Integer;
     /// 1/100mm -> render pixels, without the integer rounding of ScaleX/ScaleY
-    function  ScaleXF(V: Integer): single;
-    function  ScaleYF(V: Integer): single;
+    function ScaleXF(V: Integer): single;
+    function ScaleYF(V: Integer): single;
     /// draw text keeping sub-pixel precision when ACanvas is the PDF bridge
     procedure EmitCanvasText(ACanvas: TCanvas; X, Y: Integer;
                              const S: RawUtf8);
     { the scaling functions - always use them to convert coordinates }
-    function  ScaleX(V: Integer): Integer;  // Convert 1/100mm to render pixels
-    function  ScaleY(V: Integer): Integer;  // Convert 1/100mm to render pixels
+    function ScaleX(V: Integer): Integer; // Convert 1/100mm to render pixels
+    function ScaleY(V: Integer): Integer; // Convert 1/100mm to render pixels
     procedure SetFontStyleProperty(Style: TFontStyles);
     procedure SetLineHeightFactor(Value: single);
     procedure SetMarginLeft(Value: Integer);
@@ -427,7 +427,7 @@ type
     procedure SetExportPdfTagged(Value: boolean);
   public
     constructor Create(AOwner: TComponent); override;
-    destructor  Destroy; override;
+    destructor Destroy; override;
 
     { --- page management (Phase 3) --- }
     procedure NewPage;
@@ -438,9 +438,9 @@ type
     procedure RestoreLayout;
     procedure SetFont(const Name: RawUtf8; Size: Integer);
     /// font styling (bold, italic, underline, strikethrough)
-    property  FontStyle: TFontStyles read fFontStyle write SetFontStyleProperty;
+    property FontStyle: TFontStyles read fFontStyle write SetFontStyleProperty;
     /// text color (RGB) for TextOut and other text operations
-    property  TextColor: TColor      read fTextColor  write fTextColor;
+    property TextColor: TColor read fTextColor write fTextColor;
     /// line height multiplier applied to the raw font TextHeight - default 1.1
     // - increase to e.g. 1.5 for more leading; decrease towards 1.0 for tighter spacing
     // - changing this property invalidates the cached line height immediately
@@ -456,17 +456,17 @@ type
 
     { --- page settings (set before first NewPage) --- }
     /// paper size (A4, A5, A3, Letter, Legal) - default psA4
-    property PaperSize:    TGdiPagePaperSize   read fPaperSize    write fPaperSize;
+    property PaperSize: TGdiPagePaperSize read fPaperSize write fPaperSize;
     /// page orientation (poPortrait or poLandscape) - default poPortrait
-    property Orientation:  TReportOrientation  read fOrientation  write fOrientation;
+    property Orientation: TReportOrientation read fOrientation write fOrientation;
     /// left margin in 1/100 mm units - default 2000 (20mm) - updates page dimensions
-    property MarginLeft:   Integer             read fMarginLeft   write SetMarginLeft;
+    property MarginLeft: Integer read fMarginLeft write SetMarginLeft;
     /// right margin in 1/100 mm units - default 2000 (20mm) - updates page dimensions
-    property MarginRight:  Integer             read fMarginRight  write SetMarginRight;
+    property MarginRight: Integer read fMarginRight write SetMarginRight;
     /// top margin in 1/100 mm units - default 2000 (20mm) - updates page dimensions
-    property MarginTop:    Integer             read fMarginTop    write SetMarginTop;
+    property MarginTop: Integer read fMarginTop write SetMarginTop;
     /// bottom margin in 1/100 mm units - default 2000 (20mm) - updates page dimensions
-    property MarginBottom: Integer             read fMarginBottom write SetMarginBottom;
+    property MarginBottom: Integer read fMarginBottom write SetMarginBottom;
 
     { --- header/footer (Phase 3) --- }
     /// set page header text with placeholders: {#} = page number (1-based), {total} = total pages
@@ -544,22 +544,22 @@ type
     procedure DrawCaption(X, MaxWidth, Y: Integer; const ACaption: RawUtf8); overload;
 
     { --- metadata --- }
-    property Title:   RawUtf8 read fTitle   write fTitle;
-    property Author:  RawUtf8 read fAuthor  write fAuthor;
+    property Title: RawUtf8 read fTitle write fTitle;
+    property Author: RawUtf8 read fAuthor write fAuthor;
     property Subject: RawUtf8 read fSubject write fSubject;
 
     { --- page geometry (read-only) --- }
     /// printable page width in 1/100 mm
-    property PageWidth:        Integer read fPageWidth;
+    property PageWidth: Integer read fPageWidth;
     /// printable page height in 1/100 mm
-    property PageHeight:       Integer read fPageHeight;
+    property PageHeight: Integer read fPageHeight;
     /// current Y cursor within the printable area (1/100 mm)
-    property CurrentY:         Integer read fCurrentY;
-    property CurrentX:         Integer read fCurrentX write fCurrentX;
+    property CurrentY: Integer read fCurrentY;
+    property CurrentX: Integer read fCurrentX write fCurrentX;
     /// 1-based index of the last page (0 = no pages yet)
     property CurrentPageIndex: Integer read GetCurrentPageIndex;
     /// number of completed pages
-    property PageCount:        Integer  read GetPageCount;
+    property PageCount: Integer read GetPageCount;
     /// direct access to page data by index - mainly for unit tests
     property Pages[Index: Integer]: TPageData read GetPage;
 
@@ -620,7 +620,7 @@ type
     // - IMPORTANT: uses PDF.ScreenLogPixels for MMToPixels (not the screen DPI)
     //   so TPdfVclCanvas coordinates match the PDF coordinate system exactly
     // - aRaiseException = true re-raises the error instead of returning false
-    function  ExportPdfStream(aDest: TStream;
+    function ExportPdfStream(aDest: TStream;
                               aRaiseException: boolean = false): boolean;
     /// export all pages as PDF to a file; calls ExportPdfStream internally
     // - raises on any error: ESynException when there is no page, otherwise
@@ -635,22 +635,22 @@ type
 
     { --- Phase 6: PDF export options --- }
     /// include PDF outlines/bookmarks (default: false)
-    property UseOutlines:          boolean    read fUseOutlines          write fUseOutlines;
+    property UseOutlines: boolean read fUseOutlines write fUseOutlines;
     /// PDF/A compliance level; pdfaNone = standard PDF 1.x (default)
-    property ExportPdfLevel:       TPdfALevel read fExportPdfLevel       write fExportPdfLevel;
+    property ExportPdfLevel: TPdfALevel read fExportPdfLevel write fExportPdfLevel;
     /// embed TrueType fonts in the PDF (default: true)
-    property ExportPdfEmbeddedTTF: boolean    read fExportPdfEmbeddedTTF write fExportPdfEmbeddedTTF;
+    property ExportPdfEmbeddedTTF: boolean read fExportPdfEmbeddedTTF write fExportPdfEmbeddedTTF;
     /// use PDF Type1 standard fonts (Helvetica/Times/Courier) instead of TTF (default: true)
-    property ExportPdfStandardFonts: boolean  read fExportPdfStandardFonts write fExportPdfStandardFonts;
+    property ExportPdfStandardFonts: boolean read fExportPdfStandardFonts write fExportPdfStandardFonts;
     /// PDF author field (defaults to Author property when empty)
-    property ExportPdfAuthor:      RawUtf8     read fExportPdfAuthor      write fExportPdfAuthor;
+    property ExportPdfAuthor: RawUtf8 read fExportPdfAuthor write fExportPdfAuthor;
     /// PDF subject field (defaults to Subject property when empty)
-    property ExportPdfSubject:     RawUtf8     read fExportPdfSubject     write fExportPdfSubject;
+    property ExportPdfSubject: RawUtf8 read fExportPdfSubject write fExportPdfSubject;
     /// PDF creator field (defaults to the executable name when empty)
     // - a GUI application may pass its Application.Title here
-    property ExportPdfCreator:     RawUtf8     read fExportPdfCreator     write fExportPdfCreator;
+    property ExportPdfCreator: RawUtf8 read fExportPdfCreator write fExportPdfCreator;
     /// PDF version written to the file header; default is pdf13 (backward-compatible)
-    property ExportPdfFileFormat:  TPdfFileFormat read fExportPdfFileFormat write fExportPdfFileFormat;
+    property ExportPdfFileFormat: TPdfFileFormat read fExportPdfFileFormat write fExportPdfFileFormat;
     /// enable Tagged PDF (ISO 32000-1 14) on export; adds structure tags H1-H6 and P
     // - PDF/UA needs embedded fonts, so setting this forces ExportPdfEmbeddedTTF
     // and clears ExportPdfStandardFonts
@@ -775,46 +775,46 @@ end;
 constructor TGDIPages.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
-  fBitmaps           := TObjectList.Create(True);
-  fFontName          := FONT_SANS;
-  fFontSize          := 10;
-  fFontStyle         := [];
-  fTextColor         := clBlack;
-  fPaperSize         := psA4;
-  fOrientation       := poPortrait;
-  fMarginLeft        := 2000;
-  fMarginRight       := 2000;
-  fMarginTop         := 2000;
-  fMarginBottom      := 2000;
-  fMeasureBitmap        := TBitmap.Create;
-  fMeasureBitmap.Width  := 1;
+  fBitmaps := TObjectList.Create(True);
+  fFontName := FONT_SANS;
+  fFontSize := 10;
+  fFontStyle := [];
+  fTextColor := clBlack;
+  fPaperSize := psA4;
+  fOrientation := poPortrait;
+  fMarginLeft := 2000;
+  fMarginRight := 2000;
+  fMarginTop := 2000;
+  fMarginBottom := 2000;
+  fMeasureBitmap := TBitmap.Create;
+  fMeasureBitmap.Width := 1;
   fMeasureBitmap.Height := 1;
-  fMeasurer             := TPdfFontMeasurer.Create;
+  fMeasurer := TPdfFontMeasurer.Create;
   // Phase 6 defaults
-  fUseOutlines          := False;
-  fExportPdfLevel       := pdfaNone;
+  fUseOutlines := False;
+  fExportPdfLevel := pdfaNone;
   fExportPdfEmbeddedTTF := True;
   fExportPdfStandardFonts := True;
-  fExportPdfFileFormat    := pdf13;
-  fExportPdfTagged        := False;
-  fRenderRowGroup         := psrTable; // no row group open
-  fExportPdfLanguage      := 'en';
-  fExportPdfPageMode      := pmUseNone;
+  fExportPdfFileFormat := pdf13;
+  fExportPdfTagged := False;
+  fRenderRowGroup := psrTable; // no row group open
+  fExportPdfLanguage := 'en';
+  fExportPdfPageMode := pmUseNone;
 
   // Phase 5: Initialize format registry with default Markdown-style formats
   fHeadingCount := 0;
   SetLength(fHeadings, 0);
   fCurrentHeadingLevel := 0;
   fInParagraph := 0;
-  fNextBlockId      := 0;
-  fCurrentBlockId   := 0;
-  fInlineBlockId    := 0;
-  fEmitInline       := false;
-  fEmitInlineStyle  := isPlain;
-  fEmitRowHeader    := false;
-  fRenderBlockId    := 0;
-  fRenderBlockElem  := -1;
-  fRenderBlockOpen  := false;
+  fNextBlockId := 0;
+  fCurrentBlockId := 0;
+  fInlineBlockId := 0;
+  fEmitInline := false;
+  fEmitInlineStyle := isPlain;
+  fEmitRowHeader := false;
+  fRenderBlockId := 0;
+  fRenderBlockElem := -1;
+  fRenderBlockOpen := false;
   InitializeFormatRegistry;
 
   UpdatePageDimensions;
@@ -823,7 +823,7 @@ begin
   fPrintableWidth := fPageWidth;
   fPrintableHeight := fPageHeight;
   fWrappingWidthPx := MMToPixels(fPrintableWidth, 96);
-  fLineHeightFactor   := 1.1;
+  fLineHeightFactor := 1.1;
   fCachedLineHeightPx := 0;
   fCachedLineHeightMM := 0;
   fRenderScaleX := 1.0;
@@ -1022,8 +1022,8 @@ begin
     PW := PAPER_HEIGHT[fPaperSize]; // landscape: swap
     PH := PAPER_WIDTH[fPaperSize];
   end;
-  fPageWidth  := PW - fMarginLeft - fMarginRight;
-  fPageHeight := PH - fMarginTop  - fMarginBottom;
+  fPageWidth := PW - fMarginLeft - fMarginRight;
+  fPageHeight := PH - fMarginTop - fMarginBottom;
 end;
 
 procedure TGDIPages.CloseOpenList;
@@ -1082,8 +1082,8 @@ end;
 
 procedure TGDIPages.SetupMeasureFont;
 begin
-  fMeasureBitmap.Canvas.Font.Name  := Utf8ToString(fFontName);
-  fMeasureBitmap.Canvas.Font.Size  := fFontSize;
+  fMeasureBitmap.Canvas.Font.Name := Utf8ToString(fFontName);
+  fMeasureBitmap.Canvas.Font.Size := fFontSize;
   fMeasureBitmap.Canvas.Font.Style := fFontStyle;
 end;
 
@@ -1118,7 +1118,7 @@ end;
 
 procedure TGDIPages.SetLineHeightFactor(Value: single);
 begin
-  fLineHeightFactor   := Value;
+  fLineHeightFactor := Value;
   fCachedLineHeightPx := 0;
   fCachedLineHeightMM := 0;
 end;
@@ -1175,12 +1175,12 @@ begin
   fWrappingWidthPx := MMToPixels(fPrintableWidth, 96);
 
   SetLength(fPages, fPageCount + 1);
-  fPages[fPageCount].Commands    := nil;
-  fPages[fPageCount].PageWidth   := fPageWidth;
-  fPages[fPageCount].PageHeight  := fPageHeight;
-  fPages[fPageCount].MarginLeft  := fMarginLeft;
+  fPages[fPageCount].Commands := nil;
+  fPages[fPageCount].PageWidth := fPageWidth;
+  fPages[fPageCount].PageHeight := fPageHeight;
+  fPages[fPageCount].MarginLeft := fMarginLeft;
   fPages[fPageCount].MarginRight := fMarginRight;
-  fPages[fPageCount].MarginTop   := fMarginTop;
+  fPages[fPageCount].MarginTop := fMarginTop;
   fPages[fPageCount].MarginBottom:= fMarginBottom;
   Inc(fPageCount);
   fCurrCmds := @fPages[fPageCount - 1].Commands;
@@ -1199,8 +1199,8 @@ procedure TGDIPages.SaveLayout;
 begin
   if fSavedCount >= Length(fSavedStates) then
     SetLength(fSavedStates, fSavedCount + 8);
-  fSavedStates[fSavedCount].FontName  := fFontName;
-  fSavedStates[fSavedCount].FontSize  := fFontSize;
+  fSavedStates[fSavedCount].FontName := fFontName;
+  fSavedStates[fSavedCount].FontSize := fFontSize;
   fSavedStates[fSavedCount].FontStyle := fFontStyle;
   fSavedStates[fSavedCount].TextColor := fTextColor;
   Inc(fSavedCount);
@@ -1210,8 +1210,8 @@ procedure TGDIPages.RestoreLayout;
 begin
   if fSavedCount <= 0 then Exit;
   Dec(fSavedCount);
-  fFontName  := fSavedStates[fSavedCount].FontName;
-  fFontSize  := fSavedStates[fSavedCount].FontSize;
+  fFontName := fSavedStates[fSavedCount].FontName;
+  fFontSize := fSavedStates[fSavedCount].FontSize;
   fFontStyle := fSavedStates[fSavedCount].FontStyle;
   fTextColor := fSavedStates[fSavedCount].TextColor;
 end;
@@ -1727,19 +1727,19 @@ var
   TextWidthMM: Integer;
   AdjustedX: Integer;
 begin
-  Cmd              := NewCommand;
-  Cmd.Kind         := dckDrawText;
-  Cmd.Text         := S;
-  Cmd.Color        := fTextColor;
-  Cmd.FontName     := fFontName;
-  Cmd.FontSize     := fFontSize;
-  Cmd.FontStyle    := fFontStyle;
-  Cmd.Align        := Align;
+  Cmd := NewCommand;
+  Cmd.Kind := dckDrawText;
+  Cmd.Text := S;
+  Cmd.Color := fTextColor;
+  Cmd.FontName := fFontName;
+  Cmd.FontSize := fFontSize;
+  Cmd.FontStyle := fFontStyle;
+  Cmd.Align := Align;
   Cmd.HeadingLevel := fCurrentHeadingLevel;
-  Cmd.BlockId      := fCurrentBlockId;
-  Cmd.IsInline     := fEmitInline;
-  Cmd.InlineStyle  := fEmitInlineStyle;
-  Cmd.RowHeader    := fEmitRowHeader;
+  Cmd.BlockId := fCurrentBlockId;
+  Cmd.IsInline := fEmitInline;
+  Cmd.InlineStyle := fEmitInlineStyle;
+  Cmd.RowHeader := fEmitRowHeader;
   { Measure text width ONCE at recording time in normalized units }
   TextWidthMM := MeasureTextWidthMM(S);
   Cmd.TextWidthMM := TextWidthMM;
@@ -1760,8 +1760,8 @@ begin
     // 0 = left - no adjustment
   end;
 
-  Cmd.X         := NormalizeX(AdjustedX);
-  Cmd.Y         := NormalizeY(Y);
+  Cmd.X := NormalizeX(AdjustedX);
+  Cmd.Y := NormalizeY(Y);
   AddCommand(Cmd);
 end;
 
@@ -1835,14 +1835,14 @@ procedure TGDIPages.DrawLine(X1, Y1, X2, Y2, Width: Integer; Color: TColor);
 var
   Cmd: TDrawCommand;
 begin
-  Cmd           := NewCommand;
-  Cmd.Kind      := dckDrawLine;
-  Cmd.X         := NormalizeX(X1);
-  Cmd.Y         := NormalizeY(Y1);
-  Cmd.X2        := NormalizeX(X2);
-  Cmd.Y2        := NormalizeY(Y2);
+  Cmd := NewCommand;
+  Cmd.Kind := dckDrawLine;
+  Cmd.X := NormalizeX(X1);
+  Cmd.Y := NormalizeY(Y1);
+  Cmd.X2 := NormalizeX(X2);
+  Cmd.Y2 := NormalizeY(Y2);
   Cmd.LineWidth := Width;
-  Cmd.Color     := Color;
+  Cmd.Color := Color;
   AddCommand(Cmd);
 end;
 
@@ -1850,12 +1850,12 @@ procedure TGDIPages.DrawFilledRect(X1, Y1, X2, Y2: Integer; Color: TColor);
 var
   Cmd: TDrawCommand;
 begin
-  Cmd       := NewCommand;
-  Cmd.Kind  := dckFillRect;
-  Cmd.X     := NormalizeX(X1);
-  Cmd.Y     := NormalizeY(Y1);
-  Cmd.X2    := NormalizeX(X2);
-  Cmd.Y2    := NormalizeY(Y2);
+  Cmd := NewCommand;
+  Cmd.Kind := dckFillRect;
+  Cmd.X := NormalizeX(X1);
+  Cmd.Y := NormalizeY(Y1);
+  Cmd.X2 := NormalizeX(X2);
+  Cmd.Y2 := NormalizeY(Y2);
   Cmd.Color := Color;
   AddCommand(Cmd);
 end;
@@ -1865,14 +1865,14 @@ end;
 procedure TGDIPages.RecordWrappedText(X: Integer; var Y: Integer;
   const S: RawUtf8; MaxWidthMM: Integer);
 var
-  MaxPt:  single;
+  MaxPt: single;
   SpaceW: single;
-  LH:     Integer;
-  Words:  TRawUtf8DynArray;
-  Line:   RawUtf8;
-  LineW:  single;
-  WordW:  single;
-  i:      Integer;
+  LH: Integer;
+  Words: TRawUtf8DynArray;
+  Line: RawUtf8;
+  LineW: single;
+  WordW: single;
+  i: Integer;
   PrevBlockId: Integer;
 begin
   { All lines emitted below belong to one logical paragraph: they share a
@@ -1884,8 +1884,8 @@ begin
   { Break lines in PDF points - the unit the glyphs are actually placed in.
     Widths are accumulated unrounded and only the emitted Y is converted to
     1/100 mm, so no per-word rounding error can add up over a paragraph. }
-  MaxPt  := MaxWidthMM * (72 / 2540);
-  LH     := LineHeightMM;
+  MaxPt := MaxWidthMM * (72 / 2540);
+  LH := LineHeightMM;
   SpaceW := MeasureTextWidthPt(' ');
   if SpaceW < 0 then
   begin
@@ -1898,7 +1898,7 @@ begin
 
   try
     CsvToRawUtf8DynArray(pointer(S), Words, ' ');
-    Line  := '';
+    Line := '';
     LineW := 0;
     for i := 0 to High(Words) do
     begin
@@ -1917,17 +1917,17 @@ begin
         end;
         EmitTextCmd(NormalizeX(X), NormalizeY(Y), Line, 0);
         Inc(Y, LH);
-        Line  := Words[i];
+        Line := Words[i];
         LineW := WordW;
       end
       else if Line <> '' then
       begin
-        Line  := Line + ' ' + Words[i];
+        Line := Line + ' ' + Words[i];
         LineW := LineW + SpaceW + WordW;
       end
       else
       begin
-        Line  := Words[i];
+        Line := Words[i];
         LineW := WordW;
       end;
     end;
@@ -1949,13 +1949,13 @@ end;
 
 procedure TGDIPages.Columns2(Gap: Integer; const Text1, Text2: RawUtf8);
 var
-  ColW:    Integer;
+  ColW: Integer;
   Y1, Y2: Integer;
 begin
   ColW := (fPageWidth - Gap) div 2;
-  Y1   := fCurrentY;
-  Y2   := fCurrentY;
-  RecordWrappedText(0,          Y1, Text1, ColW);
+  Y1 := fCurrentY;
+  Y2 := fCurrentY;
+  RecordWrappedText(0, Y1, Text1, ColW);
   RecordWrappedText(ColW + Gap, Y2, Text2, ColW);
   fCurrentY := Max(Y1, Y2);
 end;
@@ -2022,7 +2022,7 @@ var
   CellHeight: Integer;
 begin
   TRCmd := NewCommand;
-  TRCmd.Kind  := dckBeginTR;
+  TRCmd.Kind := dckBeginTR;
   TRCmd.Color := ARowKind;
   AddCommand(TRCmd);
   SaveLayout;
@@ -2144,7 +2144,7 @@ begin
   nam := fTableLayout.FooterFontName;
   siz := fTableLayout.FooterFontSize;
   sty := fTableLayout.FooterFontStyle;
-  bk  := fTableLayout.FooterBkColor;
+  bk := fTableLayout.FooterBkColor;
   if (nam = '') and
      (siz = 0) and
      (sty = []) and
@@ -2153,7 +2153,7 @@ begin
     nam := fTableLayout.HeaderFontName;
     siz := fTableLayout.HeaderFontSize;
     sty := fTableLayout.HeaderFontStyle;
-    bk  := fTableLayout.HeaderBkColor;
+    bk := fTableLayout.HeaderBkColor;
   end;
 
   { never leave the footer alone on a page without its table: break first,
@@ -2208,7 +2208,7 @@ begin
   end;
 
   TRCmd := NewCommand;
-  TRCmd.Kind  := dckBeginTR;
+  TRCmd.Kind := dckBeginTR;
   TRCmd.Color := 0;  // 0 = data row
   AddCommand(TRCmd);
 
@@ -2418,20 +2418,20 @@ procedure TGDIPages.RenderPageToCanvas(ACanvas: TCanvas;
   PageIndex, DestWidth, DestHeight: Integer;
   SourceDPI: Integer = 0);
 var
-  Page:           TPageData;
-  Cmd:            TDrawCommand;
-  i, TX, TW:     Integer;
-  R:              TRect;
+  Page: TPageData;
+  Cmd: TDrawCommand;
+  i, TX, TW: Integer;
+  R: TRect;
   HeaderText, FooterText: RawUtf8;
-  Format:         TReportFormat;  // For heading/text formatting
-  FontScale:      Double;
-  BaseHeight:     Integer;
-  InTableRow:     boolean;        // true between dckBeginTR and dckEndTR
-  InHeaderRow:    boolean;        // true if current TR is a header row
-  InListItem:     boolean;        // true between dckBeginLI and dckEndLI
-  SpanOpen:       boolean;        // true while a Span wraps the current run
-  ArtifactDoc:    TPdfDocumentVcl; // fActivePdfDoc, set aside in an artifact row
-  Bridge:         TPdfVclCanvas;   // ACanvas when it is the PDF bridge, else nil
+  Format: TReportFormat; // For heading/text formatting
+  FontScale: Double;
+  BaseHeight: Integer;
+  InTableRow: boolean;          // true between dckBeginTR and dckEndTR
+  InHeaderRow: boolean;         // true if current TR is a header row
+  InListItem: boolean;          // true between dckBeginLI and dckEndLI
+  SpanOpen: boolean;            // true while a Span wraps the current run
+  ArtifactDoc: TPdfDocumentVcl; // fActivePdfDoc, set aside in an artifact row
+  Bridge: TPdfVclCanvas;        // ACanvas when it is the PDF bridge, else nil
 
 
   { Delphi 7's TCanvas drawing methods are static: a call through ACanvas
@@ -2484,8 +2484,8 @@ var
 
   procedure ApplyFont;
   begin
-    ACanvas.Font.Name  := Utf8ToString(Cmd.FontName);
-    ACanvas.Font.Size  := Round(Cmd.FontSize * FontScale);
+    ACanvas.Font.Name := Utf8ToString(Cmd.FontName);
+    ACanvas.Font.Size := Round(Cmd.FontSize * FontScale);
     ACanvas.Font.Style := Cmd.FontStyle;
     ACanvas.Font.Color := Cmd.Color;
   end;
@@ -2502,7 +2502,7 @@ var
     fRenderBlockOpen := false;
     if not AKeepBlock then
     begin
-      fRenderBlockId   := 0;
+      fRenderBlockId := 0;
       fRenderBlockElem := -1;
     end;
   end;
@@ -2568,10 +2568,10 @@ begin
   if (Page.PageWidth <= 0) or (Page.PageHeight <= 0) then Exit;
 
   { === cache the rendering parameters once === }
-  fRenderScaleX := DestWidth  / (Page.PageWidth  + Page.MarginLeft + Page.MarginRight);
-  fRenderScaleY := DestHeight / (Page.PageHeight + Page.MarginTop  + Page.MarginBottom);
+  fRenderScaleX := DestWidth / (Page.PageWidth + Page.MarginLeft + Page.MarginRight);
+  fRenderScaleY := DestHeight / (Page.PageHeight + Page.MarginTop + Page.MarginBottom);
   fRenderOffsetX := Round(Page.MarginLeft * fRenderScaleX);
-  fRenderOffsetY := Round(Page.MarginTop  * fRenderScaleY);
+  fRenderOffsetY := Round(Page.MarginTop * fRenderScaleY);
 
   { Font scaling: at base DPI without zoom, FontScale=1.0.
     When DestHeight differs from base (e.g. preview zoom), scale fonts proportionally.
@@ -2586,15 +2586,15 @@ begin
   else
     FontScale := 1.0;
 
-  InTableRow  := false;
+  InTableRow := false;
   InHeaderRow := false;
-  InListItem  := false;
-  SpanOpen    := false;
+  InListItem := false;
+  SpanOpen := false;
   ArtifactDoc := nil;
   { preview and printing do not tag: never carry block state into them }
   if fActivePdfDoc = nil then
   begin
-    fRenderBlockId   := 0;
+    fRenderBlockId := 0;
     fRenderBlockElem := -1;
   end;
   fRenderBlockOpen := false;
@@ -2610,8 +2610,8 @@ begin
   if fHeaderText <> '' then
   begin
     HeaderText := SubstitutePlaceholders(fHeaderText, PageIndex);
-    ACanvas.Font.Name  := Utf8ToString(fFontName);
-    ACanvas.Font.Size  := Round(fFontSize * FontScale);
+    ACanvas.Font.Name := Utf8ToString(fFontName);
+    ACanvas.Font.Size := Round(fFontSize * FontScale);
     ACanvas.Font.Style := fFontStyle;
     ACanvas.Font.Color := fTextColor;
     ACanvas.Brush.Style := bsClear;
@@ -2654,7 +2654,7 @@ begin
             if Cmd.BlockId <> 0 then
             begin
               { keep the element open for the next line of this paragraph }
-              fRenderBlockId   := Cmd.BlockId;
+              fRenderBlockId := Cmd.BlockId;
               fRenderBlockElem := fActivePdfDoc.LastStructContent;
               fRenderBlockOpen := fRenderBlockElem >= 0;
             end;
@@ -2701,15 +2701,15 @@ begin
         R := Rect(ScaleX(Cmd.X), ScaleY(Cmd.Y), ScaleX(Cmd.X2), ScaleY(Cmd.Y2));
         ACanvas.Brush.Color := Cmd.Color;
         ACanvas.Brush.Style := bsSolid;
-        ACanvas.Pen.Style   := psClear;
+        ACanvas.Pen.Style := psClear;
         CanvasRectangle(R);
-        ACanvas.Pen.Style   := psSolid;
+        ACanvas.Pen.Style := psSolid;
       end;
       dckDrawRect:
       begin
         R := Rect(ScaleX(Cmd.X), ScaleY(Cmd.Y), ScaleX(Cmd.X2), ScaleY(Cmd.Y2));
-        ACanvas.Pen.Color   := Cmd.Color;
-        ACanvas.Pen.Width   := Max(1, Cmd.LineWidth);
+        ACanvas.Pen.Color := Cmd.Color;
+        ACanvas.Pen.Width := Max(1, Cmd.LineWidth);
         ACanvas.Brush.Style := bsClear;
         CanvasRectangle(R);
       end;
@@ -2757,7 +2757,7 @@ begin
           end;
           fActivePdfDoc.EndStructContent;   // close Table
         end;
-        InTableRow  := false;
+        InTableRow := false;
         InHeaderRow := false;
       end;
       dckBeginTR:
@@ -2765,7 +2765,7 @@ begin
         { only rows 1 and 2 hold header cells; 3 is the footer, whose cells
           are TD like any data cell - except a row header (Cmd.RowHeader) }
         InHeaderRow := Cmd.Color in [1, 2];
-        InTableRow  := true;
+        InTableRow := true;
         if fActivePdfDoc <> nil then
           if Cmd.Color = 2 then
           begin
@@ -2773,7 +2773,7 @@ begin
               is an artifact, and without fActivePdfDoc its cells open no
               struct element }
             fActivePdfDoc.BeginArtifact;
-            ArtifactDoc   := fActivePdfDoc;
+            ArtifactDoc := fActivePdfDoc;
             fActivePdfDoc := nil;
           end
           else
@@ -2791,12 +2791,12 @@ begin
         if ArtifactDoc <> nil then
         begin
           fActivePdfDoc := ArtifactDoc;
-          ArtifactDoc   := nil;
+          ArtifactDoc := nil;
           fActivePdfDoc.EndArtifact;
         end
         else if fActivePdfDoc <> nil then
           fActivePdfDoc.EndStructContent;
-        InTableRow  := false;
+        InTableRow := false;
         InHeaderRow := false;
       end;
       dckBeginList:
@@ -2828,8 +2828,8 @@ begin
   if fFooterText <> '' then
   begin
     FooterText := SubstitutePlaceholders(fFooterText, PageIndex);
-    ACanvas.Font.Name  := Utf8ToString(fFontName);
-    ACanvas.Font.Size  := Round(fFontSize * FontScale);
+    ACanvas.Font.Name := Utf8ToString(fFontName);
+    ACanvas.Font.Size := Round(fFontSize * FontScale);
     ACanvas.Font.Style := fFontStyle;
     ACanvas.Font.Color := fTextColor;
     ACanvas.Brush.Style := bsClear;
@@ -2898,11 +2898,11 @@ end;
 function TGDIPages.ExportPdfStream(aDest: TStream;
   aRaiseException: boolean): boolean;
 var
-  PDF:          TPdfDocumentVcl;
-  i:            Integer;
+  PDF: TPdfDocumentVcl;
+  i: Integer;
   PageW, PageH: Integer;
   PdfAuthor,
-  PdfSubject:   RawUtf8;
+  PdfSubject: RawUtf8;
 begin
   Result := False;
   if fPageCount = 0 then
@@ -2916,11 +2916,11 @@ begin
     try
       // Resolve author/subject: use dedicated export fields when set,
       // otherwise fall back to the report-level Author/Subject properties.
-      PdfAuthor  := fExportPdfAuthor;
-      if PdfAuthor  = '' then PdfAuthor  := fAuthor;
+      PdfAuthor := fExportPdfAuthor;
+      if PdfAuthor = '' then PdfAuthor := fAuthor;
       PdfSubject := fExportPdfSubject;
       if PdfSubject = '' then PdfSubject := fSubject;
-      PDF.Info.Title   := Utf8ToString(TrimU(fTitle));
+      PDF.Info.Title := Utf8ToString(TrimU(fTitle));
       { PDF/UA needs a title (dc:title, DisplayDocTitle): without one, the
         first H1 names the document }
       if fExportPdfTagged and
@@ -2935,9 +2935,9 @@ begin
         PDF.Info.Creator := Utf8ToString(TrimU(fExportPdfCreator))
       else
         PDF.Info.Creator := Utf8ToString(Executable.ProgramName);
-      PDF.Info.Author  := Utf8ToString(PdfAuthor);
+      PDF.Info.Author := Utf8ToString(PdfAuthor);
       PDF.Info.Subject := Utf8ToString(PdfSubject);
-      PDF.FileFormat   := fExportPdfFileFormat;
+      PDF.FileFormat := fExportPdfFileFormat;
       { Tagged first: TPdfDocument.SetTagged picks the PDF/UA font mode, and
         SetExportPdfTagged has already aligned our own flags with it }
       if fExportPdfTagged then
@@ -2946,7 +2946,7 @@ begin
         if fExportPdfLanguage <> '' then
           PDF.DefaultLanguage := fExportPdfLanguage;
       end;
-      PDF.EmbeddedTTF  := fExportPdfEmbeddedTTF;
+      PDF.EmbeddedTTF := fExportPdfEmbeddedTTF;
       PDF.StandardFontsReplace := fExportPdfStandardFonts;
       // before SaveToStreamDirectBegin: PDF/A writes its XMP packet there
       PDF.PdfAMetadaExtension := fExportPdfMetadataExtension;
@@ -2955,20 +2955,20 @@ begin
         PDF.Root.PageMode := fExportPdfPageMode;
       PDF.SaveToStreamDirectBegin(aDest);
       { logical block state is per export run }
-      fRenderBlockId   := 0;
+      fRenderBlockId := 0;
       fRenderBlockElem := -1;
       fRenderBlockOpen := false;
       for i := 0 to fPageCount - 1 do
       begin
         // PDF page size = FULL page in PDF points (including margins)
         // This must match the canvas size used in RenderPageToCanvas
-        PDF.DefaultPageWidth  := MulDiv(fPages[i].PageWidth  + fPages[i].MarginLeft + fPages[i].MarginRight,  72, 2540);
-        PDF.DefaultPageHeight := MulDiv(fPages[i].PageHeight + fPages[i].MarginTop  + fPages[i].MarginBottom, 72, 2540);
+        PDF.DefaultPageWidth := MulDiv(fPages[i].PageWidth + fPages[i].MarginLeft + fPages[i].MarginRight, 72, 2540);
+        PDF.DefaultPageHeight := MulDiv(fPages[i].PageHeight + fPages[i].MarginTop + fPages[i].MarginBottom, 72, 2540);
         PDF.AddPage;
         // Render page to PDF canvas with FULL page size (including per-page margins)
-        PageW := MMToPixels(fPages[i].PageWidth  + fPages[i].MarginLeft + fPages[i].MarginRight,
+        PageW := MMToPixels(fPages[i].PageWidth + fPages[i].MarginLeft + fPages[i].MarginRight,
           PDF.ScreenLogPixels);
-        PageH := MMToPixels(fPages[i].PageHeight + fPages[i].MarginTop  + fPages[i].MarginBottom,
+        PageH := MMToPixels(fPages[i].PageHeight + fPages[i].MarginTop + fPages[i].MarginBottom,
           PDF.ScreenLogPixels);
         if fExportPdfTagged then
           fActivePdfDoc := PDF
@@ -3015,8 +3015,8 @@ begin
     ESynException.RaiseUtf8('%.ExportPDF: no page to export', [self]);
   // Transfer per-call title/company into the export properties so
   // ExportPdfStream picks them up through the unified code path.
-  fTitle             := ATitle;
-  fExportPdfSubject  := ACompany;
+  fTitle := ATitle;
+  fExportPdfSubject := ACompany;
   // in memory first: the file is touched only by a complete PDF; fmCreate
   // keeps its permissions and links, and refuses a read-only file, as before
   MS := TMemoryStream.Create;

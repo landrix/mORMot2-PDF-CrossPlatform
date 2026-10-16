@@ -102,15 +102,15 @@ procedure GetPdfFonts(Embedded: boolean;
 begin
   if Embedded then
   begin
-    SansFont  := PDF_FONT_TTF_SANS;
+    SansFont := PDF_FONT_TTF_SANS;
     SerifFont := PDF_FONT_TTF_SERIF;
-    MonoFont  := PDF_FONT_TTF_MONO;
+    MonoFont := PDF_FONT_TTF_MONO;
   end
   else
   begin
-    SansFont  := PDF_FONT_STD_SANS;
+    SansFont := PDF_FONT_STD_SANS;
     SerifFont := PDF_FONT_STD_SERIF;
-    MonoFont  := PDF_FONT_STD_MONO;
+    MonoFont := PDF_FONT_STD_MONO;
   end;
 end;
 

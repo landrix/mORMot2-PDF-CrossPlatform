@@ -57,16 +57,16 @@ type
   /// state and event handlers of one modal preview window
   TReportPreview = class
   private
-    fReport:     TGDIPages;
-    fCurrPage:   Integer;
+    fReport: TGDIPages;
+    fCurrPage: Integer;
     fTotalPages: Integer;
-    fLblPage:    TLabel;
-    fEdtZoom:    TEdit;        // editable zoom percentage input
-    fPaintBox:   TPaintBox;
-    fScrollBox:  TScrollBox;   // scrollable container for zoomed page
-    fW:          Integer;      // base preview width @ 96 DPI (unzoomed)
-    fH:          Integer;      // base preview height @ 96 DPI (unzoomed)
-    fZoom:       Double;       // zoom factor (1.0 = 100%)
+    fLblPage: TLabel;
+    fEdtZoom: TEdit; // editable zoom percentage input
+    fPaintBox: TPaintBox;
+    fScrollBox: TScrollBox; // scrollable container for zoomed page
+    fW: Integer;            // base preview width @ 96 DPI (unzoomed)
+    fH: Integer;            // base preview height @ 96 DPI (unzoomed)
+    fZoom: Double;          // zoom factor (1.0 = 100%)
     procedure UpdateLabel;
     procedure GoToPage(Page: Integer);
     procedure ApplyZoom;
@@ -141,14 +141,14 @@ begin
     Exit;
   ZW := Round(fW * fZoom);
   ZH := Round(fH * fZoom);
-  fPaintBox.Width  := ZW;
+  fPaintBox.Width := ZW;
   fPaintBox.Height := ZH;
-  CX := (fScrollBox.ClientWidth  - ZW) div 2;
+  CX := (fScrollBox.ClientWidth - ZW) div 2;
   CY := (fScrollBox.ClientHeight - ZH) div 2;
   if CX < GRAY_MARGIN then CX := GRAY_MARGIN;
   if CY < GRAY_MARGIN then CY := GRAY_MARGIN;
   fPaintBox.Left := CX;
-  fPaintBox.Top  := CY;
+  fPaintBox.Top := CY;
   if fEdtZoom <> nil then
     fEdtZoom.Text := Format('%d%%', [Round(fZoom * 100)]);
   fPaintBox.Invalidate;
@@ -182,7 +182,7 @@ var
 begin
   if fScrollBox = nil then
     Exit;
-  ZX := (fScrollBox.ClientWidth  - 2 * GRAY_MARGIN) / fW;
+  ZX := (fScrollBox.ClientWidth - 2 * GRAY_MARGIN) / fW;
   ZY := (fScrollBox.ClientHeight - 2 * GRAY_MARGIN) / fH;
   fZoom := Min(ZX, ZY);
   if fZoom < 0.1 then
@@ -265,24 +265,24 @@ begin
   end;
   ZoomVal := ZoomVal / 100.0;
   if ZoomVal < 0.25 then ZoomVal := 0.25;
-  if ZoomVal > 4.0  then ZoomVal := 4.0;
+  if ZoomVal > 4.0 then ZoomVal := 4.0;
   fZoom := ZoomVal;
   ApplyZoom;
 end;
 
 procedure TReportPreview.Show;
 var
-  Form:               TForm;
-  ScrollBox:          TScrollBox;
-  PaintBox:           TPaintBox;
+  Form: TForm;
+  ScrollBox: TScrollBox;
+  PaintBox: TPaintBox;
   TopPanel, BtnPanel: TPanel;
   BtnZoomOut, BtnZoomIn,
   BtnFitPage, BtnFitWidth: TButton;
   BtnPrev, BtnNext,
-  BtnClose:           TButton;
-  LblPage:            TLabel;
-  EdtZoom:            TEdit;
-  First:              TPageData;
+  BtnClose: TButton;
+  LblPage: TLabel;
+  EdtZoom: TEdit;
+  First: TPageData;
 begin
   fTotalPages := fReport.PageCount;
   if fTotalPages = 0 then
@@ -309,99 +309,99 @@ begin
     Form.Caption := Utf8ToString(fReport.Title);
     if Form.Caption = '' then
       Form.Caption := 'Print Preview';
-    Form.Position    := poScreenCenter;
+    Form.Position := poScreenCenter;
     Form.BorderStyle := bsSizeable;
-    Form.KeyPreview  := True;
-    Form.Width  := Min(Round(Screen.Width  * 0.8), 1200);
+    Form.KeyPreview := True;
+    Form.Width := Min(Round(Screen.Width * 0.8), 1200);
     Form.Height := Min(Round(Screen.Height * 0.8), 900);
-    Form.OnResize    := DoFormResize;
-    Form.OnKeyDown   := DoKeyDown;
+    Form.OnResize := DoFormResize;
+    Form.OnKeyDown := DoKeyDown;
     // --- top toolbar panel (zoom controls) ---
     TopPanel := TPanel.Create(Form);
-    TopPanel.Parent     := Form;
-    TopPanel.Align      := alTop;
-    TopPanel.Height     := 36;
+    TopPanel.Parent := Form;
+    TopPanel.Align := alTop;
+    TopPanel.Height := 36;
     TopPanel.BevelOuter := bvNone;
     BtnZoomOut := TButton.Create(Form);
-    BtnZoomOut.Parent  := TopPanel;
+    BtnZoomOut.Parent := TopPanel;
     BtnZoomOut.Caption := Utf8ToString(MINUS_SIGN);
     BtnZoomOut.SetBounds(8, 4, 32, 28);
     BtnZoomOut.OnClick := DoZoomOut;
     EdtZoom := TEdit.Create(Form);
-    EdtZoom.Parent    := TopPanel;
+    EdtZoom.Parent := TopPanel;
     EdtZoom.SetBounds(44, 6, 60, 24);
     EdtZoom.Alignment := taCenter;
     EdtZoom.OnEditingDone := DoZoomEdit;
-    fEdtZoom          := EdtZoom;
+    fEdtZoom := EdtZoom;
     BtnZoomIn := TButton.Create(Form);
-    BtnZoomIn.Parent  := TopPanel;
+    BtnZoomIn.Parent := TopPanel;
     BtnZoomIn.Caption := '+';
     BtnZoomIn.SetBounds(108, 4, 32, 28);
     BtnZoomIn.OnClick := DoZoomIn;
     BtnFitPage := TButton.Create(Form);
-    BtnFitPage.Parent  := TopPanel;
+    BtnFitPage.Parent := TopPanel;
     BtnFitPage.Caption := 'Fit Page';
     BtnFitPage.SetBounds(152, 4, 90, 28);
     BtnFitPage.OnClick := DoFitPage;
     BtnFitWidth := TButton.Create(Form);
-    BtnFitWidth.Parent  := TopPanel;
+    BtnFitWidth.Parent := TopPanel;
     BtnFitWidth.Caption := 'Fit Width';
     BtnFitWidth.SetBounds(248, 4, 90, 28);
     BtnFitWidth.OnClick := DoFitWidth;
     // --- bottom panel (page navigation) ---
     BtnPanel := TPanel.Create(Form);
-    BtnPanel.Parent     := Form;
-    BtnPanel.Align      := alBottom;
-    BtnPanel.Height     := 42;
+    BtnPanel.Parent := Form;
+    BtnPanel.Align := alBottom;
+    BtnPanel.Height := 42;
     BtnPanel.BevelOuter := bvNone;
     BtnPrev := TButton.Create(Form);
-    BtnPrev.Parent  := BtnPanel;
+    BtnPrev.Parent := BtnPanel;
     BtnPrev.Caption := '< Back';
     BtnPrev.SetBounds(8, 6, 84, 28);
     BtnPrev.OnClick := DoPrev;
     LblPage := TLabel.Create(Form);
-    LblPage.Parent    := BtnPanel;
-    LblPage.AutoSize  := False;
-    LblPage.Width     := 140;
-    LblPage.Left      := (BtnPanel.Width - 140) div 2;
-    LblPage.Top       := 14;
+    LblPage.Parent := BtnPanel;
+    LblPage.AutoSize := False;
+    LblPage.Width := 140;
+    LblPage.Left := (BtnPanel.Width - 140) div 2;
+    LblPage.Top := 14;
     LblPage.Alignment := taCenter;
-    fLblPage          := LblPage;
+    fLblPage := LblPage;
     UpdateLabel;
     BtnClose := TButton.Create(Form);
-    BtnClose.Parent      := BtnPanel;
-    BtnClose.Caption     := 'Close';
+    BtnClose.Parent := BtnPanel;
+    BtnClose.Caption := 'Close';
     BtnClose.ModalResult := mrOk;
-    BtnClose.Anchors     := [akTop, akRight];
+    BtnClose.Anchors := [akTop, akRight];
     BtnClose.SetBounds(BtnPanel.Width - 112, 6, 96, 28);
     BtnNext := TButton.Create(Form);
-    BtnNext.Parent  := BtnPanel;
+    BtnNext.Parent := BtnPanel;
     BtnNext.Caption := 'Next >';
     BtnNext.Anchors := [akTop, akRight];
     BtnNext.SetBounds(BtnPanel.Width - 208, 6, 84, 28);
     BtnNext.OnClick := DoNext;
     // --- scroll box (fills center area) ---
     ScrollBox := TScrollBox.Create(Form);
-    ScrollBox.Parent      := Form;
-    ScrollBox.Align       := alClient;
-    ScrollBox.Color       := clSilver;
-    ScrollBox.AutoScroll  := True;
+    ScrollBox.Parent := Form;
+    ScrollBox.Align := alClient;
+    ScrollBox.Color := clSilver;
+    ScrollBox.AutoScroll := True;
     ScrollBox.BorderStyle := bsNone;
     ScrollBox.OnMouseWheel := DoMouseWheel;
     fScrollBox := ScrollBox;
     // --- paint box (inside scroll box, explicit size set by ApplyZoom) ---
     PaintBox := TPaintBox.Create(Form);
-    PaintBox.Parent  := ScrollBox;
-    PaintBox.Color   := clWhite;
+    PaintBox.Parent := ScrollBox;
+    PaintBox.Color := clWhite;
     fPaintBox := PaintBox;
     PaintBox.OnPaint := DoPaint;
     ApplyZoom;
     Form.ShowModal;
   finally
-    fPaintBox  := nil;
+    fPaintBox := nil;
     fScrollBox := nil;
-    fLblPage   := nil;
-    fEdtZoom   := nil;
+    fLblPage := nil;
+    fEdtZoom := nil;
     Form.Free;
   end;
 end;

@@ -103,11 +103,11 @@ end;
 
 function TPdfFPImageAdapter.DetectAndLoad(AStream: TStream): boolean;
 var
-  sig:     array[0..3] of byte;
+  sig: array[0..3] of byte;
   savedPos: int64;
-  reader:   TFPCustomImageReader;
+  reader: TFPCustomImageReader;
 begin
-  result   := false;
+  result := false;
   savedPos := AStream.Position;
   if AStream.Read(sig, 4) < 4 then
     exit;
@@ -162,8 +162,8 @@ end;
 function TPdfFPImageAdapter.GetRawRGB: RawByteString;
 var
   w, h, x, y: integer;
-  p:           PByte;
-  col:         TFPColor;
+  p: PByte;
+  col: TFPColor;
 begin
   result := '';
   w := fImage.Width;
@@ -175,16 +175,16 @@ begin
   for y := 0 to h - 1 do
     for x := 0 to w - 1 do
     begin
-      col  := fImage.Colors[x, y];
-      p^   := col.red shr 8;   inc(p);  // R (16-bit -> 8-bit)
-      p^   := col.green shr 8; inc(p);  // G
-      p^   := col.blue shr 8;  inc(p);  // B
+      col := fImage.Colors[x, y];
+      p^ := col.red shr 8; inc(p);   // R (16-bit -> 8-bit)
+      p^ := col.green shr 8; inc(p); // G
+      p^ := col.blue shr 8; inc(p);  // B
     end;
 end;
 
 function TPdfFPImageAdapter.GetJpegBytes(AQuality: integer): RawByteString;
 var
-  ms:     TMemoryStream;
+  ms: TMemoryStream;
   writer: TFPWriterJPEG;
 begin
   result := '';

@@ -2637,7 +2637,7 @@ begin
             end;
       EMR_GDICOMMENT:
         with PEMRGDIComment(R)^ do
-          if cbData >= 1  then
+          if cbData >= 1 then
             E.HandleComment(
               TPdfGdiComment(Data[0]), PAnsiChar(@Data) + 1, cbData - 1);
       EMR_MODIFYWORLDTRANSFORM:
