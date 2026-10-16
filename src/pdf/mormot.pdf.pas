@@ -6420,7 +6420,8 @@ end;
 
 // a viewer reaches the glyphs of a simple TrueType font through its (3,1) or
 // (1,0) cmap only (ISO 32000-1 9.6.6.4), and hb-subset drops a (1,0): a face
-// with no Microsoft cmap - macOS Geeza Pro has (0,3) only - is drawn by glyph
+// without a (3,1) or (3,0) cmap - macOS Geeza Pro has (0,3) only - is drawn
+// by glyph
 function FaceHasUnicodeCmapOnly(const aFace: IFontFace): boolean;
 var
   ttf: TPdfTtf;
@@ -6876,7 +6877,7 @@ begin
   else
   begin
     nam := ADoc.TtfFontPostcriptName(AFontIndex, AStyle, self);
-    // a CFF face, or one without a Microsoft cmap, drawing through its Type0
+    // a CFF face, or one without a (3,1) or (3,0) cmap, drawing through its Type0
     // font only (Type0Only): its WinAnsi font is internal - metrics,
     // descriptor, subset - and not written
     fCffRead := true;
@@ -7817,7 +7818,7 @@ begin
         WR.Add('[').AddWithSpace(fWinAnsiWidth[' ']);
         fData.AddItem('Widths', TPdfRawText.Create(WR.Add(']').ToPdfString));
       end;
-      // a name-keyed CFF face, or one without a Microsoft cmap, drew its text
+      // a name-keyed CFF face, or one without a (3,1) or (3,0) cmap, drew its text
       // as glyph indexes when it was created embedded: without its program
       // they would mean nothing
       if fInternal and

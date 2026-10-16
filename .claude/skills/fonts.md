@@ -128,7 +128,8 @@ Embedding switched on after such a face was created renames its simple font
 `/Type1`; switched off after a name-keyed face was created embedded, the save
 raises `EPdfInvalidOperation` (its text is glyph indexes without a program).
 
-**A face without a Microsoft cmap takes the same path** (R-31, 2026-10-16):
+**A face without a (3,1) or (3,0) cmap takes the same path** (R-31,
+2026-10-16):
 a viewer reaches the glyphs of a simple TrueType font through its (3,1) or
 (1,0) cmap only (ISO 32000-1 9.6.6.4); macOS Geeza Pro (the first faces of
 `GeezaPro.ttc`) has (0,3) alone, so its space in the simple font was
@@ -138,7 +139,8 @@ with it is `Type0Only` (`FaceHasUnicodeCmapOnly`, beside `PdfFaceCffInfo` in
 the constructor) - CIDFontType2 in `/FontFile2`, Identity, `/ToUnicode`.
 A (1,0) does not count: hb-subset drops it (it keeps (0,3), (0,4), (3,1),
 (3,10) and format 14, filtered, and adds none). Not embedded, the simple
-font stays, as for a name-keyed CFF face. A face whose only cmap is format
+font stays, as for a name-keyed CFF face; embedding switched on after the
+face was created keeps it too, with its gap - set `EmbeddedTTF` first. A face whose only cmap is format
 12 is not read at all (`LoadCmap` reads format 4) and keeps the simple
 font. GDI loads no face without a Microsoft cmap - it gives another font -
 so `TestUnicodeOnlyCmap` (Test Unicode Only, (0,3) alone) checks the path on
@@ -375,6 +377,8 @@ Preference order, in `TPdfTtf.Create`:
    macOS `GeezaPro.ttc` expose *only* `(0,3)`, and before this fallback the
    parser returned an empty CMAP, so every Arabic glyph came out `.notdef` and
    the document silently fell back to `FontFallBackName` (Arial Unicode MS).
+   It sets `UnicodePlatform`: embedded, such a face draws through its Type0
+   font (R-31, "CFF Faces: Type0 Only").
 
 Only **format 4** is parsed. A `(0,4)`/`(3,10)` format 12 subtable is selected
 only when nothing else exists, and then rejected by the format check.

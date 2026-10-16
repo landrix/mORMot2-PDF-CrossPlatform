@@ -299,8 +299,8 @@ v0.10.0 (2026-09-30).
   Geeza Pro has only a (0,3) cmap, which a viewer does not use for a simple
   TrueType font - the space of an Arabic line came out as `.notdef`. Such
   a face, embedded, draws all its text by glyph through its Type0 font now,
-  as a CFF face does; faces with a (3,1) cmap - all of Windows and Linux -
-  are unchanged
+  as a CFF face does; faces with a (3,1) or (3,0) cmap - every face GDI
+  can load - are unchanged
 - **Changed under PDF/A:** a character neither the font nor the fallback
   font has raises `EPdfInvalidOperation` (was `Exception`, and only when no
   fallback font was registered at all): PDF/A forbids the box glyph

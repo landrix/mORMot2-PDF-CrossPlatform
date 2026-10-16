@@ -1582,16 +1582,28 @@ begin
     end;
   end;
   s := UnicodeOnlyPdf(true);
+  {$ifdef OSWINDOWS}
   if not loaded then
   begin
-    Check(true, 'SKIP: the face was replaced by one with a Microsoft cmap');
+    Check(true, 'SKIP: GDI replaced the face by one with a Microsoft cmap');
     Check(PosEx('(Ab c) Tj', s) > 0, 'the replacement in the simple font');
     exit;
   end;
+  {$else}
+  Check(loaded, 'the test face, (0,3) only');
+  {$endif OSWINDOWS}
   Check(PosEx('(Ab c) Tj', s) = 0, 'not in the simple font');
   Check(PosEx('/Subtype/TrueType', s) = 0, 'no simple font written');
   Check(PosEx('/Subtype/Type0', s) > 0, 'the Type0 font');
-  CheckEqual(CountOccurrences('> Tj', s), 2, 'both APIs by glyph');
+  // the glyf flavour: CIDFontType2 by glyph index, no CFF program or version
+  Check(PosEx('/Subtype/CIDFontType2', s) > 0, 'a CIDFontType2');
+  Check(PosEx('/CIDToGIDMap/Identity', s) > 0, 'its codes the glyph indexes');
+  Check((PosEx('/FontFile2', s) > 0) and
+        (PosEx('/FontFile3', s) = 0), 'the glyf program in /FontFile2');
+  Check(Copy(s, 1, 8) = '%PDF-1.3', 'no version raised');
+  // A b space c of the face, not .notdef
+  CheckEqual(CountOccurrences('<0022004300010044> Tj', s), 2,
+    'both APIs by glyph');
   Check(PosEx('/ToUnicode', s) > 0, 'the text extractable');
   // word spacing on 2-byte codes: a TJ adjustment after the space
   s := UnicodeOnlyPdf(true, pdfaNone, 5);
