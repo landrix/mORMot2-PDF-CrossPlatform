@@ -194,7 +194,7 @@ fonts. The faces are subset on every platform — `libharfbuzz-subset` on
 Linux/macOS, `CreateFontPackage` with a glyph keep list on Windows (R-15) —
 both keeping glyph IDs, so `/ToUnicode` stays valid. Both
 have to be set **before the first page is drawn** — the font flags decide which
-metrics the layout is measured with — and both raise `ESynException` if set later.
+metrics the layout is measured with — and both raise `ESynException` if set later (`EPdfReport`, its descendant, from the report).
 
 Full details including dual-instance model, CMAP loading, text rendering chains, and RTL/Arabic limitations: `.claude/skills/fonts.md`
 

@@ -57,7 +57,6 @@ type
   TPdfAFRelationship = mormot.pdf.TPdfAFRelationship;
   TPdfPageMode = mormot.pdf.TPdfPageMode;
 
-type
   /// exception class raised by this unit
   EPdfReport = class(ESynException);
 
@@ -686,7 +685,7 @@ type
     // - PDF/UA needs embedded fonts, so setting this forces ExportPdfEmbeddedTTF
     // and clears ExportPdfStandardFonts
     // - those flags decide which metrics the layout is measured with, so this
-    // has to be set before the first drawing command
+    // has to be set before the first drawing command; later raises EPdfReport
     property ExportPdfTagged: boolean read fExportPdfTagged write SetExportPdfTagged;
     /// BCP-47 language tag for the Tagged PDF /Lang entry (default 'en')
     property ExportPdfLanguage: RawUtf8 read fExportPdfLanguage write fExportPdfLanguage;

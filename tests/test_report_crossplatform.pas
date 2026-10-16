@@ -1121,7 +1121,7 @@ end;
 
 procedure TReportTests.TestMisuseRaises;
 const
-  MISUSE: array[0..15] of string = (
+  MISUSE: array[0..15] of RawUtf8 = (
     'drawing before NewPage', 'drawing after EndDoc', 'heading level 0',
     'heading level 7', 'empty heading', 'EndTable without BeginTable',
     'DrawTableHeader without BeginTable', 'DrawTableRow without BeginTable',
@@ -1133,7 +1133,7 @@ var
   i: integer;
 begin
   for i := 0 to high(MISUSE) do
-    CheckRaised(RunMisuse, [i], EPdfReport, StringToUtf8(MISUSE[i]));
+    CheckRaised(RunMisuse, [i], EPdfReport, MISUSE[i]);
 end;
 
 end.

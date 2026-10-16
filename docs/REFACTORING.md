@@ -820,7 +820,8 @@ Process, agreed in the forum:
     of `mormot.pdf`; `raise Exception.Create` 10 times in
     `mormot.pdf.report`, once in `mormot.pdf` (the PDF/A font fallback,
     gone with the fallback step: `EPdfInvalidOperation` since 2026-10-15) and
-    once in `zugferd_demo` (`ESynException` instead - a change for callers
+    once in `zugferd_demo` (`EPdfReport` in the report, `aRaiseException`
+    in the demo: "Exceptions, done" below - a change for callers
     that catch by class, so "To Announce"); `with` outside comments and
     strings 57 times in `mormot.pdf`, 64 in `mormot.pdf.canvas` (mostly
     from the trunk's original), twice in `mormot.pdf.report`, 10 times in
