@@ -18,6 +18,7 @@ repository.
 | `mORMotTestSymbol-Regular.ttf` | mORMot Test Symbol | `NotoSans-Regular.ttf`, as above | `89c3c497f618fdaa0b2d1e98fef93582f28c71debd2c4a8cdf41f190ced2909d` |
 | `mORMotTestSymbolLow-Regular.ttf` | mORMot Test Symbol Low | `NotoSans-Regular.ttf`, as above | `89c3c497f618fdaa0b2d1e98fef93582f28c71debd2c4a8cdf41f190ced2909d` |
 | `mORMotTestSymbolF2-Regular.ttf` | mORMot Test Symbol F2 | `NotoSans-Regular.ttf`, as above | `89c3c497f618fdaa0b2d1e98fef93582f28c71debd2c4a8cdf41f190ced2909d` |
+| `mORMotTestUnicodeOnly-Regular.ttf` | mORMot Test Unicode Only | `NotoSans-Regular.ttf`, as above | `89c3c497f618fdaa0b2d1e98fef93582f28c71debd2c4a8cdf41f190ced2909d` |
 | `mORMotTestCJKGlyf-Regular.ttf` | mORMot Test CJK Glyf | `DroidSansFallbackFull.ttf`, Debian/Ubuntu package `fonts-droid-fallback` 1:6.0.1r16-1.1build1 | `acb6440a713d880a13a21b468ba7cd43f5a2b2934972e51be791c880730777b8` |
 | `mORMotTestCollection.ttc` | mORMot Test TTC A, mORMot Test TTC B | `NotoSans-Regular.ttf`, as above | `89c3c497f618fdaa0b2d1e98fef93582f28c71debd2c4a8cdf41f190ced2909d` |
 
@@ -29,6 +30,7 @@ repository.
 | `mORMotTestSymbol-Regular.ttf` | 23,976 | `d93ae69394dc88c7f30d1ae86160497b2e2975f5a6c3e9859f51377af2bac259` | `glyf`: a symbol font as Wingdings is one - ASCII at U+F020-F07E in a single (3,0) cmap, the symbol code page (OS/2 bit 31), the name records in the symbol encoding |
 | `mORMotTestSymbolLow-Regular.ttf` | 24,008 | `64a8eeaaadec4ce731801bfecb5684773ff998c366b1fb38e20c5b9fbb673c3a` | the same symbol font with its cmap at U+0020-007E, the bytes as they are, as some older symbol fonts have it |
 | `mORMotTestSymbolF2-Regular.ttf` | 24,000 | `36d0bfca007ffadd5913994bb26bce6b007dc52e55db6943b77f0ecb1043b2cc` | the same symbol font with its cmap at U+F220-F27E, the last of the ranges ISO 32000-1 9.6.6.4 names for the bytes |
+| `mORMotTestUnicodeOnly-Regular.ttf` | 34,860 | `90db20f37fea8cf7a3b70df5ff66df57b5a1cc851ee87fa0a9b6c0f4a7e6bafa` | `glyf`: the Latin of Test Sans (Basic Latin, Latin-1, the punctuation) in a single **(0,3)** cmap - no (3,1), (3,0) or (1,0), as the first faces of macOS `GeezaPro.ttc` have: a simple TrueType font cannot reach its glyphs (ISO 32000-1 9.6.6.4), its text goes through the Type0 font |
 | `mORMotTestCJKGlyf-Regular.ttf` | 31,088 | `aea021acb4dddb507b843c6f55b9d60db179b41b24930ef27723f3958ed0bc42` | `glyf` (TrueType outlines, which FontSub subsets, unlike the CFF of Test CJK): the ideographs and kana of the tests and the golden files, the space and the CJK punctuation, **no Latin**; **4200 empty glyphs** out of the cmap after `.notdef`, so the glyphs drawn are 4201-4254 (4233-4254 the components of its composites) - two glyphs 4096 apart with no character (`TestShapedGlyphKeys`) and a keep list of high IDs in a face of 31 KB. No layout or vertical tables |
 | `mORMotTestCollection.ttc` | 46,776 | `875acb78bbf2b9d91f4a0f686a0bf98924a399a0cfffc8f484d2e2c7b37d3ccd` | a collection of two `glyf` faces: face 0 Basic Latin, face 1 the same without 'A'-'G', so its 'H' is glyph 34, face 0's glyph 41 |
 
