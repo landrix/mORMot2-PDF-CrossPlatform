@@ -889,6 +889,10 @@ Process, agreed in the forum:
     fallback font on `TPdfDocument.Canvas`, the page canvas, not on the
     canvas it draws on - they differ for a form XObject; a fix of its own
     (done, below)
+    The eight `with` left in the test units (Martin, #57) are written out
+    in the follow-up to #57 and #58, by hand: record copies and prefixes.
+    Two remain in the Android host form `tests/delphi13/android`, which
+    only builds for Android64 (FMX): for the next Delphi 13 run there.
 
     **Exceptions, done** (branch `pr/exceptions`, on `pr/no-with`): the
     report's 10 `raise Exception.Create` and 4 `ESynException` raises are
