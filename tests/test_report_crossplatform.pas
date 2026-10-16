@@ -51,6 +51,10 @@ type
     procedure TestTableFooterRowHeader;
     procedure TestExportPdfPageMode;
     procedure TestExportPdfFile;
+    /// a call out of order or with a wrong argument raises EPdfReport
+    procedure TestMisuseRaises;
+  private
+    procedure RunMisuse(const Params: array of const);
   end;
 
 implementation
@@ -1035,6 +1039,101 @@ begin
     FileSetHidden(ro, false); // writable again, so that it can be deleted
     DeleteFile(ro);
   end;
+end;
+
+
+// Params[0]: the case - one misuse each, on a report of its own
+procedure TReportTests.RunMisuse(const Params: array of const);
+var
+  Report: TGDIPages;
+  Layout: TTableLayout;
+  MS: TMemoryStream;
+begin
+  SetLength(Layout.ColumnWidths, 1);
+  SetLength(Layout.ColumnAligns, 1);
+  Layout.ColumnWidths[0] := 17000;
+  Layout.ColumnAligns[0] := tcaLeft;
+  Layout.HeaderFontName := 'Arial';
+  Layout.HeaderFontSize := 12;
+  Layout.BodyFontName := 'Arial';
+  Layout.BodyFontSize := 10;
+  MS := nil;
+  Report := TGDIPages.Create(nil);
+  try
+    if not (Params[0].VInteger in [0, 13, 15]) then
+      Report.NewPage;
+    case Params[0].VInteger of
+      0:
+        Report.DrawText('before NewPage');
+      1:
+        begin
+          Report.EndDoc;
+          Report.DrawText('after EndDoc');
+        end;
+      2:
+        Report.DrawHeading(0, 'Title');
+      3:
+        Report.DrawHeading(7, 'Title');
+      4:
+        Report.DrawHeading(1, '');
+      5:
+        Report.EndTable;
+      6:
+        Report.DrawTableHeader(['Head']);
+      7:
+        Report.DrawTableRow(['Cell']);
+      8:
+        Report.DrawTableFooter(['Total']);
+      9:
+        Report.AddTableRow(['Cell']);
+      10:
+        begin
+          Report.BeginTable(Layout);
+          Report.BeginTable(Layout);
+        end;
+      11:
+        begin
+          Report.BeginTable([17000], [tcaLeft]);
+          Report.BeginTable([17000], [tcaLeft]);
+        end;
+      12:
+        Report.ExportPdfTagged := true;
+      13:
+        begin
+          MS := TMemoryStream.Create;
+          Report.ExportPdfStream(MS, {aRaiseException=}true);
+        end;
+      14:
+        begin
+          Report.EndDoc;
+          Report.ExportPDF(WorkDir + 'report_misuse.pdf', {Protect=}true,
+            {Encrypt=}false, 'Title', 'Company');
+        end;
+      15:
+        Report.ExportPDF(WorkDir + 'report_misuse.pdf', false, false,
+          'Title', 'Company');
+    end;
+  finally
+    MS.Free;
+    Report.Free;
+  end;
+end;
+
+procedure TReportTests.TestMisuseRaises;
+const
+  MISUSE: array[0..15] of string = (
+    'drawing before NewPage', 'drawing after EndDoc', 'heading level 0',
+    'heading level 7', 'empty heading', 'EndTable without BeginTable',
+    'DrawTableHeader without BeginTable', 'DrawTableRow without BeginTable',
+    'DrawTableFooter without BeginTable', 'AddTableRow without BeginTable',
+    'BeginTable(Layout) twice', 'BeginTable(widths) twice',
+    'ExportPdfTagged after the first page', 'ExportPdfStream without a page',
+    'ExportPDF with Protect', 'ExportPDF without a page');
+var
+  i: integer;
+begin
+  for i := 0 to high(MISUSE) do
+    CheckRaised(RunMisuse, [i], EPdfReport, StringToUtf8(MISUSE[i]));
 end;
 
 end.
