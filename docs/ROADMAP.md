@@ -295,6 +295,12 @@ v0.10.0 (2026-09-30).
 - **Fixed: fallback text in a form XObject** (`TPdfFormWithCanvas`)
   drawn before the first `AddPage` raised an access violation: the fallback
   font was chosen through the document's canvas, which has no page yet
+- **Fixed: the WinAnsi text of a face without a (3,1) cmap** (R-31): macOS
+  Geeza Pro has only a (0,3) cmap, which a viewer does not use for a simple
+  TrueType font - the space of an Arabic line came out as `.notdef`. Such
+  a face, embedded, draws all its text by glyph through its Type0 font now,
+  as a CFF face does; faces with a (3,1) cmap - all of Windows and Linux -
+  are unchanged
 - **Changed under PDF/A:** a character neither the font nor the fallback
   font has raises `EPdfInvalidOperation` (was `Exception`, and only when no
   fallback font was registered at all): PDF/A forbids the box glyph
@@ -1037,19 +1043,6 @@ row. Let the row split: partial cell content on the current page, the rest on
 the next. The split row's cells have to stay inside **one** `TR` element
 referencing both pages — `TPdfDocumentVcl.ResumeStructContent` does this for
 text blocks (B-2) and is the model to follow.
-
-### R-31 — WinAnsi Text in a Face Without a (3,1) or (1,0) cmap — unprioritised
-
-**Effort:** 1 day | **File:** `src/pdf/mormot.pdf.pas`
-
-Found by Martin on #52 (`arabic_system` on macOS): the space of line 1 is
-drawn as `.notdef`. The space goes through the simple TrueType font
-(WinAnsi), and a viewer reaches its glyph through the (3,1) or (1,0) cmap
-of the embedded program (ISO 32000-1 9.6.6.4); Geeza Pro has only (0,3).
-The engine has always written Geeza Pro this way; the golden case only made
-it visible, and the macOS baseline holds it. Fix: draw the WinAnsi text of
-such a face by glyph through its Type0 font, as a CFF face does
-(`Type0Only`), or write a (3,1) subtable into the embedded program.
 
 ### R-11 — TTC Face Index — unprioritised
 

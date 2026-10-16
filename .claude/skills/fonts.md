@@ -127,6 +127,22 @@ The descendant, `/CIDToGIDMap` and the names follow `GetCff <> pcNone`.
 Embedding switched on after such a face was created renames its simple font
 `/Type1`; switched off after a name-keyed face was created embedded, the save
 raises `EPdfInvalidOperation` (its text is glyph indexes without a program).
+
+**A face without a Microsoft cmap takes the same path** (R-31, 2026-10-16):
+a viewer reaches the glyphs of a simple TrueType font through its (3,1) or
+(1,0) cmap only (ISO 32000-1 9.6.6.4); macOS Geeza Pro (the first faces of
+`GeezaPro.ttc`) has (0,3) alone, so its space in the simple font was
+`.notdef` (Martin, `arabic_system`). `LoadCmap` falls back to the Unicode
+platform then and sets `TPdfTtf.UnicodePlatform`; an embedded `glyf` face
+with it is `Type0Only` (`FaceHasUnicodeCmapOnly`, beside `PdfFaceCffInfo` in
+the constructor) - CIDFontType2 in `/FontFile2`, Identity, `/ToUnicode`.
+A (1,0) does not count: hb-subset drops it (it keeps (0,3), (0,4), (3,1),
+(3,10) and format 14, filtered, and adds none). Not embedded, the simple
+font stays, as for a name-keyed CFF face. A face whose only cmap is format
+12 is not read at all (`LoadCmap` reads format 4) and keeps the simple
+font. GDI loads no face without a Microsoft cmap - it gives another font -
+so `TestUnicodeOnlyCmap` (Test Unicode Only, (0,3) alone) checks the path on
+Linux and macOS and the replacement on Windows.
 - **Codes:** `GlyphCode(glyph)` is the CID of a CID-keyed face (`fCff.Cid`,
   read once by `GetCff` on the WinAnsi font), the glyph index otherwise.
   Every writer of Type0 codes goes through it - the three branches of
