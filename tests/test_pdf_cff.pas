@@ -1754,6 +1754,7 @@ begin
   w := WidthsOf(glyphs, copy(hmtx, 1, PAIRS * 4), width);
   Check(PosEx('67[600 600]', w) > 0,
     'b and c past the end of hmtx with the width of .notdef: ' + Utf8ToString(w));
+  CheckSame(width, 2 * 600 * 12 / 1000, 1E-4, 'TextWidth with that width');
 end;
 
 procedure TPdfCffTests.Type0Routing;

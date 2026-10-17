@@ -315,7 +315,8 @@ v0.10.0 (2026-09-30).
   others the width of `.notdef`, where OpenType gives the last advance.
   It shows only for such a glyph the cmap maps: the first one in many faces
   with a short `hmtx`, the others where the last advance differs from that
-  of `.notdef`
+  of `.notdef`. A face whose `hmtx` is shorter than its `hhea` states gets
+  the width of `.notdef` past its end, instead of 0
 - **Fixed: faces whose only cmap is format 12** were read as having no
   characters, so all their text came from the fallback font: on macOS
   Hiragino Sans (Hiragino Kaku Gothic, every weight), STHeiti, Geneva, Big

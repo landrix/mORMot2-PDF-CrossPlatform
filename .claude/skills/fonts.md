@@ -386,7 +386,8 @@ selected):
      Martin on #64), so a glyph past the end of a `hmtx` shorter than `hhea`
      says gets `W`, the width of `.notdef`, here (was 0) and 0 from
      `GlyphHmtxWidth`, whose callers fall back on it; `ShortHmtxWidths`
-     checks that too.
+     checks the `W` case of the loop (`GlyphHmtxWidth`'s bound has no test:
+     it is reached through a shaper only).
 
 ### Subtable selection (cmap)
 
