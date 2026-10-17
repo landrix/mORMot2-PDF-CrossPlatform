@@ -347,7 +347,7 @@ end;
 ```
 
 **Critical invariant:** `length(fUsedWide) >= fUsedWideChar.Count` always.
-Both arrays grow together inside `FindOrAddUsedWideChar` (§8).
+Both arrays grow together inside `FindOrAddUsedCodePoint` (§8).
 The UnicodeFont's arrays are fully populated at construction (entire CMAP);
 the WinAnsi font's arrays only contain actually-used code points.
 

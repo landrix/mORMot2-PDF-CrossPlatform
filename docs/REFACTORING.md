@@ -788,9 +788,9 @@ Gist §20. Transitional names and aliases removed, unit splits reviewed.
 - **R-32 step 1 during the freeze** (decided 2026-10-17 with Sven, Codex
   and Fable): the used characters keyed by code point instead of UTF-16
   unit (ROADMAP R-32). An internal change, no feature: golden files on
-  every system and the demo PDFs identical, the public methods kept. Steps
-  2 and 3 (supplementary characters drawn, shaped source text) wait for
-  the end of R-28 as planned.
+  every system and the demo PDFs (pdfcheck, Windows) identical, the public
+  methods kept. Steps 2 and 3 (supplementary characters drawn, shaped
+  source text) wait for the end of R-28 as planned.
 
 Process, agreed in the forum:
 

@@ -6790,10 +6790,10 @@ begin
   result := fUsedWideChar.Add(aCode);
   if result < 0 then
   begin
-    result := -(result + 1); // this WideChar was already existing -> return index
+    result := -(result + 1); // this code point was already existing -> return index
     exit;
   end;
-  // this WideChar was just added -> reserve space in fUsedWide[]
+  // this code point was just added -> reserve space in fUsedWide[]
   if length(fUsedWide) = fUsedWideChar.Count - 1 then
     SetLength(fUsedWide, fUsedWideChar.Count + 100);
   n := fUsedWideChar.Count - 1;
@@ -6847,7 +6847,7 @@ begin
   for i := 0 to uni.fUsedWideChar.Count - 1 do
     if uni.fUsedWide[i].Glyph = aGlyph then
     begin
-      // split to avoid evaluation-order AV: FindOrAddUsedWideChar may call
+      // split to avoid evaluation-order AV: FindOrAddUsedCodePoint may call
       // SetLength(fUsedWide,...) which moves the array; pre-loading the base
       // pointer before the call would leave a stale reference (see Fix C).
       idx := uni.WinAnsiFont.FindOrAddUsedCodePoint(uni.fUsedWideChar.Values[i]);
