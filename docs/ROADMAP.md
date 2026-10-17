@@ -82,7 +82,7 @@ v0.10.0 (2026-09-30).
   `mormot.lib.core` of mORMot2 and lost the `Pdf` prefix -
   `IFontProvider`, `IFontEnumerator`, `IFontDC`, `TFontRequest`,
   `TFontMetrics`... The former names have no alias (`mormot.pdf.types`
-  kept them for a while and is gone, see below). Removed as well, so code that
+  kept them for a while and is gone, see above). Removed as well, so code that
   registers or calls a backend of its own no longer compiles:
   `PdfPlatformFont`, `PdfSystemFonts`, `PdfPlatformDCProvider`,
   `PdfTextShaper`, `PdfFontSubsetter`, `RegisterPdfPlatform`,
