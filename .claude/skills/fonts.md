@@ -218,7 +218,8 @@ and the rejections on tables built in code.
 
 Found on the way: a run that switched to the fallback face mid-run wrote
 the fallback codes without an opening `<` (also in the original,
-`reference/mormot.ui.pdf.pas:5340`); and the `/ToUnicode` codespace of
+the trunk's `mormot.ui.pdf.pas` at
+[63d06371a, line 5340](https://github.com/synopse/mORMot2/blob/63d06371ad6a75948398ebc1d90cb64af39ca474/src/ui/mormot.ui.pdf.pas#L5340)); and the `/ToUnicode` codespace of
 every Type0 font ran from the glyph of the first character to the glyph of
 the last - inverted whenever they were out of order. It is `<0000> <FFFF>`
 now, and `/W` and `/ToUnicode` are sorted by code, one entry per code.

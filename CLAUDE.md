@@ -1,7 +1,7 @@
 # mORMot2 PDF Cross-Platform — Agent Reference
 
 Cross-platform PDF and report engine for Windows, Linux and macOS, based on mORMot2.
-The original document (`reference/mormot.ui.pdf.pas`) was Windows/GDI-only; this project abstracts all platform calls behind interfaces.
+The original, the trunk's `src/ui/mormot.ui.pdf.pas`, is Windows/GDI-only; this project abstracts all platform calls behind interfaces.
 
 ---
 
@@ -101,8 +101,6 @@ tests/
   fonts/                       test fonts the tests register (RegisterFontData): renamed OFL subsets of Noto (Latin, Arabic, CJK, symbol, a (0,3) cmap only, a format 12 cmap only, a collection) and an Apache 2.0 subset of Droid Sans Fallback (CJK with TrueType outlines), their licences, sources and generator
   test_coordinates.pas         page geometry
   test_report_coordinates.pas  report geometry
-reference/
-  mormot.ui.pdf.pas   Original Windows/GDI file (12,514 lines, reference only)
 docs/
   DEMOS.md            Learning path: the 8 demos step by step
   API_REFERENCE.md    TCanvas methods, TReportFormat, TTableLayout

@@ -733,11 +733,11 @@ objects).
 
 **Why.** The original never drew it in `TPdfCanvas` either: only the EMF
 path did, `TPdfEnum.TextOut` drawing a line after the text for
-`lfUnderline`/`lfStrikeOut` (`reference/mormot.ui.pdf.pas`, around line
-12464). The Windows report went through a metafile then; the cross-platform
+`lfUnderline`/`lfStrikeOut` (the trunk's `mormot.ui.pdf.pas` at
+[63d06371a, line 12462](https://github.com/synopse/mORMot2/blob/63d06371ad6a75948398ebc1d90cb64af39ca474/src/ui/mormot.ui.pdf.pas#L12462)). The Windows report went through a metafile then; the cross-platform
 engine draws through `TPdfVclCanvas` straight onto `TPdfCanvas`, and the
 line was lost on the way. The second font object: in the original the font
-lookup by name (`GetRegisteredTrueTypeFont`, around line 7578) compares the
+lookup by name (`GetRegisteredTrueTypeFont`, [line 7577](https://github.com/synopse/mORMot2/blob/63d06371ad6a75948398ebc1d90cb64af39ca474/src/ui/mormot.ui.pdf.pas#L7577)) compares the
 whole `TPdfFontStyles`, `pfsUnderline` included — where the lookup by
 `TLogFontW` (`CompareLogFontW`) ignores underline and strike-out on purpose,
 "internal to PDF graphics state". The measurements fit that; `src/` was not
