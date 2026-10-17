@@ -59,6 +59,10 @@ With `mormot.pdf` last, `Report.PaperSize := psA4` does not compile. What a
 report needs from below is re-exported by `mormot.pdf.report`; if something is
 missing, it belongs there, not in your `uses` clause.
 
+**Coming from the trunk's `mormot.ui.pdf` or `mormot.ui.report`?**
+[docs/MIGRATION.md](docs/MIGRATION.md) maps the units and calls; the report
+is a port, not a rename.
+
 ---
 
 ## Quick start
