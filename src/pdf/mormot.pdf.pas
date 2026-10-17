@@ -2914,7 +2914,7 @@ type
   protected
     // read the cmap of aFace: true with fmt4 and its arrays set, or Groups
     function LoadCmap(const aFace: IFontFace): boolean;
-    // read the (3,10) or (0,4) format 12 cmap of aFace into Groups
+    // read the format 12 cmap of aFace into Groups: (3,10), (0,4), another (0,x)
     function LoadCmap12(const aFace: IFontFace): boolean;
   public
     /// create Unicode glyph description for a supplied true Type Font
@@ -6420,7 +6420,7 @@ begin
   if fmt4^.format <> 4 then
   begin
     fmt4 := nil;
-    result := LoadCmap12(aFace); // the (0,4) one, usually format 12
+    result := LoadCmap12(aFace); // not format 4: maybe format 12
     exit;
   end;
   endCode := pointer(PtrUInt(@fmt4^.format) + SizeOf(TCmapFmt4));
@@ -6437,7 +6437,7 @@ const
 var
   raw: RawByteString;
   P: PByteArray;
-  i, k, n, ms, uni: PtrInt;
+  i, k, n, ms, uni, other: PtrInt;
   L, off, len, count: Int64; // 32-bit fields: compared before any narrowing
   plat, enc, size: cardinal;
   first, last, glyph, prev: Int64;
@@ -6474,6 +6474,7 @@ begin
     exit;
   ms := 0;
   uni := 0;
+  other := 0;
   NoSimpleCmap := true;
   for i := 0 to n - 1 do
   begin
@@ -6489,12 +6490,19 @@ begin
     if (plat = TTFCFP_MS_PLATFORMID) and
        (enc = TTFCFP_UNICODE_FULL_MS) then
       ms := PtrInt(off)
-    else if (plat = TTFCFP_UNICODE_PLATFORMID) and
-            (enc = TTFCFP_UNICODE_FULL) then
-      uni := PtrInt(off);
+    else if plat = TTFCFP_UNICODE_PLATFORMID then
+    begin
+      // the first other (0,x): macOS Geneva has it under (0,3), Big Caslon (0,1)
+      if enc = TTFCFP_UNICODE_FULL then
+        uni := PtrInt(off)
+      else if other = 0 then
+        other := PtrInt(off);
+    end;
   end;
   if ms = 0 then
     ms := uni;
+  if ms = 0 then
+    ms := other;
   if ms = 0 then
     exit;
   len := U32(ms + 4); // the subtable's own length bounds its groups
@@ -6533,8 +6541,7 @@ begin
     inc(k);
   end;
   SetLength(Groups, k);
-  Symbol := false;
-  result := k > 0;
+  result := k > 0; // Symbol as LoadCmap left it: true from a (3,0) only
 end;
 
 constructor TPdfTtf.CreateCmap(const aFace: IFontFace);

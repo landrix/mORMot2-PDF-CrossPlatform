@@ -55,6 +55,9 @@ type
     /// the format 12 reader on every system: a glyf face served by the fake
     // provider, which GDI would replace
     procedure Format12CmapFace;
+    /// the format 12 reader on cmap tables built in code: the subtable
+    // selection, the clipping at U+FFFF and the rejections
+    procedure Format12CmapTables;
   end;
 
 /// a bare 'CFF ' table of Glyphs glyphs
@@ -1492,30 +1495,178 @@ const
     'name');
 var
   font: RawByteString;
-  off, len: cardinal;
-  fake: TFakeFace;
-  face: IFontFace;
-  i: PtrInt;
-  s, txt: RawUtf8;
+
+  // the font with its one cmap record, (3,10), set to Platform, Encoding
+  procedure Draw(Platform, Encoding: integer; const Msg: string);
+  var
+    off, len: cardinal;
+    fake: TFakeFace;
+    face: IFontFace;
+    i: PtrInt;
+    table: RawByteString;
+    s, txt: RawUtf8;
+  begin
+    fake := TFakeFace.Create;
+    face := fake; // the reference owns it
+    for i := 0 to high(TAGS) do
+      if Check(SfntFindTable(font, TAGS[i], off, len), Utf8ToString(TAGS[i])) then
+      begin
+        table := copy(font, off + 1, len);
+        if TAGS[i] = 'cmap' then
+        begin
+          Check(copy(table, 3, 6) = Card16(1) + Card16(3) + Card16(10),
+            'one record, (3,10)');
+          table := copy(table, 1, 4) + Card16(Platform) + Card16(Encoding) +
+            copy(table, 9, MaxInt);
+        end;
+        fake.AddTable(TAGS[i], table);
+      end;
+    fake.Seal(#0#1#0#0);
+    FakeEmbedded := true;
+    try
+      s := FakeFacePdf(face, 'Ab c');
+    finally
+      FakeEmbedded := false;
+    end;
+    Check(TextObjectOfType0(s, txt), 'only the Type0 font selected ' + Msg);
+    Check(PosEx('<0022004300010044> Tj', txt) > 0, 'A b space c by glyph ' + Msg);
+    Check(PosEx('/FontFile2', s) > 0, 'the glyf program embedded ' + Msg);
+  end;
+
 begin
   font := StringFromFile(TestFontFile('mORMotTestFormat12-Regular.ttf'));
   if not Check(font <> '', 'the test font') then
     exit;
+  Draw(3, 10, '(3,10)');
+  Draw(0, 3, '(0,3), as macOS Geneva');
+  Draw(0, 1, '(0,1), as macOS Big Caslon');
+end;
+
+// a format 12 subtable of Groups (first, last, glyph); Len: its length
+// field, 0 for the length it has
+function Format12Subtable(const Groups: array of cardinal;
+  Len: cardinal = 0): RawByteString;
+var
+  i: PtrInt;
+begin
+  if Len = 0 then
+    Len := 16 + (length(Groups) div 3) * 12;
+  result := Card16(12) + Card16(0) + Card32(Len) + Card32(0) +
+    Card32(length(Groups) div 3);
+  for i := 0 to high(Groups) do
+    result := result + Card32(Groups[i]);
+end;
+
+// a cmap table of Records (platform, encoding, index in Subtables)
+function CmapTable(const Records: array of integer;
+  const Subtables: array of RawByteString): RawByteString;
+var
+  i, n: PtrInt;
+  offs: array of cardinal;
+begin
+  n := length(Records) div 3;
+  SetLength(offs, length(Subtables));
+  if length(offs) > 0 then
+    offs[0] := 4 + n * 8;
+  for i := 1 to high(offs) do
+    offs[i] := offs[i - 1] + cardinal(length(Subtables[i - 1]));
+  result := Card16(0) + Card16(n);
+  for i := 0 to n - 1 do
+    result := result + Card16(Records[i * 3]) + Card16(Records[i * 3 + 1]) +
+      Card32(offs[Records[i * 3 + 2]]);
+  for i := 0 to high(Subtables) do
+    result := result + Subtables[i];
+end;
+
+// the cmap of a face of that table alone, as WinAnsiMissing reads it
+function CmapOf(const Table: RawByteString): TPdfTtf;
+var
+  fake: TFakeFace;
+  face: IFontFace;
+begin
   fake := TFakeFace.Create;
-  face := fake; // the reference owns it
-  for i := 0 to high(TAGS) do
-    if Check(SfntFindTable(font, TAGS[i], off, len), TAGS[i]) then
-      fake.AddTable(TAGS[i], copy(font, off + 1, len));
-  fake.Seal(#0#1#0#0);
-  FakeEmbedded := true;
-  try
-    s := FakeFacePdf(face, 'Ab c');
-  finally
-    FakeEmbedded := false;
+  face := fake;
+  fake.AddTable('cmap', Table);
+  result := TPdfTtf.CreateCmap(face);
+end;
+
+procedure TPdfCffTests.Format12CmapTables;
+var
+  ttf: TPdfTtf;
+  a1, a2, a3: RawByteString;
+
+  procedure Rejected(const Groups: array of cardinal; const Msg: string;
+    Len: cardinal = 0);
+  var
+    t: TPdfTtf;
+  begin
+    t := CmapOf(CmapTable([3, 10, 0], [Format12Subtable(Groups, Len)]));
+    try
+      Check(not t.HasCmap, Msg);
+    finally
+      t.Free;
+    end;
   end;
-  Check(TextObjectOfType0(s, txt), 'only the Type0 font selected');
-  Check(PosEx('<0022004300010044> Tj', txt) > 0, 'A b space c by glyph');
-  Check(PosEx('/FontFile2', s) > 0, 'the glyf program embedded');
+
+  function GlyphOfA(const Records: array of integer): integer;
+  var
+    t: TPdfTtf;
+  begin
+    t := CmapOf(CmapTable(Records, [a1, a2, a3]));
+    try
+      result := t.GlyphOf(ord('A'));
+    finally
+      t.Free;
+    end;
+  end;
+
+begin
+  // a group across U+FFFF is clipped, one beyond the BMP left out
+  ttf := CmapOf(CmapTable([0, 3, 0], [Format12Subtable(
+    [$41, $43, 10, $fff0, $1000f, 100, $1f600, $1f600, 10])]));
+  try
+    Check(ttf.HasCmap, 'read');
+    Check(ttf.NoSimpleCmap, 'no (3,1) or (3,0)');
+    Check(not ttf.Symbol, 'no symbol font');
+    if CheckEqual(length(ttf.Groups), 2, 'the BMP groups') then
+      CheckEqual(ttf.Groups[1].LastCode, $ffff, 'clipped at U+FFFF');
+    CheckEqual(ttf.GlyphOf($42), 11, 'B');
+    CheckEqual(ttf.GlyphOf($ffff), 115, 'U+FFFF');
+    CheckEqual(ttf.GlyphOf($f600), 0, 'U+F600 is not U+1F600');
+    CheckEqual(ttf.GlyphOf($1f600), 0, 'beyond the BMP');
+  finally
+    ttf.Free;
+  end;
+  // the selection: (3,10), then (0,4), then another (0,x)
+  a1 := Format12Subtable([$41, $41, 1]);
+  a2 := Format12Subtable([$41, $41, 2]);
+  a3 := Format12Subtable([$41, $41, 3]);
+  CheckEqual(GlyphOfA([0, 3, 0, 0, 4, 1, 3, 10, 2]), 3, '(3,10) first');
+  CheckEqual(GlyphOfA([3, 10, 2, 0, 4, 1, 0, 3, 0]), 3, '(3,10) first, listed first');
+  CheckEqual(GlyphOfA([0, 3, 0, 0, 4, 1]), 2, '(0,4) before (0,3)');
+  CheckEqual(GlyphOfA([0, 4, 1, 0, 3, 0]), 2, '(0,4) before (0,3), listed first');
+  CheckEqual(GlyphOfA([0, 1, 0]), 1, '(0,1) alone');
+  CheckEqual(GlyphOfA([0, 1, 0, 0, 3, 1]), 1, 'the first other (0,x)');
+  CheckEqual(GlyphOfA([0, 3, 1, 0, 1, 0]), 2, 'the first other (0,x), swapped');
+  CheckEqual(GlyphOfA([1, 0, 1, 0, 6, 0]), 1, 'not (1,0)');
+  // a (3,0) of another format leaves a symbol font a symbol font
+  ttf := CmapOf(CmapTable([3, 0, 0, 3, 10, 1], [a1, a3]));
+  try
+    CheckEqual(ttf.GlyphOf(ord('A')), 3, 'the (3,10) one');
+    Check(ttf.Symbol, 'still a symbol font');
+    Check(not ttf.NoSimpleCmap, 'a (3,0)');
+  finally
+    ttf.Free;
+  end;
+  // every group checked, beyond the BMP too
+  Rejected([$1f600, $1f600, 1, $41, $41, 2], 'not in order');
+  Rejected([$41, $45, 1, $45, $46, 10], 'overlapping');
+  Rejected([$45, $41, 1], 'last before first');
+  Rejected([$41, $42, $ffff], 'a glyph beyond 65535');
+  Rejected([$41, $41, 1, $42, $42, 2], 'more groups than its length', 28);
+  Rejected([$41, $41, 1], 'its length past the table', 1000);
+  Rejected([$41, $41, 1], 'its length below its header', 12);
+  Rejected([$1f600, $1f600, 1], 'no group in the BMP');
 end;
 
 procedure TPdfCffTests.Type0Routing;
