@@ -38,8 +38,8 @@ text and a figure, page 2 a table.
 - PAC 2024 passes both Windows files and keeps one hint, "possibly
   inappropriate use of figure". It comes with every Figure, path or image,
   and is accepted (roadmap W-1)
-- no image: `mormot.pdf.fpimage` is FPC-only, and the demo keeps to what both
-  compilers share
+- no image: the demo keeps to shapes and text, which both compilers draw
+  alike
 
 **Build and run**
 

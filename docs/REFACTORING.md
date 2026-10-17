@@ -802,7 +802,10 @@ step its own PR, output byte-equal):
    scripts `%MORMOT2%\src\ui` and `test_runner.dproj` `$(MORMOT2)\src\ui`;
    no unit of ours is named `mormot.ui.pdf` any more, so the trunk's
    originals there are never taken; `layer1_demo` needs neither
-3. **`mormot.pdf.fpimage` removed**: no caller; announced
+3. **`mormot.pdf.fpimage` removed** - done: no caller in this repository,
+   its tests and demos, the fork or XRechnung for Delphi; shipped in v0.10.0
+   (as `src/core/mormot.pdf.fpimage.pas`), so "To Announce" says what
+   replaces it: FPImage in the program, `TPdfImagePixels` for the pixels
 4. **The review recorded here**: what stays and why, `reference/`, the
    migration note for users of the trunk's `mormot.ui.pdf`/`mormot.ui.report`
 

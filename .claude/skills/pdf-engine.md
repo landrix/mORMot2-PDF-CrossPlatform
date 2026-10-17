@@ -1,7 +1,6 @@
 # PDF Engine — TPdfDocument / TPdfDocumentVcl
 
 Source: `src/pdf/mormot.pdf.pas`, canvas bridge: `src/pdf/mormot.pdf.canvas.pas`
-FPImage adapter: `src/pdf/mormot.pdf.fpimage.pas`
 
 ## Two Entry Points
 
@@ -782,32 +781,6 @@ reader is public: `PdfCffParse(Data, Len, Info)` / `PdfFaceCffInfo(Face,
 Info)` give `TPdfCffInfo` (`Kind` pcNone/pcNameKeyed/pcCidKeyed/pcInvalid,
 `GlyphCount`, `FontName`, `Registry`/`Ordering`/`Supplement`, `Cid[]`).
 Details: `fonts.md` "CFF Faces: Type0 Only"
-
----
-
-## FPImage Bitmap Adapter (mormot.pdf.fpimage)
-
-Loads PNG/JPEG files with FPC's FPImage (non-Windows guard, FPC-only units).
-**Nothing calls it** - neither the engine nor the bridge: it is a standalone
-helper. Phase 2 keeps it as an optional FPC adapter whose `GetRawRGB` feeds a
-`TPdfImagePixels` (`ipfRgb24`, top-down); `GetJpegBytes` re-encodes, it does
-not pass a JPEG through.
-
-```pascal
-uses mormot.pdf.fpimage;
-
-var Adapter: IPdfBitmapAdapter;
-Adapter := CreatePdfBitmapAdapter;
-Adapter.LoadFromFile('photo.png');
-// width, height, raw pixels:
-W := Adapter.GetWidth;
-H := Adapter.GetHeight;
-Raw := Adapter.GetRawRGB;              // RGB24 bytes
-Jpg := Adapter.GetJpegBytes(85);      // JPEG-encoded at quality 85
-```
-
-`CreatePdfBitmapAdapter` is a plain factory: it returns a new
-`TPdfFPImageAdapter`; nothing is registered.
 
 ---
 

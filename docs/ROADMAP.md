@@ -69,6 +69,13 @@ v0.10.0 (2026-09-30).
   (issue #4, Ubuntu 24.04). The README now says which distributions ship a
   HarfBuzz older than 2.9 and do not subset at all: Debian 11, Ubuntu 22.04,
   RHEL 8/9
+- **`mormot.pdf.fpimage` is gone (R-28, refactoring Phase 5):** the FPImage
+  adapter (`IPdfBitmapAdapter`, `TPdfFPImageAdapter`, `CreatePdfBitmapAdapter`,
+  `TPdfPixelFormat`; POSIX, FPC only) had no caller - the engine never used
+  it. Load the picture with FPImage yourself and hand its pixels to
+  `Doc.CreateOrGetImage` as a `TPdfImagePixels` (`ipfRgb24` and the other
+  layouts, no re-encoding); a JPEG file goes in unchanged through
+  `TPdfImage.CreateJpegDirect`
 - **`src/core` is gone (R-28, refactoring Phase 5):** `mormot.ui.core` and
   `mormot.ui.gdiplus`, which `mormot.pdf.canvas` needs on Windows, come
   from mORMot2's `src/ui` now - the copies here differed only by the path
@@ -637,7 +644,7 @@ mORMot2 2.4-stable) and macOS 317/317, the demo PDFs unchanged.
   machines: after a change, the Delphi 13 runs and the demos with Delphi 13
   (none built yet) have to come from contributors
 - the TCanvas bridge and `TGDIPages` on Delphi for Linux/Android: no VCL
-  there — an FMX or bitmap adapter would be the way (cf. `mormot.pdf.fpimage`)
+  there — an FMX adapter would be the way, feeding `TPdfImagePixels`
 - HarfBuzz and hb-subset on Android: not packaged, their tests skip;
   an NDK build as for FreeType would add shaping and subsetting
 - Delphi for macOS (OSX64/OSXARM64) untried
