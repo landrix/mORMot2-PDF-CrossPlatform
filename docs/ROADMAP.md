@@ -1061,8 +1061,9 @@ text blocks (B-2) and is the model to follow.
 
 **Effort:** several PRs | **File:** `src/pdf/mormot.pdf.pas`
 
-The engine keys characters by UTF-16 code unit (`fUsedWideChar` is a
-`TSortedWordArray`, `FindOrAddUsedWideChar` takes a `WideChar`), so a
+The engine keyed characters by UTF-16 code unit (`fUsedWideChar` was a
+`TSortedWordArray`, `FindOrAddUsedWideChar` takes a `WideChar`; step 1
+below changed the keys, the text paths still look up one unit), so a
 character beyond the BMP - emoji, CJK Extension B, mathematical
 alphanumerics - is never found in the plain path, on any face: each
 surrogate is looked up alone, then in the fallback font the same way, then
@@ -1078,6 +1079,16 @@ table (the BMP still from format 4, never "prefer format 12" for it),
 surrogate pairs combined in `AddUnicodeHexTextNoUniScribe` and
 `UnicodeTextWidth`, the fallback and the PDF/A message by code point,
 `/ToUnicode` destinations as UTF-16BE pairs; (3) shaped source text.
+**Step 1 done** (2026-10-17, ahead of R-28 as a byte-equal internal change,
+decided with Sven, Codex and Fable - REFACTORING "Outside the Phases"):
+`fUsedWideChar` is a `TSortedIntegerArray`, `FindOrAddUsedCodePoint` with
+`FindOrAddUsedWideChar` as its wrapper, `GetUsedGlyphs` returns integer keys,
+`PdfUsedCodes` packs `GlyphCode shl 37 + code point shl 16 + width`. Steps
+2 and 3 stay after R-28: new behaviour, and step 3 new output. For step
+2 (Codex): the `/ToUnicode` destination must not go through `AddHex4`,
+which indexes its hex table unmasked with a value above $FFFF; FontSub
+(`mormot.lib.uniscribe`) skips supplementary code points in the request,
+keeping their glyphs only by the glyph keep list; hb-subset takes them.
 PDFBox and iText read format 12 and encode by code point the same way.
 
 ### R-11 — TTC Face Index — unprioritised

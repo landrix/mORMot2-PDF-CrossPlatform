@@ -405,7 +405,7 @@ AddShapedRun(Run, WinAnsiTtf):          ← the font it was shaped with
   Advances (HarfBuzz): for each glyph
       WinAnsiTtf.GetAndMarkGlyphAsUsedWithWidth(Glyph, Advance_1000)
         Step 1: already registered (fUsedWide or fShapedGlyph) → exit
-        Step 2: reverse CMAP → FindOrAddUsedWideChar → exit
+        Step 2: reverse CMAP → FindOrAddUsedCodePoint → exit
           ← hmtx width from TPdfTtf.Create: (int64(hmtx) * 1000) div UPM
         Step 3: AddShapedGlyph with the hmtx width (not in CMAP)
     one Tj, or a TJ where an offset or the hmtx width differs (P3-B, U-2)
@@ -420,7 +420,7 @@ public AddGlyphs (→ AddGlyphsOf with the page font, VisAttr filter if given):
     glyph := Ttf.WinAnsiFont.GetAndMarkGlyphAsUsed(shapedGlyph)
     │  Step 1: already in fUsedWide[] → return immediately
     │  Step 2: reverse CMAP scan in UnicodeFont.fUsedWide[]
-    │           found → WinAnsiFont.FindOrAddUsedWideChar → register in WinAnsi tracking
+    │           found → WinAnsiFont.FindOrAddUsedCodePoint → register in WinAnsi tracking
     │           not found → fall through to Step 3
     │  Step 3: GSUB glyph (Arabic form, ligature) - every platform since W3
     │           FontProvider.GetGlyphAdvance(DC, glyph) → advance width
@@ -462,7 +462,7 @@ TPdfDocument.SaveToStream / SaveToFile → SaveToStreamDirectEnd
       WinAnsiFont.GetUsedGlyphs(keys, used): fUsedWide[] and fShapedGlyph
         merged in key order (a shaped glyph under $E000 + gid mod 4096)
       PdfUsedCodes: GlyphCode(Glyph) (the CID of a CID-keyed CFF face),
-        sorted, one entry per code (the smallest Unicode value wins)
+        sorted, one entry per code (the smallest code point wins)
       /W array from the codes:
         if fFixedWidth and not PDF/A: omit /W (use /DW for all)
         else: c [w1 w2 ...] per run of consecutive codes
