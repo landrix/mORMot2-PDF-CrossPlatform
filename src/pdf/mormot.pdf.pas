@@ -6420,7 +6420,7 @@ begin
   if fmt4^.format <> 4 then
   begin
     fmt4 := nil;
-    result := LoadCmap12(aFace); // the (0,4) one, usually format 12
+    result := LoadCmap12(aFace); // not format 4: maybe format 12
     exit;
   end;
   endCode := pointer(PtrUInt(@fmt4^.format) + SizeOf(TCmapFmt4));
@@ -6491,10 +6491,13 @@ begin
        (enc = TTFCFP_UNICODE_FULL_MS) then
       ms := PtrInt(off)
     else if plat = TTFCFP_UNICODE_PLATFORMID then
+    begin
+      // the first other (0,x): macOS Geneva has it under (0,3), Big Caslon (0,1)
       if enc = TTFCFP_UNICODE_FULL then
         uni := PtrInt(off)
       else if other = 0 then
-        other := PtrInt(off); // macOS Geneva has it under (0,3), Big Caslon (0,1)
+        other := PtrInt(off);
+    end;
   end;
   if ms = 0 then
     ms := uni;
