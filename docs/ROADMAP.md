@@ -72,10 +72,14 @@ v0.10.0 (2026-09-30).
 - **`mormot.pdf.fpimage` is gone (R-28, refactoring Phase 5):** the FPImage
   adapter (`IPdfBitmapAdapter`, `TPdfFPImageAdapter`, `CreatePdfBitmapAdapter`,
   `TPdfPixelFormat`; POSIX, FPC only) had no caller - the engine never used
-  it. Load the picture with FPImage yourself and hand its pixels to
-  `Doc.CreateOrGetImage` as a `TPdfImagePixels` (`ipfRgb24` and the other
-  layouts, no re-encoding); a JPEG file goes in unchanged through
-  `TPdfImage.CreateJpegDirect`
+  it. A program with the LCL loads the picture into a `TBitmap` (`TPicture`
+  reads PNG and JPEG) and passes it to `CreateOrGetBitmapImage` of
+  `mormot.pdf.canvas`. Without the LCL: load it with FPImage, pack
+  `Colors[x, y]` (16 bits per channel) into 8-bit RGB rows, as the
+  adapter's `GetRawRGB` did, and hand them to `Doc.CreateOrGetImage` as a
+  `TPdfImagePixels` (`ipfRgb24`, stride, no re-encoding); a JPEG file goes
+  in unchanged through `TPdfImage.CreateJpegDirect`, then `RegisterImage`
+  and `DrawImage`. Alpha is dropped either way, as before
 - **`src/core` is gone (R-28, refactoring Phase 5):** `mormot.ui.core` and
   `mormot.ui.gdiplus`, which `mormot.pdf.canvas` needs on Windows, come
   from mORMot2's `src/ui` now - the copies here differed only by the path

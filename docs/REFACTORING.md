@@ -498,7 +498,7 @@ cairo):
   Output unchanged: the palette stays indexed, a 24-bit color key stays
   `/Mask`, 32-bit input still drops alpha (`/SMask` would be a new feature),
   the objects keep their order. `mormot.pdf.fpimage` (no caller today) stays
-  an optional FPC adapter feeding the same input
+  an optional FPC adapter feeding the same input (removed in Phase 5)
 - **EMF moves now:** `TPdfDocumentGdi`, `RenderMetaFile`, the EMF form and the
   printer helpers (with `winspool`) go to a new unit `mormot.pdf.canvas`,
   with the bitmap conversion; Phase 3 adds the rest of the `TCanvas` bridge.
@@ -854,7 +854,7 @@ Process, agreed in the forum:
     These PRs also bring the existing code to the source form of
     `CLAUDE.md` (binding since 2026-10-14), measured that day: banners
     missing in `mormot.pdf.fpimage`, `.report`, `.report.preview`,
-    `.types`, and written `{****` without the space in `mormot.pdf` (8) and
+    `.types` (`.fpimage` and `.types` gone in Phase 5), and written `{****` without the space in `mormot.pdf` (8) and
     `mormot.pdf.canvas` (4); `///` missing on 2 of 16 unit-level routines
     of `mormot.pdf`; `raise Exception.Create` 10 times in
     `mormot.pdf.report`, once in `mormot.pdf` (the PDF/A font fallback,
