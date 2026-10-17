@@ -765,7 +765,8 @@ of Linux and the four report demos of Delphi 7 unchanged. Open: Delphi 2010, PAC
 the end of the phase. `src/core` now holds only the copies of the trunk's
 `mormot.ui.core` and `mormot.ui.gdiplus`; since no other unit of ours
 shares a name with the trunk's `src/ui` any more, whether `src/ui` on the
-search path can replace the copies is a Phase 5 question
+search path can replace the copies is a Phase 5 question (it can: Phase 5
+step 2 removed them)
 
 **Bug fixes** (Phase 4's bug-fix PR, branch `pr/phase4-fixes`, decided
 with Sven after Codex and Fable, three alternatives each):
@@ -796,10 +797,11 @@ step its own PR, output byte-equal):
    - done: they differed from the fork's `src/ui` only by the defines
    include; the `.lpi` take `$PkgDir(mormot2)/../../src/ui` (checked with
    `lazbuild` on Linux by a project that compiles `mormot.ui.core` through
-   it - our projects compile the two units on Windows only), the Delphi
-   scripts and `test_runner.dproj` `%MORMOT2%\src\ui`; no unit of ours is
-   named `mormot.ui.pdf` any more, so the trunk's originals there are never
-   taken
+   it - our projects compile the two units on Windows only; `lazbuild` on
+   Windows not run, the local one reads a stale configuration), the Delphi
+   scripts `%MORMOT2%\src\ui` and `test_runner.dproj` `$(MORMOT2)\src\ui`;
+   no unit of ours is named `mormot.ui.pdf` any more, so the trunk's
+   originals there are never taken; `layer1_demo` needs neither
 3. **`mormot.pdf.fpimage` removed**: no caller; announced
 4. **The review recorded here**: what stays and why, `reference/`, the
    migration note for users of the trunk's `mormot.ui.pdf`/`mormot.ui.report`
