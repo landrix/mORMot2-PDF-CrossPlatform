@@ -349,11 +349,11 @@ laufen und gibt das Ergebnis als Exit-Code zurück. Die App braucht ein mit dem
 NDK gebautes `libfreetype.so`, siehe
 [BUILD-FREETYPE.md](tests/delphi13/android/BUILD-FREETYPE.md).
 
-`mORMot2\src\ui` gehört nicht in einen Delphi-Suchpfad: Dort liegen
-`mormot.ui.core` und `mormot.ui.gdiplus` unter den Namen der Kopien dieses
-Projekts in `src\core`, die der Compiler je nach Reihenfolge des Suchpfads
-stattdessen nehmen kann; außerdem die originalen `mormot.ui.pdf` und
-`mormot.ui.report`.
+`mormot.ui.core` und `mormot.ui.gdiplus` (Windows) kommen aus `src\ui`
+von mORMot2, das im Suchpfad jedes Projekts mit der TCanvas-Brücke
+steht (nicht bei Android und `pdfcheck`); die dortigen
+`mormot.ui.pdf` und `mormot.ui.report` sind die Originale des Trunks, die
+keine Unit dieses Projekts verwendet.
 
 Die beiden GUI-Demos exportieren auch ohne Fenster — so laufen die
 automatisierten Prüfungen:
