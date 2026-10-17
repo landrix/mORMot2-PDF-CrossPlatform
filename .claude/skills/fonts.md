@@ -145,7 +145,11 @@ face was created keeps it too, with its gap - set `EmbeddedTTF` first.
 GDI loads no face without a (3,1) or (3,0) cmap - it gives another font -
 so `TestUnicodeOnlyCmap` (Test Unicode Only, (0,3) alone) and
 `TestFormat12Cmap` (Test Format12, (3,10) format 12 alone) check the path
-on Linux and macOS and the replacement on Windows.
+on Linux and macOS and the replacement on Windows. The CFF suite runs
+the format 12 reader on every system and compiler: `Format12CmapFace` serves
+Test Format12 through the fake provider, its record also set to (0,3) and
+(0,1); `Format12CmapTables` checks the selection, the clipping at U+FFFF
+and the rejections on tables built in code.
 - **Codes:** `GlyphCode(glyph)` is the CID of a CID-keyed face (`fCff.Cid`,
   read once by `GetCff` on the WinAnsi font), the glyph index otherwise.
   Every writer of Type0 codes goes through it - the three branches of
@@ -380,11 +384,13 @@ Preference order, in `TPdfTtf.Create`:
    the document silently fell back to `FontFallBackName` (Arial Unicode MS).
    It sets `NoSimpleCmap`: embedded, such a face draws through its Type0
    font (R-31, "CFF Faces: Type0 Only").
-4. **Format 12, `(3,10)` then `(0,4)`** - when none of the above is a format
-   4 table (`LoadCmap12`, 2026-10-16). Measured on macOS 26: 33 of 788
-   faces have format 12 and no format 4 - Hiragino Kaku Gothic (Hiragino
-   Sans, every weight), STHeiti, Geneva, Big Caslon, Apple Symbols, Apple
-   Color Emoji; none on Windows (641 faces) or Linux (348). Before, their
+4. **Format 12, `(3,10)`, then `(0,4)`, then the first other `(0,x)`** -
+   when none of the above is a format 4 table (`LoadCmap12`, 2026-10-16;
+   the other `(0,x)` since 2026-10-17: Geneva has it under `(0,3)`, Big
+   Caslon under `(0,1)`, and failed veraPDF until then). Measured on macOS
+   26: 33 of 788 faces have format 12 and no format 4 - Hiragino Kaku
+   Gothic (Hiragino Sans, every weight), STHeiti, Geneva, Big Caslon, Apple
+   Symbols, Apple Color Emoji; none on Windows (641 faces) or Linux (348). Before, their
    table was empty: all their text came from the fallback font (Hiragino
    Sans drew `Abc` and kana in Arial Unicode MS, 36 KB; now in itself,
    5.7 KB). Read from the raw bytes (`GetFontData`, all fields 32-bit, so
@@ -393,7 +399,14 @@ Preference order, in `TPdfTtf.Create`:
    character beyond the BMP is unsupported in the plain path for every
    face (ROADMAP "Supplementary-Plane Text"). Groups out of order or
    overlapping, or a glyph beyond 65535, make the cmap unreadable rather
-   than guessed. Sets `NoSimpleCmap` unless a (3,0)/(3,1) record exists.
+   than guessed. Sets `NoSimpleCmap` unless a (3,0)/(3,1) record exists;
+   leaves `Symbol` as `LoadCmap` set it, so a face with a (3,0) of another
+   format stays a symbol font. Apple Color Emoji (format 12 under `(0,4)`)
+   is read too, and still draws no emoji: its pictures are `sbix` bitmaps,
+   its `glyf` outlines empty placeholders except space, `#`, `*` and the
+   digits. Before, its WinAnsi text came out as `.notdef` boxes through the
+   simple font; now that text is drawn, and ©, ™, ☀ are empty (measured
+   with PDFKit). Color bitmaps are out of reach of a PDF font either way.
 
 Formats 4 and 12 are parsed; `HasCmap` says whether one was read.
 
