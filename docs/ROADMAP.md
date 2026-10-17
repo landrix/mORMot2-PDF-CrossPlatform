@@ -32,6 +32,11 @@ here until the post is written, then the list is emptied. It is the only such
 list: the CHANGELOG entry of the next release is written from it. Emptied for
 v0.10.0 (2026-09-30).
 
+- **New: `docs/MIGRATION.md`** for programs on the trunk's `mormot.ui.pdf`
+  and `mormot.ui.report`, which go at the 2.5 merge: which unit each name
+  is in now, the calls that change (`CreateOrGetBitmapImage`,
+  `CreateGraphicImage`), the behaviour and output that differ, and the
+  port of a `TGdiPages` report to this `TGDIPages`
 - **New, opt-in (`TGDIPages`):** `TTableLayout.FooterRowHeader` makes the
   first cell of a footer row a row header (`TH` with `/Scope /Row`), so a
   screen reader announces "Gesamtbetrag: 226,00"; `ExportPdfPageMode`

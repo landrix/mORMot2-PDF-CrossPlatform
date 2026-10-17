@@ -64,6 +64,10 @@ welches ein Name meint. Mit `mormot.pdf` zuletzt kompiliert
 `mormot.pdf.report` weiter; fehlt etwas, gehört es dorthin, nicht in die eigene
 `uses`-Klausel.
 
+**Umstieg von `mormot.ui.pdf` oder `mormot.ui.report` des Trunks?**
+[docs/MIGRATION.md](docs/MIGRATION.md) (englisch) ordnet Units und Aufrufe
+zu; der Report ist eine Portierung, keine Umbenennung.
+
 ---
 
 ## Schnellstart

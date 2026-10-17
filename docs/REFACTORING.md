@@ -806,8 +806,50 @@ step its own PR, output byte-equal):
    its tests and demos, the fork or XRechnung for Delphi; shipped in v0.10.0
    (as `src/core/mormot.pdf.fpimage.pas`), so "To Announce" says what
    replaces it: FPImage in the program, `TPdfImagePixels` for the pixels
-4. **The review recorded here**: what stays and why, `reference/`, the
-   migration note for users of the trunk's `mormot.ui.pdf`/`mormot.ui.report`
+4. **The review recorded here** - done: what stays and why (below);
+   `reference/` deleted - its `mormot.ui.pdf.pas` was the trunk's at
+   63d06371a (2026-03-08) with two local edits (`MilliSecsPerDay`, a
+   commented-out `EMR_ALPHABLEND` branch) and trailing blanks, its
+   `mormot.ui.report.pas` the trunk's from a931cdbdc until 7f330f690
+   changed it; the skills and ROADMAP cite the trunk commit instead; the
+   migration note for users of the trunk's units is `docs/MIGRATION.md`
+
+**What stays, and why** (the inventory of Codex and Fable, 2026-10-17):
+
+- **The unit split:** `mormot.pdf` (no VCL/LCL), `mormot.pdf.canvas` (the
+  `TCanvas` bridge, bitmaps, EMF), `mormot.pdf.report` (no `Forms`, no
+  `Printers`) and `mormot.pdf.report.preview` (both) - each cut is a GUI
+  dependency, the gist's boundary (§12, §23). EMF stays in
+  `mormot.pdf.canvas`; the EMF state the engine still holds (`fEmfDC`, the
+  mapping and world transform, `EmfDC`) and the core/font split of
+  `mormot.pdf` are reconsidered together after the merge, once that
+  coupling is gone - code changes, not a cleanup
+- **The switches:** `mormot.pdf.defines.inc` (constructor signatures,
+  security, Uniscribe, GDI+, metafiles); `PDF_CANVASVIRTUAL` (`override`
+  against `reintroduce`, a compiler fact) and `PDF_HASVCLCANVAS` (the
+  tests: is there a VCL/LCL). None is a migration flag. The include's
+  redundant POSIX `undef` block goes with the relative include at the move
+- **Names that are real classes, not aliases:** `TPdfDocumentGdi` (the EMF
+  path, with tests), `TGDIPages`
+- **Caller contracts, cheap to keep:** `UseUniscribe` (the one shaping
+  switch, HarfBuzz too), `GeneratePdf15File` (wraps `FileFormat`),
+  `PdfAMetadaExtension` (the trunk's spelling), the `TLogFontW` constructor
+  that keeps `lfWidth` and the other native fields (dropping them changes
+  behaviour), `FindOrAddUsedWideChar` (until R-32 step 2)
+- **The re-exports of `mormot.pdf.report`:** PDF/A levels,
+  `TPdfFileFormat`, `afr*`, page modes, `PdfMetadataFacturX` - one unit
+  per layer (CLAUDE.md)
+- **The report's older API:** the positioned overloads, the table API
+  beside `TTableLayout`, `REPORT_FONT_*`/`GetReportFonts`, `DrawTextAt` -
+  callers use them; "older" alone is no reason
+- **`mormot.lib.*`:** the agreed final names; the Windows-shaped `tm*`,
+  `otm*` and `abc*` fields of its records stay - renaming them costs every
+  backend and gains nothing now
+- **Left for the formatting PRs** (source, no output): a stale
+  `UseSetTextJustification` in a comment of `mormot.pdf.canvas` (in the
+  trunk's original too), the unused POSIX `LOGPIXELSY` of `mormot.pdf`,
+  and `IFontProvider.GetFaceFile` in a comment of `mormot.lib.core`, which
+  is `IFontFace` now
 
 **At the move, not now:** `x:xmptk="mormot.ui.pdf"` becomes `mormot.pdf`
 (the only change of output, one new baseline on every machine), the
