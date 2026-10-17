@@ -10,7 +10,8 @@ at the 2.5 merge (docs/REFACTORING.md, Phase 4); there is no compatibility unit.
   same name, and most of the trunk's methods have no counterpart.
 
 The trunk state compared is that of the `pdf-font-layer` branch of
-`landrix/mORMot2`, the trunk plus the `mormot.lib.*` units this engine needs.
+`landrix/mORMot2`: the trunk plus the `mormot.lib.*` units this engine
+needs, which are not in the trunk yet.
 
 ## The Units
 
@@ -25,6 +26,13 @@ A report program uses `mormot.pdf.report` alone: it re-exports the PDF/A
 levels, `TPdfFileFormat`, `afr*`, the page modes and `PdfMetadataFacturX`.
 Do not put `mormot.pdf` beside it: both declare `psA4`, and `TRect` differs
 from the LCL's, so the `uses` order would decide which one a name means.
+
+**mORMot2 sources:** until the merge, the `pdf-font-layer` branch of
+`landrix/mORMot2`, not the trunk: `mormot.pdf` uses `mormot.lib.core`,
+`mormot.lib.freetype` and `mormot.lib.harfbuzz`, which only that branch
+has in `src/lib`, and the font services that branch adds to the trunk's
+`mormot.lib.uniscribe`. With a trunk checkout the build stops at the first
+of them it needs.
 
 **Search path:** this repository's `src/pdf`, and on Windows mORMot2's
 `src/ui` for `mormot.ui.core` and `mormot.ui.gdiplus` (any project with
@@ -63,7 +71,8 @@ parameter, so existing calls compile: `CreateFileAttachment`
 A class derived from `TPdfDocument` or `TPdfFontTrueType` loses the
 protected font DC (`GetDCWithFont`): fonts are `TFontRequest`,
 `TFontMetrics`, `TFontOutlineMetrics` and an `IFontFace` of `mormot.lib.core`.
-`TPdfWrite.B`/`BEnd`/`BEnd4` are `fB`/`fBEnd`/`fBEnd4`.
+`TPdfWrite.B`/`BEnd`/`BEnd4` are `fB`/`fBEnd`/`fBEnd4`, and its protected
+`AddUnicodeHexTextUniScribe` is gone.
 
 ### Behaviour That Changes
 
@@ -145,7 +154,7 @@ millimetres.
 | `ExportPdfEmbeddedTTF` (default false) | the same, default true |
 | - (the trunk never replaced fonts) | `ExportPdfStandardFonts`, default **true**: Arial, Times New Roman and Courier New become the unembedded Helvetica, Times and Courier, with their metrics and WinAnsi only. Set it to false before the first `NewPage` to keep the TrueType faces (`ExportPdfTagged` does that itself) |
 | `ExportPdfGeneratePdf15File` (false: PDF 1.4) | `ExportPdfFileFormat`, default `pdf13`: `pdf14` or `pdf15` for the trunk's output |
-| `ExportPdfApplication` | `ExportPdfCreator` |
+| `ExportPdfApplication` (`/Creator`, the application title when empty) | `ExportPdfCreator` (the executable's name when empty) |
 | `ShowPreviewForm(Buttons)` | `ShowReportPreview(Report)`: modal, navigation and zoom, LCL only |
 | `PrintPages(From, To)` - 1-based, (0, 0) all, negative a dialog | `PrintReport(Report, From, To)` - 0-based, all by default, the current printer settings, no dialog |
 | `Pages`, `PageCount` | `Pages[Index]` holds commands, not metafiles; `PageCount`; `CurrentPageIndex` is 1-based |
@@ -170,6 +179,10 @@ captions, `Columns2`.
   currency columns
 - bookmarks and links: headings make outlines; `DrawLink` draws the text as a
   link but writes no link annotation (ROADMAP R-29)
+- `TextWidth`: the report has no public text measuring
+- the report unit's printer functions `CurrentPrinterName`,
+  `CurrentPrinterPaperSize` (a string, not the `TPdfPaperSize` one of
+  `mormot.pdf.canvas`), `UseDefaultPrinter`, `SetCurrentPrinterAsDefault`
 - `BiDiMode` and the export's shaping and fallback options
 - background image, keywords, encryption
 - the preview's buttons, menus, clipboard and the page and zoom events
