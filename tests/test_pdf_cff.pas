@@ -58,6 +58,9 @@ type
     /// the format 12 reader on cmap tables built in code: the subtable
     // selection, the clipping at U+FFFF and the rejections
     procedure Format12CmapTables;
+    /// the widths of the glyphs past the last (advance, bearing) pair of
+    // hmtx: the advance of that pair (OpenType hmtx), in /W and TextWidth
+    procedure ShortHmtxWidths;
   end;
 
 /// a bare 'CFF ' table of Glyphs glyphs
@@ -1667,6 +1670,66 @@ begin
   Rejected([$41, $41, 1], 'its length past the table', 1000);
   Rejected([$41, $41, 1], 'its length below its header', 12);
   Rejected([$1f600, $1f600, 1], 'no group in the BMP');
+end;
+
+// Test Format12 with hmtx cut after glyph 66: glyph 67 ('b') is the first
+// past the last pair, 68 ('c') the next - both have the advance of 66
+procedure TPdfCffTests.ShortHmtxWidths;
+const
+  TAGS: array[0..9] of RawUtf8 = (
+    'cmap', 'head', 'hhea', 'hmtx', 'maxp', 'loca', 'glyf', 'post', 'OS/2',
+    'name');
+  PAIRS = 67;
+var
+  font, table, hmtx: RawByteString;
+  off, len: cardinal;
+  fake: TFakeFace;
+  face: IFontFace;
+  i, glyphs: PtrInt;
+  s, w: RawUtf8;
+  last: integer;
+begin
+  font := StringFromFile(TestFontFile('mORMotTestFormat12-Regular.ttf'));
+  if not Check(font <> '', 'the test font') or
+     not Check(SfntFindTable(font, 'hmtx', off, len), 'hmtx') then
+    exit;
+  hmtx := copy(font, off + 1, len);
+  glyphs := len div 4; // the font has one pair per glyph
+  last := ord(hmtx[(PAIRS - 1) * 4 + 1]) shl 8 + ord(hmtx[(PAIRS - 1) * 4 + 2]);
+  CheckEqual(last, 561, 'the advance of glyph 66');
+  // the pairs up to 66, then the bearings of the others
+  table := copy(hmtx, 1, PAIRS * 4);
+  for i := PAIRS to glyphs - 1 do
+    table := table + copy(hmtx, i * 4 + 3, 2);
+  hmtx := table;
+  fake := TFakeFace.Create;
+  face := fake; // the reference owns it
+  for i := 0 to high(TAGS) do
+    if Check(SfntFindTable(font, TAGS[i], off, len), Utf8ToString(TAGS[i])) then
+    begin
+      table := copy(font, off + 1, len);
+      if TAGS[i] = 'hhea' then
+        table := copy(table, 1, 34) + Card16(PAIRS)
+      else if TAGS[i] = 'hmtx' then
+        table := hmtx;
+      fake.AddTable(TAGS[i], table);
+    end;
+  fake.Seal(#0#1#0#0);
+  RoutedText := 'bc';
+  RoutedNextLine := false;
+  RoutedWordSpace := 0;
+  RoutedWidth := 0;
+  FakeEmbedded := true;
+  try
+    s := FakeFacePdf(face, '', nil, DrawRouted);
+  finally
+    FakeEmbedded := false;
+  end;
+  i := PosEx('/W [', s);
+  w := copy(s, i, PosEx(']]', s, i) + 2 - i);
+  Check(PosEx('67[561 561]', w) > 0,
+    'b and c with the advance of 66 in /W: ' + Utf8ToString(w));
+  CheckSame(RoutedWidth, 2 * 561 * 12 / 1000, 1E-4, 'TextWidth with that advance');
 end;
 
 procedure TPdfCffTests.Type0Routing;

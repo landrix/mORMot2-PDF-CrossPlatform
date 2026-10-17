@@ -371,6 +371,13 @@ selected):
      was only correct for power-of-2 UPM (1024, 2048, …). For UPM=1000 fonts (e.g. Noto Naskh
      Arabic): divisor was 512 instead of 1000 → every `/W` width 1.953× too large → characters
      spaced too far apart. Fixed to `(int64(hmtx_advance) * 1000) div UnitsPerEm`.
+   - A glyph at or past `numOfLongHorMetrics` has the advance of the last
+     pair, as in `GlyphHmtxWidth` (2026-10-17). Before, the glyph equal to it
+     read the bearing after the last pair and the ones past it the advance of
+     `.notdef` (Times New Roman: 1593 instead of 1024). 194 of 641 Windows
+     faces have such a tail (Times, Tahoma, SimSun, Yu Gothic, Source Code
+     Pro), three test fonts too; no golden file or demo draws one of those
+     glyphs. `ShortHmtxWidths` cuts Test Format12's `hmtx` after glyph 66.
 
 ### Subtable selection (cmap)
 

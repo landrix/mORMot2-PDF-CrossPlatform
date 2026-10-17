@@ -6710,13 +6710,21 @@ begin
     begin
       numOfLongHorMetrics := fhhea[17];
       for i := 0 to aUnicodeTtf.fUsedWideChar.Count - 1 do
-        if aUnicodeTtf.fUsedWide[i].Glyph <> 0 then
-          if aUnicodeTtf.fUsedWide[i].Glyph <= numOfLongHorMetrics then
-            aUnicodeTtf.fUsedWide[i].Width :=
-              (int64(fhmtx[aUnicodeTtf.fUsedWide[i].Glyph * 2]) * 1000) div
-              head^.UnitsPerEm
-          else
-            aUnicodeTtf.fUsedWide[i].Width := W;
+      begin
+        glyph := aUnicodeTtf.fUsedWide[i].Glyph;
+        if glyph = 0 then
+          continue;
+        // past the last (advance, bearing) pair: the advance of that pair,
+        // as GlyphHmtxWidth - not the bearing after it, nor that of .notdef
+        if glyph >= numOfLongHorMetrics then
+          glyph := integer(numOfLongHorMetrics) - 1;
+        if (glyph >= 0) and
+           (glyph * 2 < length(fhmtx)) then
+          aUnicodeTtf.fUsedWide[i].Width :=
+            (int64(fhmtx[glyph * 2]) * 1000) div head^.UnitsPerEm
+        else
+          aUnicodeTtf.fUsedWide[i].Width := W;
+      end;
     end;
   end;
 end;
