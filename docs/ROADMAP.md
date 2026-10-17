@@ -1104,6 +1104,8 @@ decided with Sven, Codex and Fable - REFACTORING "Outside the Phases"):
 which indexes its hex table unmasked with a value above $FFFF; FontSub
 (`mormot.lib.uniscribe`) skips supplementary code points in the request,
 keeping their glyphs only by the glyph keep list; hb-subset takes them.
+`FindOrAddUsedCodePoint` is protected until then (Martin on #65); step 2
+may make it public again.
 PDFBox and iText read format 12 and encode by code point the same way.
 
 ### R-11 — TTC Face Index — unprioritised
