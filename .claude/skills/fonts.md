@@ -374,10 +374,17 @@ selected):
    - A glyph at or past `numOfLongHorMetrics` has the advance of the last
      pair, as in `GlyphHmtxWidth` (2026-10-17). Before, the glyph equal to it
      read the bearing after the last pair and the ones past it the advance of
-     `.notdef` (Times New Roman: 1593 instead of 1024). 194 of 641 Windows
-     faces have such a tail (Times, Tahoma, SimSun, Yu Gothic, Source Code
-     Pro), three test fonts too; no golden file or demo draws one of those
-     glyphs. `ShortHmtxWidths` cuts Test Format12's `hmtx` after glyph 66.
+     `.notdef`. 194 of 641 Windows faces have such a tail (Times, Tahoma,
+     SimSun, Yu Gothic, Source Code Pro). A width changes only for a tail
+     glyph the cmap maps: always for the first one (it read a bearing, as a
+     word: Test Arabic's ZWNJ U+200C, glyph 687, was 65518 and is 0; Test CJK
+     Glyf's U+3001, glyph 4203, was 23 and is 1000), for the others where the
+     last advance differs from `.notdef`'s. Times and Tahoma: their one tail
+     glyph is not in the cmap. No golden case draws such a glyph. `ShortHmtxWidths`
+     cuts Test Format12's `hmtx` after glyph 66. `glyph * 2 < length(fhmtx)`
+     admits the zero word `GetTtfData` adds past the table, as in
+     `GlyphHmtxWidth`: a face whose `hmtx` is shorter than `hhea` says gets
+     width 0 there - left for a fix of both.
 
 ### Subtable selection (cmap)
 
