@@ -95,6 +95,9 @@ type
     procedure TestFaceNotFoundRaises;
     procedure TestTaggedAlwaysEmbeds;
     procedure TestGlyphAdvanceByIndex;
+    /// the used characters are keyed by code point: one beyond the BMP is
+    // not cut to 16 bits (R-32 step 1)
+    procedure TestCodePointKeys;
     {$ifdef OSWINDOWS}
     procedure TestLogFontWidth;
     {$endif OSWINDOWS}
@@ -1318,6 +1321,33 @@ end;
 type
   // reaches the glyph bookkeeping of a font
   TPdfFontTrueTypeAccess = class(TPdfFontTrueType);
+
+procedure TPdfSubsetEngineTests.TestCodePointKeys;
+var
+  PDF: TPdfDocument;
+  fnt: TPdfFontTrueTypeAccess;
+  i: integer;
+begin
+  PDF := TPdfDocument.Create;
+  try
+    PDF.EmbeddedTTF := true;
+    PDF.AddPage;
+    fnt := TPdfFontTrueTypeAccess(PDF.Canvas.SetFont(TEST_SANS, 12, [],
+      PDF_DEFAULT_CHARSET));
+    if not Check(fnt.InheritsFrom(TPdfFontTrueType), 'a TrueType font') then
+      exit;
+    fnt := TPdfFontTrueTypeAccess(fnt.WinAnsiFont);
+    CheckEqual(fnt.FindOrAddUsedWideChar('A'), fnt.FindOrAddUsedCodePoint(65),
+      'the WideChar method is the code point one');
+    Check(fnt.fUsedWide[fnt.fUsedWideChar.IndexOf(65)].Glyph <> 0, 'A has its glyph');
+    i := fnt.FindOrAddUsedCodePoint($1f600);
+    CheckEqual(fnt.fUsedWideChar.IndexOf($1f600), i, 'U+1F600 under its own key');
+    CheckEqual(fnt.fUsedWideChar.IndexOf($f600), -1, 'not cut to U+F600');
+    CheckEqual(fnt.fUsedWide[i].Glyph, 0, 'no glyph: the cmap is read for the BMP');
+  finally
+    PDF.Free;
+  end;
+end;
 
 {$ifdef OSWINDOWS}
 

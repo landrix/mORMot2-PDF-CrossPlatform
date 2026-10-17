@@ -328,7 +328,7 @@ Arabic output (R-19, 2026-09-26):
 
 | Field | Type | Instance | Purpose |
 |---|---|---|---|
-| `fUsedWideChar` | `TSortedWordArray` | WinAnsi | sorted Unicode code points used during rendering; drives `CreateFontPackage` and `/W` array |
+| `fUsedWideChar` | `TSortedIntegerArray` | WinAnsi | sorted Unicode code points used during rendering (32-bit since R-32 step 1); drives `CreateFontPackage` and `/W` array |
 | `fUsedWide` | `TUsedWide` (dyn. array) | WinAnsi | parallel to `fUsedWideChar`: packed `(Width: word; Glyph: word)` per code point |
 | `fWinAnsiUsed` | `TSynAnsicharSet` | WinAnsi | 256-bit set of WinAnsi chars used (U+0020–U+00FF); drives `/FirstChar`–`/LastChar /Widths` |
 | `fDefaultWidth` | `cardinal` | WinAnsi | advance width of space char; used as PDF `/DW` for unregistered glyphs |
@@ -347,7 +347,7 @@ end;
 ```
 
 **Critical invariant:** `length(fUsedWide) >= fUsedWideChar.Count` always.
-Both arrays grow together inside `FindOrAddUsedWideChar` (§8).
+Both arrays grow together inside `FindOrAddUsedCodePoint` (§8).
 The UnicodeFont's arrays are fully populated at construction (entire CMAP);
 the WinAnsi font's arrays only contain actually-used code points.
 
@@ -519,13 +519,16 @@ keeps its own for callers passing `TScriptVisAttr`s. Details per outcome:
 
 ## 8. Key Internal Functions
 
-### `FindOrAddUsedWideChar(aWideChar)` — WinAnsi font only (`pdf.pas:6189`)
+### `FindOrAddUsedCodePoint(aCode)` — WinAnsi font only
 
 Registers a Unicode code point in the WinAnsi font's tracking arrays.
-Called from the WinAnsi text rendering path for every non-Latin character.
+Called from the WinAnsi text rendering path for every non-Latin character,
+through `FindOrAddUsedWideChar(aWideChar)`, its inline wrapper for a UTF-16
+unit. The keys are code points since R-32 step 1 (2026-10-17); the text
+paths still pass one UTF-16 unit at a time (surrogates paired in step 2).
 
 ```
-fUsedWideChar.Add(ord(aWideChar))   — sorted insertion into WinAnsi tracking array
+fUsedWideChar.Add(aCode)            — sorted insertion into WinAnsi tracking array
                                        returns -(found_index+1) if already present
 if already present:
   result := -(Add_result + 1)        — decode the existing index
@@ -538,7 +541,7 @@ if new entry (result = insertion index):
   if UnicodeFont = nil:
     CreateAssociatedUnicodeFont              — lazy creation on first non-Latin char
 
-  i := UnicodeFont.fUsedWideChar.IndexOf(ord(aWideChar))
+  i := UnicodeFont.fUsedWideChar.IndexOf(aCode)
   if (i < 0) or (i >= length(UnicodeFont.fUsedWide)):
     i := 0                           — char absent from CMAP → .notdef glyph
   else:
@@ -606,7 +609,7 @@ Step 1: scan WinAnsiFont.fUsedWide[0..Count-1].Glyph == aGlyph
           → found: already registered, return aGlyph unchanged (fast path)
 
 Step 2: scan UnicodeFont.fUsedWide[0..Count-1].Glyph == aGlyph  (reverse CMAP)
-          → found: WinAnsiFont.FindOrAddUsedWideChar(UnicodeFont.fUsedWideChar.Values[i])
+          → found: WinAnsiFont.FindOrAddUsedCodePoint(UnicodeFont.fUsedWideChar.Values[i])
                    return WinAnsiFont.fUsedWide[idx].Glyph
                    (the index is one of the WinAnsi instance's fUsedWide[], not of
                     the Unicode one's CMAP array - both instances have the method)
@@ -647,7 +650,9 @@ PdfUsedCodes(WinAnsiFont)   GetUsedGlyphs: characters (fUsedWide[]) and
                             merged in key order (§8); each glyph's code
                             GlyphCode() (the CID of a CID-keyed CFF face),
                             sorted by code, one entry per code - the
-                            smallest Unicode value wins
+                            smallest code point wins (packed as GlyphCode
+                            shl 37 + code point shl 16 + width: 16 + 21 +
+                            16 bits, the order of the 16-bit packing before)
 /W array construction:
   if WinAnsiFont.fFixedWidth and not PDF/A:
     omit /W entirely (all glyphs use /DW)

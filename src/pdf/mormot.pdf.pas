@@ -2957,7 +2957,8 @@ type
     // note: fUsedWide[] and fUsedWideChar are used:
     // - in WinAnsi Fonts for glyphs used by ShowText
     // - in Unicode Fonts for all available glyphs from TPdfTtf values
-    fUsedWideChar: TSortedWordArray;
+    // - keyed by code point: 32-bit, for the planes beyond the BMP (R-32)
+    fUsedWideChar: TSortedIntegerArray;
     fUsedWide: TUsedWide;
     // glyphs used without a code point of their own (shaped glyphs out of the
     // cmap), on the WinAnsi font: sorted indexes, and their widths in parallel
@@ -3021,7 +3022,7 @@ type
     // register a glyph without a code point, see fShapedGlyph
     procedure AddShapedGlyph(aGlyph: word; aWidth: integer);
     // the glyphs used by this WinAnsi font, as /W and /ToUnicode list them
-    procedure GetUsedGlyphs(out aKeys: TWordDynArray; out aUsed: TUsedWide);
+    procedure GetUsedGlyphs(out aKeys: TIntegerDynArray; out aUsed: TUsedWide);
     // register a shaped glyph with the advance width a shaper gave it
     // - used by AddShapedRun for a run with Advances (HarfBuzz): a glyph out
     // of the cmap gets the true 'hmtx' advance instead of /DW (which would
@@ -3071,6 +3072,10 @@ type
     // - this index is the one just added, or the existing one if the value
     // was found to be already in the fUserWideChar[] array
     function FindOrAddUsedWideChar(aWideChar: WideChar): integer;
+      {$ifdef HASINLINE}inline;{$endif}
+    /// mark some Unicode code point as used
+    // - as FindOrAddUsedWideChar, for any code point
+    function FindOrAddUsedCodePoint(aCode: cardinal): integer;
     /// retrieve the width of an UTF-16 codepoint
     // - WinAnsi characters are taken from fWinAnsiWidth[], unicode chars from
     // fUsedWide[].Width
@@ -6769,21 +6774,26 @@ type
   end;
 
 function TPdfFontTrueType.FindOrAddUsedWideChar(aWideChar: WideChar): integer;
+begin
+  result := FindOrAddUsedCodePoint(ord(aWideChar));
+end;
+
+function TPdfFontTrueType.FindOrAddUsedCodePoint(aCode: cardinal): integer;
 var
   n, i, range, ansi: integer;
 begin
   if fUnicode then // we need fUsedWide[] to be the used glyphs
   begin
-    result := WinAnsiFont.FindOrAddUsedWideChar(aWideChar);
+    result := WinAnsiFont.FindOrAddUsedCodePoint(aCode);
     exit;
   end;
-  result := fUsedWideChar.Add(ord(aWideChar));
+  result := fUsedWideChar.Add(aCode);
   if result < 0 then
   begin
-    result := -(result + 1); // this WideChar was already existing -> return index
+    result := -(result + 1); // this code point was already existing -> return index
     exit;
   end;
-  // this WideChar was just added -> reserve space in fUsedWide[]
+  // this code point was just added -> reserve space in fUsedWide[]
   if length(fUsedWide) = fUsedWideChar.Count - 1 then
     SetLength(fUsedWide, fUsedWideChar.Count + 100);
   n := fUsedWideChar.Count - 1;
@@ -6793,14 +6803,14 @@ begin
   if UnicodeFont = nil then
     CreateAssociatedUnicodeFont;
   // update fUsedWide[result] for current glyph
-  i := UnicodeFont.fUsedWideChar.IndexOf(ord(aWideChar));
+  i := UnicodeFont.fUsedWideChar.IndexOf(aCode);
   if (i < 0) and
      UnicodeFont.fIsSymbolFont then
   begin
     // the WinAnsi byte, as the simple path writes it, in each range ISO
     // 32000-1 9.6.6.4 names for a (3,0) cmap; a character with no such byte
     // keeps glyph 0, so the fallback font draws it
-    ansi := WideCharToWinAnsi(ord(aWideChar));
+    ansi := WideCharToWinAnsi(aCode);
     range := $f000;
     while (i < 0) and
           (ansi >= 0) and
@@ -6837,10 +6847,10 @@ begin
   for i := 0 to uni.fUsedWideChar.Count - 1 do
     if uni.fUsedWide[i].Glyph = aGlyph then
     begin
-      // split to avoid evaluation-order AV: FindOrAddUsedWideChar may call
+      // split to avoid evaluation-order AV: FindOrAddUsedCodePoint may call
       // SetLength(fUsedWide,...) which moves the array; pre-loading the base
       // pointer before the call would leave a stale reference (see Fix C).
-      idx := uni.WinAnsiFont.FindOrAddUsedWideChar(WideChar(uni.fUsedWideChar.Values[i]));
+      idx := uni.WinAnsiFont.FindOrAddUsedCodePoint(uni.fUsedWideChar.Values[i]);
       result := uni.WinAnsiFont.fUsedWide[idx].Glyph;
       exit; // result may be 0 if this glyph doesn't exist in the CMAP content
     end;
@@ -6993,7 +7003,7 @@ begin
     for i := 0 to uni.fUsedWideChar.Count - 1 do
       if uni.fUsedWide[i].Glyph = aGlyph then
       begin
-        idx := uni.WinAnsiFont.FindOrAddUsedWideChar(WideChar(uni.fUsedWideChar.Values[i]));
+        idx := uni.WinAnsiFont.FindOrAddUsedCodePoint(uni.fUsedWideChar.Values[i]);
         exit; // width from CMAP hmtx data
       end;
   // Step 3: GSUB-only glyph not in CMAP - register it by its index.
@@ -7183,12 +7193,12 @@ begin
   wa.fShapedWidth[i] := aWidth;
 end;
 
-procedure TPdfFontTrueType.GetUsedGlyphs(out aKeys: TWordDynArray;
+procedure TPdfFontTrueType.GetUsedGlyphs(out aKeys: TIntegerDynArray;
   out aUsed: TUsedWide);
 var
   order: TIntegerDynArray;
   i, j, k, n, s: PtrInt;
-  key: word;
+  key: integer;
 begin
   // a glyph without a code point is listed under $E000 + its index mod 4096,
   // the /ToUnicode value of before: sort them by that key, then by index, and
@@ -7812,11 +7822,11 @@ begin
     'can be read%', [fDoc.fTrueTypeFonts[fTrueTypeFontsIndex - 1], style, hint]);
 end;
 
-// the used glyphs of a Type0 font as GlyphCode() shl 32 + Unicode shl 16 +
-// width, sorted, one entry per code - the smallest Unicode value wins
+// the used glyphs of a Type0 font as GlyphCode() shl 37 + code point shl 16
+// + width, sorted, one entry per code - the smallest code point wins
 function PdfUsedCodes(WinAnsi: TPdfFontTrueType): TInt64DynArray;
 var
-  keys: TWordDynArray;
+  keys: TIntegerDynArray;
   used: TUsedWide;
   i, n: PtrInt;
 begin
@@ -7826,7 +7836,7 @@ begin
   for i := 0 to high(keys) do
     if used[i].Used <> 0 then
     begin
-      result[n] := Int64(WinAnsi.GlyphCode(used[i].Glyph)) shl 32 +
+      result[n] := Int64(WinAnsi.GlyphCode(used[i].Glyph)) shl 37 +
                    Int64(keys[i]) shl 16 + used[i].Width;
       inc(n);
     end;
@@ -7836,7 +7846,7 @@ begin
   n := 0;
   for i := 0 to high(result) do
     if (n = 0) or
-       (result[i] shr 32 <> result[n - 1] shr 32) then
+       (result[i] shr 37 <> result[n - 1] shr 37) then
     begin
       result[n] := result[i];
       inc(n);
@@ -7915,9 +7925,9 @@ begin
         // one c [w1 w2 ...] per run of consecutive codes
         for i := 0 to n - 1 do
         begin
-          code := cardinal(codes[i] shr 32);
+          code := cardinal(codes[i] shr 37);
           if (i = 0) or
-             (code <> cardinal(codes[i - 1] shr 32) + 1) then
+             (code <> cardinal(codes[i - 1] shr 37) + 1) then
           begin
             if i > 0 then
               WR.Add(']');
@@ -7955,8 +7965,8 @@ begin
           L := n;
         tounicode.Writer.Add(L).Add(' beginbfchar'#10);
         for i := ndx to ndx + L - 1 do
-          tounicode.Writer.Add('<').AddHex4(cardinal(codes[i] shr 32)).
-            Add('> <').AddHex4(cardinal(codes[i] shr 16) and $ffff).
+          tounicode.Writer.Add('<').AddHex4(cardinal(codes[i] shr 37)).
+            Add('> <').AddHex4(cardinal(codes[i] shr 16) and $1fffff).
             Add('>'#10);
         dec(n, L);
         inc(ndx, L);
