@@ -295,6 +295,12 @@ v0.10.0 (2026-09-30).
 - **Fixed: fallback text in a form XObject** (`TPdfFormWithCanvas`)
   drawn before the first `AddPage` raised an access violation: the fallback
   font was chosen through the document's canvas, which has no page yet
+- **Fixed: the width of a glyph past the last advance of `hmtx`** in `/W`
+  and in `TextWidth`: the first such glyph had a bearing as its width, the
+  others the width of `.notdef`, where OpenType gives the last advance.
+  It shows only for such a glyph the cmap maps: the first one in many faces
+  with a short `hmtx`, the others where the last advance differs from that
+  of `.notdef`
 - **Fixed: faces whose only cmap is format 12** were read as having no
   characters, so all their text came from the fallback font: on macOS
   Hiragino Sans (Hiragino Kaku Gothic, every weight), STHeiti, Geneva, Big

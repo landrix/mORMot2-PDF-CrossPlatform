@@ -371,6 +371,20 @@ selected):
      was only correct for power-of-2 UPM (1024, 2048, …). For UPM=1000 fonts (e.g. Noto Naskh
      Arabic): divisor was 512 instead of 1000 → every `/W` width 1.953× too large → characters
      spaced too far apart. Fixed to `(int64(hmtx_advance) * 1000) div UnitsPerEm`.
+   - A glyph at or past `numOfLongHorMetrics` has the advance of the last
+     pair, as in `GlyphHmtxWidth` (2026-10-17). Before, the glyph equal to it
+     read the bearing after the last pair and the ones past it the advance of
+     `.notdef`. 194 of 641 Windows faces have such a tail (Times, Tahoma,
+     SimSun, Yu Gothic, Source Code Pro). A width changes only for a tail
+     glyph the cmap maps: always for the first one (it read a bearing, as a
+     word: Test Arabic's ZWNJ U+200C, glyph 687, was 65518 and is 0; Test CJK
+     Glyf's U+3001, glyph 4203, was 23 and is 1000), for the others where the
+     last advance differs from `.notdef`'s. Times and Tahoma: their one tail
+     glyph is not in the cmap. No golden case draws such a glyph. `ShortHmtxWidths`
+     cuts Test Format12's `hmtx` after glyph 66. `glyph * 2 < length(fhmtx)`
+     admits the zero word `GetTtfData` adds past the table, as in
+     `GlyphHmtxWidth`: a face whose `hmtx` is shorter than `hhea` says gets
+     width 0 there - left for a fix of both.
 
 ### Subtable selection (cmap)
 
