@@ -486,7 +486,8 @@ cairo):
   and first needs that coupling removed (gist §7, §23: not for naming
   symmetry). fpPDF keeps writer, objects and fonts in one unit; PDFium and
   LuaTeX tie their fonts to the document as well. The split is reconsidered
-  once the coupling is gone (Phase 5 at the latest)
+  once the coupling is gone - after the merge, as Phase 5 decided ("What
+  stays, and why")
 - **Images:** `mormot.pdf` takes raw pixels and encoded JPEG, as libHaru,
   PoDoFo and PDFium take buffers. The contract: width, height, format (RGB24,
   Indexed8 with its palette), row stride and order, buffer length, an
@@ -678,7 +679,7 @@ Codex and Fable; Fable's probes built with Delphi 7 and FPC/LCL):
   output through the adapters, the golden files (96) and the demos unchanged
 - **Moved as it is:** the bridge's measuring DC (the fallback for a face no
   backend resolves, Delphi's `PenPos`) and `PDF_CANVASVIRTUAL` are
-  behaviour; changing them is a Phase 5 item
+  behaviour; Phase 5 kept both ("What stays, and why")
 - **Formatting:** the bridge to the trunk's style in place before it moves
   (column alignment only, `git diff -w` empty); `mormot.pdf` and
   `mormot.pdf.canvas` in one formatting PR before the 2.5 merge, with
@@ -826,8 +827,10 @@ step its own PR, output byte-equal):
   coupling is gone - code changes, not a cleanup
 - **The switches:** `mormot.pdf.defines.inc` (constructor signatures,
   security, Uniscribe, GDI+, metafiles); `PDF_CANVASVIRTUAL` (`override`
-  against `reintroduce`, a compiler fact) and `PDF_HASVCLCANVAS` (the
-  tests: is there a VCL/LCL). None is a migration flag. The include's
+  switches, a compiler fact) and `PDF_HASVCLCANVAS` (the
+  tests: is there a VCL/LCL). None is a migration flag. The bridge's
+  measuring DC stays too: the fallback for a face no backend resolves,
+  and Delphi's `PenPos` The include's
   redundant POSIX `undef` block goes with the relative include at the move
 - **Names that are real classes, not aliases:** `TPdfDocumentGdi` (the EMF
   path, with tests), `TGDIPages`
@@ -896,7 +899,9 @@ Process, agreed in the forum:
     These PRs also bring the existing code to the source form of
     `CLAUDE.md` (binding since 2026-10-14), measured that day: banners
     missing in `mormot.pdf.fpimage`, `.report`, `.report.preview`,
-    `.types` (`.fpimage` and `.types` gone in Phase 5), and written `{****` without the space in `mormot.pdf` (8) and
+    `.types` (`.fpimage` and `.types` gone in Phase 5), and written
+    `{****` without
+    the space in `mormot.pdf` (8) and
     `mormot.pdf.canvas` (4); `///` missing on 2 of 16 unit-level routines
     of `mormot.pdf`; `raise Exception.Create` 10 times in
     `mormot.pdf.report`, once in `mormot.pdf` (the PDF/A font fallback,
@@ -980,7 +985,8 @@ Process, agreed in the forum:
     (`LoadFreeType` is POSIX-only; E2250 on its `Synchronize` and `Queue`
     calls): Delphi 13 Win64 stops on the same three errors before
     and after, none in the changed lines. The six `with` of the trunk
-    copies in `src/core` stay, as the trunk has them.
+    copies in `src/core` stayed, as the trunk has them (the copies went in
+    Phase 5).
 
     **Exceptions, done** (branch `pr/exceptions`, on `pr/no-with`): the
     report's 10 `raise Exception.Create` and 4 `ESynException` raises are

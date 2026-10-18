@@ -673,7 +673,8 @@ uses those of `mormot.lib.core` (`PdfPlatformFont` -> `FontProvider`,
 **Global use in `mormot.pdf`** (code references, comments not counted):
 `PdfPlatformFont` 29, `PdfPlatformDCProvider` 6, `PdfFontSubsetter` 4,
 `PdfTextShaper` 3, `PdfSystemFonts` 1 - 43 in all. Besides,
-`PdfPlatformRegistered` in `mormot.pdf.types` reads three of them, and the
+`PdfPlatformRegistered` in `mormot.pdf.types` (the unit is gone since R-28
+Phase 5) read three of them, and the
 backends register. A document-local copy (gist §18) touches those places.
 
 **`mormot.pdf.types` mixed two kinds:** generic font types (the three

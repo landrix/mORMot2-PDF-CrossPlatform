@@ -9,6 +9,13 @@ at the 2.5 merge (docs/REFACTORING.md, Phase 4); there is no compatibility unit.
 - **`mormot.ui.report`:** a port. This `TGDIPages` is another class with the
   same name, and most of the trunk's methods have no counterpart.
 
+**Coming from v0.10.0 of this project**, not from the trunk? Its units had
+the same names (`mormot.ui.pdf`, `mormot.ui.pdfcanvas`, `mormot.ui.report`,
+`mormot.ui.reportpreview`), and the classes are the same: the `uses`
+change, and the few calls listed in docs/ROADMAP.md, "To Announce" - the
+image calls among them (`CreateOrGetBitmapImage`, `CreateGraphicImage`).
+This guide is not for you.
+
 The trunk state compared is that of the `pdf-font-layer` branch of
 `landrix/mORMot2`: the trunk plus the `mormot.lib.*` units this engine
 needs, which are not in the trunk yet.
@@ -18,14 +25,14 @@ needs, which are not in the trunk yet.
 | Trunk | Now | For |
 |---|---|---|
 | `mormot.ui.pdf` | `mormot.pdf` | `TPdfDocument`, `TPdfCanvas`, fonts, images from pixels or JPEG; no VCL/LCL, every platform |
-| `mormot.ui.pdf` | `mormot.pdf.canvas` | `TPdfDocumentVcl` (the TCanvas bridge), `TBitmap`/`TGraphic` images; on Windows `TPdfDocumentGdi`, `TPdfPageGdi`, `TPdfForm`, `RenderMetaFile`, the `GdiComment*` functions, `CurrentPrinterPaperSize`, `CurrentPrinterRes` |
+| `mormot.ui.pdf` | `mormot.pdf.canvas` | `TBitmap`/`TGraphic` images; on Windows `TPdfDocumentGdi` (its `VclCanvas` draws through a metafile, as in the trunk), `TPdfPageGdi`, `TPdfForm`, `RenderMetaFile`, the `GdiComment*` functions, `CurrentPrinterPaperSize`, `CurrentPrinterRes` |
+| - | `mormot.pdf.canvas` | new: `TPdfDocumentVcl` and `TPdfVclCanvas`, a `TCanvas` that draws straight into the PDF, on every platform |
 | `mormot.ui.report` | `mormot.pdf.report` | `TGDIPages`: recording and PDF export, no `Forms`, no `Printers` |
 | `mormot.ui.report` | `mormot.pdf.report.preview` | `ShowReportPreview`, `PrintReport` (LCL only) |
 
 A report program uses `mormot.pdf.report` alone: it re-exports the PDF/A
 levels, `TPdfFileFormat`, `afr*`, the page modes and `PdfMetadataFacturX`.
-Do not put `mormot.pdf` beside it: both declare `psA4`, and `TRect` differs
-from the LCL's, so the `uses` order would decide which one a name means.
+Why not `mormot.pdf` beside it: the README, "Which unit to use".
 
 **mORMot2 sources:** until the merge, the `pdf-font-layer` branch of
 `landrix/mORMot2`, not the trunk: `mormot.pdf` uses `mormot.lib.core`,
@@ -45,7 +52,8 @@ comes with the merge.
 | | Trunk | Now |
 |---|---|---|
 | `mormot.ui.pdf` / `mormot.pdf` | Windows, VCL or LCL | Windows, Linux, macOS; FPC, Delphi 7 and later |
-| TCanvas bridge, bitmaps | Windows | FPC with the LCL everywhere; Delphi on Windows |
+| `TCanvas` drawing | `TPdfDocumentGdi.VclCanvas`, a metafile, Windows | the same, and `TPdfDocumentVcl`: FPC with the LCL everywhere, Delphi on Windows |
+| bitmaps | Windows | FPC with the LCL everywhere; Delphi on Windows |
 | report | Delphi on Windows (an empty unit on FPC) | FPC/LCL everywhere, Delphi on Windows |
 | report preview | Delphi on Windows | LCL only - none for Delphi yet (ROADMAP R-20) |
 
@@ -113,11 +121,12 @@ before. The font objects can still differ, embedded or not:
   or another PDF/A level
 - **Faces with a format 12 cmap only** draw their BMP characters; characters
   above U+FFFF stay unsupported
-- **`x:xmptk="mormot.ui.pdf"`** in the XMP stays until the units move into
-  the trunk
 
-The full list, with the reason for each: CHANGELOG.md and docs/ROADMAP.md,
-"To Announce".
+The XMP of both writes `x:xmptk="mormot.ui.pdf"` today; it becomes
+`mormot.pdf` when the units move into the trunk.
+
+The history of each change: CHANGELOG.md and docs/ROADMAP.md, "To
+Announce".
 
 ## `mormot.ui.report` → `mormot.pdf.report`
 
@@ -136,6 +145,7 @@ millimetres.
 | `TGdiPages.Create(Owner)` on a form, `Parent`, `Align` | `TGDIPages.Create(Owner)`, no control; the preview is `ShowReportPreview` |
 | `BeginDoc` ... `EndDoc` | set the options, `NewPage`, draw, `EndDoc`; a new report is a new instance |
 | `NewPage(ForceEndGroup)` | `NewPage`, `ForceNewPage` |
+| `NewPageLayout(...)` - size and orientation for the next page, a free size in mm | set `PaperSize` and `Orientation` before the next `NewPage`; no free size |
 | `NewPageIfAnyContent` | no counterpart: both methods always add a page, so keep track of whether the page has content |
 | `PageMargins` (10 mm at `BeginDoc`) | `MarginLeft`, `MarginRight`, `MarginTop`, `MarginBottom` in 1/100 mm, default 2000 (20 mm) |
 | `CurrentYPos` | `CurrentY`, read-only; `CurrentX` |
@@ -149,7 +159,8 @@ millimetres.
 | `AddColumns(Percent)`, `AddColumnHeaders`, `DrawTextAcrossCols` | a `TTableLayout` with widths in 1/100 mm and `tcaLeft`/`tcaCenter`/`tcaRight`; `BeginTable`, `DrawTableHeader`, `DrawTableRow`, `DrawTableFooter`, `EndTable` - the header repeats on a new page. A cell is one line, neither wrapped nor clipped (no `WordWrapLeftCols`): a long text runs into the next column |
 | header and footer lists | `SetHeader(S)`, `SetFooter(S)`, one text each, `{#}` and `{total}` for the page numbers |
 | `PaperSize: TSize`, `Orientation: TPrinterOrientation` | `PaperSize: TGdiPagePaperSize` (A4, A5, A3, Letter, Legal), `Orientation: TReportOrientation`, before `NewPage`; no custom size |
-| `ExportPdf(FileName, ShowError, Launch): boolean` | `ExportPDF(FileName, false, false, Title, Company)`, a procedure that raises; `Protect` or `Encrypt` true raises `EPdfReport` |
+| `Caption` (the PDF `/Title`, the print job's name) | `Title`, or the title passed to `ExportPDF` |
+| `ExportPdf(FileName, ShowError, Launch): boolean` | `ExportPDF(FileName, Protect, Encrypt, Title, Company)`, a procedure that raises: the two booleans are not the trunk's - nothing is shown or launched - but `Protect` and `Encrypt`, not implemented yet, so pass false (true raises `EPdfReport`) |
 | `ExportPdfStream(Stream, RaiseException)` | the same |
 | `ExportPdfEmbeddedTTF` (default false) | the same, default true |
 | - (the trunk never replaced fonts) | `ExportPdfStandardFonts`, default **true**: Arial, Times New Roman and Courier New become the unembedded Helvetica, Times and Courier, with their metrics and WinAnsi only. Set it to false before the first `NewPage` to keep the TrueType faces (`ExportPdfTagged` does that itself) |

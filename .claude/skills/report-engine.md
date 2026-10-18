@@ -62,6 +62,14 @@ finally
 end;
 ```
 
+**Defaults of `TGDIPages.Create`:** A4 portrait, margins 2000 (20 mm) on
+each side, `REPORT_FONT_SANS` at 10 pt, `LineHeightFactor` 1.1,
+`UseOutlines` false, `ExportPdfEmbeddedTTF` true, `ExportPdfStandardFonts`
+true (Arial, Times New Roman and Courier New are written as the
+unembedded Helvetica, Times and Courier unless it is set false before the
+first `NewPage`; `ExportPdfTagged` sets it false), `ExportPdfFileFormat`
+`pdf13`, `ExportPdfLevel` `pdfaNone`.
+
 ---
 
 ## Layout Methods
@@ -70,8 +78,8 @@ end;
 
 | Method/Property | Description |
 |---|---|
-| `NewPage` | Begin a new page |
-| `ForceNewPage` | Force a new page (even when space remains) |
+| `NewPage` | Begin a new page - always, there is no check for content |
+| `ForceNewPage` | `NewPage`, then Y at the top of the printable area |
 | `EndDoc` | Finalise document (must be called before export) |
 | `CurrentY` | Current Y position (read-only) |
 | `CurrentX` | Current X position (read/write) |
@@ -331,7 +339,8 @@ only the public API (`PageCount`, `Pages[]`, margins, `Title`,
 // WYSIWYG preview (GUI, modal):
 ShowReportPreview(Report);
 
-// Print on the default printer (range clipped, defaults print all pages):
+// Print on the LCL's current printer (Printers.Printer, its settings; range
+// clipped, 0-based, defaults print all pages; no dialog):
 PrintReport(Report);
 PrintReport(Report, 0, 2);
 
@@ -342,7 +351,7 @@ Report.ExportPDF(FileName, false, false, Title, Company); // raises on error
 
 // PDF export configuration:
 Report.ExportPdfEmbeddedTTF    := True;      // embed TrueType fonts
-Report.ExportPdfStandardFonts  := False;     // use Type1 instead of TTF
+Report.ExportPdfStandardFonts  := False;     // keep the TrueType faces (true: Type1 base-14)
 Report.ExportPdfLevel          := pdfa3U;    // PDF/A level, pdfaNone (default) … pdfa3U
 Report.ExportPdfFileFormat     := pdf17;     // PDF version header (default: pdf13)
 Report.ExportPdfAuthor         := 'Company';

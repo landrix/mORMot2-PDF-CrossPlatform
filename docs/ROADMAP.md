@@ -3,12 +3,12 @@
 Open work only. Finished work is in the git history, and the technical knowledge
 it produced in `.claude/skills/` — this file repeats neither.
 
-**State on 2026-09-29.** The engine is cross-platform, writes PDF 1.7, and its
+**State on 2026-10-18.** The engine is cross-platform, writes PDF 1.7, and its
 tagged output passes PAC 2024 with accepted hints only (W-1, W-2) and veraPDF
 `ua1`; PDF/A-3U with PDF/UA-1 is verified (R-17). Fonts are embedded and subset
 on all three platforms; tables carry `THead`/`TBody`/`TFoot` row groups.
-`test_runner` is green with 279 assertions on Windows (FPC, Delphi 7 and
-Delphi 2010), 337 on macOS and 318 on Linux. **Delphi:** layer
+`test_runner` is green with 1277 assertions on Windows (FPC, Delphi 7,
+Delphi 2010 and Delphi 13), 1338 on macOS and 1305 on Linux. **Delphi:** layer
 1, the TCanvas bridge and the `TGDIPages` core build on Delphi 7 (R-19, R-20
 steps 1–6) and on Delphi 2010, a Unicode Delphi (R-25); all six console demos
 and the `--export` of the two GUI demos give the same PDF as FPC. Delphi 13
@@ -17,7 +17,7 @@ backends only (no VCL), on Linux64 and Android64. The files of
 macOS, Debian, FPC/Win64, Delphi 7 and Delphi 2010 all pass PAC 2024
 and veraPDF (V); the new `zugferd_demo` (R-26, on `TGDIPages`, its text from
 the invoice XML) also veraPDF `3u` and Mustang. **Next:** R-28, the
-integration into the mORMot2 trunk, under a feature freeze. Alongside it only
+integration into the mORMot2 trunk (Phases 0 to 5 done), under a feature freeze. Alongside it only
 what stays out of `src/`: R-24 (CI) and the open checks in V. The rest of
 R-26, R-20 steps 7–8, R-22, the Windows subset size, thinner table
 borders, the undrawn underline and strike-out, the richer structure of
@@ -36,7 +36,10 @@ v0.10.0 (2026-09-30).
   and `mormot.ui.report`, which go at the 2.5 merge: which unit each name
   is in now, the calls that change (`CreateOrGetBitmapImage`,
   `CreateGraphicImage`), the behaviour and output that differ, and the
-  port of a `TGdiPages` report to this `TGDIPages`
+  port of a `TGdiPages` report to this `TGDIPages`. Not for programs on
+  v0.10.0 of this project, whose units had the same names: for them the
+  `uses` change and the calls this list names (the entries on
+  `mormot.ui.pdfcanvas`, `mormot.ui.report` and the images below)
 - **New, opt-in (`TGDIPages`):** `TTableLayout.FooterRowHeader` makes the
   first cell of a footer row a row header (`TH` with `/Scope /Row`), so a
   screen reader announces "Gesamtbetrag: 226,00"; `ExportPdfPageMode`

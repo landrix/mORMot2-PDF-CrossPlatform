@@ -2,9 +2,19 @@
 
 Cross-platform PDF-Generierung für Windows, Linux und macOS, basierend auf der [mORMot2](https://github.com/synopse/mORMot2) PDF-Engine (`mormot.ui.pdf.pas`). Das Original ist Windows/GDI-only; dieses Projekt abstrahiert alle Plattformaufrufe hinter Interfaces und liefert ein FreeType2-Backend für Unix/macOS.
 
-**Aktuelles Release: [v0.10.0](CHANGELOG.md)** — PDF/A-3 und
-ZUGFeRD-/Factur-X-E-Rechnungen, Delphi 7 bis Delphi 13; Tagged-PDF-Ausgabe von
-veraPDF und PAC 2024 auf allen drei Plattformen geprüft.
+**Stand: im Übergang in den mORMot2-Trunk.** Die Engine zieht als
+`src/pdf` in mORMot2 um, sobald mORMot2 2.5 erschienen ist
+([docs/REFACTORING.md](docs/REFACTORING.md), „Into the trunk after
+mORMot 2.5“). Bis dahin:
+
+- **Zum Benutzen:** [v0.10.0](CHANGELOG.md), das letzte Release, baut mit
+  mORMot2 2.4-stable - PDF/A-3 und ZUGFeRD-/Factur-X-E-Rechnungen, Delphi 7
+  bis Delphi 13, Tagged-PDF-Ausgabe von veraPDF und PAC 2024 geprüft
+- **`main`** baut nur gegen den Zweig `pdf-font-layer` von
+  `landrix/mORMot2` (der Trunk plus die `mormot.lib.*`-Units); es ist die
+  laufende Integration, unter einem Feature-Freeze, mit den künftigen
+  Unit-Namen des Trunks - [docs/MIGRATION.md](docs/MIGRATION.md) ordnet
+  sie zu
 
 ## Plattformen
 
@@ -66,7 +76,9 @@ welches ein Name meint. Mit `mormot.pdf` zuletzt kompiliert
 
 **Umstieg von `mormot.ui.pdf` oder `mormot.ui.report` des Trunks?**
 [docs/MIGRATION.md](docs/MIGRATION.md) (englisch) ordnet Units und Aufrufe
-zu; der Report ist eine Portierung, keine Umbenennung.
+zu; der Report ist eine Portierung, keine Umbenennung. **Von v0.10.0 dieses
+Projekts**, dessen Units dieselben Namen hatten: die `uses` und wenige Aufrufe
+ändern sich, aufgeführt in docs/ROADMAP.md, „To Announce“.
 
 ---
 
@@ -296,9 +308,11 @@ Vollständige Anleitung: [docs/DEMOS.md](docs/DEMOS.md)
 
 ## Bauen
 
-Voraussetzungen: FreePascal 3.2+ mit Lazarus und den mORMot2-Quellen (das
-Lazarus-Paket `mormot2`), oder Delphi 7 / Delphi 2010 für Win32, oder
-Delphi 13 — siehe unten.
+Voraussetzungen: FreePascal 3.2+ mit Lazarus und den mORMot2-Quellen, die
+oben unter Stand genannt sind - für `main` der Zweig `pdf-font-layer` von
+`landrix/mORMot2` (das Lazarus-Paket `mormot2`, mit `static/` aus
+`mormot2static`), für v0.10.0 2.4-stable -, oder Delphi 7 / Delphi 2010
+für Win32, oder Delphi 13 — siehe unten.
 
 ```bash
 # Windows
@@ -412,7 +426,7 @@ Sans Mono). HarfBuzz ist nicht paketiert: kein Shaping, kein Subsetting.
 - **GDI+/Gradient Fills:** nur via EMF auf Windows verfügbar
 - **Tabellen-Pagination:** kein Zeilenumbruch innerhalb einer Zelle
 - **Delphi:** Delphi 7 und Delphi 2010 (Win32) bauen Ebene 1, die TCanvas-Brücke und den Kern von `TGDIPages`, alle sechs Konsolen-Demos und den Batch-Export der beiden GUI-Demos, noch nicht die Vorschau und die Demo-Fenster (Roadmap R-20). Die Zeichenmethoden von `TCanvas` sind unter Delphi 7 statisch: über eine `TPdfVclCanvas`-Referenz zeichnen (`Doc.VclCanvas` hat diesen Typ), nie über ein einfaches `TCanvas`, sonst kommt nichts im PDF an. Delphi 13 baut Ebene 1, die TCanvas-Brücke und den Kern von `TGDIPages` unter Win32 und Win64 (geprüft über `test_runner`, die Demos noch nicht; beides hängt an der Community, die Maintainer haben kein Delphi 13); unter Linux64 und Android64 nur Ebene 1 und die Backends — keine VCL, also keine TCanvas-Brücke, kein `TGDIPages` und keine `TBitmap`-Bilder (JPEG über `CreateJpegDirect`) (Roadmap R-27)
-- **Links in getaggter Ausgabe:** `CreateHyperLink` in einem getaggten Dokument verletzt PDF/UA — es gibt kein `Link`-Strukturelement für Annotationen. `TGDIPages.DrawLink` bleibt konform, weil es nur formatierten Text zeichnet; seine URL ist nicht anklickbar (Roadmap R-18)
+- **Links in getaggter Ausgabe:** `CreateHyperLink` in einem getaggten Dokument verletzt PDF/UA — es gibt kein `Link`-Strukturelement für Annotationen. `TGDIPages.DrawLink` bleibt konform, weil es nur formatierten Text zeichnet; seine URL ist nicht anklickbar (Roadmap R-29)
 
 Details und aktueller Prüfstand: [docs/ROADMAP.md](docs/ROADMAP.md)
 

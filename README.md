@@ -2,9 +2,18 @@
 
 Cross-platform PDF generation for Windows, Linux and macOS, based on the [mORMot2](https://github.com/synopse/mORMot2) PDF engine (`mormot.ui.pdf.pas`). The original implementation is Windows/GDI-only; this project abstracts all platform calls behind interfaces and provides a FreeType2 backend for Unix/macOS.
 
-**Current release: [v0.10.0](CHANGELOG.md)** — PDF/A-3 and ZUGFeRD /
-Factur-X e-invoices, Delphi 7 to Delphi 13; tagged PDF output verified by
-veraPDF and PAC 2024 on all three platforms.
+**Status: in transition to the mORMot2 trunk.** The engine moves into
+mORMot2 as `src/pdf` once mORMot2 2.5 is released
+([docs/REFACTORING.md](docs/REFACTORING.md), "Into the trunk after
+mORMot 2.5"). Until then:
+
+- **To use it:** [v0.10.0](CHANGELOG.md), the last release, builds with
+  mORMot2 2.4-stable - PDF/A-3 and ZUGFeRD / Factur-X e-invoices, Delphi 7
+  to Delphi 13, tagged output verified by veraPDF and PAC 2024
+- **`main`** builds only against the `pdf-font-layer` branch of
+  `landrix/mORMot2` (the trunk plus the `mormot.lib.*` units); it is the
+  integration in progress, under a feature freeze, with the unit names of
+  the trunk to come - [docs/MIGRATION.md](docs/MIGRATION.md) maps them
 
 ## Platforms
 
@@ -61,7 +70,9 @@ missing, it belongs there, not in your `uses` clause.
 
 **Coming from the trunk's `mormot.ui.pdf` or `mormot.ui.report`?**
 [docs/MIGRATION.md](docs/MIGRATION.md) maps the units and calls; the report
-is a port, not a rename.
+is a port, not a rename. **From v0.10.0 of this project**, whose units had
+the same names: the `uses` and a few calls change, listed in
+docs/ROADMAP.md, "To Announce".
 
 ---
 
@@ -283,11 +294,11 @@ Full guide: [docs/DEMOS.md](docs/DEMOS.md)
 
 ## Build
 
-Requirements: FreePascal 3.2+ with Lazarus and the mORMot2 sources of the
-**trunk** (the Lazarus package `mormot2`, with `static/` from
-`mormot2static`), or Delphi 7 / Delphi 2010 for Win32, or Delphi 13 — see
-below. The release mORMot2 2.4-stable lacks functions this project uses;
-v0.10.0 is the last version that builds with it.
+Requirements: FreePascal 3.2+ with Lazarus and the mORMot2 sources named
+under Status at the top - for `main` the `pdf-font-layer` branch of
+`landrix/mORMot2` (the Lazarus package `mormot2`, with `static/` from
+`mormot2static`), for v0.10.0 2.4-stable - or Delphi 7 / Delphi 2010 for
+Win32, or Delphi 13 — see below.
 
 ```bash
 # Windows
@@ -398,7 +409,7 @@ Serif, Droid Sans Mono). HarfBuzz is not packaged: no shaping, no subsetting.
 - **GDI+/Gradient fills:** available only via EMF on Windows
 - **Table pagination:** no row wrap within a cell
 - **Delphi:** Delphi 7 and Delphi 2010 (Win32) build layer 1, the TCanvas bridge and the `TGDIPages` core, all six console demos and the batch export of the two GUI demos, not yet the preview or the demo windows (roadmap R-20). Delphi 7's `TCanvas` drawing methods are static: draw through a `TPdfVclCanvas` reference (`Doc.VclCanvas` has that type), never through a plain `TCanvas`, or nothing reaches the PDF. Delphi 13 builds layer 1, the TCanvas bridge and the `TGDIPages` core on Win32 and Win64 (tested through `test_runner`, the demos not yet; both depend on the community, the maintainers have no Delphi 13); on Linux64 and Android64 only layer 1 and the backends — no VCL, so no TCanvas bridge, no `TGDIPages` and no `TBitmap` images (JPEG through `CreateJpegDirect`) (roadmap R-27)
-- **Links in tagged output:** `CreateHyperLink` in a tagged document fails PDF/UA — there is no `Link` structure element for annotations. `TGDIPages.DrawLink` stays conformant by drawing styled text only; its URL is not clickable (roadmap R-18)
+- **Links in tagged output:** `CreateHyperLink` in a tagged document fails PDF/UA — there is no `Link` structure element for annotations. `TGDIPages.DrawLink` stays conformant by drawing styled text only; its URL is not clickable (roadmap R-29)
 
 Details and the current verification status: [docs/ROADMAP.md](docs/ROADMAP.md)
 

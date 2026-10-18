@@ -384,7 +384,7 @@ selected):
      glyph is not in the cmap. No golden case draws such a glyph. `ShortHmtxWidths`
      cuts Test Format12's `hmtx` after glyph 66. `GetTtfData` adds a zero
      word past the table: both readers stop before it (`length(fhmtx) - 1`,
-     Martin on #64), so a glyph past the end of a `hmtx` shorter than `hhea`
+     Martin on #65), so a glyph past the end of a `hmtx` shorter than `hhea`
      says gets `W`, the width of `.notdef`, here (was 0) and 0 from
      `GlyphHmtxWidth`, whose callers fall back on it; `ShortHmtxWidths`
      checks the `W` case of the loop (`GlyphHmtxWidth`'s bound has no test:

@@ -121,9 +121,9 @@ uses mormot.pdf;
 
 Doc := TPdfDocument.Create;
 Doc.DefaultPaperSize := psA4;     // psA4, psLetter, psA3, psA5, ...
-Doc.EmbeddedTtf := False;          // True = embed full TTF
+Doc.EmbeddedTtf := False;          // True = embed (a subset by default)
 Doc.StandardFontsReplace := True;  // True = Helvetica/Times/Courier as Type1
-Doc.PdfA := pdfA1B;               // pdfNone, pdfA1A, pdfA1B, pdfA2A, pdfA2B, pdfA3A, pdfA3B, pdfa3U
+Doc.PdfA := pdfA1B;               // pdfaNone, pdfA1A, pdfA1B, pdfA2A, pdfA2B, pdfA3A, pdfA3B, pdfa3U
                                    // setting PdfA calls NewDoc: prefer the constructor's APdfA
 Doc.NewDoc;
 Page := Doc.AddPage;               // returns TPdfPage
@@ -140,7 +140,7 @@ Doc.Free;
 |---|---|---|
 | `Canvas` | `TPdfCanvas` | Draw on current page |
 | `Info` | `TPdfInfo` | Document metadata |
-| `EmbeddedTtf` | boolean | True = embed TrueType fonts (full TTF) |
+| `EmbeddedTtf` | boolean | True = embed TrueType fonts (a subset unless `EmbeddedWholeTtf`) |
 | `EmbeddedTtfIgnore` | `TRawUtf8List` | Font names excluded from optional embedding; ignored for PDF/A and tagged output |
 | `StandardFontsReplace` | boolean | True = Type1 fallback for Helvetica/Times/Courier |
 | `DefaultPaperSize` | `TPdfPaperSize` | psA4, psLetter, etc. |
@@ -157,7 +157,7 @@ Doc.Free;
 | `UseOptionalContent` | boolean | Enable PDF optional content (layers) |
 | `FontFallBackName` | string | Font used when requested font not found |
 | `FileFormat` | `TPdfFileFormat` | PDF version header: `pdf13`..`pdf17` (default `pdf13`); PDF/A and Tagged auto-raise this |
-| `GeneratePdf15File` | boolean | Compatibility alias: `true` = `pdf15`, `false` leaves `FileFormat` unchanged |
+| `GeneratePdf15File` | boolean | Compatibility alias, as in the trunk: below `pdf16`, `true` = `pdf15` and `false` = `pdf14`; from `pdf16` on it changes nothing |
 | `Tagged` | boolean | Enable Tagged PDF (ISO 32000-1 §14); setting `true` auto-raises `FileFormat` to `pdf17` |
 | `UseUniscribe` | boolean | The one shaping switch: Uniscribe on Windows, HarfBuzz on Linux/macOS; `Canvas.RightToLeftText` is the direction only (`platform-backends.md`, Registration) |
 
@@ -388,8 +388,8 @@ the former `TPdfImage.Create(TGraphic)` and `TPdfDocument.CreateOrGetImage
 (TBitmap)` - fill a `TPdfImagePixels` from `ScanLine[]` and call the same
 code.
 
-How the image paths behave today (measured by `tests/test_pdf_images.pas`,
-before Phase 2 moves the `TBitmap` conversion out of the engine):
+How the image paths behave (measured by `tests/test_pdf_images.pas`; the
+`TBitmap` conversion is in `mormot.pdf.canvas` since Phase 2):
 
 - `CreateOrGetBitmapImage`: pf24bit and pf32bit become `/DeviceRGB` (alpha
   dropped); a fixed transparent color writes `/Mask`. The same pixels give the
