@@ -3031,6 +3031,10 @@ type
     // 'hmtx' table - the value /W has to carry per ISO 14289-1 7.21.5
     // - returns 0 when the tables cannot be read, so the caller can fall back
     function GlyphHmtxWidth(aGlyph: word): integer;
+    // mark some Unicode code point as used, as FindOrAddUsedWideChar
+    // - protected until R-32 step 2: /ToUnicode writes code points up to
+    // U+FFFF only (AddHex4), so a caller must not pass one beyond the BMP
+    function FindOrAddUsedCodePoint(aCode: cardinal): integer;
     // the width registered for aGlyph, i.e. the one that will reach /W
     // - returns 0 if the glyph is not registered on this font instance
     function UsedWideGlyphWidth(aGlyph: word): integer;
@@ -3070,10 +3074,6 @@ type
     // - this index is the one just added, or the existing one if the value
     // was found to be already in the fUserWideChar[] array
     function FindOrAddUsedWideChar(aWideChar: WideChar): integer;
-      {$ifdef HASINLINE}inline;{$endif}
-    /// mark some Unicode code point as used
-    // - as FindOrAddUsedWideChar, for any code point
-    function FindOrAddUsedCodePoint(aCode: cardinal): integer;
     /// retrieve the width of an UTF-16 codepoint
     // - WinAnsi characters are taken from fWinAnsiWidth[], unicode chars from
     // fUsedWide[].Width
@@ -6732,8 +6732,9 @@ begin
         // as GlyphHmtxWidth - not the bearing after it, nor that of .notdef
         if glyph >= numOfLongHorMetrics then
           glyph := integer(numOfLongHorMetrics) - 1;
+        // GetTtfData() adds one zero word past the table: not an advance
         if (glyph >= 0) and
-           (glyph * 2 < length(fhmtx)) then
+           (glyph * 2 < length(fhmtx) - 1) then
           aUnicodeTtf.fUsedWide[i].Width :=
             (int64(fhmtx[glyph * 2]) * 1000) div head^.UnitsPerEm
         else
@@ -6985,8 +6986,8 @@ begin
     exit;
   if aGlyph >= numOfLongHorMetrics then
     aGlyph := numOfLongHorMetrics - 1;
-  if aGlyph * 2 >= length(fHmtx) then
-    exit;
+  if aGlyph * 2 >= length(fHmtx) - 1 then
+    exit; // the last word is the zero GetTtfData() adds past the table
   result := (int64(fHmtx[aGlyph * 2]) * 1000) div head^.UnitsPerEm;
 end;
 
