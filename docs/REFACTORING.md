@@ -352,7 +352,8 @@ Phase 1 is one PR to `synopse/mORMot2`.
   `mormot.ui.pdf`; they are the shaper and the subsetter of
   `mormot.lib.uniscribe` now (not in the gist), and the engine has one path
   for both platforms. The two paths differed in shape, not only in library -
-  see `.claude/skills/platform-backends.md`, "Phase 1 Notes"
+  see `.claude/skills/platform-backends.md`, "IFontShaper" and
+  "IFontSubsetter"
 - **The engine's direct GDI calls behind the interfaces** (done in step W3,
   2026-10-09): the document DC (`FontDC`), font creation and release, metrics,
   character widths, tables and glyph advances by index (the new
