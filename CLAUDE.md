@@ -13,7 +13,7 @@ Skills contain complete, distilled API and architectural knowledge. The main sou
 
 | Skill | When to use |
 |---|---|
-| `.claude/skills/pdf-engine.md` | TPdfDocument, TPdfDocumentVcl, TPdfCanvas — full API, enums, encryption, FPImage |
+| `.claude/skills/pdf-engine.md` | TPdfDocument, TPdfDocumentVcl, TPdfCanvas — full API, enums, encryption |
 | `.claude/skills/report-engine.md` | TGDIPages — all methods, tables, command recording, global helpers |
 | `.claude/skills/platform-backends.md` | IFontProvider/Enumerator/DC, optional IFontShaper/IFontSubsetter (mormot.lib.core) — interfaces, backends, data types |
 | `.claude/skills/call-graph.md` | Execution paths: registration → rendering → serialization (font lifecycle 4a–4d, image, bookmarks) |
@@ -50,7 +50,6 @@ All files under `src/` require justification and user approval before reading.
 | mORMot2 `src/lib/mormot.lib.uniscribe.pas` | GDI backend (Windows), Uniscribe shaper and FontSub subsetter, beside their bindings | Production |
 | mORMot2 `src/lib/mormot.lib.freetype.pas` | FreeType2 backend (POSIX) | Production |
 | mORMot2 `src/lib/mormot.lib.harfbuzz.pas` | HarfBuzz shaper (RTL/complex scripts) and hb-subset subsetter (R-12) | Production |
-| `src/pdf/mormot.pdf.fpimage.pas` | FPImage bitmap adapter | Production |
 
 ## File Structure
 
@@ -60,7 +59,6 @@ src/
     mormot.pdf.pas              PDF objects, TPdfDocument, TPdfCanvas - no VCL/LCL
     mormot.pdf.canvas.pas       TCanvas bridge (TPdfDocumentVcl), TBitmap/TGraphic images, TPdfDocumentGdi and EMF (Windows)
     mormot.pdf.defines.inc      the USE_* switches of mormot.pdf and mormot.pdf.canvas
-    mormot.pdf.fpimage.pas      Bitmap embedding (FPImage)
     mormot.pdf.report.pas       TGDIPages — layout engine, no forms or printer
     mormot.pdf.report.preview.pas ShowReportPreview, PrintReport (LCL)
   (mormot.ui.core and mormot.ui.gdiplus come from mORMot2's src/ui, on the
@@ -113,7 +111,7 @@ docs/
   CI.md               GitHub Actions for FPC/Lazarus: rule, install options, this project's jobs (R-24)
 CHANGELOG.md          Released versions; a release's entry is written from ROADMAP "To Announce", the one list of user-visible changes
 .claude/skills/
-  pdf-engine.md       TPdfDocument, TPdfDocumentVcl, TPdfCanvas — full API, enums, encryption, FPImage
+  pdf-engine.md       TPdfDocument, TPdfDocumentVcl, TPdfCanvas — full API, enums, encryption
   report-engine.md    TGDIPages — all methods, tables, command recording, global helpers
   platform-backends.md IFontProvider/Enumerator/DC, IFontShaper/IFontSubsetter — interfaces, backends, registration, the shaping switch
   call-graph.md       Complete call graph: font lifecycle (4a–4d), rendering, image, bookmarks
