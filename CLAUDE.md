@@ -63,9 +63,9 @@ src/
     mormot.pdf.fpimage.pas      Bitmap embedding (FPImage)
     mormot.pdf.report.pas       TGDIPages — layout engine, no forms or printer
     mormot.pdf.report.preview.pas ShowReportPreview, PrintReport (LCL)
-  core/                         copies of trunk units
-    mormot.ui.core.pas          UI helper functions   } the trunk's units of mORMot2 src/ui (only the include path differs),
-    mormot.ui.gdiplus.pas       GDI+ support (Windows) } which is not on the search path
+  (mormot.ui.core and mormot.ui.gdiplus come from mORMot2's src/ui, on the
+   search path of every project with the TCanvas bridge; the copies of
+   src/core went in R-28 Phase 5)
   (the backends are mORMot2 units in src/lib: mormot.lib.uniscribe on Windows
    (GDI), mormot.lib.freetype and mormot.lib.harfbuzz - shaper and subsetter,
    each library optional - on POSIX)
@@ -434,10 +434,11 @@ itself is in each demo's `uReport.pas`; the form only passes its options.
   literal rule in Coding Conventions): `TextOut` reads Delphi 7's `string` as
   ANSI. A console program needs `{$APPTYPE CONSOLE}` after the
   `mormot.defines.inc` include: FPC's project makes a console executable,
-  dcc32 a GUI one without it, where `WriteLn` raises I/O error 105. Never put
-  `mORMot2/src/ui` on a Delphi search path: its `mormot.ui.core` and
-  `mormot.ui.gdiplus` have the names of our copies in `src/core`, and it
-  holds the original `mormot.ui.pdf`/`report`
+  dcc32 a GUI one without it, where `WriteLn` raises I/O error 105.
+  `mormot.ui.core` and `mormot.ui.gdiplus` come from `mORMot2/src/ui` (the
+  copies in `src/core` are gone, R-28 Phase 5): it is on the search path of
+  every project with the TCanvas bridge;
+  its `mormot.ui.pdf`/`report` of the trunk are named by no unit of ours
 
 Current verification status per platform, and the open items in detail:
 `docs/ROADMAP.md`
