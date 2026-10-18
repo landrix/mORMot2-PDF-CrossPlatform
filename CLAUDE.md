@@ -9,13 +9,13 @@ The original, the trunk's `src/ui/mormot.ui.pdf.pas`, is Windows/GDI-only; this 
 
 **RULE: Read the relevant skill file(s) BEFORE doing anything else — before reading source files, before searching, before planning.**
 
-Skills contain complete, distilled API and architectural knowledge. The main source files are very large (mormot.pdf.pas is 11,800+ lines, mormot.pdf.canvas.pas 3,000+, mormot.pdf.report.pas 2,900+); reading them without necessity wastes context and time.
+Skills contain complete, distilled API and architectural knowledge. The main source files are very large (mormot.pdf.pas is 13,000+ lines, mormot.pdf.canvas.pas 3,900+, mormot.pdf.report.pas 3,000+); reading them without necessity wastes context and time.
 
 | Skill | When to use |
 |---|---|
 | `.claude/skills/pdf-engine.md` | TPdfDocument, TPdfDocumentVcl, TPdfCanvas — full API, enums, encryption |
 | `.claude/skills/report-engine.md` | TGDIPages — all methods, tables, command recording, global helpers |
-| `.claude/skills/platform-backends.md` | IFontProvider/Enumerator/DC, optional IFontShaper/IFontSubsetter (mormot.lib.core) — interfaces, backends, data types |
+| `.claude/skills/platform-backends.md` | IFontProvider, IFontFace, IFontEnumerator, optional IFontShaper/IFontSubsetter (mormot.lib.core) — interfaces, backends, registration, the shaping switch |
 | `.claude/skills/call-graph.md` | Execution paths: registration → rendering → serialization (font lifecycle 4a–4d, image, bookmarks) |
 | `.claude/skills/fonts.md` | Font handling deep reference: dual-instance model, CMAP loading, text rendering chains, RTL/Arabic |
 
@@ -44,9 +44,9 @@ All files under `src/` require justification and user approval before reading.
 | File | Purpose | Status |
 |---|---|---|
 | `src/pdf/mormot.pdf.pas` | PDF engine (cross-platform) | Production |
-| `src/pdf/mormot.pdf.report.pas` | Report engine (`TGDIPages`) - R-28 Phase 4 | Production |
+| `src/pdf/mormot.pdf.report.pas` | Report engine (`TGDIPages`) | Production |
 | `src/pdf/mormot.pdf.report.preview.pas` | Preview window and printing for `TGDIPages` (LCL) | Production |
-| `src/pdf/mormot.pdf.canvas.pas` | VCL/LCL adapter: the TCanvas bridge (`TPdfDocumentVcl`, `TPdfVclCanvas`), `TBitmap`/`TGraphic` images; `TPdfDocumentGdi`, `RenderMetaFile`, printer helpers (Windows) - R-28 Phase 2 | Production |
+| `src/pdf/mormot.pdf.canvas.pas` | VCL/LCL adapter: the TCanvas bridge (`TPdfDocumentVcl`, `TPdfVclCanvas`), `TBitmap`/`TGraphic` images; `TPdfDocumentGdi`, `RenderMetaFile`, printer helpers (Windows) | Production |
 | mORMot2 `src/lib/mormot.lib.uniscribe.pas` | GDI backend (Windows), Uniscribe shaper and FontSub subsetter, beside their bindings | Production |
 | mORMot2 `src/lib/mormot.lib.freetype.pas` | FreeType2 backend (POSIX) | Production |
 | mORMot2 `src/lib/mormot.lib.harfbuzz.pas` | HarfBuzz shaper (RTL/complex scripts) and hb-subset subsetter (R-12) | Production |
@@ -62,8 +62,7 @@ src/
     mormot.pdf.report.pas       TGDIPages — layout engine, no forms or printer
     mormot.pdf.report.preview.pas ShowReportPreview, PrintReport (LCL)
   (mormot.ui.core and mormot.ui.gdiplus come from mORMot2's src/ui, on the
-   search path of every project with the TCanvas bridge; the copies of
-   src/core went in R-28 Phase 5)
+   search path of every project with the TCanvas bridge)
   (the backends are mORMot2 units in src/lib: mormot.lib.uniscribe on Windows
    (GDI), mormot.lib.freetype and mormot.lib.harfbuzz - shaper and subsetter,
    each library optional - on POSIX)
@@ -109,12 +108,7 @@ docs/
   MIGRATION.md        For users of the trunk's mormot.ui.pdf/mormot.ui.report: units, calls, what changed
   CI.md               GitHub Actions for FPC/Lazarus: rule, install options, this project's jobs (R-24)
 CHANGELOG.md          Released versions; a release's entry is written from ROADMAP "To Announce", the one list of user-visible changes
-.claude/skills/
-  pdf-engine.md       TPdfDocument, TPdfDocumentVcl, TPdfCanvas — full API, enums, encryption
-  report-engine.md    TGDIPages — all methods, tables, command recording, global helpers
-  platform-backends.md IFontProvider/Enumerator/DC, IFontShaper/IFontSubsetter — interfaces, backends, registration, the shaping switch
-  call-graph.md       Complete call graph: font lifecycle (4a–4d), rendering, image, bookmarks
-  fonts.md            Font handling deep reference: dual-instance model, CMAP loading, text rendering chains, RTL/Arabic
+.claude/skills/      the skill files: see "Skills — Mandatory First Step"
 ```
 
 ## Architecture
@@ -246,6 +240,14 @@ Details on interfaces and registration: `.claude/skills/platform-backends.md`
     the compiler: `PDF_HASVCLCANVAS` (tests/test_defines.inc), not `FPC`.
     Compiler switches come from `{$I mormot.defines.inc}`, never from a bare
     `{$mode delphi}` (roadmap R-21)
+  - **Delphi 7:** its `TCanvas` drawing methods are static, so the bridge
+    reintroduces them (`PDF_CANVASVIRTUAL` off): draw through a
+    `TPdfVclCanvas` reference - `VclCanvas` has that type,
+    `RenderPageToCanvas` casts. Text beyond ASCII goes through `TextOutUtf8`
+    from a `RawUtf8` constant: `TextOut` reads Delphi 7's `string` as ANSI. A
+    console program needs `{$APPTYPE CONSOLE}` after the `mormot.defines.inc`
+    include: dcc32 makes a GUI executable without it, where `WriteLn` raises
+    I/O error 105
   - a `raise` inside `try..finally` of a function makes Delphi 7 and 2010
     warn W1035 (result undefined) though every path sets it: raise through
     `ESynException.RaiseU`/`RaiseUtf8`, a call, rather than add a
@@ -266,8 +268,8 @@ Details on interfaces and registration: `.claude/skills/platform-backends.md`
   numbers as `RawByteString`, never from `#$8B` literals or `StringOfChar`
 - No blank lines between `begin`/`end` blocks
 - Interfaces with reference counting (`TInterfacedObject`)
-- **The mORMot2 source form — binding** (decided 2026-10-14, checked
-  against the trunk's own code): new and changed code follows it, the
+- **The mORMot2 source form — binding** (checked against the trunk's own
+  code): new and changed code follows it, the
   existing code is brought to it in the formatting PRs (`docs/REFACTORING.md`,
   "formatting"):
   - **unit head:** a `///` line saying what the unit is, then
@@ -395,50 +397,34 @@ itself is in each demo's `uReport.pas`; the form only passes its options.
 
 ## Open Items
 
-- **mORMot Refactoring** (R-28, in progress): before any step of it, read
-  `docs/REFACTORING.md` — its rules apply on top of this file
-- **Font subsetting**: default (`EmbeddedWholeTtf = False`) on all platforms, two implementations, both keeping the original glyph IDs and therefore safe for CJK, shaped Arabic and tagged output. **Linux/macOS** (R-12): `IFontSubsetter` (`mormot.lib.core`) implemented by `mormot.lib.harfbuzz` (`libharfbuzz-subset`); 97–99.5% smaller PDFs. **Windows** (R-15): `IFontSubsetter` implemented by `mormot.lib.uniscribe` (`CreateFontPackage` with a glyph keep list, `TTFCFP_FLAGS_GLYPHLIST`; the face of a `.ttc` found from the bytes) - one path through `FontSubsetter` on every platform since R-28 Phase 1 W2. The whole face is embedded instead for PDF/A-1 (no `/CIDSet`), for symbol fonts on POSIX (R-15b) and when `libharfbuzz-subset` is missing. See `.claude/skills/fonts.md` §3, §9
-- **CFF faces: Type0 only** (R-15c, then the CFF series of R-28): a CFF face draws all its text through its Type0 font as a `CIDFontType0` - the codes of a CID-keyed face are its CIDs, not glyph indexes; it is embedded as its bare CFF (`/FontFile3 /Subtype /CIDFontType0C`), a name-keyed one as an OpenType font file (PDF 1.6, by the header or the catalog `/Version`; not PDF/A-1); its WinAnsi font is internal and not written. An unembedded name-keyed face keeps its Latin text in the simple font. An embedded `glyf` face without a (3,1) or (3,0) cmap (macOS Geeza Pro: (0,3) only) takes the Type0 path too (R-31). `glyf` goes to `/FontFile2`. Embedding CFF in `/FontFile2` is a spec violation (ISO 32000-1 9.9). See `.claude/skills/fonts.md` "CFF Faces: Type0 Only"
-- **RTL / Arabic text**: one switch, `UseUniscribe` — HarfBuzz delivers correct ligatures on Linux/macOS, Windows uses Uniscribe; `RightToLeftText` is the base direction only; a part the font lacks glyphs for is shaped again in the fallback face (`IFontRunShaper`); HarfBuzz itemizes by script with a two-level order, no full bidi — see `.claude/skills/fonts.md` §10 and `.claude/skills/platform-backends.md`
-- **Testing RTL**: Linux fonts (Noto Naskh Arabic) resolve shaped glyphs through the CMAP, so they never exercise the shaper's own advance path. Validate RTL work against a font without Arabic presentation forms — `mORMot Test Arabic` (`tests/fonts`), which the tests use on every platform; see `.claude/skills/fonts.md` §10
-- **TTC collections**: only face index 0 is reachable; `TFontFileMap` (`mormot.lib.freetype`) has no face index, so the other faces of a `.ttc` cannot be selected by name
-- **EMF/MetaFile**: Windows-only (`TPdfDocumentGdi`, `mormot.pdf.canvas`), not portable
-- **GDI+/gradient fills**: Windows-only via EMF
-- **Table pagination**: no row break within a cell (roadmap R-10)
-- **Symbol fonts on POSIX**: excluded from subsetting, the whole face is embedded (roadmap R-15b); `TestSubsetSymbolFont` covers both sides where Wingdings, Webdings or Symbol is installed (Windows: subset by FontSub; macOS: Symbol embedded whole), no demo
-- **PDF/A** (R-17): A-3U + PDF/UA-1, A-3A (tagged) and A-3B verified on all three platforms with veraPDF, Mustang and PAC; A-1 and A-2 implemented, unverified. Pass the level to the constructor — the `PdfA` setter calls `NewDoc`. A levels need `Tagged := True`. With PDF/A + Tagged the engine describes `pdfuaid` in the XMP extension schemas, inside the caller's `<pdfaExtension:schemas><rdf:Bag>` if `PdfAMetadaExtension` has one — keep that single list
-- **E-invoices**: the engine writes the PDF/A-3 container (`CreateFileAttachmentFrom` + `PdfMetadataFacturX`; in `TGDIPages` `AddExportPdfAttachment` + `ExportPdfMetadataExtension`) and never generates or validates invoice XML. Scope is B2B (ZUGFeRD/Factur-X profile EN 16931); invoices to German authorities are pure XML and out of scope. Sample data only under the licence of this project (mORMot's MPL/GPL/LGPL)
-- **Charts**: out of scope — no chart engine, as no invoice XML. A chart is an
-  image from a chart library in a `Figure` with `/Alt`, its values as a table
-  besides. `layer1_demo`'s figure is deliberately a set of shapes, not a
-  chart. A chart example only on request (ROADMAP "Charts")
-- **Links in tagged output**: no `Link` role, `OBJR` or `/StructParent` for annotations — `CreateHyperLink` in tagged output fails veraPDF `ua1` on four 7.18 rules (measured). `TGDIPages.DrawLink` draws link-styled text as a `Span` and drops the URL: conformant, not clickable (roadmap R-29, item 7)
-- **Delphi** (R-19, R-21, R-23, R-25, R-27 done; R-20 steps 1–6 done): layer 1,
-  the TCanvas bridge and the `TGDIPages` core build on Delphi 7 and Delphi
-  2010 (Unicode Delphi), Win32; `test_runner` green on Delphi 7 (counts: the
-  test list above; Delphi 2010 1277/1277, #69). All six console
-  demos and the `--export` of the two GUI demos build and give the same PDF as
-  FPC (the GUI demos build their report in `uReport.pas`, without a form);
-  PAC 2024 and veraPDF pass the files of both compilers. Open: the preview and
-  the demo windows (R-20 steps 7, 8). Delphi 13 (R-27): `test_runner`
-  green on Win32, Win64, Linux64 and Android64 — on Linux/Android layer 1
-  and the backends only, Delphi has no VCL there (`USE_GRAPHICS_UNIT` off,
-  no `TBitmap` images).
-  Delphi 7's `TCanvas` drawing methods are static: the bridge reintroduces
-  them (`PDF_CANVASVIRTUAL` off), so draw through a `TPdfVclCanvas`
-  reference — `VclCanvas` has that type, `RenderPageToCanvas` casts. Text
-  beyond ASCII goes through `TextOutUtf8` from a `RawUtf8` constant (see the
-  literal rule in Coding Conventions): `TextOut` reads Delphi 7's `string` as
-  ANSI. A console program needs `{$APPTYPE CONSOLE}` after the
-  `mormot.defines.inc` include: FPC's project makes a console executable,
-  dcc32 a GUI one without it, where `WriteLn` raises I/O error 105.
-  `mormot.ui.core` and `mormot.ui.gdiplus` come from `mORMot2/src/ui` (the
-  copies in `src/core` are gone, R-28 Phase 5): it is on the search path of
-  every project with the TCanvas bridge;
-  its `mormot.ui.pdf`/`report` of the trunk are named by no unit of ours
+What is open, one line each; the detail is in `docs/ROADMAP.md`, the
+knowledge in the skills.
 
-Current verification status per platform, and the open items in detail:
-`docs/ROADMAP.md`
+- **mORMot Refactoring** (R-28): before any step of it, read
+  `docs/REFACTORING.md` - its rules apply on top of this file
+- **Delphi preview and demo windows** (R-20 steps 7-8): Delphi 7, 2010 and 13
+  build layer 1, the TCanvas bridge and the `TGDIPages` core (on Linux64 and
+  Android64 layer 1 only: no VCL), not the preview
+- **Table pagination:** no row break within a cell (R-10)
+- **Symbol fonts on POSIX:** embedded whole, not subset (R-15b)
+- **TTC collections:** FreeType's lookup by name reaches only face 0 of a
+  system `.ttc` (R-11); a registered collection takes a face index, and
+  Windows resolves every face
+- **Links in tagged output:** `TGDIPages.DrawLink` draws a `Span`, the URL is
+  not clickable (R-29, item 7)
+- **Text above U+FFFF:** not drawn (R-32)
+- **PDF/A-1 and A-2:** implemented, not verified (ROADMAP "V"); A-3U with
+  PDF/UA-1, A-3A and A-3B are
+- **Out of scope:** invoice XML - the engine writes the PDF/A-3 container,
+  never the XML (`docs/DEMOS.md`, `zugferd_demo`), and sample invoice data
+  only under this project's licence (mORMot's MPL/GPL/LGPL); a chart engine (ROADMAP
+  "Charts"); EMF and GDI+ outside Windows (ROADMAP "EMF/MetaFile")
+
+Before RTL work read `fonts.md` on testing it: validate against `mORMot Test
+Arabic` (`tests/fonts`), not a system face whose cmap holds the presentation
+forms: there most widths come from `hmtx` through the cmap, and the width
+registration of GSUB-only glyphs by glyph index runs only for the few glyphs
+the cmap does not reach.
 
 ## Dependencies
 
