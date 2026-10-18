@@ -827,11 +827,11 @@ step its own PR, output byte-equal):
   coupling is gone - code changes, not a cleanup
 - **The switches:** `mormot.pdf.defines.inc` (constructor signatures,
   security, Uniscribe, GDI+, metafiles); `PDF_CANVASVIRTUAL` (`override`
-  switches, a compiler fact) and `PDF_HASVCLCANVAS` (the
+  against `reintroduce`, a compiler fact) and `PDF_HASVCLCANVAS` (the
   tests: is there a VCL/LCL). None is a migration flag. The bridge's
   measuring DC stays too: the fallback for a face no backend resolves,
-  and Delphi's `PenPos` The include's
-  redundant POSIX `undef` block goes with the relative include at the move
+  and Delphi's `PenPos`. The include's redundant POSIX `undef` block goes
+  with the relative include at the move
 - **Names that are real classes, not aliases:** `TPdfDocumentGdi` (the EMF
   path, with tests), `TGDIPages`
 - **Caller contracts, cheap to keep:** `UseUniscribe` (the one shaping
@@ -900,9 +900,8 @@ Process, agreed in the forum:
     `CLAUDE.md` (binding since 2026-10-14), measured that day: banners
     missing in `mormot.pdf.fpimage`, `.report`, `.report.preview`,
     `.types` (`.fpimage` and `.types` gone in Phase 5), and written
-    `{****` without
-    the space in `mormot.pdf` (8) and
-    `mormot.pdf.canvas` (4); `///` missing on 2 of 16 unit-level routines
+    `{****` without the space in `mormot.pdf` (8) and `mormot.pdf.canvas`
+    (4); `///` missing on 2 of 16 unit-level routines
     of `mormot.pdf`; `raise Exception.Create` 10 times in
     `mormot.pdf.report`, once in `mormot.pdf` (the PDF/A font fallback,
     gone with the fallback step: `EPdfInvalidOperation` since 2026-10-15) and

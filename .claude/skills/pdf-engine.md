@@ -123,7 +123,7 @@ Doc := TPdfDocument.Create;
 Doc.DefaultPaperSize := psA4;     // psA4, psLetter, psA3, psA5, ...
 Doc.EmbeddedTtf := False;          // True = embed (a subset by default)
 Doc.StandardFontsReplace := True;  // True = Helvetica/Times/Courier as Type1
-Doc.PdfA := pdfA1B;               // pdfaNone, pdfA1A, pdfA1B, pdfA2A, pdfA2B, pdfA3A, pdfA3B, pdfa3U
+Doc.PdfA := pdfa1B;               // pdfaNone, pdfa1A, pdfa1B, pdfa2A, pdfa2B, pdfa3A, pdfa3B, pdfa3U
                                    // setting PdfA calls NewDoc: prefer the constructor's APdfA
 Doc.NewDoc;
 Page := Doc.AddPage;               // returns TPdfPage
