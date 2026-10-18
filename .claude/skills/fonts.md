@@ -218,7 +218,8 @@ and the rejections on tables built in code.
 
 Found on the way: a run that switched to the fallback face mid-run wrote
 the fallback codes without an opening `<` (also in the original,
-`reference/mormot.ui.pdf.pas:5340`); and the `/ToUnicode` codespace of
+the trunk's `mormot.ui.pdf.pas` at
+[63d06371a, line 5340](https://github.com/synopse/mORMot2/blob/63d06371ad6a75948398ebc1d90cb64af39ca474/src/ui/mormot.ui.pdf.pas#L5340)); and the `/ToUnicode` codespace of
 every Type0 font ran from the glyph of the first character to the glyph of
 the last - inverted whenever they were out of order. It is `<0000> <FFFF>`
 now, and `/W` and `/ToUnicode` are sorted by code, one entry per code.
@@ -383,7 +384,7 @@ selected):
      glyph is not in the cmap. No golden case draws such a glyph. `ShortHmtxWidths`
      cuts Test Format12's `hmtx` after glyph 66. `GetTtfData` adds a zero
      word past the table: both readers stop before it (`length(fhmtx) - 1`,
-     Martin on #64), so a glyph past the end of a `hmtx` shorter than `hhea`
+     Martin on #65), so a glyph past the end of a `hmtx` shorter than `hhea`
      says gets `W`, the width of `.notdef`, here (was 0) and 0 from
      `GlyphHmtxWidth`, whose callers fall back on it; `ShortHmtxWidths`
      checks the `W` case of the loop (`GlyphHmtxWidth`'s bound has no test:

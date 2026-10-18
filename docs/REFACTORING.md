@@ -486,7 +486,8 @@ cairo):
   and first needs that coupling removed (gist §7, §23: not for naming
   symmetry). fpPDF keeps writer, objects and fonts in one unit; PDFium and
   LuaTeX tie their fonts to the document as well. The split is reconsidered
-  once the coupling is gone (Phase 5 at the latest)
+  once the coupling is gone - after the merge, as Phase 5 decided ("What
+  stays, and why")
 - **Images:** `mormot.pdf` takes raw pixels and encoded JPEG, as libHaru,
   PoDoFo and PDFium take buffers. The contract: width, height, format (RGB24,
   Indexed8 with its palette), row stride and order, buffer length, an
@@ -678,7 +679,7 @@ Codex and Fable; Fable's probes built with Delphi 7 and FPC/LCL):
   output through the adapters, the golden files (96) and the demos unchanged
 - **Moved as it is:** the bridge's measuring DC (the fallback for a face no
   backend resolves, Delphi's `PenPos`) and `PDF_CANVASVIRTUAL` are
-  behaviour; changing them is a Phase 5 item
+  behaviour; Phase 5 kept both ("What stays, and why")
 - **Formatting:** the bridge to the trunk's style in place before it moves
   (column alignment only, `git diff -w` empty); `mormot.pdf` and
   `mormot.pdf.canvas` in one formatting PR before the 2.5 merge, with
@@ -806,8 +807,52 @@ step its own PR, output byte-equal):
    its tests and demos, the fork or XRechnung for Delphi; shipped in v0.10.0
    (as `src/core/mormot.pdf.fpimage.pas`), so "To Announce" says what
    replaces it: FPImage in the program, `TPdfImagePixels` for the pixels
-4. **The review recorded here**: what stays and why, `reference/`, the
-   migration note for users of the trunk's `mormot.ui.pdf`/`mormot.ui.report`
+4. **The review recorded here** - done: what stays and why (below);
+   `reference/` deleted - its `mormot.ui.pdf.pas` was the trunk's at
+   63d06371a (2026-03-08) with two local edits (`MilliSecsPerDay`, a
+   commented-out `EMR_ALPHABLEND` branch) and trailing blanks, its
+   `mormot.ui.report.pas` the trunk's from a931cdbdc until 7f330f690
+   changed it; the skills and ROADMAP cite the trunk commit instead; the
+   migration note for users of the trunk's units is `docs/MIGRATION.md`
+
+**What stays, and why** (the inventory of Codex and Fable, 2026-10-17):
+
+- **The unit split:** `mormot.pdf` (no VCL/LCL), `mormot.pdf.canvas` (the
+  `TCanvas` bridge, bitmaps, EMF), `mormot.pdf.report` (no `Forms`, no
+  `Printers`) and `mormot.pdf.report.preview` (both) - each cut is a GUI
+  dependency, the gist's boundary (§12, §23). EMF stays in
+  `mormot.pdf.canvas`; the EMF state the engine still holds (`fEmfDC`, the
+  mapping and world transform, `EmfDC`) and the core/font split of
+  `mormot.pdf` are reconsidered together after the merge, once that
+  coupling is gone - code changes, not a cleanup
+- **The switches:** `mormot.pdf.defines.inc` (constructor signatures,
+  security, Uniscribe, GDI+, metafiles); `PDF_CANVASVIRTUAL` (`override`
+  against `reintroduce`, a compiler fact) and `PDF_HASVCLCANVAS` (the
+  tests: is there a VCL/LCL). None is a migration flag. The bridge's
+  measuring DC stays too: the fallback for a face no backend resolves,
+  and Delphi's `PenPos`. The include's redundant POSIX `undef` block goes
+  with the relative include at the move
+- **Names that are real classes, not aliases:** `TPdfDocumentGdi` (the EMF
+  path, with tests), `TGDIPages`
+- **Caller contracts, cheap to keep:** `UseUniscribe` (the one shaping
+  switch, HarfBuzz too), `GeneratePdf15File` (wraps `FileFormat`),
+  `PdfAMetadaExtension` (the trunk's spelling), the `TLogFontW` constructor
+  that keeps `lfWidth` and the other native fields (dropping them changes
+  behaviour), `FindOrAddUsedWideChar` (until R-32 step 2)
+- **The re-exports of `mormot.pdf.report`:** PDF/A levels,
+  `TPdfFileFormat`, `afr*`, page modes, `PdfMetadataFacturX` - one unit
+  per layer (CLAUDE.md)
+- **The report's older API:** the positioned overloads, the table API
+  beside `TTableLayout`, `REPORT_FONT_*`/`GetReportFonts`, `DrawTextAt` -
+  callers use them; "older" alone is no reason
+- **`mormot.lib.*`:** the agreed final names; the Windows-shaped `tm*`,
+  `otm*` and `abc*` fields of its records stay - renaming them costs every
+  backend and gains nothing now
+- **Left for the formatting PRs** (source, no output): a stale
+  `UseSetTextJustification` in a comment of `mormot.pdf.canvas` (in the
+  trunk's original too), the unused POSIX `LOGPIXELSY` of `mormot.pdf`,
+  and `IFontProvider.GetFaceFile` in a comment of `mormot.lib.core`, which
+  is `IFontFace` now
 
 **At the move, not now:** `x:xmptk="mormot.ui.pdf"` becomes `mormot.pdf`
 (the only change of output, one new baseline on every machine), the
@@ -854,8 +899,9 @@ Process, agreed in the forum:
     These PRs also bring the existing code to the source form of
     `CLAUDE.md` (binding since 2026-10-14), measured that day: banners
     missing in `mormot.pdf.fpimage`, `.report`, `.report.preview`,
-    `.types` (`.fpimage` and `.types` gone in Phase 5), and written `{****` without the space in `mormot.pdf` (8) and
-    `mormot.pdf.canvas` (4); `///` missing on 2 of 16 unit-level routines
+    `.types` (`.fpimage` and `.types` gone in Phase 5), and written
+    `{****` without the space in `mormot.pdf` (8) and `mormot.pdf.canvas`
+    (4); `///` missing on 2 of 16 unit-level routines
     of `mormot.pdf`; `raise Exception.Create` 10 times in
     `mormot.pdf.report`, once in `mormot.pdf` (the PDF/A font fallback,
     gone with the fallback step: `EPdfInvalidOperation` since 2026-10-15) and
@@ -938,7 +984,8 @@ Process, agreed in the forum:
     (`LoadFreeType` is POSIX-only; E2250 on its `Synchronize` and `Queue`
     calls): Delphi 13 Win64 stops on the same three errors before
     and after, none in the changed lines. The six `with` of the trunk
-    copies in `src/core` stay, as the trunk has them.
+    copies in `src/core` stayed, as the trunk has them (the copies went in
+    Phase 5).
 
     **Exceptions, done** (branch `pr/exceptions`, on `pr/no-with`): the
     report's 10 `raise Exception.Create` and 4 `ESynException` raises are

@@ -1,7 +1,7 @@
 # mORMot2 PDF Cross-Platform — Agent Reference
 
 Cross-platform PDF and report engine for Windows, Linux and macOS, based on mORMot2.
-The original document (`reference/mormot.ui.pdf.pas`) was Windows/GDI-only; this project abstracts all platform calls behind interfaces.
+The original, the trunk's `src/ui/mormot.ui.pdf.pas`, is Windows/GDI-only; this project abstracts all platform calls behind interfaces.
 
 ---
 
@@ -79,7 +79,7 @@ examples/
   (each demo folder carries a short README.md; the source header of its .lpr
    (`layer1_demo`: .dpr) says the same thing in two sentences)
 tests/
-  test_runner.lpr              runs every suite below (green: 1277 assertions on Windows with FPC, Delphi 13 and Delphi 7 - Delphi 2010 last measured at 1264 (#65); 1338 on macOS, 1305 on Linux. The font tests assert on the test fonts of tests/fonts everywhere; a test that also needs an installed face (Hiragino Sans GB, Geeza Pro, Nirmala UI, the OS collections, the faces of cjk_system and arabic_system) asks SystemFaceExtra first - one assertion either way, a missing face of this OS's list reported, a failure with --require-fonts; only a missing shaper or subsetter library skips; the golden files add two per case with or without a baseline. Delphi 13, measured before the golden files: 259 on Windows, 171 on Linux64, 129 on Android64, layer 1 only)
+  test_runner.lpr              runs every suite below (green: 1277 assertions on Windows with FPC, Delphi 13, Delphi 7 and Delphi 2010 (#69); 1338 on macOS, 1305 on Linux. The font tests assert on the test fonts of tests/fonts everywhere; a test that also needs an installed face (Hiragino Sans GB, Geeza Pro, Nirmala UI, the OS collections, the faces of cjk_system and arabic_system) asks SystemFaceExtra first - one assertion either way, a missing face of this OS's list reported, a failure with --require-fonts; only a missing shaper or subsetter library skips; the golden files add two per case with or without a baseline. Delphi 13, measured before the golden files: 259 on Windows, 171 on Linux64, 129 on Android64, layer 1 only)
   test_defines.inc             PDF_HASVCLCANVAS: the TCanvas bridge suites (all compilers since R-20)
   build_delphi7.bat            dcc32 build of one project (R-19)
   build_delphi2010.bat         the same with Delphi 2010, warnings on (R-25, Unicode Delphi)
@@ -101,13 +101,12 @@ tests/
   fonts/                       test fonts the tests register (RegisterFontData): renamed OFL subsets of Noto (Latin, Arabic, CJK, symbol, a (0,3) cmap only, a format 12 cmap only, a collection) and an Apache 2.0 subset of Droid Sans Fallback (CJK with TrueType outlines), their licences, sources and generator
   test_coordinates.pas         page geometry
   test_report_coordinates.pas  report geometry
-reference/
-  mormot.ui.pdf.pas   Original Windows/GDI file (12,514 lines, reference only)
 docs/
   DEMOS.md            Learning path: the 8 demos step by step
   API_REFERENCE.md    TCanvas methods, TReportFormat, TTableLayout
   ROADMAP.md          Open work in detail, completed work as one line each
   REFACTORING.md      mORMot Refactoring: integration into the trunk as src/pdf (R-28)
+  MIGRATION.md        For users of the trunk's mormot.ui.pdf/mormot.ui.report: units, calls, what changed
   CI.md               GitHub Actions for FPC/Lazarus: rule, install options, this project's jobs (R-24)
 CHANGELOG.md          Released versions; a release's entry is written from ROADMAP "To Announce", the one list of user-visible changes
 .claude/skills/
@@ -417,7 +416,7 @@ itself is in each demo's `uReport.pas`; the form only passes its options.
 - **Delphi** (R-19, R-21, R-23, R-25, R-27 done; R-20 steps 1–6 done): layer 1,
   the TCanvas bridge and the `TGDIPages` core build on Delphi 7 and Delphi
   2010 (Unicode Delphi), Win32; `test_runner` green on Delphi 7 (counts: the
-  test list above; Delphi 2010 last measured at 1264/1264, #65). All six console
+  test list above; Delphi 2010 1277/1277, #69). All six console
   demos and the `--export` of the two GUI demos build and give the same PDF as
   FPC (the GUI demos build their report in `uReport.pas`, without a form);
   PAC 2024 and veraPDF pass the files of both compilers. Open: the preview and
