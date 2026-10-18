@@ -219,7 +219,15 @@ checked against that record:
    `c68fc85aa` (2026-10-14, symbol faces measured by their symbol cmap), then
    `c53462a61` (2026-10-15, the fallback step: `fsoMissingGlyphs`,
    `IFontRunShaper`, HarfBuzz script runs), then `b2d659d44` (2026-10-15,
-   Uniscribe keeps the missing-glyph check when its font properties fail).
+   Uniscribe keeps the missing-glyph check when its font properties fail),
+   then `287ef426f` (2026-10-18, the trunk of that day merged in - the first
+   synchronization since `d60cc6e80`, 349 commits, among them `f2b61cbc1`:
+   `RunRedirect` on POSIX returns once the child exits; conflicts only in
+   the Lazarus package, the trunk's DuckDB units beside ours; checked:
+   `test_runner` 1277/1277 on Windows aarch64 (FPC 3.3.1), Delphi 7 and
+   Delphi 13 Win32/Win64, the dproj built with msbuild, 1305/1305 on Linux
+   aarch64, 1338/1338 on macOS aarch64, golden files unchanged everywhere;
+   the demo PDFs identical to the old pin - 7 on Windows, 8 on Linux).
    **Checked:** against `d60cc6e80`, today's `main`,
    `test_runner` 259/259 on Windows (FPC Win64, Delphi 7, Delphi 2010),
    298/298 on Linux, 317/317 on macOS (fpcupdeluxe, FPC 3.2.3). Against
