@@ -1,6 +1,7 @@
 # mORMot PDF Cross-Platform — Implementation Roadmap
 
-Open work only. Finished work is in the git history, and the technical knowledge
+Open work in detail, finished work as one line each ("Done", at the end).
+The details of finished work are in the git history, the technical knowledge
 it produced in `.claude/skills/` — this file repeats neither.
 
 **State on 2026-10-18.** The engine is cross-platform, writes PDF 1.7, and its
@@ -13,7 +14,8 @@ Delphi 2010 and Delphi 13), 1338 on macOS and 1305 on Linux. **Delphi:** layer
 steps 1–6) and on Delphi 2010, a Unicode Delphi (R-25); all six console demos
 and the `--export` of the two GUI demos give the same PDF as FPC. Delphi 13
 (R-27) runs `test_runner` green on Win32 and Win64 and, with layer 1 and the
-backends only (no VCL), on Linux64 and Android64. The files of
+backends only (no VCL), on Linux64 and Android64 (those two last run before
+the golden files). The files of
 macOS, Debian, FPC/Win64, Delphi 7 and Delphi 2010 all pass PAC 2024
 and veraPDF (V); the new `zugferd_demo` (R-26, on `TGDIPages`, its text from
 the invoice XML) also veraPDF `3u` and Mustang. **Next:** R-28, the
@@ -395,7 +397,8 @@ a PAC error like "unbalanced marked content" then names no culprit.
 | PAC 2024 + tag-tree inspection | **Windows** (only platform; mandatory) |
 | Third-platform verification per change | macOS |
 | Delphi build and Win32 run (R-19, R-20, R-25) | **Windows** VM with Delphi 7 and Delphi 2010 (`dcc32`) |
-| Delphi 13: Win32, Win64, Linux64, Android64 (R-27) | none of ours — the community; a change is not re-run there unless a contributor does it |
+| Delphi 13: Win32, Win64 (R-27) | **Windows**, in every check session |
+| Delphi 13: Linux64, Android64 (R-27) | none of ours — the community; a change is not re-run there unless a contributor does it |
 | `veraPDF` (`ua1`, `3b`, `3u`, `3a`) | installed on macOS since 2026-09-22; the Windows and Linux files are copied there |
 
 **PAC caveat.** The traffic-light status is not enough: a flat tree of
@@ -413,8 +416,10 @@ distributions do not always install: symlink `libgtk-x11-2.0.so`,
 `libgdk-x11-2.0.so` and `libatk-1.0.so` to their `.so.0` files in a scratch
 directory and build with `lazbuild --opt=-Fl<dir>`.
 
-**Windows.** Target **x86_64-win64**; an aarch64-win64 FPC is not usable —
-mORMot2 ships no static libraries for it. Build every project with `-B`: stale
+**Windows.** Target **x86_64-win64** or **aarch64-win64**. mORMot2 ships no
+static libraries for aarch64-win64, so `mormot.defines.inc` takes the pure
+pascal fallbacks there, and the ORM parts (`mormot_demo`) need an aarch64
+`sqlite3-64.dll`. Build every project with `-B`: stale
 `.ppu` files in `examples/*/lib/` outlive a unit-path change and will hide it.
 Where the only `pdftotext` available is xpdf's rather than poppler's, there is
 no `-bbox` — use `-layout` for column and line alignment. Without `pdffonts`,
@@ -438,11 +443,12 @@ demos headless; the `xvfb-run` advice is Linux/GTK2 only.
 **Checking a change.** First the golden files: `test_runner --golden-record`
 on the commit before the change, then `test_runner` on the change - a change
 meant to be invisible leaves every golden case green (CLAUDE.md, Build
-Commands). Then build all eight demos and compare the
-PDFs with the previous run: file size, `pdffonts`, `pdftotext` output, and the
-pages rendered with `pdftoppm -r 110 -png` compared pixel by pixel. A change
-that is meant to be invisible has to come out pixel-identical. A pixel
-comparison is valid **within** one platform only — see V below.
+Commands). Then the demo PDFs against the previous run with `pdfcheck
+compare`, normalized. While R-28 runs this is the whole check
+(`docs/REFACTORING.md`, rule 1, "A Check Session"). Where the poppler tools
+are installed, `pdffonts`, `pdftotext` and the pages rendered with
+`pdftoppm -r 110 -png` add a pixel comparison - valid **within** one
+platform only, see V below.
 
 ---
 
@@ -461,109 +467,29 @@ https://gist.github.com/synopse/9e31d8808ed2575ad5ad23da6fe41e4f
 
 **Alongside it** only work outside `src/`, where the refactoring PRs of this
 repository land (the `mormot.lib.*` units of Phase 1 are written in the
-`pdf-font-layer` branch of `landrix/mORMot2`): R-24, the checks in V (old HarfBuzz, `.ttc` on Linux — the paths
-Phase 1 moves), and preparing the open decisions in REFACTORING.md. Waiting
-for R-28, because a refactoring step touches the same code or the freeze
-forbids it:
+`pdf-font-layer` branch of `landrix/mORMot2`): R-24, the checks in V, the
+documentation, and preparing the open decisions in REFACTORING.md. The
+feature freeze holds back R-26 (the other demos), R-22, R-20 steps 7-8,
+the Windows font subsets, thinner table borders and R-29; R-30 builds on
+R-29.
 
-| Item | Why it waits |
-|---|---|
-| R-26, the other demos | overlaps the ASCII-only sources of the formatting pass |
-| R-22 | overlaps the roadmap references taken out of the comments; every unit |
-| R-20 steps 7–8 | a feature (Phase 4 moved report and preview as they are) |
-| Windows font subsets | `CreateFontPackage` moves behind the subsetter interface in `mormot.lib.uniscribe` in Phase 1 |
-| Thinner table borders | a feature |
-| R-29 | features of the report, under the feature freeze |
-| R-30 | builds on R-29; its engine gaps are features in the tagging code |
+### R-26 — The Other Demos in Plain ASCII — after R-28
 
-### R-26 — `zugferd_demo` on `TGDIPages`, Its Text From the XML — done; the other demos after R-28
+`zugferd_demo` is done: a report on `TGDIPages` that reads its page from the
+`factur-x.xml` it embeds, its source pure ASCII ("Done"; the extension it
+needed, `AddExportPdfAttachment` and `ExportPdfMetadataExtension`, is in
+`report-engine.md`).
 
-**Why.** Since 3d0ab39 every non-ASCII character in the demos is a code-point
-constant (`{$ifdef HASCODEPAGE} #$00E4 {$else} #$C3#$A4 {$endif}`). That
-builds on every compiler, but a user cannot read or adapt it, and other
-compilers must not pay for Delphi 7. `zugferd_demo` is the worst case — a
-German invoice — and hard to follow besides: pixel columns, `Open`/`Close`
-around every element, hand-broken lines, and a page that repeats
-`factur-x.xml` by hand, so the two have to be changed together.
+**Kept out on purpose:** an event `OnExportPdfDocument(Sender, Doc)` instead of
+the export options - it would hand out the document in the middle of the
+stream (an `AddPage` there breaks the file), and `of object` needs a helper
+class in a console program.
 
-**Decided 2026-09-29:**
-- **Layer 3.** The invoice is a report: `DrawHeading`, `DrawParagraph` (word
-  wrap), a `TTableLayout` table (`THead`/`TBody`/`TFoot` and page breaks
-  come with it), tagging without `Open`/`Close`. Layer 2 stays shown by
-  `pdf_demo`, `chinese_demo` and `rtl_demo`, layer 1 by `layer1_demo`
-- **The page reads `factur-x.xml`**, the file it embeds, so the two cannot
-  differ. A demo-only reader with fixed paths fills a record `TInvoice`;
-  then the page is drawn from the record, which shows where data from a
-  database would go in. The reader is a hint, not a parser: the prefixes
-  `rsm:`/`ram:`/`udt:` are fixed, no entities, no CDATA, no validation — the
-  engine still neither generates nor validates invoice XML. mORMot2 has no XML
-  reader (only `JsonToXML`/`XmlEscape`); a small `PosEx` search through the
-  nested tags is enough. Refused is only a file that is not UTF-8. The
-  XML is the `Gesamtbeispiel` of XRechnung for Delphi, under this project's
-  licence (PR #5 replaced the KoSIT test case, Apache-2.0)
-- **Labels in ASCII German**, so the source is pure ASCII without
-  `HASCODEPAGE`: "Ihre Referenz" for "Käuferreferenz", "Bankverbindung:
-  IBAN …" for "SEPA-Überweisung auf IBAN …". The umlauts on the page come
-  from the UTF-8 XML. Amounts `336.9` → `336,90`, `0.1275` → `0,1275`
-  (every decimal of the XML, two at least), dates `20160404` → `04.04.2016`,
-  the IBAN in groups of four
-- The footer names the source of the sample data (XRechnung for Delphi);
-  `--no-attachment` and `--untagged` stay
-
-**The library extension.** `TGDIPages.ExportPdfStream` creates its
-`TPdfDocumentVcl` as a local, streams it page by page
-(`SaveToStreamDirect*`) and frees it: nothing outside reaches
-`CreateFileAttachmentFrom` or `PdfAMetadaExtension`. `ExportPdfLevel`
-already takes `pdfa3U` (it goes to the constructor). New, in the style of the
-other `ExportPdf*` options, applied after the outlines and before
-`SaveToStreamDirectEnd`:
-```pascal
-Report.AddExportPdfAttachment(Xml, 'factur-x.xml', 'Factur-X invoice data',
-  'text/xml', afrAlternative);
-Report.ExportPdfMetadataExtension := PdfMetadataFacturX('EN 16931', 'factur-x.xml');
-```
-`TPdfAFRelationship` re-exported by `mormot.ui.report` (now
-`mormot.pdf.report`), as
-`TPdfALevel` is. **Rejected:** an event `OnExportPdfDocument(Sender, Doc)` —
-it hands out the document in the middle of the stream (an `AddPage` there
-breaks the file), and `of object` needs a helper class in a console program.
-
-**Answered (2026-09-29):** `CreateFileAttachmentFrom` works in the direct
-streaming mode, after the outlines. The metadata extension does not fit at
-the end: PDF/A writes its XMP packet in `SaveToStreamDirectBegin`, so it is
-assigned before that.
-
-**Work, in this order (on Windows: FPC, Delphi 7, Delphi 2010):**
-1. ~~Test~~ done: `TestExportPdfAttachment` in `test_report_crossplatform`
-   (inflates the object streams first); failed 7/9 with a stub
-2. ~~The extension~~ done: `AddExportPdfAttachment`,
-   `ClearExportPdfAttachments`, `ExportPdfMetadataExtension`; docs updated.
-   `test_runner` 253/253 on FPC, Delphi 7 and Delphi 2010 (Windows)
-3. ~~`zugferd_demo` rewritten~~ done: reader → `TInvoice` → `TGDIPages`,
-   the source pure ASCII; README, `DEMOS.md`, the source header
-4. ~~Checked~~ done. Windows: `test_runner` 259/259 on all three compilers; the demo
-   builds without a warning and gives the same PDF from all three (identical
-   after inflating the streams and masking dates, `/ID`, subset prefixes);
-   structure `H1`, 11 `P`, `Table` with `THead` 1 / `TBody` 2 / `TFoot` 3
-   `TR`; the page looked at, PAC 2024 passes the files of all three
-   compilers. The table borders are grey now: `TTableLayout.GridColor`, new.
-   After 994cdb4 (no background `FillRect` on the PDF bridge): Windows
-   259/259 on all three compilers, the PDF unchanged (identical after
-   inflating and masking dates); Linux (aarch64) `test_runner` 298/298, the
-   demo pixel-identical (`pdftoppm`) with the same `pdftotext` output.
-   macOS (aarch64) `test_runner` 317/317. veraPDF `3u` and `ua1` and
-   Mustang pass the `zugferd_demo` files of macOS, Debian, FPC/Win64,
-   Delphi 7 and Delphi 2010 (5/5 each); PAC 2024 passes on Windows
-
-**Accepted differences:** the layout changes, so the PDF is not compared with
-the old one, only checked again. `TTableLayout` styles all footer rows alike —
-today only "Gesamtbetrag" is bold. More items than fit now break the page
-instead of running off it.
-
-**Afterwards, demo by demo:** the other demos lose their code-point constants
-the same way — ASCII labels, non-ASCII data from a UTF-8 file or a literal
-straight into a `RawUtf8`. Then the literal rule in `CLAUDE.md` (Coding
-Conventions) applies to `src/` and `tests/` only.
+**Open, demo by demo:** the other demos lose their code-point constants
+(`{$ifdef HASCODEPAGE} #$00E4 {$else} #$C3#$A4 {$endif}`) the same way -
+ASCII labels, non-ASCII data from a UTF-8 file or a literal straight into a
+`RawUtf8`. Then the literal rule in `CLAUDE.md` (Coding Conventions) applies
+to `src/` and `tests/` only.
 
 ### R-20 — Delphi: the TCanvas Bridge and `TGDIPages` — steps 7–8 after R-28
 
@@ -591,21 +517,8 @@ carries no structure, so there is no tagged output, and the original in
 under Delphi has to give the same text and structure as the same page through
 layer 1.
 
-**Done** (details in the commits):
-1. The bridge reads `string` per compiler; `TextOutUtf8`, `TextWidthUtf8` (e06c736)
-2. `TGDIPages` on `RawUtf8`, file names `TFileName` (c644e17)
-3. `TGDIPages` a non-visual `TComponent`; preview and printing in
-   `mormot.ui.reportpreview` (e9d63fb)
-4. The bridge and the `TGDIPages` core build on Delphi 7; `test_runner`
-   243/243 there (cb39c6c)
-5. `pdf_demo`, `chinese_demo`, `rtl_demo`, `zugferd_demo` build on Delphi 7;
-   every demo names its PDF `<demo>_<os>_<cpu>_<compiler>.pdf` (3d0ab39)
-6. `report_demo --export` and `mormot_demo --export` build on Delphi 7, the
-   report in each demo's `uReport.pas` (049a9b2)
-
-Steps 1–6 verified on all three platforms, from Delphi 7 and — with R-25 —
-from Delphi 2010: see V. Not checked since step 3: the FPC GUI itself
-(preview, print, export dialog) after the split.
+Steps 1-6 are done ("Done"). Not checked since the split of the preview:
+the FPC GUI itself (preview, print, export dialog).
 
 **Remaining, in this order:**
 7. **`mormot.pdf.report.preview` on the VCL.**
@@ -616,45 +529,22 @@ Optional, for consistency down to layer 1: a `TPdfCanvas.TextOutUtf8`, so
 callers need not go through `Utf8ToSynUnicode` + `TextOutW` as `layer1_demo`
 does.
 
-### R-25 — Unicode Delphi: Delphi 2010 — done, two leftovers
+### R-25 — Unicode Delphi: Delphi 2010 — leftovers
 
-**Why Delphi 2010, decided 2026-09-28.** It is Unicode, the Pro edition ships
-`dcc32`, so builds and tests run unattended as for Delphi 7, and mORMot2 lists
-it among its validated compilers. The Community Edition (13.0) was rejected as
-the main target: since 10.4 it refuses command-line compiling (`dcc32`,
-`dcc64` and MSBuild — "This version of the product does not support command
-line compiling"), so every build would go through the IDE by hand.
+Delphi 2010 builds and runs everything Delphi 7 does ("Done"). **Open:** the
+W1057/W1058 warnings (implicit string casts) in the tests - 24 when last
+counted; `tests/build_delphi2010.bat` keeps warnings on to show them.
 
-**Done 2026-09-28** (9f6633b): `tests\build_delphi2010.bat`; `test_runner`
-244/244 with Delphi 2010, Delphi 7 and FPC; all eight demos build with Delphi
-2010 and give the same PDFs as Delphi 7 (identical after masking dates and
-`/ID`); PAC 2024 and veraPDF pass them (V). `src/` compiles without a
-warning. The findings were in the UTF-8 constants, not in the engine — the
-literal rule in `CLAUDE.md`, Coding Conventions — and they uncovered a
-double-encoded XMP packet header from Unicode Delphi (`XPACKET_BEGIN`, checked
-by `TestPdfA3UIdentification`) and the missing `{$APPTYPE CONSOLE}` of every
-console program under dcc32.
+### R-27 — Delphi 13: Win64, Linux64, Android64 — leftovers
 
-**Open:** the 24 W1057/W1058 in the tests. Win64 Delphi is green with
-Delphi 13 (R-27).
-
-### R-27 — Delphi 13: Win64, Linux64, Android64 — done, leftovers
-
-**Done 2026-09-29.** `tests/delphi13/test_runner.dproj` builds the suites
-from the IDE for Win32, Win64, Linux64 (PAServer) and Android64;
-`tests/delphi13/android` is an FMX host, since Android starts no console
-program — `build.cmd`, `run-emulator.cmd -Run` (unattended, log fetched,
-verdict as exit code), `BUILD-FREETYPE.md` for the NDK build of
-`libfreetype.so`. Results after the rebase onto 8bdd6bd: Win32 and Win64
-259/259, Android64 129/129 on an x86_64 AVD with ARM64 translation, Linux64
-171/171 on LMDE 7 (needs `fonts-liberation` and `fonts-noto-core`, else two
-tests fail). FPC after the move away from `dynlibs`: Linux 298/298 (also against
-mORMot2 2.4-stable) and macOS 317/317, the demo PDFs unchanged.
+`tests/delphi13/test_runner.dproj` builds the suites for Win32, Win64,
+Linux64 and Android64, `tests/delphi13/android` is the FMX host for Android
+("Done"). Linux64 needs `fonts-liberation` and `fonts-noto-core`.
 
 **Open:**
-- **Checks by the community.** Delphi 13 is on none of the maintainers'
-  machines: after a change, the Delphi 13 runs and the demos with Delphi 13
-  (none built yet) have to come from contributors
+- **Checks by the community.** Win32 and Win64 run in every check session
+  (`docs/REFACTORING.md`); Linux64 and Android64 after a change, and the
+  demos with Delphi 13 (none built yet), have to come from contributors
 - the TCanvas bridge and `TGDIPages` on Delphi for Linux/Android: no VCL
   there — an FMX adapter would be the way, feeding `TPdfImagePixels`
 - HarfBuzz and hb-subset on Android: not packaged, their tests skip;
@@ -670,7 +560,7 @@ source while a fix is in progress; once it is accepted they move to the skill
 comment shrinks to the rule it protects.
 
 **The state.** The older code carries the investigations themselves —
-measurements, validator runs, spec clauses argued out, roadmap IDs — above all
+measurements, validator runs, spec clauses argued out — above all
 `mormot.pdf.pas` (`PrepareForSaving`, `PrepareFontSubsets`, the text
 rendering chains), also `mormot.pdf.report.pas`, the backends and the test
 units. Part of it repeats the skills, part of it is found nowhere else.
@@ -681,7 +571,7 @@ then cut the comment. Comments only — `test_runner` gives the same assertion
 count, and the demo PDFs are byte-identical apart from date and `/ID`.
 The `///` API documentation inherited from the original mORMot2 units stays.
 
-### Windows Font Subsets Are Larger — after R-28 Phase 1
+### Windows Font Subsets Are Larger — after R-28
 
 Harmless — the subsets are valid and pass veraPDF — but the Windows demo PDFs
 are 2–5 times the size of the POSIX ones (`markdown_demo` 230 KB against
@@ -872,36 +762,24 @@ in order, what is still to check and what stays manual. Settled:
 
 ### V — Verification Outstanding
 
-All three platforms build and pass `test_runner` (279 assertions on Windows
-with FPC, Delphi 7 and Delphi 2010, 337 on macOS, 318 on Linux).
-Last full run 2026-09-29, after the shaping switch (`UseUniscribe`), on the
-files of macOS, Debian, FPC/Win64, Delphi 7 and Delphi 2010: the seven tagged
-files pass veraPDF `ua1` (35/35 files) and PAC 2024, `zugferd_demo` also `3u`
-(5/5) and Mustang (5/5, no warnings); `chinese_demo` and `rtl_demo` are
-untagged (not applicable). Linux and macOS built the POSIX shaping branches
-for the first time in that run; `tagged_unicode_*.pdf`, whose Arabic HarfBuzz
-now shapes there, passes PAC and veraPDF as well. The run of 2026-09-28, after R-25, found page
-counts and structure trees (roles and their counts) the same across all five
-for every file.
-After R-26 (8de33da, 994cdb4), 2026-09-29: the new
-`zugferd_demo` passes veraPDF `3u` and `ua1` and Mustang on all five (5/5);
-the other tagged files of Debian and the three Windows compilers pass `ua1`
-(24/24).
+All three platforms build and pass `test_runner` (the counts: `CLAUDE.md`,
+tests). The last full check session (#69) ran on the files of Windows (FPC,
+Delphi 7, Delphi 2010), Debian and macOS: veraPDF `ua1` passes all 35 tagged
+files, `3u` the five `zugferd_demo` files, PAC 2024 is green; Mustang last
+passed the `zugferd_demo` files of all five with R-26. `chinese_demo` and
+`rtl_demo` are untagged (not applicable).
 
 | Open | Why it matters |
 |---|---|
-| HarfBuzz older than 2.9 | loads, but lacks `hb_subset_or_fail`. The **missing** library is covered by `tests/no_hbsubset.sh`; an old one is still the default on Ubuntu 22.04 LTS and RHEL 9 (2.7.4) — untested here |
-| HarfBuzz older than 10.0 | returns an empty font instead of failing for a face without glyphs; `Subset` catches it since issue #4. Checked 2026-10-02 in an `ubuntu:24.04` Docker container (8.3.0) with the Debian-built `test_runner`: 303/303, without the fix 2 failures in `TestSubsetAcceptsCff`. Needs `libgtk2.0-0t64`, `xvfb` and the README fonts in the container |
-| The U-2 width fix on Linux | exercised on macOS only: no Linux Arabic face reaches the shaper width path (`fonts.md` §10), and `TestShapedGlyphWidthFromHmtx` skips itself there |
+| HarfBuzz older than 2.9 | loads, but lacks `hb_subset_or_fail`. The **missing** library is covered by `tests/no_hbsubset.sh`; an old one is still the default on Ubuntu 22.04 LTS and RHEL 9 (2.7.4) — untested here. HarfBuzz 8.3.0 (< 10.0) was tested this way: an `ubuntu:24.04` container running the Debian-built `test_runner`, with `libgtk2.0-0t64`, `xvfb` and the README fonts |
 | veraPDF in the routine runs | installed on macOS with `ua1`, `3a`, `3b`, `3u` (path in `CLAUDE.local.md`); run by hand on each platform's files, not scripted |
-| The `.ttc` fix on Linux | `TestTtcFaceExtraction` skips itself: the Linux machine has no `.ttc` installed (e.g. `fonts-noto-cjk` would bring one) |
 | Delphi GUI | the preview and the demo windows — R-20 steps 7 and 8 |
 
 **Comparing the platforms — but not pixel by pixel.** The demos resolve
 different families (Calibri/Cambria/Consolas, Liberation, Trebuchet MS/Georgia/
 Andale Mono), so different advance widths, line breaks and page counts are
-correct behaviour, not a defect. B-5 made the measurement platform-independent
-*for one face*, not the faces themselves. What must match: `pdftotext` output,
+correct behaviour, not a defect. The measurement is platform-independent
+*for one face* (B-5), not the faces themselves. What must match: `pdftotext` output,
 the structure tree (roles and their counts), `pdffonts` (embedded, subset,
 `uni`), page count and the PAC result. A true cross-platform render diff would
 need a demo that forces one face on all three systems — worth building only if
@@ -965,22 +843,23 @@ would need a tagged link annotation, which the engine cannot write yet
 (R-29, item 7), so the hint is accepted, like W-1. `invoice_demo` draws its
 addresses the same way.
 
-### `RunRedirect` Hangs on POSIX — mORMot2 fix, unprioritised
+### `pdfcheck` Without `RunRedirect` on Linux — after the next trunk merge
 
-Found on 2026-10-01 with `pdfcheck run fpc` on Linux: after the first demo had
-written its PDF and exited, `pdfcheck` spun at 100 % CPU, the child left as a
-zombie. In `RunRedirect` (`mormot.core.os.posix.inc`, `RedirectOutput`)
-`fpread` returns 0 at the end of the pipe, but only `n < 0` counts as closed;
-with `INFINITE` the loop reads the closed pipe for ever and never reaches
-`pclose`. Windows goes through `RunCommandWin` and is not affected.
+`RunRedirect` hangs on Linux once the child has exited: `WaitReadPending`
+returns -1 when `poll()` reports only `POLLHUP`, and `RedirectOutput` reads
+the pipe only on a positive result, so it never sees the end of the output
+and loops at full CPU, the child a zombie. macOS reports `POLLIN` with the
+hang-up and is not affected: `pdfcheck run` through `RunRedirect` ran all
+eight demos there. The trunk fixed it in f2b61cbc1 (a negative result ends
+the output); the pinned `pdf-font-layer` does not have it yet - 667509df5,
+which it has, covered only `fpread` = 0. `tests/pdfcheck.lpr` works around
+it under `OSPOSIX` (`ChDir` + `RunCommand(cmd, true)`, the demo output on
+the console).
 
-**Workaround, done:** `pdfcheck` runs the demos with `ChDir` +
-`RunCommand(cmd, true)` under `OSPOSIX`; their output goes to the console
-instead of being shown on a failure.
-
-**The fix still open:** take `n <= 0` as the end in `RedirectOutput`, in the
-mORMot2 fork and as a PR to Synopse; then drop the `{$ifdef OSPOSIX}` in
-`tests/pdfcheck.lpr`.
+**Open:** once `pdf-font-layer` takes f2b61cbc1, run `pdfcheck run` on Linux
+through `RunRedirect` and drop the `{$ifdef OSPOSIX}` branch: one
+`RunRedirect` call for every platform, with `DemoEnvironment` as its `env`
+on POSIX.
 
 ### CFF Faces the Reader Refuses — unprioritised
 
@@ -999,7 +878,7 @@ gives the source cluster of each glyph, the Uniscribe adapter discards
 `logclust`; `ShowGlyph` has no source text at all. Matters for justified
 text in a CFF or complex-script face.
 
-### Shaped Text: Real `/ToUnicode` and Vertical Offsets — after R-28 Phase 1
+### Shaped Text: Real `/ToUnicode` and Vertical Offsets — after R-28
 
 Two gaps of shaped text, each a change of its own:
 - **Text extraction:** a shaped glyph without a code point of its own maps to
@@ -1018,20 +897,11 @@ for it, but for a face that draws only CJK or Arabic that instance shows
 nothing — `SetFont` selects the WinAnsi instance and writes `Tf` at once, and
 the text output switches to the CID font right after (`/F1 18 Tf /F2 18 Tf`).
 
-**Measured with a `glyf` face on Windows, 2026-09-26 — not cosmetic.** The
-peer was a `/TrueType` font without `/FirstChar`, `/LastChar` and `/Widths`,
-which ISO 32000-1 table 111 requires for a simple TrueType font, because they
-were written only when a character was used. PAC 2024 stopped on it ("'FirstChar'
-not defined in TrueType font"), on the R-19 test file (Microsoft YaHei and
-Tahoma) from both compilers. `chinese_demo` and `rtl_demo` carry the same
-peer, but are untagged, so PAC had never run on them. On macOS the Hiragino
-peer is a `/Type1` (a CFF face), and veraPDF passed PDF/A-3U and PDF/UA-1 with
-it on 2026-09-24.
-
-**Stopgap, done 2026-09-26:** a peer with no used character gets
-`/FirstChar 32 /LastChar 32` and the width of the space, so the dictionary is
-valid; `TestTaggedUnicode` asserts that no simple TrueType font lacks
-`/FirstChar` (fails 1/5 without the change).
+**Not cosmetic.** A simple TrueType font needs `/FirstChar`, `/LastChar` and
+`/Widths` (ISO 32000-1 table 111), and PAC 2024 stops on a peer without them.
+Today an unused peer gets `/FirstChar 32 /LastChar 32` and the width of the
+space, so the dictionary is valid; `TestTaggedUnicode` asserts that no simple
+TrueType font lacks `/FirstChar`.
 
 **The fix still open for glyf faces:** stop emitting the peer — write `Tf`
 only when text is shown, and leave an unused peer out of the page resources
@@ -1069,16 +939,15 @@ The CFF series of R-28 tests the CFF programs, the PDF/A-1 refusal of a
 name-keyed face and the routing with a synthetic face (`test_pdf_cff`, not
 tagged); veraPDF and PAC on real CFF output (macOS) are still to run.
 
-### `TGDIPages.ExportPDF`: `Protect` and `Encrypt` — refused since Phase 4's bug-fix PR, the feature after R-28
+### `TGDIPages.ExportPDF`: `Protect` and `Encrypt` — refused, the feature after R-28
 
-`ExportPDF(FileName, Protect, Encrypt, ..)` took both flags and passed
-neither on (found by Codex while deciding the bug fixes of Phase 2); since
-Phase 4's bug-fix PR it raises when either is true. Open, after R-28: the
+`ExportPDF(FileName, Protect, Encrypt, ..)` raises `EPdfReport` when either
+is true: neither is implemented. Open, after R-28: the
 trunk's `TGdiPages` properties `ExportPdfEncryptionLevel`,
 `ExportPdfEncryptionUserPassword`, `ExportPdfEncryptionOwnerPassword` and
 `ExportPdfEncryptionPermissions`, passed as `TPdfEncryption.New(..)` to the
-`TPdfDocumentVcl` that `ExportPdfStream` creates (the bridge takes one
-since Phase 2's bug-fix PR). Needs a password and permission policy; PDF/A
+`TPdfDocumentVcl` that `ExportPdfStream` creates (its constructor takes
+one). Needs a password and permission policy; PDF/A
 refuses encryption (the engine raises), PDF/UA needs `epContentExtraction`,
 and `elAES_256` gives no encryption (`TPdfEncryption.New` returns nil).
 
@@ -1096,36 +965,28 @@ text blocks (B-2) and is the model to follow.
 
 **Effort:** several PRs | **File:** `src/pdf/mormot.pdf.pas`
 
-The engine keyed characters by UTF-16 code unit (`fUsedWideChar` was a
-`TSortedWordArray`, `FindOrAddUsedWideChar` takes a `WideChar`; step 1
-below changed the keys, the text paths still look up one unit), so a
-character beyond the BMP - emoji, CJK Extension B, mathematical
-alphanumerics - is never found in the plain path, on any face: each
-surrogate is looked up alone, then in the fallback font the same way, then
-`.notdef` (a raise under PDF/A). The format 12 reader keeps only the BMP
-part of a cmap for this reason. Shaped text may draw such glyphs, without a
-real `/ToUnicode` ("Shaped Text: Real /ToUnicode"). Discussed with Codex and
-Fable (2026-10-16), in this order, each byte-equal for the output of today
-but the last: (1) code points as keys - `TSortedIntegerArray`, cardinal
-lookups with the `WideChar` methods as wrappers, the packing of
-`PdfUsedCodes` (16 bits of Unicode today) and `GetUsedGlyphs` widened;
-(2) the supplementary groups of format 12 into the Unicode instance's
-table (the BMP still from format 4, never "prefer format 12" for it),
-surrogate pairs combined in `AddUnicodeHexTextNoUniScribe` and
-`UnicodeTextWidth`, the fallback and the PDF/A message by code point,
-`/ToUnicode` destinations as UTF-16BE pairs; (3) shaped source text.
-**Step 1 done** (2026-10-17, ahead of R-28 as a byte-equal internal change,
-decided with Sven, Codex and Fable - REFACTORING "Outside the Phases"):
-`fUsedWideChar` is a `TSortedIntegerArray`, `FindOrAddUsedCodePoint` with
-`FindOrAddUsedWideChar` as its wrapper, `GetUsedGlyphs` returns integer keys,
-`PdfUsedCodes` packs `GlyphCode shl 37 + code point shl 16 + width`. Steps
-2 and 3 stay after R-28: new behaviour, and step 3 new output. For step
-2 (Codex): the `/ToUnicode` destination must not go through `AddHex4`,
-which indexes its hex table unmasked with a value above $FFFF; FontSub
-(`mormot.lib.uniscribe`) skips supplementary code points in the request,
-keeping their glyphs only by the glyph keep list; hb-subset takes them.
-`FindOrAddUsedCodePoint` is protected until then (Martin on #65); step 2
-may make it public again.
+The used characters are keyed by code point (step 1, "Done"), but the text
+paths still look up one UTF-16 unit, so a character beyond the BMP - emoji,
+CJK Extension B, mathematical alphanumerics - is never found in the plain
+path, on any face: each surrogate is looked up alone, then in the fallback
+font the same way, then `.notdef` (a raise under PDF/A). The format 12
+reader keeps only the BMP part of a cmap for this reason. Shaped text may
+draw such glyphs, without a real `/ToUnicode` ("Shaped Text: Real
+/ToUnicode").
+
+**Open, after R-28:**
+2. **Step 2:** the supplementary groups of format 12 into the Unicode instance's table
+   (the BMP still from format 4, never "prefer format 12" for it), surrogate
+   pairs combined in `AddUnicodeHexTextNoUniScribe` and `UnicodeTextWidth`,
+   the fallback and the PDF/A message by code point, `/ToUnicode`
+   destinations as UTF-16BE pairs. Byte-equal for today's output. Watch:
+   the `/ToUnicode` destination must not go through `AddHex4`, which indexes
+   its hex table unmasked with a value above $FFFF; FontSub skips
+   supplementary code points in the request, keeping their glyphs only by the
+   glyph keep list; hb-subset takes them. `FindOrAddUsedCodePoint` is
+   protected until this step and may become public with it
+3. **Step 3:** shaped source text - new output
+
 PDFBox and iText read format 12 and encode by code point the same way.
 
 ### R-11 — TTC Face Index — unprioritised
@@ -1141,8 +1002,7 @@ FreeType backend already extracts a single face as a standalone sfnt
 ### R-30 — Rebuild the Published Accessibility References — after R-28 and the merge of R-29
 
 **Why.** The tagged output is checked by validators, not against examples
-others published as correct. `docs/ACCESSIBILITY_REFERENCES.md` (2026-10-10,
-branch `feature/accessibility-reference-rebuild`) maps the PDF Association's
+others published as correct. `docs/ACCESSIBILITY_REFERENCES.md` maps the PDF Association's
 Techniques for Accessible PDF, its PDF/UA-1 Reference Suite (both CC BY
 4.0) and the BITV-PDF-Test onto the engine. It lists each case as tested,
 shown in a demo only, solved by R-29, a gap, or to be checked.
@@ -1183,3 +1043,52 @@ chart library's bitmap is to be built only when someone asks for it.
 ### EMF/MetaFile and GDI+ Gradients — no work planned
 
 Windows-only (`TPdfDocumentGdi`), not portable.
+
+---
+
+## Done
+
+One line per finished ID, so that every citation resolves; the details are
+in git, the knowledge in the skills.
+
+- **B-1** - nested structure tags for tables and lists, not a flat tree (a7687b9)
+- **B-2** - one tag per paragraph, not per wrapped line (2a36b30)
+- **B-3** - one tag per sentence, `Span` for styled inline runs (b55d3d7, 65497b5)
+- **B-4** - wrong text bounding boxes in graphics on Linux/macOS: text metrics from the PDF font engine (eeea21b)
+- **B-5** - line and inline spacing differed across platforms: layout measured with the PDF font engine, not the LCL (026137d)
+- **B-6** - `/Alt` written as a bare token instead of a string (eeea21b)
+- **B-7** - PAC: `DisplayDocTitle` not set (64337cd)
+- **B-8** - PAC: PDF/UA identifier missing, the XMP stream was written empty (64337cd)
+- **B-9** - PAC: path objects not tagged (64337cd)
+- **B-10** - PAC: title missing in the XMP metadata (64337cd)
+- **B-11** - PAC: table header cells without associated cells, no `/Scope` (64337cd)
+- **B-12** - PAC: `RG` inside a path object, `LineTo` writes a complete path object (ed38f2f)
+- **B-13** - PAC: `Figure` on one page without a `/BBox` layout attribute (ae6194a)
+- **R-1** - AES-128 encryption (in the initial commit c9d92f3)
+- **R-2** - cross-reference streams, PDF 1.5+ (in the initial commit c9d92f3)
+- **R-3** - object streams, PDF 1.5+ (in the initial commit c9d92f3)
+- **R-4** - XMP metadata stream (in the initial commit c9d92f3)
+- **R-5** - table structure tags (in the initial commit c9d92f3)
+- **R-6** - `Figure` tags with `/Alt` (in the initial commit c9d92f3)
+- **R-7** - transparency, `/ExtGState` `/ca` `/CA` (in the initial commit c9d92f3)
+- **R-8** - configurable line height, `LineHeightFactor` (in the initial commit c9d92f3)
+- **R-9** - table header repeated on a page break (in the initial commit c9d92f3)
+- **R-12** - font subsetting on POSIX with hb-subset (4ef4bc3)
+- **R-14** - table row groups `THead`/`TBody`/`TFoot`, `DrawTableFooter` (e28c2a6)
+- **R-15** - Windows subsets by glyph ID, `CreateFontPackage` with `TTFCFP_FLAGS_GLYPHLIST` (14436d9)
+- **R-15a** - both platforms subset once per face, through `PrepareFontSubsets` (14436d9)
+- **R-15c** - macOS CJK demo embedded two whole faces: CFF faces embedded as `/FontFile3` and subset (392de2f); continued by the CFF series (#33)
+- **R-16** - Uniscribe produced no contextual forms on Windows: callers can set `UseUniscribe` (cd38116)
+- **R-17** - PDF/A-3A verified, level U added, `zugferd_demo` (821aae3, 5003394); its leftovers are "PDF/A - What R-17 Left Open"
+- **R-18** - tagged link annotations; moved to R-29, item 7
+- **R-19** - Delphi 7: the core engine builds and `test_runner` passes (787e6e1 to 53aad0b)
+- **R-20, steps 1-6** - the bridge reads `string` per compiler, `TGDIPages` on `RawUtf8` and a non-visual `TComponent` with the preview apart, the bridge, the report core and every demo (GUI demos as `--export`) build on Delphi 7 (e06c736, c644e17, e9d63fb, cb39c6c, 3d0ab39, 049a9b2); steps 7-8 stay open
+- **R-21** - compiler switches from `mormot.defines.inc`, not a bare `{$mode delphi}` (6e503a9 to 92dcadf)
+- **R-23** - `layer1_demo`, a layer 1 demo for Delphi (613ccf9)
+- **R-25** - Unicode Delphi checked with Delphi 2010 (9f6633b); its leftovers stay open
+- **R-26** - `zugferd_demo` on `TGDIPages`, its text from the XML; PDF/A-3 attachments and XMP extension on export (7b49304, 8de33da); the other demos stay open
+- **R-27** - Delphi 13 on Win64, Linux64 and Android64 (#1); its leftovers stay open
+- **R-31** - WinAnsi text in a face without a (3,1) or (3,0) cmap draws by glyph through the Type0 font (#59)
+- **R-32, step 1** - the used characters keyed by code point, not UTF-16 unit (#65); steps 2-3 stay open
+- **U-1** - glyph widths disagreed with the embedded font program on POSIX (315be6f)
+- **U-2** - a shaped Arabic glyph carried the shaper's advance in `/W`, not the `hmtx` one (7224b26)
