@@ -412,7 +412,8 @@ knowledge in the skills.
   Windows resolves every face
 - **Links in tagged output:** `TGDIPages.DrawLink` draws a `Span`, the URL is
   not clickable (R-29, item 7)
-- **Text above U+FFFF:** not drawn (R-32)
+- **Text above U+FFFF:** each surrogate drawn as `.notdef`, a raise under
+  PDF/A (R-32)
 - **PDF/A-1 and A-2:** implemented, not verified (ROADMAP "V"); A-3U with
   PDF/UA-1, A-3A and A-3B are
 - **Out of scope:** invoice XML - the engine writes the PDF/A-3 container,

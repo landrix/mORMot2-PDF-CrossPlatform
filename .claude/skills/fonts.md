@@ -307,7 +307,7 @@ Every TrueType font exists as **two linked instances**:
 
 | Instance | `fUnicode` | Purpose |
 |---|---|---|
-| WinAnsi font | `false` | Renders U+0000–U+00FF via `(text) Tj`; tracks actually-used chars - of a CFF face: internal, never selected, not written |
+| WinAnsi font | `false` | Renders the WinAnsi (cp1252) characters via `(text) Tj`, through `WideCharToWinAnsi`; tracks actually-used chars - of a CFF face: internal, never selected, not written |
 | Unicode font | `true` | CID/Identity-H font; renders non-Latin via `<XXXX> Tj` - of a CFF face: all text; loaded with full CMAP at creation |
 
 Navigation:

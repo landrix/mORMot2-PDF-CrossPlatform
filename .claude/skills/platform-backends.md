@@ -587,7 +587,7 @@ var FontSubsetter: IFontSubsetter;  // mormot.lib.core; nil = no subsetter
   | Debian 13, Ubuntu 25.04 / 25.10 | 10.2.0 | on |
   | Ubuntu 26.04 LTS | 12.3.2 | on |
   | Fedora 43 / 44 | 11.5.1 / 14.1.0 | on |
-  | macOS (Homebrew) | 14.5.1 | on |
+  | macOS (Homebrew) | the current release (rolling) | on |
 - Tuning globals: `HbSubsetFlags` (default `RETAIN_GIDS or NOTDEF_OUTLINE or
   NO_HINTING`; `RETAIN_GIDS` is always forced), `HbSubsetDropLayoutTables`
   (default true: drop `GSUB/GPOS/GDEF`). Keeping the layout tables makes the

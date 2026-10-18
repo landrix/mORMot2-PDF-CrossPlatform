@@ -83,7 +83,7 @@ keeps the size and margins it was created with (`TPageData`).
 | Method/Property | Description |
 |---|---|
 | `NewPage` | Begin a new page - always, there is no check for content; `CurrentX`/`CurrentY` back to 0 |
-| `ForceNewPage` | `NewPage`, then Y at the top of the printable area |
+| `ForceNewPage` | the same as `NewPage` (it sets Y to the top again) |
 | `EndDoc` | Finalise document: closes an open list, then any further drawing raises; call it before export |
 | `CurrentY` | Current Y position (read-only) |
 | `CurrentX` | Current X position (read/write) |

@@ -329,7 +329,7 @@ TGDIPages.ExportPDF(FileName, Protect, Encrypt, Title, Company)
 
 ```
 PrintReport(Report, From = 0, To_ = all)        (mormot.pdf.report.preview)
-  │  no dialog: prints on the default printer; the range is clipped
+  │  no dialog: prints on the LCL's current printer (Printers.Printer); the range is clipped
   │  Printer.BeginDoc
   │  for PageIndex := From to To_ do
   │    Printer.NewPage  (except first page)
@@ -851,7 +851,7 @@ TPdfDocument.SetTagged(true)
   fTagged := true
   fFileFormat raised to pdf17
   PDF/UA font mode: fStandardFontsReplace := false; fEmbeddedTtf := true;
-                    fEmbeddedWholeTtf := FontSubsetter = nil
+                    fEmbeddedWholeTtf := not PdfCanSubsetRetainingGids
                     ← both subsetters keep the glyph IDs, so /ToUnicode stays
                       valid: subsets on Windows (FontSub) and POSIX (hb-subset);
                       the whole face only without a subsetter
