@@ -88,8 +88,8 @@ begin
 end;
 
 {$ifdef OSPOSIX}
-// the environment of this process for RunCommand, SOURCE_DATE_EPOCH set to
-// Epoch: RunCommand passes FPC's startup environment, which setenv() does not
+// the environment of this process for RunRedirect, SOURCE_DATE_EPOCH set to
+// Epoch: a child gets FPC's startup environment, which setenv() does not
 // change, and an inherited entry would come first, even an empty one
 function DemoEnvironment(const Epoch: RawUtf8): RawUtf8;
 var
@@ -118,6 +118,7 @@ var
   start: TUnixTime;
   pdfs: TFindFilesDynArray;
   output, epoch: RawUtf8;
+  env: TRunArg;
 begin
   if (Compiler <> 'fpc') and (Compiler <> 'd7') and (Compiler <> 'd2010') then
   begin
@@ -131,6 +132,9 @@ begin
     epoch := SOURCE_DATE;
   {$ifdef OSWINDOWS}
   SetSystemEnv('SOURCE_DATE_EPOCH', epoch); // inherited by RunRedirect
+  env := '';
+  {$else}
+  env := DemoEnvironment(epoch);
   {$endif OSWINDOWS}
   for i := 0 to high(DEMOS) do
   begin
@@ -145,16 +149,8 @@ begin
       cmd := cmd + ' --export';
     start := UnixTimeUtc - 1;
     code := -1;
-    {$ifdef OSPOSIX}
-    // POSIX RunRedirect takes fpread() = 0 at EOF for more output and never
-    // returns: the demo writes to our console instead
-    ChDir(RootDir + 'examples' + PathDelim + DEMOS[i].Dir);
-    output := '';
-    code := RunCommand(cmd, true, DemoEnvironment(epoch));
-    {$else}
-    output := RunRedirect(cmd, @code, nil, INFINITE, true, '',
+    output := RunRedirect(cmd, @code, nil, INFINITE, true, env,
       RootDir + 'examples' + PathDelim + DEMOS[i].Dir);
-    {$endif OSPOSIX}
     if code <> 0 then
     begin
       Fail(Utf8(DEMOS[i].Dir) + ': exit code ' + Int32ToUtf8(code));

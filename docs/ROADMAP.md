@@ -843,24 +843,6 @@ would need a tagged link annotation, which the engine cannot write yet
 (R-29, item 7), so the hint is accepted, like W-1. `invoice_demo` draws its
 addresses the same way.
 
-### `pdfcheck` Without `RunRedirect` on Linux — after the next trunk merge
-
-`RunRedirect` hangs on Linux once the child has exited: `WaitReadPending`
-returns -1 when `poll()` reports only `POLLHUP`, and `RedirectOutput` reads
-the pipe only on a positive result, so it never sees the end of the output
-and loops at full CPU, the child a zombie. macOS reports `POLLIN` with the
-hang-up and is not affected: `pdfcheck run` through `RunRedirect` ran all
-eight demos there. The trunk fixed it in f2b61cbc1 (a negative result ends
-the output); the pinned `pdf-font-layer` does not have it yet - 667509df5,
-which it has, covered only `fpread` = 0. `tests/pdfcheck.lpr` works around
-it under `OSPOSIX` (`ChDir` + `RunCommand(cmd, true)`, the demo output on
-the console).
-
-**Open:** once `pdf-font-layer` takes f2b61cbc1, run `pdfcheck run` on Linux
-through `RunRedirect` and drop the `{$ifdef OSPOSIX}` branch: one
-`RunRedirect` call for every platform, with `DemoEnvironment` as its `env`
-on POSIX.
-
 ### CFF Faces the Reader Refuses — unprioritised
 
 A CFF face `PdfCffParse` refuses (`pcInvalid`: malformed, a ROS of CFF
