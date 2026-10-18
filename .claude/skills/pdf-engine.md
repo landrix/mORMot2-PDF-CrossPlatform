@@ -6,34 +6,37 @@ Source: `src/pdf/mormot.pdf.pas`, canvas bridge: `src/pdf/mormot.pdf.canvas.pas`
 
 | Class | Coordinates | Dependency | When to use |
 |---|---|---|---|
-| `TPdfDocument` | PDF points (72 DPI), Y=0 bottom | mORMot2-Core and the font backend - no VCL/LCL (R-28 Phase 2; `TBitmap`/EMF: `mormot.pdf.canvas`) | Server/CLI, no TCanvas |
-| `TPdfDocumentVcl` | pixels (96 DPI), Y=0 top | + TCanvas bridge; LCL, and the VCL on Delphi 7 (R-20) | TCanvas-compatible code, GUI apps |
+| `TPdfDocument` | PDF points (72 DPI), Y=0 bottom | mORMot2-Core and the font backend - no VCL/LCL (`TBitmap`/EMF: `mormot.pdf.canvas`) | Server/CLI, no TCanvas |
+| `TPdfDocumentVcl` | pixels (96 DPI), Y=0 top | + TCanvas bridge; the LCL, or the VCL on Delphi | TCanvas-compatible code, GUI apps |
 
-`TPdfDocumentGdi` (Windows-only) uses EMF/GDI — not ported; since R-28 Phase 2 it lives
-in `mormot.pdf.canvas` with `RenderMetaFile`, the `GdiComment*` procedures, the printer
-helpers and the `TBitmap`/`TGraphic` image functions. The adapter reaches the engine's
-protected state through implementation-local access classes (`TPdfCanvasAccess` ...).
+`TPdfDocumentGdi` (Windows-only) uses EMF/GDI — not ported; it lives in
+`mormot.pdf.canvas` with `RenderMetaFile`, the `GdiComment*` procedures, the
+printer helpers and the `TBitmap`/`TGraphic` image functions. The adapter
+reaches the engine's protected state through implementation-local access
+classes (`TPdfCanvasAccess` ...).
 
 **Compilers.** `TPdfDocument`/`TPdfCanvas` build with FPC everywhere and with
-Delphi 7 for Win32 (R-19, `tests\build_delphi7.bat`), and so does
-`TPdfDocumentVcl` since R-20 — but the `TCanvas` drawing methods are virtual
-in the LCL and static in Delphi 7's VCL. `TPdfVclCanvas` overrides them under
-FPC and reintroduces them under Delphi (`PDF_CANVASVIRTUAL`), so on Delphi
-only a `TPdfVclCanvas` reference reaches the PDF: a call through `TCanvas`
-draws on the measuring DC. `VclCanvas` therefore has the type
-`TPdfVclCanvas`; keep it. Code for both compilers follows the rule
-in `CLAUDE.md` (Coding Conventions): mORMot2 functions first — `PosEx`, not the
-three-argument `Pos`; `MinPtrInt`, not `Min` — and no `Default()`, `for..in`,
-`inline` or records with methods.
+Delphi 7, Delphi 2010 and Delphi 13 (`tests\build_delphi7.bat`,
+`tests\build_delphi2010.bat`, `tests\delphi13\`), and so does
+`TPdfDocumentVcl` on Windows — Delphi 13 on Linux64/Android64 has no VCL and
+builds layer 1 only. The `TCanvas` drawing methods are virtual in the LCL and
+static in Delphi's VCL. `TPdfVclCanvas` overrides them under FPC and
+reintroduces them under Delphi (`PDF_CANVASVIRTUAL`, defined for FPC only),
+so on Delphi only a `TPdfVclCanvas` reference reaches the PDF: a call through
+`TCanvas` draws on the measuring DC. `VclCanvas` therefore has the type
+`TPdfVclCanvas`; keep it. Code for every compiler follows the rule in
+`CLAUDE.md` (Coding Conventions): mORMot2 functions first — `PosEx`, not the
+three-argument `Pos`; `MinPtrInt`, not `Min` — and no `Default()`, `for..in`
+or records with methods; `inline` only behind `{$ifdef HASINLINE}`.
 
 **Numbers in the output differ by compiler.** FPC formats `double` with
 Grisu (`DOUBLETOSHORT_USEGRISU` in `mormot.defines.inc`), Delphi 7 with
 `Str(Value:0:2)`. Both give `'3.40'`, but Grisu writes an exact 0 as `'0'`,
-not `'0.00'`. Code that post-processes the text — `TPdfWrite.Add(double)`
-cuts trailing zeros — must not assume two decimals; it once emptied every
-`TPdfReal` of 0 under FPC (`/XYZ 0 802 ]`, R-23, `TestZeroRealIsWritten`).
-Comparing the FPC and Delphi 7 output of one page is how such a difference
-shows up.
+not `'0.00'`. Code that post-processes the text must not assume two
+decimals: `TPdfWrite.Add(double)` cuts trailing zeros only after a `'.'`, so
+a `'0'` stays (`TestZeroRealIsWritten`; trimming it empties every
+`TPdfReal` of 0, e.g. `/XYZ 0 802 ]`). Comparing the FPC and Delphi 7 output
+of one page is how such a difference shows up.
 
 ---
 
@@ -50,16 +53,19 @@ TPdfFileFormat = (pdf13, pdf14, pdf15, pdf16, pdf17);
 // How the document appears when opened in a viewer
 TPdfPageMode = (pmUseNone, pmUseOutlines, pmUseThumbs, pmFullScreen,
                 pmUseAttachments);  // PDF 1.6: SaveToStreamDirectBegin raises
-                                    // FileFormat to pdf16; not allowed (and
-                                    // dropped) for NonFullScreenPageMode
+                                    // FileFormat to pdf16, or raises
+                                    // EPdfInvalidOperation under PDF/A-1;
+                                    // not allowed (and dropped) for
+                                    // NonFullScreenPageMode
 
 // Page layout used when document is opened
 TPdfPageLayout = (plSinglePage, plOneColumn, plTwoColumnLeft, plTwoColumnRight);
 
 // Viewer UI preferences
 TPdfViewerPreference = (vpHideToolbar, vpHideMenubar, vpHideWindowUI,
-                        vpFitWindow, vpCenterWindow, vpEnforcePrintScaling,
-                        vpDisplayDocTitle);  // set by Tagged (PDF/UA-1 7.1)
+                        vpFitWindow, vpCenterWindow,
+                        vpEnforcePrintScaling, // raises FileFormat to pdf16
+                        vpDisplayDocTitle);    // set by Tagged (PDF/UA-1 7.1)
 TPdfViewerPreferences = set of TPdfViewerPreference;
 
 // Available paper sizes
@@ -92,7 +98,7 @@ TLineJoinStyle = (ljMiterJoin, ljRoundJoin, ljBevelJoin);
 
 // Encryption level (compile-time flag USE_PDFSECURITY required)
 // elAES_128: AES-128-CBC, PDF 1.6, Standard Security Handler R=4
-// elAES_256: defined but not yet implemented (returns nil from TPdfEncryption.New)
+// elAES_256: declared, not implemented - TPdfEncryption.New returns nil
 TPdfEncryptionLevel = (elNone, elRC4_40, elRC4_128, elAES_128, elAES_256);
 
 // Encryption permission bits
@@ -107,7 +113,7 @@ Predefined permission sets (compile-time `USE_PDFSECURITY`):
 ```pascal
 PDF_PERMISSION_ALL            // all permissions granted
 PDF_PERMISSION_NOMODIF        // no modification or annotation
-PDF_PERSMISSION_NOPRINT       // no printing
+PDF_PERSMISSION_NOPRINT       // no printing (the misspelling is the declared name)
 PDF_PERMISSION_NOCOPY         // no content copy
 PDF_PERMISSION_NOCOPYNORPRINT // no copy and no print
 ```
@@ -119,13 +125,12 @@ PDF_PERMISSION_NOCOPYNORPRINT // no copy and no print
 ```pascal
 uses mormot.pdf;
 
-Doc := TPdfDocument.Create;
-Doc.DefaultPaperSize := psA4;     // psA4, psLetter, psA3, psA5, ...
+Doc := TPdfDocument.Create;        // (AUseOutlines, ACodePage, APdfA, AEncryption)
+Doc.DefaultPaperSize := psA4;      // psA4, psLetter, psA3, psA5, ...
 Doc.EmbeddedTtf := False;          // True = embed (a subset by default)
 Doc.StandardFontsReplace := True;  // True = Helvetica/Times/Courier as Type1
-Doc.PdfA := pdfa1B;               // pdfaNone, pdfa1A, pdfa1B, pdfa2A, pdfa2B, pdfa3A, pdfa3B, pdfa3U
+Doc.PdfA := pdfa1B;                // pdfaNone, pdfa1A, pdfa1B, pdfa2A, pdfa2B, pdfa3A, pdfa3B, pdfa3U
                                    // setting PdfA calls NewDoc: prefer the constructor's APdfA
-Doc.NewDoc;
 Page := Doc.AddPage;               // returns TPdfPage
 C := Doc.Canvas;                   // TPdfCanvas (same per page)
 C.SetFont('Helvetica', 12, []);
@@ -134,58 +139,72 @@ Doc.SaveToFile('out.pdf');
 Doc.Free;
 ```
 
+The constructor calls `NewDoc`; call it again only to reset the whole
+document.
+
 ### Key Properties
 
 | Property | Type | Description |
 |---|---|---|
 | `Canvas` | `TPdfCanvas` | Draw on current page |
 | `Info` | `TPdfInfo` | Document metadata |
-| `EmbeddedTtf` | boolean | True = embed TrueType fonts (a subset unless `EmbeddedWholeTtf`) |
+| `Root` | `TPdfCatalog` | The catalog: `PageLayout`, `PageMode`, `NonFullScreenPageMode`, `ViewerPreference`, `OpenAction` (below) |
+| `EmbeddedTtf` | boolean | True = embed TrueType fonts (a subset unless `EmbeddedWholeTtf`); default false |
+| `EmbeddedWholeTtf` | boolean | True = embed the whole face instead of a subset; default false |
 | `EmbeddedTtfIgnore` | `TRawUtf8List` | Font names excluded from optional embedding; ignored for PDF/A and tagged output |
-| `StandardFontsReplace` | boolean | True = Type1 fallback for Helvetica/Times/Courier |
-| `DefaultPaperSize` | `TPdfPaperSize` | psA4, psLetter, etc. |
+| `StandardFontsReplace` | boolean | True = Arial/Times New Roman/Courier New (and Helvetica/Times/Courier) drawn as the base-14 Type1 fonts, WinAnsi text only; default false |
+| `DefaultPaperSize` | `TPdfPaperSize` | psA4 (default), psLetter, etc.; resets the orientation to portrait |
 | `DefaultPageWidth` | cardinal | Page width in PDF points (overrides PaperSize) |
 | `DefaultPageHeight` | cardinal | Page height in PDF points |
-| `DefaultPageLandscape` | boolean | Landscape orientation |
-| `PdfA` | `TPdfALevel` | PDF/A conformance level |
-| `CompressionMethod` | `TPdfCompressionMethod` | cmNone or cmFlateDecode |
+| `DefaultPageLandscape` | boolean | Landscape orientation (swaps width and height) |
+| `PdfA` | `TPdfALevel` | PDF/A conformance level; the setter calls `NewDoc` |
+| `PdfAMetadaExtension` | `RawUtf8` | Raw XMP appended to the packet (below) |
+| `CompressionMethod` | `TPdfCompressionMethod` | cmNone or cmFlateDecode (default) |
+| `UseOutlines` | boolean | Must be true (or `AUseOutlines` of the constructor) before `OutlineRoot` or `CreateOutline` is used |
 | `OutlineRoot` | `TPdfOutlineRoot` | Bookmarks root |
-| `PageLayout` | `TPdfPageLayout` | Initial page layout in viewer |
-| `PageMode` | `TPdfPageMode` | Initial display mode (outline panel, etc.) |
-| `NonFullScreenPageMode` | `TPdfPageMode` | Mode after leaving full-screen |
-| `ViewerPreference` | `TPdfViewerPreferences` | Viewer UI flags |
-| `UseOptionalContent` | boolean | Enable PDF optional content (layers) |
-| `FontFallBackName` | string | Font used when requested font not found |
-| `FileFormat` | `TPdfFileFormat` | PDF version header: `pdf13`..`pdf17` (default `pdf13`); PDF/A and Tagged auto-raise this |
+| `UseOptionalContent` | boolean | Enable PDF optional content (layers); forces PDF 1.5; the setter calls `NewDoc` |
+| `UseFontFallBack` | boolean | Draw glyphs missing from the current face with `FontFallBackName`; default true |
+| `FontFallBackName` | string | Face used for glyphs missing from the current one |
+| `ForceJPEGCompression` | integer | 0 (default) = bitmaps as they are; a quality (e.g. 60, 80) = the `TBitmap`/`TGraphic` images of `mormot.pdf.canvas` stored as JPEG; no effect on raw pixels |
+| `ForceNoBitmapReuse` | boolean | True = no lookup of identical images (faster, larger) |
+| `ScreenLogPixels` | integer | DPI the pixel coordinates are mapped with: 96, the screen's on Windows for `TPdfDocumentVcl`/`TPdfDocumentGdi`; 0 or less raises `EPdfInvalidValue` |
+| `FileFormat` | `TPdfFileFormat` | PDF version header: `pdf13`..`pdf17` (default `pdf13`); PDF/A raises it (A-1 to `pdf14`, A-2/A-3 to `pdf17`), as does `Tagged` (`pdf17`) |
+| `HeaderFileFormat` | `TPdfFileFormat` | Read-only: the version actually streamed in the header |
 | `GeneratePdf15File` | boolean | Compatibility alias, as in the trunk: below `pdf16`, `true` = `pdf15` and `false` = `pdf14`; from `pdf16` on it changes nothing |
-| `Tagged` | boolean | Enable Tagged PDF (ISO 32000-1 §14); setting `true` auto-raises `FileFormat` to `pdf17` |
+| `Tagged` | boolean | Enable Tagged PDF (ISO 32000-1 §14); set before the first `AddPage` (raises `ESynException` later); `true` raises `FileFormat` to `pdf17` and selects the fonts (Font Strategy) |
+| `DefaultLanguage` | `RawUtf8` | BCP-47 tag for `/Lang` when tagged; default `'en'` |
 | `UseUniscribe` | boolean | The one shaping switch: Uniscribe on Windows, HarfBuzz on Linux/macOS; `Canvas.RightToLeftText` is the direction only (`platform-backends.md`, Registration) |
+
+The viewer settings are properties of the catalog, not of the document:
+`Doc.Root.PageLayout`, `Doc.Root.PageMode`, `Doc.Root.NonFullScreenPageMode`
+(the mode after leaving full-screen), `Doc.Root.ViewerPreference`.
 
 ### Methods
 
 ```pascal
-Doc.NewDoc                                 // initialise (call before AddPage)
+Doc.NewDoc                                 // reset the document (the constructor calls it)
 Doc.AddPage                                // new page; Canvas switches automatically
 Doc.SaveToFile('out.pdf')                  // save to file; returns false on error
 Doc.SaveToStream(Stream)                   // save to stream
 Doc.SaveToStream(Stream, ForceModDate)     // save with explicit modification date
 
 // Bookmarks
-Doc.CreateBookMark(TopY, 'name')           // Y in PDF points from top
-Doc.CreateOutline(Title, Level, YTop)      // Level 1=H1, 2=H2 etc.
+Doc.CreateBookMark(TopY, 'name')           // /XYZ destination, TopY in PDF points from the page bottom;
+                                           // the name must be unique and not empty
+Doc.CreateOutline(Title, Level, TopY)      // Level 1=H1, 2=H2 etc. (0 = root); nil without UseOutlines
 
 // Links & annotations
-Doc.CreateLink(Rect, 'bookmark')           // internal link
+Doc.CreateLink(Rect, 'bookmark')           // internal link; the bookmark may be created later
 Doc.CreateHyperLink(Rect, 'http://', ...)  // external link
 Doc.CreateAnnotation(Type, Rect, Border)   // free annotation
 
 // Images
 Doc.CreateOrGetImage(Pixels, ...)          // raw pixels (TPdfImagePixels), deduplicated; returns XObject name
-CreateOrGetBitmapImage(Doc, Bitmap, ...)   // a VCL/LCL TBitmap, the same way (was Doc.CreateOrGetImage(Bitmap))
-Doc.AddTrueTypeFont('Calibri')             // pre-register font explicitly; returns true on success
+CreateOrGetBitmapImage(Doc, Bitmap, ...)   // a VCL/LCL TBitmap, the same way (mormot.pdf.canvas)
+Doc.AddTrueTypeFont('Calibri')             // register a face not enumerated by the system, right after Create; true on success
 
 // Optional content (layers)
-Doc.CreateOptionalContentGroup(Parent, Name)
+Doc.CreateOptionalContentGroup(Parent, Title, Visible)
 Doc.CreateOptionalContentRadioGroup(Groups)
 
 // File attachments (associated files, /AF in the catalog from PDF/A-2 up)
@@ -198,7 +217,7 @@ Doc.CreateFileAttachmentFrom(Buffer, Title, Description, MimeType,
 Doc.PdfAMetadaExtension := PdfMetadataFacturX('EN 16931');  // ZUGFeRD/Factur-X fx: + schema
 // Tagged + PdfA: the engine adds the pdfuaid schema description itself, into
 // the caller's <pdfaExtension:schemas><rdf:Bag> when there is one
-// Verified (R-17): A-3U + PDF/UA-1, A-3A, A-3B; A levels need Tagged := True
+// Verified: A-3U + PDF/UA-1, A-3A, A-3B; A levels need Tagged := True
 // (the structure tree); A-1/A-2 implemented, unverified
 
 // Streaming — page-by-page output to large streams without full buffering
@@ -206,6 +225,9 @@ Doc.SaveToStreamDirectBegin(Stream, ForceModDate)
 Doc.SaveToStreamDirectPageFlush(FlushCurrentPageNow)
 Doc.SaveToStreamDirectEnd
 ```
+
+Callers of the trunk's `Doc.CreateOrGetImage(Bitmap)` and
+`TPdfImage.Create(Graphic)`: `docs/MIGRATION.md`.
 
 ---
 
@@ -221,7 +243,7 @@ Page.PageLandscape := True;
 
 // Measure text using current font:
 W := Page.TextWidth('Hello');       // returns single (PDF points)
-N := Page.MeasureText('Long text', MaxWidth); // number of chars fitting in MaxWidth
+N := Page.MeasureText('Long text', MaxWidth); // index in the text of what fits in MaxWidth
 ```
 
 | Property | Type | Description |
@@ -245,7 +267,9 @@ Doc.Info.CreationDate := Now;
 Doc.Info.ModDate      := Now;
 ```
 
-All properties are `string` (read/write). `Producer` is set automatically by the engine.
+`Title`, `Author`, `Subject`, `Keywords` and `Creator` are `string`,
+`CreationDate` and `ModDate` are `TDateTime`, and `CustomMetadata` is
+`RawUtf8` (custom XMP). `Producer` is set by the engine (`PDF_PRODUCER`).
 
 ---
 
@@ -259,8 +283,8 @@ Coordinates: PDF points, X=0 left, Y=0 bottom.
 C.SetFont('Times', 14, [pfsBold]);   // set font; returns TPdfFont
 C.TextOut(X, Y, 'Text');             // output text at position
 C.TextOutW(X, Y, PW);                // Unicode (PWideChar)
-C.TextRect(Rect, 'Text', Align, ...); // text within a rectangle
-C.MultilineTextRect(Rect, 'Text', Align, ...); // multiline word-wrap in rect
+C.TextRect(Rect, 'Text', Alignment, Clipping); // text within a rectangle
+C.MultilineTextRect(Rect, 'Text', WordWrap);   // CR+LF lines, optional word wrap
 
 // Advanced text positioning:
 C.BeginText;
@@ -291,14 +315,19 @@ C.SetCMYKFillColor(C, M, Y, K);     // CMYK fill (0–100 each)
 C.SetCMYKStrokeColor(C, M, Y, K);   // CMYK stroke
 ```
 
-### Transparency (R-7)
+### Transparency
 
 ```pascal
-C.SetFillAlpha(0.5);    // fill opacity: 0.0=transparent, 1.0=opaque
+C.SetFillAlpha(0.5);    // fill opacity: 0.0=transparent, 1.0=opaque (clamped)
 C.SetStrokeAlpha(0.8);  // stroke opacity
 ```
 
-Both methods lazily create a named `ExtGState` entry in the page's `/Resources` dictionary and emit a `/gsNNN gs` operator. Minimum PDF version for transparency is PDF 1.4 (`pdf14`). Names are deduplicated per page (same value → same name, no duplicate dict entries).
+Both methods lazily create a named `ExtGState` entry in the page's
+`/Resources` dictionary and emit a `/<name> gs` operator: `/Fca<n>` (`/ca`)
+and `/SCA<n>` (`/CA`), `<n>` the opacity in percent, so the same value gives
+the same name on a page and no duplicate entry. Transparency needs PDF 1.4;
+the methods do not raise `FileFormat` - set `pdf14` or higher yourself.
+`TPdfDocumentVcl` has both methods too.
 
 ### Paths & Shapes
 
@@ -319,6 +348,7 @@ C.NewPath;                            // discard current path without drawing
 
 ```pascal
 C.Stroke;                    // stroke only
+C.ClosePathStroke;
 C.Fill;                      // fill only (nonzero winding)
 C.Eofill;                    // fill only (even-odd rule)
 C.FillStroke;
@@ -336,7 +366,7 @@ C.SetLineWidth(w: single);
 C.SetLineCap(lcButt_End);     // TLineCapStyle
 C.SetLineJoin(ljMiterJoin);   // TLineJoinStyle
 C.SetMiterLimit(m: single);
-C.SetDash([4, 2], phase: integer); // dash pattern (empty array = solid)
+C.SetDash([4, 2], phase);     // dash pattern of integers, phase default 0 (empty array = solid)
 C.SetFlat(flatness: byte);    // curve flatness tolerance
 ```
 
@@ -353,11 +383,11 @@ C.ConcatToCTM(a, b, c, d, e, f: single); // multiply current transform matrix
 ```pascal
 // Draw an image registered with Doc.CreateOrGetImage / CreateOrGetBitmapImage:
 C.DrawXObject(X, Y, Width, Height, 'ImageName');
-C.DrawXObjectEx(X, Y, Width, Height, 'ImageName', ClipRect, Angle);
+C.DrawXObjectEx(X, Y, Width, Height, ClipX, ClipY, ClipWidth, ClipHeight, 'ImageName');
 C.ExecuteXObject('ImageName');  // raw Do operator
 ```
 
-**Raw pixels, no VCL/LCL** (R-28 Phase 2) - what a framework adapter feeds:
+**Raw pixels, no VCL/LCL** - what a framework adapter feeds:
 
 ```pascal
 var px: TPdfImagePixels;
@@ -381,68 +411,59 @@ RGB format, a color key with `ipfIndexed8`. `ForceJPEGCompression` does not
 apply to raw pixels (no encoder in the engine). The reuse key of raw pixels
 (CRC32C lanes over the row bytes, after the palette, the format and the
 color key, one lane seeded apart) does not equal the key of
-a `TBitmap` (padded DIB rows, after its `TPaletteEntry` array) - the same
-picture added both ways gives two images. `CreateGraphicImage(Doc, Graphic,
-..)` and `CreateOrGetBitmapImage(Doc, Bitmap, ..)` - functions since Phase 2,
-the former `TPdfImage.Create(TGraphic)` and `TPdfDocument.CreateOrGetImage
-(TBitmap)` - fill a `TPdfImagePixels` from `ScanLine[]` and call the same
-code.
+a `TBitmap` (`BitmapHash`) - the same picture added both ways gives two
+images. `CreateGraphicImage(Doc, Graphic, ..)` and
+`CreateOrGetBitmapImage(Doc, Bitmap, ..)` (`mormot.pdf.canvas`) fill a
+`TPdfImagePixels` from `ScanLine[]` and call the same code.
 
-How the image paths behave (measured by `tests/test_pdf_images.pas`; the
-`TBitmap` conversion is in `mormot.pdf.canvas` since Phase 2):
+How the image paths behave (covered by `tests/test_pdf_images.pas`):
 
 - `CreateOrGetBitmapImage`: pf24bit and pf32bit become `/DeviceRGB` (alpha
-  dropped); a fixed transparent color writes `/Mask`. The same pixels give the
-  same image (a hash over the padded rows and the palette), across pages too
-- pf1bit/pf4bit/pf8bit: indexed (`/Indexed /DeviceRGB 255`) with the VCL,
-  from the bitmap's palette. The LCL keeps no palette (`GetPaletteEntries`
-  returns 0 on win32, GTK2 and Cocoa): such a bitmap is 8-bit gray (pf4bit,
-  pf8bit) or 1-bit mono, and the adapter writes it indexed with a gray ramp
-  (`<000000 010101 ...>`) - until Phase 2's bug-fix PR it raised
-  `EPdfInvalidValue('TPdfImage')`
-- **The LCL's layouts** (`LclPixels`, from `RawImage.Description`, measured by
-  Fable): pf24bit is 24-bit B,G,R on win32 but 32 bits B,G,R,x on GTK2 and
-  A,R,G,B on Cocoa; pf32bit is B,G,R,A on win32, R,G,B,A on GTK2, A,R,G,B on
-  Cocoa. A Windows DIB layout (B,G,R or B,G,R,x little-endian) goes through
-  as `ipfBgr24`/`ipfBgrx32`, gray 8-bit as `ipfIndexed8`; every other layout
-  is repacked to `ipfRgb24` through `TLazIntfImage.Colors`. Before the
-  bug-fix PR the adapter read every layout as B,G,R: the pixels of a Linux or
-  macOS PDF were misread. The tests compare with `TLazIntfImage.Colors`, not
-  with an assumed layout
-- `CreateGraphicImage(Doc, Graphic, false)`, `CreateJpeg(.., false)` and
+  dropped); a pf24bit bitmap with `TransparentMode = tmFixed` writes `/Mask`.
+  The same pixels give the same image, across pages too. An empty bitmap (no
+  width or no height) gives no image: it returns ''
+- `BitmapHash` (public) is that reuse key: CRC32C lanes over the rows - the
+  DIB row on the VCL, `RawImage.Description.BytesPerLine` on the LCL, which
+  may align rows less than a DIB (a pf1bit row of 10 pixels: 2 bytes on LCL
+  win32), so a DIB row length would read past the last row - after the
+  palette entries and the color key of a pf24bit bitmap
+- pf1bit/pf4bit/pf8bit with the VCL: converted to pf8bit and written indexed
+  (`/Indexed /DeviceRGB 255`) from the bitmap's 256-entry palette;
+  `EPdfInvalidValue` without one. The LCL keeps no palette
+  (`GetPaletteEntries` returns 0 on win32, GTK2 and Cocoa): such a bitmap is
+  8-bit gray (pf4bit, pf8bit) or 1-bit mono, and `LclPixels` writes it
+  indexed with a gray ramp (`<000000 010101 ...>`)
+- **The LCL's layouts** (`LclPixels`, from `RawImage.Description`): pf24bit is
+  24-bit B,G,R on win32 but 32 bits B,G,R,x on GTK2 and A,R,G,B on Cocoa;
+  pf32bit is B,G,R,A on win32, R,G,B,A on GTK2, A,R,G,B on Cocoa. A Windows
+  DIB layout (B,G,R or B,G,R,x little-endian) goes through as
+  `ipfBgr24`/`ipfBgrx32`, gray 8-bit as `ipfIndexed8`; every other layout is
+  repacked to `ipfRgb24` through `TLazIntfImage.Colors`. Never read an LCL
+  bitmap as B,G,R: the tests compare with `TLazIntfImage.Colors`, not with
+  an assumed layout
+- `CreateGraphicImage` raises `EPdfInvalidValue` for an empty graphic. With
+  `DontAddToFXref = false` it, `CreateJpeg(.., false)` and
   `CreateJpegDirect(.., false)` are already in the xref: register them with
   `RegisterImage` or `RegisterXObject`, not `AddXObject` (which adds them
   again and raises)
-- `TPdfForm.Create(DocGdi, MetaFile)` raised an access violation in the
-  original, the trunk and here until Phase 2's bug-fix PR: its page had no
-  MediaBox for `SetPageHeight`, no `/Resources` for the metafile's bitmaps,
-  and with no current page its `finally` left the canvas on the page it
-  freed. Now: `TPdfPage.Create(nil)` makes a MediaBox, the form shares its
-  `/XObject` and `/ExtGState` dictionaries with that page (indirect objects,
-  `TPdfDocument.ShareFormResources` - `TPdfFormWithCanvas` too), and the
-  document canvas is saved and restored field by field; the form's `/BBox`
-  is the metafile's `Width`/`Height`, which follow the reference DC's DPI.
-  Outline, bookmark and link comments of the metafile are left out in a
-  form (`TPdfEnum.HandleComment`): it has no page to point to.
-  `MetaFileForm` and `FormWithCanvasImage` test it.
-  `TPdfCanvas.DrawXObjectPrepare` copies the fonts of a `TPdfFormXObject`
-  (the base of `TPdfForm` since Phase 2) into the font list of the page:
-  `AddItem` wraps an indirect font in a new `TPdfVirtualObject`, so nothing
-  is shared - a direct value would be (no form adds one).
-  `TPdfImageRawTests.FormFonts` covers the copy. The original and the trunk
-  have the same code. `RenderMetaFile` into a page works
-- Found by the Fable review of Phase 2, fixed in its bug-fix PR (both older
-  than it): `TPdfDocumentVcl.Create` had no `AEncryption` parameter -
-  `mormot.ui.pdfcanvas` did not include `mormot.pdf.defines.inc`, so
-  `USE_PDFSECURITY` was undefined there (`TestVclCanvasEncryption`); and
-  `BitmapHash` read each row as a DIB pads it, past the end of the last row
-  on an LCL that aligns rows less (a pf1bit row of 10 pixels: 2 bytes on
-  LCL win32, 4 read). `BitmapHash` (public, `mormot.pdf.canvas`) reads
-  `RawImage.Description.BytesPerLine` on the LCL, the DIB row on the VCL, and
-  takes the color key of a pf24bit bitmap in (`BitmapKeys`)
-- An empty `TBitmap` (no width or no height) gives no image since Phase 2
-  (`CreateOrGetBitmapImage` returns ''), where the engine wrote a 0 x 0
-  image before; `CreateGraphicImage` raises `EPdfInvalidValue` for it
+- `TPdfForm.Create(DocGdi, MetaFile)` (a metafile as a form XObject) draws
+  on a `TPdfPage.Create(nil)`, which makes a MediaBox for `SetPageHeight`;
+  `TPdfDocument.ShareFormResources` gives the form and that page the same
+  indirect `/XObject`, `/ExtGState` and `/Properties` dictionaries
+  (`TPdfFormWithCanvas` too), so the metafile's bitmaps land in the form's
+  resources. The document canvas is saved and restored field by field,
+  because there may be no current page to go back to. The form's `/BBox` is
+  the metafile's `Width`/`Height`, which follow the reference DC's DPI.
+  Outline, bookmark and link comments of the metafile are left out in a form
+  (`TPdfEnum.HandleComment`): it has no page to point to. `MetaFileForm` and
+  `FormWithCanvasImage` test it. `RenderMetaFile` into a page works
+- `TPdfCanvas.DrawXObjectPrepare` copies the fonts of a `TPdfFormXObject`
+  (the base of `TPdfForm`) into the font list of the page: `AddItem` wraps an
+  indirect font in a new `TPdfVirtualObject`, so nothing is shared - a direct
+  value would be (no form adds one). `TPdfImageRawTests.FormFonts` covers it
+- `TPdfDocumentVcl.Create` takes the `AEncryption` of `TPdfDocument.Create`:
+  `mormot.pdf.canvas` includes `mormot.pdf.defines.inc`, so `USE_PDFSECURITY`
+  is the same there as in `mormot.pdf` (`TestVclCanvasEncryption`)
 
 ### Optional Content (Layers)
 
@@ -452,18 +473,24 @@ C.BeginMarkedContent(Group: TPdfOptionalContentGroup);
 C.EndMarkedContent;
 ```
 
-### Integer / Scaled Overloads
+### Pixel-Coordinate Helpers (protected)
 
-Integer overloads (`I` suffix) accept TRect/TPoint coordinates in PDF-point integers.
-Scaled overloads (`S` suffix) accept single values mapped via `ViewOffsetX/Y`.
+`TPdfCanvas` maps device pixels to PDF points with protected helpers: the
+`I` suffix takes integers, the `S` suffix `single` values. Both go through
+the window/viewport mapping (`ViewOffsetX/Y`), the world transform and the
+`ScreenLogPixels` scale, and flip Y (`I2X`/`I2Y`, `S2X`/`S2Y`). The EMF
+renderer (`TPdfEnum`, `RenderMetaFile`) and the bridge use them through
+access classes; they are not public API.
 
 ```pascal
-C.MoveToI(x, y: integer);
-C.LineToI(x, y: integer);
-C.RoundRectI(x1, y1, x2, y2, cx, cy: integer);
-C.ArcI(cx, cy, W, H, Sx, Sy, Ex, Ey: integer; ArcType: TPdfCanvasArcType);
-W := C.BoxI(Rect, Normalize);   // TRect -> TPdfBox
-R := C.RectI(Rect, Normalize);  // TRect -> TPdfRect
+MoveToI(x, y: integer);  LineToI(x, y: integer);
+MoveToS(x, y: single);   LineToS(x, y: single);
+CurveToCI(x1, y1, x2, y2, x3, y3: integer);
+RoundRectI(x1, y1, x2, y2, cx, cy: integer);
+ArcI(centerx, centery, W, H, Sx, Sy, Ex, Ey: integer; clockwise: boolean;
+  arctype: TPdfCanvasArcType; var position: TPoint);
+BoxI(Rect, Normalize);   // TRect -> TPdfBox
+RectI(Rect, Normalize);  // TRect -> TPdfRect
 ```
 
 ### Text Metrics
@@ -471,7 +498,7 @@ R := C.RectI(Rect, Normalize);  // TRect -> TPdfRect
 ```pascal
 W := C.TextWidth('Hello');             // width in PDF points
 W := C.UnicodeTextWidth(PW);           // Unicode version
-N := C.MeasureText('Long', MaxWidth);  // chars fitting within MaxWidth
+N := C.MeasureText('Long', MaxWidth);  // index in the text of what fits within MaxWidth
 ```
 
 ---
@@ -512,16 +539,16 @@ values), so the next draw writes them again.
   bitmap of their own first; the same bitmap drawn twice is one image
   (`images_bridge`)
 
-### Text Metrics (ROADMAP B-4)
+### Text Metrics
 
-`TextWidth`/`TextHeight`/`TextExtent` are overridden: they measure with
-`TPdfFontMeasurer`, i.e. the face and widths the PDF will really use, and no
-longer with the widgetset's own resolution of `Font.Name`. They still return
-`integer` pixels, so a caller that needs the exact value takes the `single`
-overloads and draws with `RectangleFrac`:
+`TextWidth`/`TextHeight`/`TextExtent` measure with `TPdfFontMeasurer`, i.e.
+the face and widths the PDF will really use, not the widgetset's own
+resolution of `Font.Name`. They return `integer` pixels, so a caller that
+needs the exact value takes the `single` methods and draws with
+`RectangleFrac`:
 
 ```pascal
-VC := Doc.VclCanvas as TPdfVclCanvas;
+VC := Doc.VclCanvas;     // TPdfVclCanvas
 VC.TextOut(X, Y, S);
 VC.RectangleFrac(X, Y, X + VC.TextWidthFrac(S), Y + VC.TextHeightFrac(S));
 ```
@@ -539,12 +566,12 @@ VC.RectangleFrac(X, Y, X + VC.TextWidthFrac(S), Y + VC.TextHeightFrac(S));
 
 ### Available TCanvas Methods
 
-Text: `TextOut`, `TextWidth`, `TextHeight`
+Text: `TextOut`, `TextWidth`, `TextHeight`, `TextExtent`
 Shapes: `Rectangle`, `Ellipse`, `RoundRect`, `FillRect`
 Sub-pixel (TPdfVclCanvas only, `single` instead of `integer`):
 `TextOutFrac`, `TextWidthFrac`, `TextHeightFrac`, `RectangleFrac`
-UTF-8 (TPdfVclCanvas only, `RawUtf8` instead of `string`): `TextOutUtf8`, `TextWidthUtf8` — the same on every compiler, while the `string` methods read `string` as the compiler holds it (UTF-8 under FPC, the ANSI code page under Delphi 7, UTF-16 under Unicode Delphi) through `StringToSynUnicode`/`StringToUtf8`. Under FPC both read the same UTF-8 whatever the unit order and the Windows code page: `mormot.core.os` calls `SetMultiByteConversionCodePage(CP_UTF8)` before `mormot.core.unicode` sets `CurrentAnsiConvert` (measured 2026-09-27)
-Lines: `MoveTo`, `LineTo`, `Polyline`, `Polygon` — `MoveTo` only moves `PenPos`; each `LineTo` writes one complete path object (`RG w` → `m` from `PenPos` → `l` → `S`), so pen changes never land inside a path (B-12)
+UTF-8 (TPdfVclCanvas only, `RawUtf8` instead of `string`): `TextOutUtf8`, `TextWidthUtf8` — the same on every compiler, while the `string` methods read `string` as the compiler holds it (UTF-8 under FPC, the ANSI code page under Delphi 7, UTF-16 under Unicode Delphi) through `StringToSynUnicode`/`StringToUtf8`. Under FPC both read the same UTF-8 whatever the unit order and the Windows code page: `mormot.core.os` calls `SetMultiByteConversionCodePage(CP_UTF8)` before `mormot.core.unicode` sets `CurrentAnsiConvert`
+Lines: `MoveTo`, `LineTo`, `Polyline`, `Polygon` — `MoveTo` only moves `PenPos`; each `LineTo` writes one complete path object (`RG w` → `m` from `PenPos` → `l` → `S`), so pen changes never land inside a path (ISO 32000-1 8.2); `psClear` draws nothing
 Images: `Draw`, `StretchDraw`
 Font: `Name`, `Size`, `Style` (fsBold/fsItalic/fsUnderline/fsStrikeOut), `Color`
 Pen: `Color`, `Width`, `Style` (psSolid/psClear)
@@ -556,25 +583,37 @@ Brush: `Color`, `Style` (bsSolid/bsClear)
 
 Tagged PDF adds structure tags (H1–H6, P, …) that screen readers and PDF/UA validators require.
 Table roles: `psrTable`, `psrTR`, `psrTH`, `psrTD`, plus the row groups
-`psrTHead`, `psrTBody` and `psrTFoot` (ISO 32000-1 14.8.4.3.4, R-14).
+`psrTHead`, `psrTBody` and `psrTFoot` (ISO 32000-1 14.8.4.3.4).
 `psrTHRow` is a `TH` that heads its row, e.g. the label of a totals line: it
 writes `/S /TH` with `/Scope /Row` (PDF/UA-1 7.5); `psrTH` heads its column.
+List roles: `psrL`, `psrLI`, `psrLbl`, `psrLBody`.
 
 ### Enum
 
 `TPdfStructRole` is declared in `mormot.pdf` (with `TPdfFileFormat`, the
-`PDF_FONT_*` constants and `GetPdfFonts`; `mormot.pdf.types`, which declared
-them until R-28 Phase 5, is gone), so `uses mormot.pdf` is enough:
+`PDF_FONT_*` constants and `GetPdfFonts`), so `uses mormot.pdf` is enough:
 
 ```pascal
 TPdfStructRole = (psrDocument, psrH1, psrH2, psrH3, psrH4, psrH5, psrH6,
                   psrP, psrSpan,
-                  psrFigure,               // for images — carries /Alt text
-                  psrTable, psrTR, psrTH, psrTD); // table structure
-// Ordinal: psrDocument=0, psrH1=1..psrH6=6, psrP=7, psrSpan=8
-//          psrFigure=9, psrTable=10, psrTR=11, psrTH=12, psrTD=13
+                  psrFigure,                    // for images — carries /Alt text
+                  psrTable, psrTR, psrTH, psrTD, // table structure
+                  psrL, psrLI, psrLbl, psrLBody, // list structure
+                  psrTHead, psrTBody, psrTFoot,  // row groups of a table
+                  psrTHRow);                     // a TH heading its row (/S /TH)
+// Ordinal: psrDocument=0, psrH1=1..psrH6=6, psrP=7, psrSpan=8,
+//          psrFigure=9, psrTable=10, psrTR=11, psrTH=12, psrTD=13,
+//          psrL=14, psrLI=15, psrLbl=16, psrLBody=17,
+//          psrTHead=18, psrTBody=19, psrTFoot=20, psrTHRow=21
 // TPdfStructRole(Level) for heading Level 1..6 gives psrH1..psrH6
+// New roles are appended at the end: TPdfStructRole(Level) and the
+// dckBeginTR logic of mormot.pdf.report depend on the existing ordinals
 ```
+
+`psrDocument`, `psrTable`, `psrTR`, `psrL`, `psrLI`, `psrTHead`, `psrTBody`
+and `psrTFoot` are containers (`PDF_STRUCT_CONTAINER`): they group kids only
+and own no marked-content region, so `BeginStructContent` writes no `BDC`
+for them.
 
 ### Low-Level: TPdfDocument
 
@@ -598,18 +637,22 @@ Doc.Canvas.EndStructContent;
 
 // Table structure
 Doc.Canvas.BeginStructContent(psrTable);
-  Doc.Canvas.BeginStructContent(psrTR);
-    Doc.Canvas.BeginStructContent(psrTH); Doc.Canvas.TextOut(...); Doc.Canvas.EndStructContent;
+  Doc.Canvas.BeginStructContent(psrTHead);
+    Doc.Canvas.BeginStructContent(psrTR);
+      Doc.Canvas.BeginStructContent(psrTH); Doc.Canvas.TextOut(...); Doc.Canvas.EndStructContent;
+    Doc.Canvas.EndStructContent;
   Doc.Canvas.EndStructContent;
-  Doc.Canvas.BeginStructContent(psrTR);
-    Doc.Canvas.BeginStructContent(psrTD); Doc.Canvas.TextOut(...); Doc.Canvas.EndStructContent;
+  Doc.Canvas.BeginStructContent(psrTBody);
+    Doc.Canvas.BeginStructContent(psrTR);
+      Doc.Canvas.BeginStructContent(psrTD); Doc.Canvas.TextOut(...); Doc.Canvas.EndStructContent;
+    Doc.Canvas.EndStructContent;
   Doc.Canvas.EndStructContent;
 Doc.Canvas.EndStructContent;
 ```
 
-`BeginStructContent(ARole, AAltText)` — `AAltText` is optional (default ''); written as `/Alt` for Figure elements. No-op when `Tagged = false`.
+`BeginStructContent(ARole, AAltText)` — `AAltText` is optional (default ''); when given it is written as `/Alt`, whatever the role (PDF/UA needs it on a `Figure`). No-op when `Tagged = false`.
 
-`/Alt` is emitted **twice**, and both are PDF strings — a WinAnsi literal in parenthesis, or `<FEFF…>` UTF-16BE outside WinAnsi (ROADMAP B-6):
+`/Alt` is emitted **twice**, and both are PDF strings — a WinAnsi literal in parenthesis, or `<FEFF…>` UTF-16BE outside WinAnsi:
 
 ```
 /Figure <</MCID 0 /Alt (Vector graphics)>> BDC     ← marked-content dictionary
@@ -628,7 +671,7 @@ than the element. `AOpenRegion=false` reopens it without a region, as
 
 An element may own both marked-content regions and child elements; `/K` then
 lists `/MCR` dicts and kid references in **reading order**. This is how one
-sentence with inline styling becomes one `P` (ROADMAP B-3):
+sentence with inline styling becomes one `P`:
 
 ```pascal
 Canvas.BeginStructGroup(psrP);        // element only — no region, no MCID yet
@@ -667,7 +710,7 @@ When `Tagged = true`:
   (also `/S /TH`) gets `/A <</O/Table/Scope/Row>>`. The role is appended to
   `TPdfStructRole` instead of a scope parameter on `BeginStructContent`, so
   it passes the bridge and `TGDIPages` unchanged
-- **Low-level API, caller's duties:** PDF/UA wants one bookmark per heading. Create the document with `AUseOutlines = true` and call `CreateOutline(Title, Level, TopPosition)` after each heading (`TopPosition` in PDF points from the page bottom); the engine cannot do it for you, because `BeginStructContent(psrHx)` never sees the heading text. `TGDIPages` does it itself. Text drawn inside a `Figure` is part of the image: a reader gets the `/Alt` instead, so the `/Alt` has to describe that text too. PAC 2024 gives the hint "Possibly inappropriate use of figure structure element" on every Figure - path or image, with or without text or `/BBox` (measured) - so it is accepted (ROADMAP W-1)
+- **Low-level API, caller's duties:** PDF/UA wants one bookmark per heading. Create the document with `AUseOutlines = true` and call `CreateOutline(Title, Level, TopPosition)` after each heading (`TopPosition` in PDF points from the page bottom); the engine cannot do it for you, because `BeginStructContent(psrHx)` never sees the heading text. `TGDIPages` does it itself. Text drawn inside a `Figure` is part of the image: a reader gets the `/Alt` instead, so the `/Alt` has to describe that text too. PAC 2024 gives the hint "Possibly inappropriate use of figure structure element" on every Figure - path or image, with or without text or `/BBox` - so it is accepted (ROADMAP W-1)
 - A `Figure` on one page gets `/A <</O/Layout/BBox[l b r t]>>`. `TPdfCanvas` collects it from the path points (widened by half the line width), from `TextOut`/`TextOutW` (width from the font engine; descent approximated as ¼ size) and from `DrawXObject`. Points drawn under a `ConcatToCTM` that is still active are ignored, because they are not in page space
 - **Artifacts:** a path object (`m l c v y re` … paint/`n`) or an image `Do` drawn while no struct region is open is wrapped in `/Artifact BMC … EMC` automatically. Inside a region (e.g. `Figure`) it stays real content. For other skipped content, e.g. a repeated table header or a running page header, use `Canvas.BeginArtifact`/`EndArtifact` (also on `TPdfDocumentVcl`). Do not open a struct element inside it: `BeginArtifact` inside a region and an unmatched `EndArtifact` raise `EPdfInvalidOperation`
 
@@ -677,7 +720,8 @@ When `Tagged = true`:
 Doc.BeginStructContent(psrH2);  // delegates to Canvas.BeginStructContent
 Doc.EndStructContent;            // delegates to Canvas.EndStructContent
 // same delegation for BeginStructGroup, ContinueStructContent,
-// SuspendStructContent, LastStructContent and ResumeStructContent
+// SuspendStructContent, LastStructContent, ResumeStructContent,
+// BeginArtifact and EndArtifact
 ```
 
 ### TGDIPages integration
@@ -688,17 +732,19 @@ Report.ExportPdfTagged   := True;    // default False — set BEFORE drawing:
                                      // it forces ExportPdfEmbeddedTTF / clears
                                      // ExportPdfStandardFonts, and those decide
                                      // which metrics the layout is measured with
-                                     // (raises ESynException once PageCount > 0)
+                                     // (raises EPdfReport, an ESynException,
+                                     // once a page exists)
 Report.ExportPdfLanguage := 'en';    // default 'en'
 // then call Report.ExportPdfStream as usual
 ```
 
-`RenderPageToCanvas` wraps drawing commands with struct content via `fActivePdfDoc: TPdfDocumentVcl`:
-- `dckDrawText`: heading-level → `psrH1..psrH6`; inside table header row → `psrTH`; inside table data row → `psrTD`; otherwise → `psrP`
+`RenderPageToCanvas` wraps drawing commands with struct content via `fActivePdfDoc: TPdfDocumentVcl` (details: `report-engine.md`):
+- `dckDrawText`: heading level → `psrH1..psrH6`; in a header row → `psrTH`; a row-header cell (`RowHeader`) → `psrTHRow`; other cells → `psrTD`; in a list item → `psrLBody`; otherwise → `psrP`. An inline line opens its element with `BeginStructGroup`, each run adding a region or a `Span`
 - `dckHeading`: `psrH1..psrH6`
 - `dckDrawBitmap`: `psrFigure`
-- `dckBeginTable`/`dckEndTable`: opens/closes `psrTable`
-- `dckBeginTR`/`dckEndTR`: opens/closes `psrTR`; `Color <> 0` marks header row (→ `psrTH` for cells)
+- `dckBeginTable`/`dckEndTable`: opens/closes `psrTable`, `dckEndTable` also the open row group
+- `dckBeginTR`/`dckEndTR`: `Color` is the row kind - 0 data, 1 header, 2 repeated header, 3 footer. A row opens its group first (`psrTHead` for 1, `psrTFoot` for 3, `psrTBody` otherwise; a change of group closes the previous one), then `psrTR`. Rows 1 and 2 hold `psrTH` cells. A repeated header (2) is an artifact and opens no struct element
+- `dckBeginList`/`dckBeginLI` and their ends: `psrL`, `psrLI`
 
 ---
 
@@ -721,16 +767,19 @@ Doc := TPdfDocument.Create(false, 0, pdfaNone, Enc);
 // ...
 ```
 
-The `TPdfEncryption` object is owned by `TPdfDocument` after passing to constructor.
+The `TPdfEncryption` object is owned by `TPdfDocument` after passing to
+constructor. PDF/A forbids encryption: a PDF/A level with an encryption
+raises `EPdfInvalidOperation` (`TestPdfAWithEncryptionRaises`).
 
 | Level | Class | PDF version | Cipher | Key derivation |
 |---|---|---|---|---|
 | `elRC4_40` | `TPdfEncryptionRC4MD5` | 1.3+ | RC4-40 | MD5 |
 | `elRC4_128` | `TPdfEncryptionRC4MD5` | 1.4+ | RC4-128 | MD5 (50 iter) |
 | `elAES_128` | `TPdfEncryptionAES128` | 1.6+ | AES-128-CBC | MD5 (same as RC4-128); IV prepended per object |
-| `elAES_256` | — | — | not implemented | — |
+| `elAES_256` | — | — | not implemented (`New` returns nil) | — |
 
-AES-128 output size: `16 (IV) + ceil(N/16)*16` bytes per encrypted object/string. The stream `Length` attribute is updated automatically before writing.
+AES-128 output size: `16 (IV) + (N div 16 + 1) * 16` bytes (PKCS#7 adds a
+whole block when N is a multiple of 16) per encrypted object/string. The stream `Length` attribute is updated automatically before writing.
 
 ---
 
@@ -739,25 +788,28 @@ AES-128 output size: `16 (IV) + ceil(N/16)*16` bytes per encrypted object/string
 | Mode | Property | Font names | Embedding |
 |---|---|---|---|
 | Standard Type1 | `StandardFontsReplace := True` | Helvetica, Times, Courier | none |
-| TrueType | `EmbeddedTTF := True` | OS-specific (see below) | subset (`EmbeddedWholeTtf = False`, default) or full TTF — see `fonts.md` §3 |
+| TrueType | `EmbeddedTTF := True` | OS-specific (see below) | subset (`EmbeddedWholeTtf = False`, default) or the whole face — see `fonts.md` §3 |
 
 **`Tagged := True` picks the mode for you:** it sets `EmbeddedTTF` and clears
 `StandardFontsReplace`, because PDF/UA allows no non-embedded base-14 face. It
 sets `EmbeddedWholeTtf := not PdfCanSubsetRetainingGids`: the faces are subset
 with retained glyph IDs, which keeps `/ToUnicode` valid — by hb-subset on
-Linux/macOS (R-12), by `CreateFontPackage` with a glyph keep list on Windows
-(R-15). Only without a subsetter (no `libharfbuzz-subset`, no `FontSub.dll`)
-is the whole face embedded. Set `EmbeddedWholeTtf := True` afterwards to force the whole face. It
-raises `ESynException` when set after the first `AddPage`, and it also widens the
-WinAnsi `/ToUnicode` CMap — previously written for PDF/A only — to tagged
-documents. Resolve font names with `GetPdfFonts` *after* setting `Tagged`.
+Linux/macOS, by `CreateFontPackage` with a glyph keep list on Windows. Only
+without a subsetter (no `libharfbuzz-subset`, no `FontSub.dll`) is the whole
+face embedded. Set `EmbeddedWholeTtf := True` afterwards to force the whole
+face. `Tagged` raises `ESynException` when set after the first `AddPage`.
+PDF/A and tagged documents get a `/ToUnicode` CMap for every font, the
+WinAnsi one included. Resolve font names with `GetPdfFonts` *after* setting
+`Tagged`.
 
 Platform-specific TTF fonts via `GetPdfFonts(Embedded, SansFont, SerifFont, MonoFont)`
-in `mormot.pdf` (constants `PDF_FONT_TTF_SANS/SERIF/MONO`) — layer 1, no
-report engine needed. `GetReportFonts` and `REPORT_FONT_*` in `mormot.pdf.report`
-are aliases of them:
+in `mormot.pdf` (constants `PDF_FONT_TTF_SANS/SERIF/MONO`; `Embedded = false`
+gives the `PDF_FONT_STD_*` names) — layer 1, no report engine needed.
+`GetReportFonts` and `REPORT_FONT_*` in `mormot.pdf.report` are aliases of
+them:
 - Windows: Calibri, Cambria, Consolas
 - macOS: Trebuchet MS, Georgia, Andale Mono
+- Android: Roboto, Noto Serif, Droid Sans Mono
 - Linux: Liberation Sans, Liberation Serif, Liberation Mono
 
 Standard constants in `mormot.pdf.pas`: `PDF_FONT_STD_SANS` = 'Helvetica', `PDF_FONT_STD_SERIF` = 'Times', `PDF_FONT_STD_MONO` = 'Courier'.
@@ -768,7 +820,8 @@ Windows falls back to the document charset and exposes only the ANSI part of
 the cmap — see `fonts.md` §10. The tests use `PDF_DEFAULT_CHARSET` from
 `test_pdf_subset`, which needs no `{$ifdef}`.
 
-`FontFallBackName` (TPdfDocument property): font substituted when a requested TrueType font is not found on the system.
+`FontFallBackName` (TPdfDocument property): the face that draws glyphs the
+current face lacks, while `UseFontFallBack` is true (the default).
 
 **CFF faces** (the CJK faces of macOS and Linux): all their text goes
 through the Type0 font (an unembedded name-keyed face keeps its Latin text in
@@ -798,4 +851,4 @@ X_pdf = X_px * 72 / 96
 Y_pdf = PageHeight_pt - Y_px * 72 / 96   (Y-flip)
 ```
 
-This conversion happens automatically in `TPdfVclCanvas`. In direct `TPdfCanvas` mode, convert manually.
+This conversion happens automatically in `TPdfVclCanvas`, at `ScreenLogPixels` instead of 96 when that was changed before the first page. In direct `TPdfCanvas` mode, convert manually.
