@@ -14,7 +14,8 @@ Delphi 2010 and Delphi 13), 1338 on macOS and 1305 on Linux. **Delphi:** layer
 steps 1–6) and on Delphi 2010, a Unicode Delphi (R-25); all six console demos
 and the `--export` of the two GUI demos give the same PDF as FPC. Delphi 13
 (R-27) runs `test_runner` green on Win32 and Win64 and, with layer 1 and the
-backends only (no VCL), on Linux64 and Android64. The files of
+backends only (no VCL), on Linux64 and Android64 (those two last run before
+the golden files). The files of
 macOS, Debian, FPC/Win64, Delphi 7 and Delphi 2010 all pass PAC 2024
 and veraPDF (V); the new `zugferd_demo` (R-26, on `TGDIPages`, its text from
 the invoice XML) also veraPDF `3u` and Mustang. **Next:** R-28, the
@@ -479,6 +480,11 @@ R-29.
 needed, `AddExportPdfAttachment` and `ExportPdfMetadataExtension`, is in
 `report-engine.md`).
 
+**Kept out on purpose:** an event `OnExportPdfDocument(Sender, Doc)` instead of
+the export options - it would hand out the document in the middle of the
+stream (an `AddPage` there breaks the file), and `of object` needs a helper
+class in a console program.
+
 **Open, demo by demo:** the other demos lose their code-point constants
 (`{$ifdef HASCODEPAGE} #$00E4 {$else} #$C3#$A4 {$endif}`) the same way -
 ASCII labels, non-ASCII data from a UTF-8 file or a literal straight into a
@@ -523,7 +529,7 @@ Optional, for consistency down to layer 1: a `TPdfCanvas.TextOutUtf8`, so
 callers need not go through `Utf8ToSynUnicode` + `TextOutW` as `layer1_demo`
 does.
 
-### R-25 — Unicode Delphi: Delphi 2010 — one leftover
+### R-25 — Unicode Delphi: Delphi 2010 — leftovers
 
 Delphi 2010 builds and runs everything Delphi 7 does ("Done"). **Open:** the
 W1057/W1058 warnings (implicit string casts) in the tests - 24 when last
@@ -765,7 +771,7 @@ passed the `zugferd_demo` files of all five with R-26. `chinese_demo` and
 
 | Open | Why it matters |
 |---|---|
-| HarfBuzz older than 2.9 | loads, but lacks `hb_subset_or_fail`. The **missing** library is covered by `tests/no_hbsubset.sh`; an old one is still the default on Ubuntu 22.04 LTS and RHEL 9 (2.7.4) — untested here |
+| HarfBuzz older than 2.9 | loads, but lacks `hb_subset_or_fail`. The **missing** library is covered by `tests/no_hbsubset.sh`; an old one is still the default on Ubuntu 22.04 LTS and RHEL 9 (2.7.4) — untested here. HarfBuzz 8.3.0 (< 10.0) was tested this way: an `ubuntu:24.04` container running the Debian-built `test_runner`, with `libgtk2.0-0t64`, `xvfb` and the README fonts |
 | veraPDF in the routine runs | installed on macOS with `ua1`, `3a`, `3b`, `3u` (path in `CLAUDE.local.md`); run by hand on each platform's files, not scripted |
 | Delphi GUI | the preview and the demo windows — R-20 steps 7 and 8 |
 
@@ -837,22 +843,16 @@ would need a tagged link annotation, which the engine cannot write yet
 (R-29, item 7), so the hint is accepted, like W-1. `invoice_demo` draws its
 addresses the same way.
 
-### `RunRedirect` Hangs on POSIX — mORMot2 fix, unprioritised
+### `pdfcheck` Without `RunRedirect` on POSIX — unprioritised
 
-Found on 2026-10-01 with `pdfcheck run fpc` on Linux: after the first demo had
-written its PDF and exited, `pdfcheck` spun at 100 % CPU, the child left as a
-zombie. In `RunRedirect` (`mormot.core.os.posix.inc`, `RedirectOutput`)
-`fpread` returns 0 at the end of the pipe, but only `n < 0` counts as closed;
-with `INFINITE` the loop reads the closed pipe for ever and never reaches
-`pclose`. Windows goes through `RunCommandWin` and is not affected.
+`RunRedirect` once hung on POSIX: `RedirectOutput` took only `fpread < 0` as
+the end of the pipe and read the closed pipe for ever. `tests/pdfcheck.lpr`
+works around it under `OSPOSIX` (`ChDir` + `RunCommand(cmd, true)`, the demo
+output on the console). The trunk fixed it (667509df5, `n <= 0` ends the
+read), and the pinned mORMot2 has the fix.
 
-Until then `pdfcheck` runs the demos with `ChDir` + `RunCommand(cmd, true)`
-under `OSPOSIX`; their output goes to the console instead of being shown
-on a failure.
-
-**The fix still open:** take `n <= 0` as the end in `RedirectOutput`, in the
-mORMot2 fork and as a PR to Synopse; then drop the `{$ifdef OSPOSIX}` in
-`tests/pdfcheck.lpr`.
+**Open:** run `pdfcheck run` on Linux and macOS through `RunRedirect`; if it
+no longer hangs, drop the `{$ifdef OSPOSIX}` branch and its comment.
 
 ### CFF Faces the Reader Refuses — unprioritised
 
@@ -939,7 +939,8 @@ is true: neither is implemented. Open, after R-28: the
 trunk's `TGdiPages` properties `ExportPdfEncryptionLevel`,
 `ExportPdfEncryptionUserPassword`, `ExportPdfEncryptionOwnerPassword` and
 `ExportPdfEncryptionPermissions`, passed as `TPdfEncryption.New(..)` to the
-`TPdfDocumentVcl` that `ExportPdfStream` creates (its constructor takes one). Needs a password and permission policy; PDF/A
+`TPdfDocumentVcl` that `ExportPdfStream` creates (its constructor takes
+one). Needs a password and permission policy; PDF/A
 refuses encryption (the engine raises), PDF/UA needs `epContentExtraction`,
 and `elAES_256` gives no encryption (`TPdfEncryption.New` returns nil).
 
@@ -967,7 +968,7 @@ draw such glyphs, without a real `/ToUnicode` ("Shaped Text: Real
 /ToUnicode").
 
 **Open, after R-28:**
-2. The supplementary groups of format 12 into the Unicode instance's table
+2. **Step 2:** the supplementary groups of format 12 into the Unicode instance's table
    (the BMP still from format 4, never "prefer format 12" for it), surrogate
    pairs combined in `AddUnicodeHexTextNoUniScribe` and `UnicodeTextWidth`,
    the fallback and the PDF/A message by code point, `/ToUnicode`
@@ -977,7 +978,7 @@ draw such glyphs, without a real `/ToUnicode` ("Shaped Text: Real
    supplementary code points in the request, keeping their glyphs only by the
    glyph keep list; hb-subset takes them. `FindOrAddUsedCodePoint` is
    protected until this step and may become public with it
-3. Shaped source text - new output
+3. **Step 3:** shaped source text - new output
 
 PDFBox and iText read format 12 and encode by code point the same way.
 
@@ -994,8 +995,7 @@ FreeType backend already extracts a single face as a standalone sfnt
 ### R-30 — Rebuild the Published Accessibility References — after R-28 and the merge of R-29
 
 **Why.** The tagged output is checked by validators, not against examples
-others published as correct. `docs/ACCESSIBILITY_REFERENCES.md` (2026-10-10,
-branch `feature/accessibility-reference-rebuild`) maps the PDF Association's
+others published as correct. `docs/ACCESSIBILITY_REFERENCES.md` maps the PDF Association's
 Techniques for Accessible PDF, its PDF/UA-1 Reference Suite (both CC BY
 4.0) and the BITV-PDF-Test onto the engine. It lists each case as tested,
 shown in a demo only, solved by R-29, a gap, or to be checked.
@@ -1057,15 +1057,15 @@ in git, the knowledge in the skills.
 - **B-11** - PAC: table header cells without associated cells, no `/Scope` (64337cd)
 - **B-12** - PAC: `RG` inside a path object, `LineTo` writes a complete path object (ed38f2f)
 - **B-13** - PAC: `Figure` on one page without a `/BBox` layout attribute (ae6194a)
-- **R-1** - AES-128 encryption (before c9d92f3)
-- **R-2** - cross-reference streams, PDF 1.5+ (before c9d92f3)
-- **R-3** - object streams, PDF 1.5+ (before c9d92f3)
-- **R-4** - XMP metadata stream (before c9d92f3)
-- **R-5** - table structure tags (before c9d92f3)
-- **R-6** - `Figure` tags with `/Alt` (before c9d92f3)
-- **R-7** - transparency, `/ExtGState` `/ca` `/CA` (before c9d92f3)
-- **R-8** - configurable line height, `LineHeightFactor` (before c9d92f3)
-- **R-9** - table header repeated on a page break (before c9d92f3)
+- **R-1** - AES-128 encryption (in the initial commit c9d92f3)
+- **R-2** - cross-reference streams, PDF 1.5+ (in the initial commit c9d92f3)
+- **R-3** - object streams, PDF 1.5+ (in the initial commit c9d92f3)
+- **R-4** - XMP metadata stream (in the initial commit c9d92f3)
+- **R-5** - table structure tags (in the initial commit c9d92f3)
+- **R-6** - `Figure` tags with `/Alt` (in the initial commit c9d92f3)
+- **R-7** - transparency, `/ExtGState` `/ca` `/CA` (in the initial commit c9d92f3)
+- **R-8** - configurable line height, `LineHeightFactor` (in the initial commit c9d92f3)
+- **R-9** - table header repeated on a page break (in the initial commit c9d92f3)
 - **R-12** - font subsetting on POSIX with hb-subset (4ef4bc3)
 - **R-14** - table row groups `THead`/`TBody`/`TFoot`, `DrawTableFooter` (e28c2a6)
 - **R-15** - Windows subsets by glyph ID, `CreateFontPackage` with `TTFCFP_FLAGS_GLYPHLIST` (14436d9)
@@ -1081,7 +1081,7 @@ in git, the knowledge in the skills.
 - **R-25** - Unicode Delphi checked with Delphi 2010 (9f6633b); its leftovers stay open
 - **R-26** - `zugferd_demo` on `TGDIPages`, its text from the XML; PDF/A-3 attachments and XMP extension on export (7b49304, 8de33da); the other demos stay open
 - **R-27** - Delphi 13 on Win64, Linux64 and Android64 (#1); its leftovers stay open
-- **R-31** - WinAnsi text in a face without a (3,1) or (1,0) cmap draws by glyph through the Type0 font (#59)
+- **R-31** - WinAnsi text in a face without a (3,1) or (3,0) cmap draws by glyph through the Type0 font (#59)
 - **R-32, step 1** - the used characters keyed by code point, not UTF-16 unit (#65); steps 2-3 stay open
 - **U-1** - glyph widths disagreed with the embedded font program on POSIX (315be6f)
 - **U-2** - a shaped Arabic glyph carried the shaper's advance in `/W`, not the `hmtx` one (7224b26)
