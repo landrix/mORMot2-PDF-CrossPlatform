@@ -705,13 +705,19 @@ Font embedding decision:
 ### `lfCharSet` on Windows
 
 `TPdfVclCanvas.SyncFont` passes `Font.Charset` (LCL default: `DEFAULT_CHARSET (1)`) to
-`TPdfCanvas.SetFont`. This ensures GDI exposes the full Unicode CMAP to `GetFontData`
-regardless of the system codepage (`fDoc.CharSet`).
+`TPdfCanvas.SetFont`. A direct `SetFont` with `ACharSet < 0` takes `fDoc.CharSet`
+instead - on Western Windows (codepage 1252) `ANSI_CHARSET (0)`.
 
-When `TPdfCanvas.SetFont` is called directly with `ACharSet < 0`, it falls back to
-`fDoc.CharSet`. On Western Windows (codepage 1252) this is `ANSI_CHARSET (0)`, which
-restricts the CMAP to ANSI-mapped characters. Always pass an explicit charset when
-calling `SetFont` directly with non-Latin fonts.
+**What the charset decides on Windows:** which face GDI's font mapper selects.
+With `ANSI_CHARSET` it prefers an installed font that has that code page over
+a requested one that lacks it, so a face without Latin is not found
+(`platform-backends.md`, "Registered Fonts"; `call-graph.md` 4a). It does
+not filter the cmap: `GetFontData` returns the raw `cmap` of the selected face,
+and `TPdfTtf.LoadCmap` picks the subtable from the table itself - (3,1), else
+(3,0), a symbol face, else (0,3)/(0,4). `SYMBOL_CHARSET (2)` also sets
+`PDF_FONT_SYMBOLIC` in the font's `/Flags` (the `TPdfFontTrueType`
+constructor), which `IsSymbolic` reads (§3). Pass `DEFAULT_CHARSET` when
+calling `SetFont` directly with a non-Latin face.
 
 On Unix/macOS: `fCodePage = CP_UTF8 → fCharSet = ANSI_CHARSET (0)`
 (`CodePageToCharSet`) — safe regardless.
@@ -877,14 +883,15 @@ TPdfCanvas.SetFont(name, size, style, ACharSet)
         Windows: TGdiFontProvider.CreateFace → lfCharSet, CreateFontIndirectW
                  → HFONT with lfCharSet
   TPdfTtf.Create → GetTtfData → fFace.GetFontData('cmap', ...)
-                 ← full Unicode CMAP with DEFAULT_CHARSET
+                 ← the raw cmap of the face GDI selected (§10)
 
 On Unix/macOS: no HFONT; FreeType reads CMAP directly from the TTF file.
 ```
 
-**Symbol font safety:** `lfCharSet = SYMBOL_CHARSET (2)` selects the symbol CMAP subtable
-(`platformSpecificID = TTFCFP_SYMBOL_CHAR_SET`). Set `Font.Charset := SYMBOL_CHARSET`
-before rendering; `SyncFont` passes it through unchanged.
+**Symbol fonts:** the symbol subtable (3,0) is chosen by `LoadCmap` from the
+table, whatever the charset. `SYMBOL_CHARSET (2)` makes the font symbolic in
+its `/Flags` (§10). Set `Font.Charset := SYMBOL_CHARSET` before rendering;
+`SyncFont` passes it through unchanged.
 
 ---
 

@@ -816,8 +816,8 @@ Standard constants in `mormot.pdf.pas`: `PDF_FONT_STD_SANS` = 'Helvetica', `PDF_
 
 **Calling `TPdfCanvas.SetFont` directly with a non-Latin face:** pass
 `DEFAULT_CHARSET` (1) as `ACharSet`, as `TPdfVclCanvas` does. Without it,
-Windows falls back to the document charset and exposes only the ANSI part of
-the cmap — see `fonts.md` §10. The tests use `PDF_DEFAULT_CHARSET` from
+Windows falls back to the document charset, and GDI's mapper may select
+another face than the one asked for — see `fonts.md` §10. The tests use `PDF_DEFAULT_CHARSET` from
 `test_pdf_subset`, which needs no `{$ifdef}`.
 
 `FontFallBackName` (TPdfDocument property): the face that draws glyphs the

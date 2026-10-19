@@ -150,7 +150,8 @@ Application
   │  no page yet
   │
   TGDIPages.NewPage
-  │  closes an open list; appends a TPageData with this page's size and
+  │  closes an open list unless a list item is being recorded
+  │  (fRecordingListItem); appends a TPageData with this page's size and
   │  margins to fPages; resets CurrentY and CurrentX
   │
   TGDIPages.SetFont / FontStyle
