@@ -1069,7 +1069,7 @@ in git, the knowledge in the skills.
 - **R-23** - `layer1_demo`, a layer 1 demo for Delphi (613ccf9)
 - **R-25** - Unicode Delphi checked with Delphi 2010 (9f6633b); its leftovers stay open
 - **R-26** - `zugferd_demo` on `TGDIPages`, its text from the XML; PDF/A-3 attachments and XMP extension on export (7b49304, 8de33da); the other demos stay open
-- **R-27** - Delphi 13 on Win64, Linux64 and Android64 (#1); its leftovers stay open
+- **R-27** - Delphi 13 on Win32, Win64, Linux64 and Android64 (#1); its leftovers stay open
 - **R-31** - WinAnsi text in a face without a (3,1) or (3,0) cmap draws by glyph through the Type0 font (#59)
 - **R-32, step 1** - the used characters keyed by code point, not UTF-16 unit (#65); steps 2-3 stay open
 - **U-1** - glyph widths disagreed with the embedded font program on POSIX (315be6f)
