@@ -535,7 +535,7 @@ Delphi 2010 builds and runs everything Delphi 7 does ("Done"). **Open:** the
 W1057/W1058 warnings (implicit string casts) in the tests - 24 when last
 counted; `tests/build_delphi2010.bat` keeps warnings on to show them.
 
-### R-27 — Delphi 13: Win64, Linux64, Android64 — leftovers
+### R-27 — Delphi 13: Win32, Win64, Linux64, Android64 — leftovers
 
 `tests/delphi13/test_runner.dproj` builds the suites for Win32, Win64,
 Linux64 and Android64, `tests/delphi13/android` is the FMX host for Android

@@ -340,7 +340,7 @@ CJK and Arabic output:
 | `fFace` | `IFontFace` | both | the face, shared by both instances (reference counted); `fFace.Handle` is the GDI `HFONT` or the `PFreeTypeFont` |
 | `fShapedGlyph`, `fShapedWidth` | `TSortedWordArray`, `TWordDynArray` | WinAnsi | glyphs used without a code point (shaped glyphs out of the cmap) and their widths, §13 |
 | `fFixedWidth` | `boolean` | WinAnsi | true = monospace; outside PDF/A `/W` is omitted, all glyphs use `/DW` |
-| `fIsSymbolFont` | `boolean` | Unicode | true = Symbol charset (glyphs at U+F0xx) |
+| `fIsSymbolFont` | `boolean` | Unicode | true = `LoadCmap` selected a (3,0) symbol cmap (glyphs at U+F0xx) |
 
 ### TUsedWide Packed Record
 
@@ -710,9 +710,10 @@ instead - on Western Windows (codepage 1252) `ANSI_CHARSET (0)`.
 
 **What the charset decides on Windows:** which face GDI's font mapper selects.
 With `ANSI_CHARSET` it prefers an installed font that has that code page over
-a requested one that lacks it, so a face without Latin is not found
-(`platform-backends.md`, "Registered Fonts"; `call-graph.md` 4a). It does
-not filter the cmap: `GetFontData` returns the raw `cmap` of the selected face,
+a registered one that lacks it, and silently substitutes it: `SetFont`
+succeeds and draws with the other face (`platform-backends.md`, "Registered
+Fonts"; `call-graph.md` 4a). It does not filter the cmap: `GetFontData`
+returns the whole `cmap` table of the selected face,
 and `TPdfTtf.LoadCmap` picks the subtable from the table itself - (3,1), else
 (3,0), a symbol face, else (0,3)/(0,4). `SYMBOL_CHARSET (2)` also sets
 `PDF_FONT_SYMBOLIC` in the font's `/Flags` (the `TPdfFontTrueType`
@@ -883,13 +884,13 @@ TPdfCanvas.SetFont(name, size, style, ACharSet)
         Windows: TGdiFontProvider.CreateFace → lfCharSet, CreateFontIndirectW
                  → HFONT with lfCharSet
   TPdfTtf.Create → GetTtfData → fFace.GetFontData('cmap', ...)
-                 ← the raw cmap of the face GDI selected (§10)
+                 ← the whole cmap of the face GDI selected (§10)
 
 On Unix/macOS: no HFONT; FreeType reads CMAP directly from the TTF file.
 ```
 
 **Symbol fonts:** the symbol subtable (3,0) is chosen by `LoadCmap` from the
-table, whatever the charset. `SYMBOL_CHARSET (2)` makes the font symbolic in
+table when the face has no (3,1), whatever the charset. `SYMBOL_CHARSET (2)` makes the font symbolic in
 its `/Flags` (§10). Set `Font.Charset := SYMBOL_CHARSET` before rendering;
 `SyncFont` passes it through unchanged.
 
