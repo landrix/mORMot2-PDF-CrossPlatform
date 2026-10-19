@@ -55,6 +55,8 @@ type
     procedure TestTableRowFonts;
     /// the legacy table API tags its rows: Table > THead/TBody > TR > TH/TD
     procedure TestLegacyTableTagged;
+    /// the legacy BeginTable saves the layout its EndTable restores
+    procedure TestLegacyTableLayoutStack;
     /// a call out of order or with a wrong argument raises EPdfReport
     procedure TestMisuseRaises;
   private
@@ -1206,6 +1208,35 @@ begin
     Check(PosEx('TBody 1', roles) > 0, 'the data rows in TBody');
   finally
     MS.Free;
+    Report.Free;
+  end;
+end;
+
+procedure TReportTests.TestLegacyTableLayoutStack;
+var
+  Report: TGDIPages;
+  Cmd: TDrawCommand;
+begin
+  Report := TGDIPages.Create(nil);
+  try
+    Report.NewPage;
+    Report.SetFont('Arial', 14);
+    Report.SaveLayout;                   // the caller's own level
+    Report.SetFont('Arial', 9);
+    Report.BeginTable([10000], [tcaLeft]);
+    Report.SetFont('Courier New', 7);
+    Report.AddTableRow(['Cell']);
+    Report.EndTable;                     // back to Arial 9, the caller's level kept
+    Report.DrawText(0, Report.CurrentY, 'After');
+    Report.RestoreLayout;                // the caller's Arial 14
+    Report.DrawText(0, Report.CurrentY, 'Restored');
+    Report.EndDoc;
+    Cmd := Report.Pages[0].Commands[High(Report.Pages[0].Commands) - 1];
+    CheckEqual(Cmd.Text, 'After', 'the text after the table');
+    CheckEqual(Cmd.FontSize, 9, 'EndTable restores what BeginTable saved');
+    Cmd := Report.Pages[0].Commands[High(Report.Pages[0].Commands)];
+    CheckEqual(Cmd.FontSize, 14, 'the caller''s saved layout is still there');
+  finally
     Report.Free;
   end;
 end;

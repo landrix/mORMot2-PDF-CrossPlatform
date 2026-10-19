@@ -2315,6 +2315,7 @@ begin
   if fTableInProgress then
     EPdfReport.RaiseUtf8('%.BeginTable: table already in progress', [self]);
   fTableInProgress := true;
+  SaveLayout; // EndTable restores it, as for BeginTable(Layout)
   fTableStartY := fCurrentY;
   fTableRowStartY := fCurrentY;
   SetLength(fTableColWidths, length(ColWidths));
