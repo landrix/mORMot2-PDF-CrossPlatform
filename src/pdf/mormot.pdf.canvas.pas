@@ -3874,6 +3874,9 @@ begin
     end
     else if (fDC[fDCIndex].WorldTransform.eM11 = fDC[fDCIndex].WorldTransform.eM22) and
             (fDC[fDCIndex].WorldTransform.eM12 = -fDC[fDCIndex].WorldTransform.eM21) and
+            // a pure positive uniform scaling is no rotation: default branch below
+            not ((fDC[fDCIndex].WorldTransform.eM12 = 0) and
+                 (fDC[fDCIndex].WorldTransform.eM11 > 0)) and
             not SameValue(ArcCos(fDC[fDCIndex].WorldTransform.eM11), 0, 0.0001) then
     begin
       xs := 0;

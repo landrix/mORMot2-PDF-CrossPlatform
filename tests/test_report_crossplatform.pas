@@ -51,6 +51,14 @@ type
     procedure TestTableFooterRowHeader;
     procedure TestExportPdfPageMode;
     procedure TestExportPdfFile;
+    /// a row font of TTableLayout: its name, size and style, each inherited alone
+    procedure TestTableRowFonts;
+    /// the legacy table API tags its rows: Table > THead/TBody > TR > TH/TD
+    procedure TestLegacyTableTagged;
+    /// the legacy BeginTable saves the layout its EndTable restores
+    procedure TestLegacyTableLayoutStack;
+    /// an export closes a list left open, as EndDoc does
+    procedure TestExportClosesOpenList;
     /// a call out of order or with a wrong argument raises EPdfReport
     procedure TestMisuseRaises;
   private
@@ -1116,6 +1124,176 @@ begin
         Report.ExportPDF(WorkDir + 'report_misuse.pdf', false, false,
           'Title', 'Company');
     end;
+  finally
+    MS.Free;
+    Report.Free;
+  end;
+end;
+
+// the height of the background of a body row whose layout sets BodySize,
+// under an 11 pt page font
+function BodyRowHeight(BodySize: integer): integer;
+var
+  Report: TGDIPages;
+  Layout: TTableLayout;
+  i: Integer;
+begin
+  result := 0;
+  Report := TGDIPages.Create(nil);
+  try
+    Report.NewPage;
+    Report.SetFont('Arial', 11);
+    FillChar(Layout, SizeOf(Layout), 0);
+    SetLength(Layout.ColumnWidths, 1);
+    SetLength(Layout.ColumnAligns, 1);
+    Layout.ColumnWidths[0] := 10000;
+    Layout.BodyFontSize := BodySize;
+    Layout.BodyBkColor := clWhite;
+    Report.BeginTable(Layout);
+    Report.DrawTableRow(['Body']);
+    Report.EndTable;
+    Report.EndDoc;
+    for i := 0 to High(Report.Pages[0].Commands) do
+      if Report.Pages[0].Commands[i].Kind = dckFillRect then
+      begin
+        result := Report.Pages[0].Commands[i].Y2 - Report.Pages[0].Commands[i].Y;
+        exit;
+      end;
+  finally
+    Report.Free;
+  end;
+end;
+
+procedure TReportTests.TestTableRowFonts;
+var
+  Report: TGDIPages;
+  Layout: TTableLayout;
+  i: Integer;
+  head, body: TDrawCommand;
+  found: Integer;
+begin
+  Report := TGDIPages.Create(nil);
+  try
+    Report.NewPage;
+    Report.SetFont('Arial', 11);
+    FillChar(Layout, SizeOf(Layout), 0);
+    SetLength(Layout.ColumnWidths, 1);
+    SetLength(Layout.ColumnAligns, 1);
+    Layout.ColumnWidths[0] := 10000;
+    Layout.HeaderFontName := 'Courier New';
+    Layout.HeaderFontSize := 0;          // a name alone: the size of the page
+    Layout.HeaderFontStyle := [fsBold];
+    Layout.BodyFontName := '';
+    Layout.BodyFontSize := 8;            // a size alone: the font of the page
+    Layout.BodyFontStyle := [fsItalic];
+    Report.BeginTable(Layout);
+    Report.DrawTableHeader(['Head']);
+    Report.DrawTableRow(['Body']);
+    Report.EndTable;
+    Report.EndDoc;
+    found := 0;
+    for i := 0 to High(Report.Pages[0].Commands) do
+      if Report.Pages[0].Commands[i].Kind = dckDrawText then
+        if Report.Pages[0].Commands[i].Text = 'Head' then
+        begin
+          head := Report.Pages[0].Commands[i];
+          inc(found);
+        end
+        else if Report.Pages[0].Commands[i].Text = 'Body' then
+        begin
+          body := Report.Pages[0].Commands[i];
+          inc(found, 2);
+        end;
+    CheckEqual(found, 3, 'both cells recorded');
+    CheckEqual(head.FontName, 'Courier New', 'header: its name');
+    CheckEqual(head.FontSize, 11, 'header: size 0 inherits the page font size');
+    Check(head.FontStyle = [fsBold], 'header: its style beside a name');
+    CheckEqual(body.FontName, 'Arial', 'body: an empty name inherits');
+    CheckEqual(body.FontSize, 8, 'body: its size beside an empty name');
+    Check(body.FontStyle = [fsItalic], 'body: its style');
+  finally
+    Report.Free;
+  end;
+  // the row is as high as its own font, not the page's
+  Check(BodyRowHeight(20) * 2 > BodyRowHeight(0) * 3,
+    'a 20 pt body row is higher than an 11 pt one');
+end;
+
+procedure TReportTests.TestLegacyTableTagged;
+var
+  Report: TGDIPages;
+  MS: TMemoryStream;
+  pdf: RawByteString;
+  roles: RawUtf8;
+begin
+  Report := TGDIPages.Create(nil);
+  MS := TMemoryStream.Create;
+  try
+    Report.ExportPdfTagged := true;
+    Report.NewPage;
+    Report.BeginTable([5000, 5000], [tcaLeft, tcaRight]);
+    Report.AddTableRow(['Item', 'Value'], true);
+    Report.AddTableRow(['One', '1']);
+    Report.AddTableRow(['Two', '2']);
+    Report.EndTable;
+    Report.EndDoc;
+    Check(Report.ExportPdfStream(MS, true), 'the export');
+    FastSetRawByteString(pdf, MS.Memory, MS.Size);
+    roles := PdfStructRoles(pdf);
+    Check(PosEx('TR 3', roles) > 0, 'a TR per row: ' + Utf8ToString(roles));
+    Check(PosEx('TH 2', roles) > 0, 'the header cells are TH');
+    Check(PosEx('TD 4', roles) > 0, 'the data cells are TD');
+    Check(PosEx('THead 1', roles) > 0, 'the header row in THead');
+    Check(PosEx('TBody 1', roles) > 0, 'the data rows in TBody');
+  finally
+    MS.Free;
+    Report.Free;
+  end;
+end;
+
+procedure TReportTests.TestLegacyTableLayoutStack;
+var
+  Report: TGDIPages;
+  Cmd: TDrawCommand;
+begin
+  Report := TGDIPages.Create(nil);
+  try
+    Report.NewPage;
+    Report.SetFont('Arial', 14);
+    Report.SaveLayout;                   // the caller's own level
+    Report.SetFont('Arial', 9);
+    Report.BeginTable([10000], [tcaLeft]);
+    Report.SetFont('Courier New', 7);
+    Report.AddTableRow(['Cell']);
+    Report.EndTable;                     // back to Arial 9, the caller's level kept
+    Report.DrawText(0, Report.CurrentY, 'After');
+    Report.RestoreLayout;                // the caller's Arial 14
+    Report.DrawText(0, Report.CurrentY, 'Restored');
+    Report.EndDoc;
+    Cmd := Report.Pages[0].Commands[High(Report.Pages[0].Commands) - 1];
+    CheckEqual(Cmd.Text, 'After', 'the text after the table');
+    CheckEqual(Cmd.FontSize, 9, 'EndTable restores what BeginTable saved');
+    Cmd := Report.Pages[0].Commands[High(Report.Pages[0].Commands)];
+    CheckEqual(Cmd.FontSize, 14, 'the caller''s saved layout is still there');
+  finally
+    Report.Free;
+  end;
+end;
+
+procedure TReportTests.TestExportClosesOpenList;
+var
+  Report: TGDIPages;
+  MS: TMemoryStream;
+begin
+  Report := TGDIPages.Create(nil);
+  MS := TMemoryStream.Create;
+  try
+    Report.ExportPdfTagged := true;
+    Report.NewPage;
+    Report.DrawListItem(800, Report.CurrentY, 'Item');
+    // no EndDoc: the list is still open
+    Check(Report.ExportPdfStream(MS), 'the export closes the list');
+    Check(MS.Size > 0, 'a PDF written');
   finally
     MS.Free;
     Report.Free;

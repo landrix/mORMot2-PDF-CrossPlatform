@@ -75,6 +75,7 @@ type
     procedure MetaFileRender;
     procedure MetaFileForm;
     procedure MetaFileFormState;
+    procedure MetaFileWorldTransform;
   end;
 
 {$endif PDF_HASVCLCANVAS}
@@ -1362,6 +1363,97 @@ begin
     'the word spacing of the page after the form');
 end;
 
+// text of a metafile under world transforms: a pure uniform scale is no
+// rotation - the EMF TextOut took it for one and drew the text turned by 180
+// degrees, its text matrix negated (the trunk's a86d7e6fc)
+procedure TPdfImageGoldenTests.MetaFileWorldTransform;
+
+  // how many text matrices of the content turn the text by 180 degrees
+  function NegatedMatrices(const Content: RawUtf8): integer;
+  var
+    i, j, n: PtrInt;
+    line: RawUtf8;
+    v: TRawUtf8DynArray;
+  begin
+    result := 0;
+    i := PosEx(' Tm', Content);
+    while i > 0 do
+    begin
+      j := i;
+      while (j > 1) and
+            not (Content[j - 1] in [#10, #13]) do
+        dec(j);
+      line := copy(Content, j, i - j);
+      v := nil;
+      CsvToRawUtf8DynArray(pointer(line), v, ' ');
+      n := length(v);
+      if (n >= 6) and
+         (v[n - 6] <> '') and (v[n - 6][1] = '-') and
+         (v[n - 3] <> '') and (v[n - 3][1] = '-') then
+        inc(result);
+      i := PosEx(' Tm', Content, i + 3);
+    end;
+  end;
+
+var
+  doc: TPdfDocumentGdi;
+  mf: TMetaFile;
+  mc: TMetaFileCanvas;
+  xf: TXForm;
+  pdf: RawByteString;
+  txt, err: RawUtf8;
+begin
+  mf := TMetaFile.Create;
+  doc := TPdfDocumentGdi.Create;
+  try
+    mf.Width := 400;
+    mf.Height := 320;
+    mc := TMetaFileCanvas.Create(mf, 0);
+    try
+      mc.Font.Name := 'Arial';
+      mc.Font.Size := 20;
+      SetGraphicsMode(mc.Handle, GM_ADVANCED);
+      FillChar(xf, SizeOf(xf), 0);
+      xf.eM11 := 0.5;
+      xf.eM22 := 0.5;
+      SetWorldTransform(mc.Handle, xf);
+      mc.TextOut(40, 40, 'Half');
+      xf.eM11 := 2;
+      xf.eM22 := 2;
+      SetWorldTransform(mc.Handle, xf);
+      mc.TextOut(20, 40, 'Double');
+      xf.eM11 := 0;
+      xf.eM12 := 1;
+      xf.eM21 := -1;
+      xf.eM22 := 0;
+      xf.eDx := 300;
+      SetWorldTransform(mc.Handle, xf);
+      mc.TextOut(40, 40, 'Turned');
+      ModifyWorldTransform(mc.Handle, xf, MWT_IDENTITY);
+      mc.TextOut(40, 260, 'Plain');
+    finally
+      mc.Free;
+    end;
+    doc.Info.CreationDate := GOLDEN_DATE;
+    doc.EmbeddedTTF := false;
+    doc.StandardFontsReplace := true;
+    doc.AddPage;
+    RenderMetaFile(doc.Canvas, mf, 1, 1, 0, 0);
+    pdf := SaveDoc(doc);
+  finally
+    doc.Free;
+    mf.Free;
+  end;
+  txt := InflatePdf(NormalizePdf(pdf, err));
+  CheckEqual(err, '');
+  Check(PosEx('(Half)', txt) > 0, 'the half-size text');
+  Check(PosEx('(Double)', txt) > 0, 'the double-size text');
+  Check(PosEx('(Turned)', txt) > 0, 'the rotated text');
+  Check(PosEx('(Plain)', txt) > 0, 'the text after the identity');
+  CheckEqual(NegatedMatrices(txt), 0, 'no text turned by 180 degrees');
+  CheckGolden('emf_world', pdf);
+end;
+
 {$else}
 
 procedure TPdfImageGoldenTests.MetaFileCanvas;
@@ -1389,6 +1481,14 @@ begin
 end;
 
 procedure TPdfImageGoldenTests.MetaFileFormState;
+var
+  i: integer;
+begin
+  for i := 1 to 8 do
+    Check(true, 'SKIP: metafiles are Windows only');
+end;
+
+procedure TPdfImageGoldenTests.MetaFileWorldTransform;
 var
   i: integer;
 begin

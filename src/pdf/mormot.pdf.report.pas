@@ -128,10 +128,10 @@ type
     dckClip,          // push clip rect (X,Y,X2,Y2)
     dckRestoreClip,   // pop clip rect
     dckBeginTable,    // mark beginning of table (used for layout)
-    dckTableRow,      // table row with cells (Text holds cell data, Color = header flag)
+    dckTableRow,      // unused: neither recorded nor rendered
     dckEndTable,      // mark end of table
     dckHeading,       // heading (Level 1..6, Title in Text)
-    dckBeginTR,       // begin table row (Color: 0 = data, 1 = header, 2 = repeated header) - for Tagged PDF structure
+    dckBeginTR,       // begin table row (Color: 0 = data, 1 = header, 2 = repeated header, 3 = footer) - for Tagged PDF structure
     dckEndTR,         // end table row - for Tagged PDF structure
     dckBeginList,     // begin list - for Tagged PDF structure (psrL)
     dckEndList,       // end list - for Tagged PDF structure
@@ -408,6 +408,10 @@ type
     procedure RecordWrappedText(X: integer; var Y: integer;
                                 const S: RawUtf8; MaxWidthMM: integer);
     procedure EmitTextCmd(X, Y: integer; const S: RawUtf8; Align: integer);
+    /// the font of a table row: AFontName '' and AFontSize 0 inherit the
+    // current font, each alone; AFontStyle always applies
+    procedure ApplyRowFont(const AFontName: RawUtf8; AFontSize: integer;
+      AFontStyle: TFontStyles);
     /// draw one fully styled table row - shared by DrawTableHeader/Footer
     // - ARowKind travels in dckBeginTR.Color: 1 = header, 2 = its repetition
     // on a continuation page (an artifact), 3 = footer
@@ -2012,6 +2016,28 @@ begin
   AddCommand(BTCmd);
 end;
 
+procedure TGDIPages.ApplyRowFont(const AFontName: RawUtf8; AFontSize: integer;
+  AFontStyle: TFontStyles);
+var
+  nam: RawUtf8;
+  siz: integer;
+begin
+  // the style first: SetFont caches the metrics of name, size and style
+  fFontStyle := AFontStyle;
+  // an empty name and a size of 0 inherit, each alone (TTableLayout); with
+  // both inherited the metrics stay as they are, as before
+  if (AFontName = '') and
+     (AFontSize <= 0) then
+    exit;
+  nam := AFontName;
+  if nam = '' then
+    nam := fFontName;
+  siz := AFontSize;
+  if siz <= 0 then
+    siz := fFontSize;
+  SetFont(nam, siz);
+end;
+
 procedure TGDIPages.DrawTableStyledRow(const Cells: array of RawUtf8;
   ARowKind: integer; const AFontName: RawUtf8; AFontSize: integer;
   AFontStyle: TFontStyles; ABkColor: TColor);
@@ -2028,12 +2054,7 @@ begin
   TRCmd.Color := ARowKind;
   AddCommand(TRCmd);
   SaveLayout;
-  { Use table layout fonts if specified, otherwise use current document font }
-  if AFontName <> '' then
-    SetFont(AFontName, AFontSize)
-  else
-    { Keep current font name/size, only change style }
-    fFontStyle := AFontStyle;
+  ApplyRowFont(AFontName, AFontSize, AFontStyle);
   fTextColor := clBlack;
 
   { Cell height includes padding above and small padding below text }
@@ -2186,13 +2207,17 @@ var
   CellX, CellWidth, CellY: integer;
   AlignValue: integer;
   BgColor: TColor;
-  RowHeight: integer;
+  RowHeight, siz: integer;
 begin
   if not fTableInProgress then
     EPdfReport.RaiseUtf8('%.DrawTableRow: BeginTable not called', [self]);
 
-  { Calculate row height with padding above and small padding below text }
-  RowHeight := LineHeightMM + CELL_PADDING;
+  { the row height of the body font, which ApplyRowFont sets only below:
+    a repeated header must still see the font of the page }
+  siz := fTableLayout.BodyFontSize;
+  if siz <= 0 then
+    siz := fFontSize;
+  RowHeight := PointsToMM100(siz * fLineHeightFactor) + CELL_PADDING;
 
   { Check for page break - repeat column headers on the continuation page }
   if fCurrentY + RowHeight > fPageHeight then
@@ -2221,12 +2246,8 @@ begin
     BgColor := fTableLayout.BodyBkColor;
 
   SaveLayout;
-  { Use table layout fonts if specified, otherwise use current document font }
-  if fTableLayout.BodyFontName <> '' then
-    SetFont(fTableLayout.BodyFontName, fTableLayout.BodyFontSize)
-  else
-    { Keep current font name/size, only change style to BodyFontStyle }
-    fFontStyle := fTableLayout.BodyFontStyle;
+  ApplyRowFont(fTableLayout.BodyFontName, fTableLayout.BodyFontSize,
+    fTableLayout.BodyFontStyle);
   fTextColor := clBlack;
 
   { Draw body cells }
@@ -2298,6 +2319,7 @@ begin
   if fTableInProgress then
     EPdfReport.RaiseUtf8('%.BeginTable: table already in progress', [self]);
   fTableInProgress := true;
+  SaveLayout; // EndTable restores it, as for BeginTable(Layout)
   fTableStartY := fCurrentY;
   fTableRowStartY := fCurrentY;
   SetLength(fTableColWidths, length(ColWidths));
@@ -2336,6 +2358,15 @@ begin
   // Check for page break
   if fCurrentY + RowHeight > fPageHeight then
     ForceNewPage;
+
+  // a row of its own in a tagged export: TR, its cells TH or TD
+  Cmd := NewCommand;
+  Cmd.Kind := dckBeginTR;
+  if IsHeader then
+    Cmd.Color := 1 // header row
+  else
+    Cmd.Color := 0; // data row
+  AddCommand(Cmd);
 
   // Draw table cells
   CellX := 0;
@@ -2392,6 +2423,9 @@ begin
     CellX := CellX + CellWidth;
   end;
 
+  Cmd := NewCommand;
+  Cmd.Kind := dckEndTR;
+  AddCommand(Cmd);
   inc(fCurrentY, RowHeight);
   fTableRowStartY := fCurrentY;
 end;
@@ -2908,6 +2942,8 @@ begin
       EPdfReport.RaiseUtf8('%.ExportPdfStream: no page to export', [self]);
     exit;
   end;
+  // as EndDoc does: a list left open would leave its struct element open
+  CloseOpenList;
   try
     PDF := TPdfDocumentVcl.Create(fUseOutlines, 0, fExportPdfLevel);
     try
