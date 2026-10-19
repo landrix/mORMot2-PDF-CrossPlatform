@@ -194,8 +194,9 @@ checked against that record:
      difference cannot be told from the change under test
 
    **Pinned:** `d60cc6e80` (2026-10-02); from Phase 1 on a commit of the
-   `pdf-font-layer` branch of `landrix/mORMot2`, which is `d60cc6e80` plus
-   the new `mormot.lib.*` units (see Phase 1, "Where the code lives"):
+   `pdf-font-layer` branch of `landrix/mORMot2`, which is the trunk - since
+   `287ef426f` the trunk of 2026-10-18, before it `d60cc6e80` - plus the new
+   `mormot.lib.*` units (see Phase 1, "Where the code lives"):
    `89d652a77` (2026-10-04, `mormot.lib.core` added, no other change), then
    `5a1fb60fc` (2026-10-04, `mormot.lib.freetype` and `mormot.lib.harfbuzz`
    added, unused here until the old POSIX backends are replaced; in
@@ -352,7 +353,8 @@ Phase 1 is one PR to `synopse/mORMot2`.
   `mormot.ui.pdf`; they are the shaper and the subsetter of
   `mormot.lib.uniscribe` now (not in the gist), and the engine has one path
   for both platforms. The two paths differed in shape, not only in library -
-  see `.claude/skills/platform-backends.md`, "Phase 1 Notes"
+  see `.claude/skills/platform-backends.md`, "IFontShaper" and
+  "IFontSubsetter"
 - **The engine's direct GDI calls behind the interfaces** (done in step W3,
   2026-10-09): the document DC (`FontDC`), font creation and release, metrics,
   character widths, tables and glyph advances by index (the new
