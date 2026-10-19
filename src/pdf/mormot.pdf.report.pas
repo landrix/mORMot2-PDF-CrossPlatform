@@ -2938,6 +2938,8 @@ begin
       EPdfReport.RaiseUtf8('%.ExportPdfStream: no page to export', [self]);
     exit;
   end;
+  // as EndDoc does: a list left open would leave its struct element open
+  CloseOpenList;
   try
     PDF := TPdfDocumentVcl.Create(fUseOutlines, 0, fExportPdfLevel);
     try

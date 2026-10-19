@@ -57,6 +57,8 @@ type
     procedure TestLegacyTableTagged;
     /// the legacy BeginTable saves the layout its EndTable restores
     procedure TestLegacyTableLayoutStack;
+    /// an export closes a list left open, as EndDoc does
+    procedure TestExportClosesOpenList;
     /// a call out of order or with a wrong argument raises EPdfReport
     procedure TestMisuseRaises;
   private
@@ -1237,6 +1239,26 @@ begin
     Cmd := Report.Pages[0].Commands[High(Report.Pages[0].Commands)];
     CheckEqual(Cmd.FontSize, 14, 'the caller''s saved layout is still there');
   finally
+    Report.Free;
+  end;
+end;
+
+procedure TReportTests.TestExportClosesOpenList;
+var
+  Report: TGDIPages;
+  MS: TMemoryStream;
+begin
+  Report := TGDIPages.Create(nil);
+  MS := TMemoryStream.Create;
+  try
+    Report.ExportPdfTagged := true;
+    Report.NewPage;
+    Report.DrawListItem(800, Report.CurrentY, 'Item');
+    // no EndDoc: the list is still open
+    Check(Report.ExportPdfStream(MS), 'the export closes the list');
+    Check(MS.Size > 0, 'a PDF written');
+  finally
+    MS.Free;
     Report.Free;
   end;
 end;
