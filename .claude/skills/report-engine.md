@@ -308,7 +308,9 @@ fields at `Length = 0`, and then no cell is drawn, not even the header.
 inherit each alone (`ApplyRowFont`): an empty `FontName` takes the current
 font name, a `FontSize` of 0 the current size, and the `FontStyle` field
 always applies. With both inherited only the style changes and the current
-metrics stay. Cell text is always black.
+metrics stay. A row is as high as its own font size (`DrawTableRow` works
+it out before setting the font, so that a header repeated at a page break
+still takes the page font). Cell text is always black.
 
 **Row groups.** A tagged export wraps the rows in the three group
 elements of ISO 32000-1 14.8.4.3.4: `Table > THead | TBody | TFoot > TR >
@@ -360,6 +362,8 @@ Report.EndTable;
   (`IsHeader`, kind 1) in `THead` with `TH` cells, a data row (kind 0) in
   `TBody` with `TD` cells
 - at a page break it starts a new page without repeating the header
+- a header row after data rows opens a second `THead` after the `TBody`,
+  as `DrawTableHeader` mid-table does: give the header first
 - this `BeginTable` saves the layout and `EndTable` restores it, as with
   `BeginTable(Layout)`
 

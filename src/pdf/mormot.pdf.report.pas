@@ -2207,13 +2207,17 @@ var
   CellX, CellWidth, CellY: integer;
   AlignValue: integer;
   BgColor: TColor;
-  RowHeight: integer;
+  RowHeight, siz: integer;
 begin
   if not fTableInProgress then
     EPdfReport.RaiseUtf8('%.DrawTableRow: BeginTable not called', [self]);
 
-  { Calculate row height with padding above and small padding below text }
-  RowHeight := LineHeightMM + CELL_PADDING;
+  { the row height of the body font, which ApplyRowFont sets only below:
+    a repeated header must still see the font of the page }
+  siz := fTableLayout.BodyFontSize;
+  if siz <= 0 then
+    siz := fFontSize;
+  RowHeight := PointsToMM100(siz * fLineHeightFactor) + CELL_PADDING;
 
   { Check for page break - repeat column headers on the continuation page }
   if fCurrentY + RowHeight > fPageHeight then

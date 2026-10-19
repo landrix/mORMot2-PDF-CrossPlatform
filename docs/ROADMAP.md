@@ -41,8 +41,9 @@ v0.10.0 (2026-09-30).
 - **Fixed (`TGDIPages`):** the row fonts of `TTableLayout` inherit as
   documented - an empty `FontName` the current font, a `FontSize` of 0 the
   current size, each alone - and the `FontStyle` field applies beside a
-  name. Before, a name with size 0 drew at 0 pt and dropped the style, and a
-  size without a name was ignored. Layouts that leave the font names and
+  name, and a body row is as high as its font. Before, a name with size 0
+  drew at 0 pt and dropped the style, a size without a name was ignored,
+  and a body row kept the height of the page font. Layouts that leave the font names and
   sizes empty, as every demo does, draw as before
 - **Fixed (`TGDIPages`, tagged):** the legacy table API (`BeginTable` with
   column widths, `AddTableRow`) writes each row as a `TR`, its cells `TH` in

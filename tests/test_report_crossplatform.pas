@@ -1130,6 +1130,40 @@ begin
   end;
 end;
 
+// the height of the background of a body row whose layout sets BodySize,
+// under an 11 pt page font
+function BodyRowHeight(BodySize: integer): integer;
+var
+  Report: TGDIPages;
+  Layout: TTableLayout;
+  i: Integer;
+begin
+  result := 0;
+  Report := TGDIPages.Create(nil);
+  try
+    Report.NewPage;
+    Report.SetFont('Arial', 11);
+    FillChar(Layout, SizeOf(Layout), 0);
+    SetLength(Layout.ColumnWidths, 1);
+    SetLength(Layout.ColumnAligns, 1);
+    Layout.ColumnWidths[0] := 10000;
+    Layout.BodyFontSize := BodySize;
+    Layout.BodyBkColor := clWhite;
+    Report.BeginTable(Layout);
+    Report.DrawTableRow(['Body']);
+    Report.EndTable;
+    Report.EndDoc;
+    for i := 0 to High(Report.Pages[0].Commands) do
+      if Report.Pages[0].Commands[i].Kind = dckFillRect then
+      begin
+        result := Report.Pages[0].Commands[i].Y2 - Report.Pages[0].Commands[i].Y;
+        exit;
+      end;
+  finally
+    Report.Free;
+  end;
+end;
+
 procedure TReportTests.TestTableRowFonts;
 var
   Report: TGDIPages;
@@ -1180,6 +1214,9 @@ begin
   finally
     Report.Free;
   end;
+  // the row is as high as its own font, not the page's
+  Check(BodyRowHeight(20) * 2 > BodyRowHeight(0) * 3,
+    'a 20 pt body row is higher than an 11 pt one');
 end;
 
 procedure TReportTests.TestLegacyTableTagged;
