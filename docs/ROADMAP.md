@@ -34,6 +34,24 @@ here until the post is written, then the list is emptied. It is the only such
 list: the CHANGELOG entry of the next release is written from it. Emptied for
 v0.10.0 (2026-09-30).
 
+- **Fixed (EMF, Windows):** a world transform that only scales, alike on
+  both axes, drew the text of a metafile turned by 180 degrees
+  (`TPdfDocumentGdi`, `RenderMetaFile`) - the trunk's fix of 2026-10-08,
+  which the cross-platform copy lacked
+- **Fixed (`TGDIPages`):** the row fonts of `TTableLayout` inherit as
+  documented - an empty `FontName` the current font, a `FontSize` of 0 the
+  current size, each alone - and the `FontStyle` field applies beside a
+  name. Before, a name with size 0 drew at 0 pt and dropped the style, and a
+  size without a name was ignored. Layouts that leave the font names and
+  sizes empty, as every demo does, draw as before
+- **Fixed (`TGDIPages`, tagged):** the legacy table API (`BeginTable` with
+  column widths, `AddTableRow`) writes each row as a `TR`, its cells `TH` in
+  `THead` or `TD` in `TBody`; it put the cells as `P` straight into the
+  `Table`. Its `BeginTable` now saves the layout its `EndTable` restores -
+  `EndTable` popped a layout the caller had saved
+- **Fixed (`TGDIPages`):** `ExportPdfStream` closes a list left open, as
+  `EndDoc` does; a tagged export without `EndDoc` failed with "struct
+  element(s) left open"
 - **New: `docs/MIGRATION.md`** for programs on the trunk's `mormot.ui.pdf`
   and `mormot.ui.report`, which go at the 2.5 merge: which unit each name
   is in now, the calls that change (`CreateOrGetBitmapImage`,
@@ -719,10 +737,15 @@ is compact, but it is two tables in the structure tree. Two ways to get one:
    wrapped paragraphs). Today a cell is one line and long text runs into the
    next cell. Not R-10: a row that does not fit still moves to the next page
    as a whole. Rough effort 1–2 days
-4. **`DrawHeading` ignores `SpaceBefore`/`SpaceAfter`** of the `Hx` format:
-   it adds a third of the font size after the heading and nothing before.
-   `invoice_demo` adds the space itself. Fixing it changes the layout of
-   every demo that defines heading formats: decide on a fix or an option
+4. **The spacing of the formats is not applied as defined.** `DrawHeading`
+   ignores `SpaceBefore`/`SpaceAfter` of the `Hx` format: it adds a third of
+   the font size after the heading and nothing before (`invoice_demo` adds
+   the space itself). And the `SpaceBefore` of `P`, `Quote`, `Caption` and
+   `LI` does not move the text: it is added to `CurrentY`, but the text is
+   drawn at the Y passed, and `DrawListItem` keeps it below the item. Fixing
+   either changes the layout of every demo using these formats
+   (`markdown_demo`: its Quote and Caption, 2 mm each): decide both at once,
+   a fix or an option
 5. **Running header and footer**: one line, left-aligned, in the font that
    is current at export time (`invoice_demo` ends with `SetFont`). Wanted:
    several lines, left/centre/right parts, a font of their own

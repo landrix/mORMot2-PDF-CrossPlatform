@@ -304,12 +304,11 @@ FPC 3.2 also takes the layout as a typed constant
 (`ColumnWidths: [2000, 6000, 2000]`); older FPC may leave such dynamic array
 fields at `Length = 0`, and then no cell is drawn, not even the header.
 
-**Fonts of a row.** The `Header*`, `Body*` and `Footer*` font fields work
-as a pair: with an empty `FontName` the row keeps the current font name and
-size and takes the `FontStyle` field; with a `FontName` the row calls
-`SetFont(FontName, FontSize)` — so give the size too, 0 is 0 pt — and the
-`FontStyle` field is not applied (the current style stays). Cell text is
-always black.
+**Fonts of a row.** The `Header*`, `Body*` and `Footer*` font fields
+inherit each alone (`ApplyRowFont`): an empty `FontName` takes the current
+font name, a `FontSize` of 0 the current size, and the `FontStyle` field
+always applies. With both inherited only the style changes and the current
+metrics stay. Cell text is always black.
 
 **Row groups.** A tagged export wraps the rows in the three group
 elements of ISO 32000-1 14.8.4.3.4: `Table > THead | TBody | TFoot > TR >
@@ -357,11 +356,12 @@ Report.EndTable;
 (`$E0E0E0`, else white), in the current font. Prefer `BeginTable(Layout)` +
 `DrawTableHeader` + `DrawTableRow` for new code:
 
-- `AddTableRow` records no `dckBeginTR`/`dckEndTR`, so a tagged export puts
-  its cells as `P` directly into the `Table` — no `TR`, `TH` or `TD`
+- each `AddTableRow` is a `TR` in a tagged export: a header row
+  (`IsHeader`, kind 1) in `THead` with `TH` cells, a data row (kind 0) in
+  `TBody` with `TD` cells
 - at a page break it starts a new page without repeating the header
-- this `BeginTable` overload calls no `SaveLayout`, but `EndTable` still
-  calls `RestoreLayout`: it pops a layout saved earlier, if there is one
+- this `BeginTable` saves the layout and `EndTable` restores it, as with
+  `BeginTable(Layout)`
 
 **Automatic page break:** When a data row no longer fits, it moves to the next page and the column headers are automatically repeated at the top. Header content is saved internally when `DrawTableHeader` is called; `EndTable` clears the saved headers. The repetition is recorded as `dckBeginTR` with `Color = 2`; a tagged export renders it inside `BeginArtifact`/`EndArtifact` with no struct elements, so the struct tree holds the header once. Running page header/footer text is an artifact too. A tagged export with an empty `Title` takes the first H1 as the document title. A single row taller than the page is not split (R-10).
 
@@ -437,7 +437,9 @@ twice, `ExportPdfTagged` after the first page (`TestMisuseRaises`, one
 `CheckRaised` each, exact class). Errors of the engine and of the file
 pass through with their own class.
 
-`ExportPdfStream` catches every exception and returns false, unless
+`ExportPdfStream` first closes a list left open, as `EndDoc` does: a tagged
+export would otherwise leave its `L` element open and fail. It catches every
+exception and returns false, unless
 `aRaiseException` is true (the trunk's parameter); either way it resets
 `fActivePdfDoc`, so a later `RenderPageToCanvas` (preview, printing) does
 not reach the freed document. With no page it returns false, or raises

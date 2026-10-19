@@ -872,6 +872,17 @@ defines include by relative path, the formatting of tests and demos.
 
 ## Outside the Phases
 
+- **Bug fixes found by the skill cleanup** (decided 2026-10-19 with Sven,
+  after Codex and Fable, three alternatives): one PR, a commit per fix, each
+  with a test that fails before it - the EMF world transform (the trunk's
+  a86d7e6fc), the row fonts of `TTableLayout`, the legacy table API's `TR`
+  and its `SaveLayout`, `ExportPdfStream` closing an open list (the gentle
+  variant: no new check, no API change), stale comments. None changes a
+  demo PDF or an existing golden file. Left out: the `SpaceBefore` of
+  `P`/`Quote`/`Caption`/`LI`, which moves `markdown_demo` - decided with the
+  heading spacing in ROADMAP R-29 item 4; the legacy header repetition, a
+  report bitmap with alt text (`feature/invoice-demo`) and cell colours -
+  features.
 - **R-32 step 1 during the freeze** (decided 2026-10-17 with Sven, Codex
   and Fable): the used characters keyed by code point instead of UTF-16
   unit (ROADMAP R-32). An internal change, no feature: golden files on

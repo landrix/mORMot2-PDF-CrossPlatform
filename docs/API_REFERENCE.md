@@ -195,17 +195,16 @@ FPC a `string` holds UTF-8 and passes as it is; under Delphi convert it with
 
 ```pascal
 TReportFormat = record
-  FontName:         RawUtf8;    // '' = inherit current document font
-  FontSize:         Integer;   // 0 = proportional to current font
+  FontName:         RawUtf8;    // face name, used as given
+  FontSize:         Integer;   // points, used as given (Code: 0 = 90% of the current size)
   FontStyle:        TFontStyles;
   Color:            TColor;
   SpaceBefore:      Integer;   // space before element (1/100mm)
   SpaceAfter:       Integer;   // space after element (1/100mm)
-  HeaderBkColor:    TColor;    // table header background
-  BodyBkColor:      TColor;    // table body background
-  AlternateRowColor: TColor;   // alternating row colour (0 = off)
 end;
 ```
+
+Table colours are fields of `TTableLayout`, not of a format.
 
 ### Predefined Format Names
 
@@ -224,6 +223,10 @@ end;
 | `Quote` | Block quote | body font, italic, grey | 200 before, 300 after |
 | `LI` | List item | body font | 0 before, 100 after |
 | `Caption` | Image caption | 80% body font | 200 before, 0 after |
+
+**Not applied yet (ROADMAP R-29, item 4):** `DrawHeading` ignores the
+`SpaceBefore` and `SpaceAfter` of the `Hx` formats, and the `SpaceBefore` of
+`P`, `Quote`, `Caption` and `LI` does not move the text.
 
 ---
 
