@@ -6859,7 +6859,7 @@ begin
     begin
       // split to avoid evaluation-order AV: FindOrAddUsedCodePoint may call
       // SetLength(fUsedWide,...) which moves the array; pre-loading the base
-      // pointer before the call would leave a stale reference (see Fix C).
+      // pointer before the call would leave a stale reference
       idx := uni.WinAnsiFont.FindOrAddUsedCodePoint(uni.fUsedWideChar.Values[i]);
       result := uni.WinAnsiFont.fUsedWide[idx].Glyph;
       exit; // result may be 0 if this glyph doesn't exist in the CMAP content

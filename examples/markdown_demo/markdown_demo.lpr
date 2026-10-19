@@ -6,8 +6,8 @@
 // - the same content is rendered twice with two TPageConfig records, to show
 //   that margins, font family, size and LineHeightFactor can change per section
 // - DrawHeading writes the PDF bookmark PDF/UA expects for a heading
-// - the invoice table uses a const TTableLayout and repeats its header row on
-//   the page break the 20 data rows force
+// - the invoice table builds its TTableLayout in a function and repeats its
+//   header row on the page break the 20 data rows force
 // - ExportPdfTagged must be set before the first drawing command: the export
 //   font flags decide which metrics the layout is measured with
 program markdown_demo;

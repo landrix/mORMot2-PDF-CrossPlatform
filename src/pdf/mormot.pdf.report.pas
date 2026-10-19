@@ -128,10 +128,10 @@ type
     dckClip,          // push clip rect (X,Y,X2,Y2)
     dckRestoreClip,   // pop clip rect
     dckBeginTable,    // mark beginning of table (used for layout)
-    dckTableRow,      // table row with cells (Text holds cell data, Color = header flag)
+    dckTableRow,      // unused: neither recorded nor rendered
     dckEndTable,      // mark end of table
     dckHeading,       // heading (Level 1..6, Title in Text)
-    dckBeginTR,       // begin table row (Color: 0 = data, 1 = header, 2 = repeated header) - for Tagged PDF structure
+    dckBeginTR,       // begin table row (Color: 0 = data, 1 = header, 2 = repeated header, 3 = footer) - for Tagged PDF structure
     dckEndTR,         // end table row - for Tagged PDF structure
     dckBeginList,     // begin list - for Tagged PDF structure (psrL)
     dckEndList,       // end list - for Tagged PDF structure

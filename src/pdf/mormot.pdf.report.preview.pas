@@ -44,8 +44,10 @@ uses
 // (buttons, PgUp/PgDn/Home/End)
 procedure ShowReportPreview(Report: TGDIPages);
 
-/// print pages [From..To_] of Report on the default printer
-// - the range is clipped to the existing pages; the defaults print them all
+/// print pages [From..To_] of Report on the current printer (Printers.Printer)
+// - with its settings, and without a dialog
+// - the range is 0-based and clipped to the existing pages; the defaults print
+// them all
 procedure PrintReport(Report: TGDIPages; From: integer = 0;
   To_: integer = MaxInt);
 
