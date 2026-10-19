@@ -408,6 +408,10 @@ type
     procedure RecordWrappedText(X: integer; var Y: integer;
                                 const S: RawUtf8; MaxWidthMM: integer);
     procedure EmitTextCmd(X, Y: integer; const S: RawUtf8; Align: integer);
+    /// the font of a table row: AFontName '' and AFontSize 0 inherit the
+    // current font, each alone; AFontStyle always applies
+    procedure ApplyRowFont(const AFontName: RawUtf8; AFontSize: integer;
+      AFontStyle: TFontStyles);
     /// draw one fully styled table row - shared by DrawTableHeader/Footer
     // - ARowKind travels in dckBeginTR.Color: 1 = header, 2 = its repetition
     // on a continuation page (an artifact), 3 = footer
@@ -2012,6 +2016,28 @@ begin
   AddCommand(BTCmd);
 end;
 
+procedure TGDIPages.ApplyRowFont(const AFontName: RawUtf8; AFontSize: integer;
+  AFontStyle: TFontStyles);
+var
+  nam: RawUtf8;
+  siz: integer;
+begin
+  // the style first: SetFont caches the metrics of name, size and style
+  fFontStyle := AFontStyle;
+  // an empty name and a size of 0 inherit, each alone (TTableLayout); with
+  // both inherited the metrics stay as they are, as before
+  if (AFontName = '') and
+     (AFontSize <= 0) then
+    exit;
+  nam := AFontName;
+  if nam = '' then
+    nam := fFontName;
+  siz := AFontSize;
+  if siz <= 0 then
+    siz := fFontSize;
+  SetFont(nam, siz);
+end;
+
 procedure TGDIPages.DrawTableStyledRow(const Cells: array of RawUtf8;
   ARowKind: integer; const AFontName: RawUtf8; AFontSize: integer;
   AFontStyle: TFontStyles; ABkColor: TColor);
@@ -2028,12 +2054,7 @@ begin
   TRCmd.Color := ARowKind;
   AddCommand(TRCmd);
   SaveLayout;
-  { Use table layout fonts if specified, otherwise use current document font }
-  if AFontName <> '' then
-    SetFont(AFontName, AFontSize)
-  else
-    { Keep current font name/size, only change style }
-    fFontStyle := AFontStyle;
+  ApplyRowFont(AFontName, AFontSize, AFontStyle);
   fTextColor := clBlack;
 
   { Cell height includes padding above and small padding below text }
@@ -2221,12 +2242,8 @@ begin
     BgColor := fTableLayout.BodyBkColor;
 
   SaveLayout;
-  { Use table layout fonts if specified, otherwise use current document font }
-  if fTableLayout.BodyFontName <> '' then
-    SetFont(fTableLayout.BodyFontName, fTableLayout.BodyFontSize)
-  else
-    { Keep current font name/size, only change style to BodyFontStyle }
-    fFontStyle := fTableLayout.BodyFontStyle;
+  ApplyRowFont(fTableLayout.BodyFontName, fTableLayout.BodyFontSize,
+    fTableLayout.BodyFontStyle);
   fTextColor := clBlack;
 
   { Draw body cells }

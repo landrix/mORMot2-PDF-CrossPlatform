@@ -51,6 +51,8 @@ type
     procedure TestTableFooterRowHeader;
     procedure TestExportPdfPageMode;
     procedure TestExportPdfFile;
+    /// a row font of TTableLayout: its name, size and style, each inherited alone
+    procedure TestTableRowFonts;
     /// a call out of order or with a wrong argument raises EPdfReport
     procedure TestMisuseRaises;
   private
@@ -1118,6 +1120,58 @@ begin
     end;
   finally
     MS.Free;
+    Report.Free;
+  end;
+end;
+
+procedure TReportTests.TestTableRowFonts;
+var
+  Report: TGDIPages;
+  Layout: TTableLayout;
+  i: Integer;
+  head, body: TDrawCommand;
+  found: Integer;
+begin
+  Report := TGDIPages.Create(nil);
+  try
+    Report.NewPage;
+    Report.SetFont('Arial', 11);
+    FillChar(Layout, SizeOf(Layout), 0);
+    SetLength(Layout.ColumnWidths, 1);
+    SetLength(Layout.ColumnAligns, 1);
+    Layout.ColumnWidths[0] := 10000;
+    Layout.HeaderFontName := 'Courier New';
+    Layout.HeaderFontSize := 0;          // a name alone: the size of the page
+    Layout.HeaderFontStyle := [fsBold];
+    Layout.BodyFontName := '';
+    Layout.BodyFontSize := 8;            // a size alone: the font of the page
+    Layout.BodyFontStyle := [fsItalic];
+    Report.BeginTable(Layout);
+    Report.DrawTableHeader(['Head']);
+    Report.DrawTableRow(['Body']);
+    Report.EndTable;
+    Report.EndDoc;
+    found := 0;
+    for i := 0 to High(Report.Pages[0].Commands) do
+      if Report.Pages[0].Commands[i].Kind = dckDrawText then
+        if Report.Pages[0].Commands[i].Text = 'Head' then
+        begin
+          head := Report.Pages[0].Commands[i];
+          inc(found);
+        end
+        else if Report.Pages[0].Commands[i].Text = 'Body' then
+        begin
+          body := Report.Pages[0].Commands[i];
+          inc(found, 2);
+        end;
+    CheckEqual(found, 3, 'both cells recorded');
+    CheckEqual(head.FontName, 'Courier New', 'header: its name');
+    CheckEqual(head.FontSize, 11, 'header: size 0 inherits the page font size');
+    Check(head.FontStyle = [fsBold], 'header: its style beside a name');
+    CheckEqual(body.FontName, 'Arial', 'body: an empty name inherits');
+    CheckEqual(body.FontSize, 8, 'body: its size beside an empty name');
+    Check(body.FontStyle = [fsItalic], 'body: its style');
+  finally
     Report.Free;
   end;
 end;
