@@ -2354,6 +2354,15 @@ begin
   if fCurrentY + RowHeight > fPageHeight then
     ForceNewPage;
 
+  // a row of its own in a tagged export: TR, its cells TH or TD
+  Cmd := NewCommand;
+  Cmd.Kind := dckBeginTR;
+  if IsHeader then
+    Cmd.Color := 1 // header row
+  else
+    Cmd.Color := 0; // data row
+  AddCommand(Cmd);
+
   // Draw table cells
   CellX := 0;
   for i := 0 to Min(high(Cells), high(fTableColWidths)) do
@@ -2409,6 +2418,9 @@ begin
     CellX := CellX + CellWidth;
   end;
 
+  Cmd := NewCommand;
+  Cmd.Kind := dckEndTR;
+  AddCommand(Cmd);
   inc(fCurrentY, RowHeight);
   fTableRowStartY := fCurrentY;
 end;

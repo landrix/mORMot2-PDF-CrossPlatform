@@ -53,6 +53,8 @@ type
     procedure TestExportPdfFile;
     /// a row font of TTableLayout: its name, size and style, each inherited alone
     procedure TestTableRowFonts;
+    /// the legacy table API tags its rows: Table > THead/TBody > TR > TH/TD
+    procedure TestLegacyTableTagged;
     /// a call out of order or with a wrong argument raises EPdfReport
     procedure TestMisuseRaises;
   private
@@ -1172,6 +1174,38 @@ begin
     CheckEqual(body.FontSize, 8, 'body: its size beside an empty name');
     Check(body.FontStyle = [fsItalic], 'body: its style');
   finally
+    Report.Free;
+  end;
+end;
+
+procedure TReportTests.TestLegacyTableTagged;
+var
+  Report: TGDIPages;
+  MS: TMemoryStream;
+  pdf: RawByteString;
+  roles: RawUtf8;
+begin
+  Report := TGDIPages.Create(nil);
+  MS := TMemoryStream.Create;
+  try
+    Report.ExportPdfTagged := true;
+    Report.NewPage;
+    Report.BeginTable([5000, 5000], [tcaLeft, tcaRight]);
+    Report.AddTableRow(['Item', 'Value'], true);
+    Report.AddTableRow(['One', '1']);
+    Report.AddTableRow(['Two', '2']);
+    Report.EndTable;
+    Report.EndDoc;
+    Check(Report.ExportPdfStream(MS, true), 'the export');
+    FastSetRawByteString(pdf, MS.Memory, MS.Size);
+    roles := PdfStructRoles(pdf);
+    Check(PosEx('TR 3', roles) > 0, 'a TR per row: ' + Utf8ToString(roles));
+    Check(PosEx('TH 2', roles) > 0, 'the header cells are TH');
+    Check(PosEx('TD 4', roles) > 0, 'the data cells are TD');
+    Check(PosEx('THead 1', roles) > 0, 'the header row in THead');
+    Check(PosEx('TBody 1', roles) > 0, 'the data rows in TBody');
+  finally
+    MS.Free;
     Report.Free;
   end;
 end;
