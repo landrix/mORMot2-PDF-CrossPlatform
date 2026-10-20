@@ -1417,7 +1417,8 @@ begin
   changed := OutlineYs(true);
   sp := PosEx(' ', same);
   cp := PosEx(' ', changed);
-  Check(sp > 1, 'two destinations written');
+  Check((sp > 1) and
+        (PosEx(' ', same, sp + 1) > sp + 1), 'two destinations written');
   CheckEqual(copy(changed, 1, cp - 1), copy(same, 1, sp - 1),
     'the first heading keeps its destination');
 end;
