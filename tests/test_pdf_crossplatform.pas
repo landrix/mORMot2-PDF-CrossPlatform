@@ -33,6 +33,10 @@ type
     procedure TestWinAnsiHighRangeWidths;
     procedure TestTextShaperAdvances;
     procedure TestTextShaperYOffsets;
+    {$ifdef OSWINDOWS}
+    /// embedded and overridden runs come out in their visual order
+    procedure TestBidiEmbeddingOrder;
+    {$endif OSWINDOWS}
     {$ifndef OSWINDOWS}
     procedure TestShapedGlyphWidthFromHmtx;
     {$endif OSWINDOWS}
@@ -1205,5 +1209,42 @@ begin
     UnregisterFontData;
   end;
 end;
+
+{$ifdef OSWINDOWS}
+procedure TPdfCrossPlatTests.TestBidiEmbeddingOrder;
+const
+  // a RLO ab LRE cd PDF ef PDF z: the embedding levels 0 1 2 1 0, where
+  // Uniscribe also sets the override bit of the state above the level bits
+  TXT: array[0..12] of WideChar = ('a', WideChar($202E), 'a', 'b',
+    WideChar($202A), 'c', 'd', WideChar($202C), 'e', 'f', WideChar($202C),
+    ' ', 'z');
+var
+  face: IFontFace;
+  runs: TFontShapedRuns;
+
+  function RunOf(Pos: integer): integer;
+  begin
+    for result := 0 to high(runs) do
+      if (Pos >= runs[result].TextStart) and
+         (Pos < runs[result].TextStart + runs[result].TextLen) then
+        exit;
+    result := -1;
+  end;
+
+begin
+  { ScriptLayout was given the whole state byte as the level: 33 for the
+    overridden runs, which reordered them against the embedded one }
+  face := TestFace(TEST_SANS);
+  if not Check(face <> nil, TEST_SANS) then
+    exit;
+  runs := nil;
+  if not Check(FontShaper.Shape(@TXT[0], length(TXT), face.Handle, false, runs),
+       'shaped: the text has right-to-left runs') then
+    exit;
+  Check((RunOf(8) >= 0) and
+        (RunOf(8) < RunOf(5)) and
+        (RunOf(5) < RunOf(2)), 'visual order ef, cd, ab');
+end;
+{$endif OSWINDOWS}
 
 end.

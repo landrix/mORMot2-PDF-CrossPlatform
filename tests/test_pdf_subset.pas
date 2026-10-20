@@ -53,6 +53,10 @@ type
     procedure TestSubsetRejectsGarbage;
     procedure TestTtcFaceIndex;
     procedure TestTtcExtractBounds;
+    {$ifdef OSWINDOWS}
+    /// a font ReduceTtf rebuilds keeps the checksum of the whole font
+    procedure TestReducedFontChecksum;
+    {$endif OSWINDOWS}
   end;
 
   /// font subsetting through TPdfDocument, on the saved PDF
@@ -1766,5 +1770,56 @@ begin
   Check(FirstFontFile(TaggedPdf(false)) <> '', 'EmbeddedTTF off after Tagged');
   Check(FirstFontFile(TaggedPdf(true)) <> '', 'EmbeddedTtfIgnore after Tagged');
 end;
+
+{$ifdef OSWINDOWS}
+
+// the checksum of a font table: its big-endian words, padded with zeros
+function TableSum(const Data: RawByteString): cardinal;
+var
+  t: RawByteString;
+  i: integer;
+begin
+  t := Data;
+  while length(t) and 3 <> 0 do
+    t := t + #0;
+  result := 0;
+  for i := 0 to length(t) shr 2 - 1 do
+    inc(result, bswap32(PCardinalArray(t)[i]));
+end;
+
+procedure TPdfSubsetTests.TestReducedFontChecksum;
+const
+  // the ten tables ReduceTtf keeps, so that it rebuilds the directory
+  TAGS: array[0..9] of cardinal = ($68656164, $63767420, $6670676D,
+    $70726570, $68686561, $6D617870, $686D7478, $636D6170, $6C6F6361,
+    $676C7966); // head cvt fpgm prep hhea maxp hmtx cmap loca glyf
+var
+  tables: array[0..9] of RawByteString;
+  font, dir, data, reduced: RawByteString;
+  i: integer;
+begin
+  { head.checkSumAdjustment makes the whole font sum to $B1B0AFBA; ReduceTtf
+    added the words of its new directory in the CPU's byte order }
+  for i := 0 to high(tables) do
+    tables[i] := BE32Bytes(cardinal(i) * $01020304 + $11) + BE32Bytes($A5A5A5A5 - cardinal(i));
+  // head: version, revision, checkSumAdjustment 0 at offset 8, magic
+  tables[0] := BE32Bytes($00010000) + BE32Bytes($00010000) + BE32Bytes(0) + BE32Bytes($5F0F3CF5);
+  dir := BE32Bytes($00010000) + BE32Bytes($000A0080) + BE32Bytes($00030020);
+  data := '';
+  for i := 0 to high(tables) do
+  begin
+    dir := dir + BE32Bytes(TAGS[i]) + BE32Bytes(TableSum(tables[i])) +
+      BE32Bytes(12 + 16 * 10 + length(data)) + BE32Bytes(length(tables[i]));
+    data := data + tables[i];
+    while length(data) and 3 <> 0 do
+      data := data + #0;
+  end;
+  font := dir + data;
+  ReduceTtf(reduced, pointer(font), length(font));
+  Check(length(reduced) and 3 = 0, 'whole words');
+  CheckEqual(TableSum(reduced), $B1B0AFBA, 'the whole font sums to $B1B0AFBA');
+end;
+
+{$endif OSWINDOWS}
 
 end.

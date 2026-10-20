@@ -609,7 +609,9 @@ var FontSubsetter: IFontSubsetter;  // mormot.lib.core; nil = no subsetter
   and new faces are missing, and the wrong face of the collection would be
   subset. No single match -> false, and as `GetFaceFile` needs the same
   match, saving raises `EPdfInvalidOperation` (embedding required, neither a
-  subset nor the whole face). `ReduceTtf` keeps the tables a PDF needs.
+  subset nor the whole face). `ReduceTtf` keeps the tables a PDF needs and,
+  from eight on, rebuilds the directory and `head.checkSumAdjustment` - all
+  words summed big-endian.
   `SupportsSymbolic` = true: GDI maps the WinAnsi bytes of a symbol font.
   Without `Font` it returns false, and for a CFF face too
   (`CreateFontPackage` takes TrueType outlines only, error 1035): such a face

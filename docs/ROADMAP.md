@@ -99,6 +99,11 @@ v0.10.0 (2026-09-30).
   (e.g. `pmUseAttachments`, new in `TPdfPageMode`, PDF 1.6) decides how a
   viewer opens the file. Layer 1: the role `psrTHRow`. Both off by default,
   the output of existing code is unchanged; `zugferd_demo` uses both
+- **Fixed (Windows, `mormot.lib.uniscribe`):** a font subset that kept
+  eight tables or more had a wrong `head.checkSumAdjustment` - strict font
+  checkers report it, viewers mostly ignore it; text with bidi override
+  controls (LRO, RLO) could be shaped in the wrong visual order. Needs
+  `pdf-font-layer` at `15fb2328a` or later
 - **Fixed (EMF, Windows):** `PT_BEZIERTO` in `EMR_POLYDRAW`/`EMR_POLYDRAW16`
   took the points i+1..i+3 instead of i..i+2, so a metafile curve drawn
   with `PolyDraw` came out distorted (trunk d76f5d793, SynPDF #84);
