@@ -122,7 +122,6 @@ const
   FW_SEMIBOLD          = 600;
   FW_BOLD              = 700;
   TMPF_FIXED_PITCH     = 1;
-  LOGPIXELSY           = 90;  // device capability index - unused on POSIX
 
 {$endif OSWINDOWS}
 

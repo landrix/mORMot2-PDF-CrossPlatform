@@ -858,11 +858,11 @@ step its own PR, output byte-equal):
 - **`mormot.lib.*`:** the agreed final names; the Windows-shaped `tm*`,
   `otm*` and `abc*` fields of its records stay - renaming them costs every
   backend and gains nothing now
-- **Left for the formatting PRs** (source, no output): a stale
-  `UseSetTextJustification` in a comment of `mormot.pdf.canvas` (in the
-  trunk's original too), the unused POSIX `LOGPIXELSY` of `mormot.pdf`,
-  and `IFontProvider.GetFaceFile` in a comment of `mormot.lib.core`, which
-  is `IFontFace` now
+- **Left for the formatting PRs** (source, no output) - done
+  2026-10-20: a stale `UseSetTextJustification` in a comment of
+  `mormot.pdf.canvas` (in the trunk's original too) and the unused POSIX
+  `LOGPIXELSY` of `mormot.pdf` removed; `IFontProvider.GetFaceFile` in a
+  comment of `mormot.lib.core` reads `IFontFace` (the fork)
 
 **At the move, not now:** `x:xmptk="mormot.ui.pdf"` becomes `mormot.pdf`
 (the only change of output, one new baseline on every machine), the
