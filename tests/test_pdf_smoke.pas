@@ -87,6 +87,8 @@ type
     procedure TestOutlineBeforePage;
     /// AddTrueTypeFont keeps the fallback font it sorts past
     procedure TestAddFontKeepsFallback;
+    /// a face without an English PostScript name keeps its family name
+    procedure TestPostScriptNameFallback;
   private
     procedure CheckNoSimpleCmap(const aFamily, aCmap: RawUtf8);
   end;
@@ -2191,6 +2193,40 @@ begin
     CheckEqual(StringToUtf8(PDF.FontFallBackName), TEST_SANS, 'kept');
   finally
     PDF.Free;
+  end;
+end;
+
+procedure TPdfSmokeTests.TestPostScriptNameFallback;
+const
+  // a family name beyond ASCII, so TtfFontPostcriptName reads the name table
+  FAKE_NAME: RawUtf8 = {$ifdef HASCODEPAGE} 'Fak'#$00E9' Face'
+    {$else} 'Fak'#$C3#$A9' Face' {$endif};
+var
+  PDF: TPdfDocument;
+  Stream: TMemoryStream;
+  previous: IFontProvider;
+  s: RawByteString;
+begin
+  { a face without an English (3,1) PostScript name gave an empty /BaseFont }
+  Stream := TMemoryStream.Create;
+  previous := SwapInNamelessFace(FAKE_NAME);
+  try
+    PDF := TPdfDocument.Create(false, 0, pdfaNone);
+    try
+      PDF.CompressionMethod := cmNone;
+      PDF.AddTrueTypeFont(FAKE_NAME);
+      PDF.AddPage;
+      PDF.Canvas.SetFont(FAKE_NAME, 12, [], PDF_DEFAULT_CHARSET);
+      PDF.Canvas.TextOut(40, 700, 'Wi');
+      PDF.SaveToStream(Stream);
+    finally
+      PDF.Free;
+    end;
+    s := StreamToRaw(Stream);
+    Check(PosEx('/BaseFont/Fak', s) > 0, 'the family name as /BaseFont');
+  finally
+    FontProvider := previous;
+    Stream.Free;
   end;
 end;
 

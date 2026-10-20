@@ -97,6 +97,10 @@ function FakeRoutingFace: IFontFace;
 // TPdfDocument.AddTrueTypeFont(FAKE_FACE)
 function SwapInFakeFace(const Face: IFontFace): IFontProvider;
 
+/// put a provider into FontProvider which gives, for Name, a TrueType face
+// without a 'name' table - returns the provider before, to be put back
+function SwapInNamelessFace(const Name: RawUtf8): IFontProvider;
+
 
 implementation
 
@@ -1487,6 +1491,13 @@ function SwapInFakeFace(const Face: IFontFace): IFontProvider;
 begin
   result := FontProvider;
   FontProvider := TFakeProvider.Create(result, Face, FAKE_FACE);
+end;
+
+function SwapInNamelessFace(const Name: RawUtf8): IFontProvider;
+begin
+  result := FontProvider;
+  FontProvider := TFakeProvider.Create(result,
+    FakeFace([$20, $57, $69], [1, 5, 6], ''), Name);
 end;
 
 // the tables of Test Format12 - a (3,10) format 12 cmap alone - through the
