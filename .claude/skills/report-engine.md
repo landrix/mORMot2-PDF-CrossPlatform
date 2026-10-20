@@ -226,6 +226,10 @@ it is added to `CurrentY`, but the text is drawn at the Y passed (the
 overloads without coordinates pass `CurrentY` before the space is added).
 The wrapped elements then set `CurrentY` below the text, which drops it;
 `DrawListItem` keeps it, so it lands below the item.
+`DrawHeading` adds a third of the font size after the heading, and nothing
+before. `PT_TO_100MM` yields 1/10 mm where 1/100 mm is meant, so that third
+is 0.33 mm after an H1 of 28 pt. The fix of all of it is decided, not done:
+ROADMAP R-29 item 4.
 
 ```pascal
 var Fmt: TReportFormat;

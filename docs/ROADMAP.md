@@ -743,10 +743,40 @@ is compact, but it is two tables in the structure tree. Two ways to get one:
    the font size after the heading and nothing before (`invoice_demo` adds
    the space itself). And the `SpaceBefore` of `P`, `Quote`, `Caption` and
    `LI` does not move the text: it is added to `CurrentY`, but the text is
-   drawn at the Y passed, and `DrawListItem` keeps it below the item. Fixing
-   either changes the layout of every demo using these formats
-   (`markdown_demo`: its Quote and Caption, 2 mm each): decide both at once,
-   a fix or an option
+   drawn at the Y passed, and `DrawListItem` keeps it below the item.
+   The third is smaller than meant: `PT_TO_100MM` (3528, divided by 1000)
+   gives 1/10 mm, so an H1 of 28 pt is followed by 0.33 mm.
+   **Decided** (2026-10-20, with Sven, after Codex and Fable, three
+   alternatives): one fix of all formats, headings included, after R-28 -
+   neither a part now (P, Quote, Caption and LI alone would move
+   `markdown_demo` twice) nor an opt-in switch (two layout paths, and the
+   trunk would inherit the wrong default). The rules:
+   - **additive:** the space between two elements is the `SpaceAfter` of
+     the first plus the `SpaceBefore` of the second, as LibreOffice does by
+     default. Word, ReportLab, CSS and LaTeX take the larger of the two;
+     that would need a pending space every drawing call honours - tables,
+     `DrawText`, `NewPage` - and layouts that set only `SpaceAfter` come
+     out the same under both
+   - **`Y` of a positioned overload is the top of the element:** its text
+     starts at `Y + SpaceBefore`, `CurrentY` follows from the last line
+     plus `SpaceAfter`; the flow overloads pass `CurrentY`
+   - **no `SpaceBefore` at the top of a page:** an element whose `Y` is 0
+     (after `NewPage`) starts its text at 0; an automatic break moves the
+     line that does not fit to 0 on the next page, positioned and flow
+     overloads alike, and adds no `SpaceBefore` there
+   - **`DrawHeading`** takes `SpaceBefore` before its page-fit check and
+     `SpaceAfter` instead of the third, which goes with `PT_TO_100MM`; the
+     bookmark points at the heading's first line, after the space
+   - keep that `MoveToNextLine` ends the inline run (`fInlineBlockId`)
+   Output: every report demo with headings (`report_demo`, `mormot_demo`,
+   `markdown_demo`, `zugferd_demo`, `invoice_demo`) and both report golden
+   cases (`report_tagged`, `report_pdfa3u`) move - one accepted difference,
+   new baselines on every machine, the demos' heading formats tuned again
+   (`invoice_demo` adds heading space itself). Tests: a positioned `Y`
+   other than `CurrentY`, the page top, a wrapped heading and its bookmark,
+   the advance after a list item. Not part of it: a heading that wraps can
+   still split across pages (no keep-with-next), and `DrawListItem` has no
+   page-fit check (item 6)
 5. **Running header and footer**: one line, left-aligned, in the font that
    is current at export time (`invoice_demo` ends with `SetFont`). Wanted:
    several lines, left/centre/right parts, a font of their own
