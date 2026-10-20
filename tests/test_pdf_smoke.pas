@@ -93,6 +93,8 @@ type
     procedure TestNewDocDropsMetadata;
     /// the catalog getters read what the setters wrote
     procedure TestCatalogGetters;
+    /// a JPEG's colour space follows its components; a non-JPEG is refused
+    procedure TestJpegColorSpace;
   private
     procedure CheckNoSimpleCmap(const aFamily, aCmap: RawUtf8);
   end;
@@ -2280,6 +2282,118 @@ begin
       'NonFullScreenPageMode read where it is written');
   finally
     PDF.Free;
+  end;
+end;
+
+{ the header of a JPEG of Components (1 gray, 3 RGB, 4 CMYK), long enough
+  for GetJpegSize - the scan data does not matter to the writer; built from
+  numbers, as binary data must be }
+function FakeJpeg(Components: integer): RawByteString;
+const
+  // SOI, APP0 of 90 bytes (its 88 data bytes follow as zeros)
+  HEAD: array[0..5] of byte = ($ff, $d8, $ff, $e0, $00, $5a);
+  // SOF0 of 17 bytes: 8 bits, 16 x 32, then the component count
+  SOF: array[0..8] of byte = ($ff, $c0, $00, $11, $08, $00, $10, $00, $20);
+var
+  p: PByteArray;
+  i, n: integer;
+begin
+  n := length(HEAD) + 88 + length(SOF) + 1 + Components * 3 + 2 + 8;
+  SetLength(result, n);
+  FillCharFast(pointer(result)^, n, 0);
+  p := pointer(result);
+  MoveFast(HEAD, p[0], length(HEAD));
+  i := length(HEAD) + 88;
+  MoveFast(SOF, p[i], length(SOF));
+  inc(i, length(SOF));
+  p[i] := Components;
+  inc(i);
+  FillCharFast(p[i], Components * 3, 1);
+  inc(i, Components * 3);
+  p[i] := $ff; // EOI
+  p[i + 1] := $d9;
+end;
+
+function JpegPdf(Components: integer; Direct: boolean): RawByteString;
+var
+  PDF: TPdfDocument;
+  Stream, jpg: TMemoryStream;
+  img: TPdfImage;
+  data: RawByteString;
+begin
+  data := FakeJpeg(Components);
+  Stream := TMemoryStream.Create;
+  jpg := TMemoryStream.Create;
+  try
+    PDF := TPdfDocument.Create(false, 0, pdfaNone);
+    try
+      PDF.CompressionMethod := cmNone;
+      PDF.AddPage;
+      if Direct then
+      begin
+        jpg.WriteBuffer(pointer(data)^, length(data));
+        img := TPdfImage.CreateJpegDirect(PDF, jpg, true);
+      end
+      else
+        img := TPdfImage.CreateJpeg(PDF, pointer(data), length(data), 32, 16, true);
+      PDF.AddXObject('img', img);
+      PDF.Canvas.DrawXObject(0, 0, 32, 16, 'img');
+      PDF.SaveToStream(Stream);
+    finally
+      PDF.Free;
+    end;
+    result := StreamToRaw(Stream);
+  finally
+    jpg.Free;
+    Stream.Free;
+  end;
+end;
+
+procedure TPdfSmokeTests.TestJpegColorSpace;
+var
+  PDF: TPdfDocument;
+  jpg: TMemoryStream;
+  data: RawByteString;
+  raised: boolean;
+begin
+  Check(PosEx('/ColorSpace/DeviceGray', JpegPdf(1, false)) > 0,
+    'CreateJpeg: a gray JPEG is DeviceGray');
+  Check(PosEx('/ColorSpace/DeviceRGB', JpegPdf(3, false)) > 0,
+    'CreateJpeg: an RGB JPEG is DeviceRGB');
+  Check(PosEx('/ColorSpace/DeviceGray', JpegPdf(1, true)) > 0,
+    'CreateJpegDirect: gray');
+  { not a JPEG, or one of four components: CreateJpegDirect left an image
+    without data or colour space; both raise now }
+  data := 'not a JPEG at all';
+  jpg := TMemoryStream.Create;
+  try
+    jpg.WriteBuffer(pointer(data)^, length(data));
+    PDF := TPdfDocument.Create(false, 0, pdfaNone);
+    try
+      raised := false;
+      try
+        TPdfImage.CreateJpegDirect(PDF, jpg, true).Free;
+      except
+        on EPdfInvalidValue do
+          raised := true;
+      end;
+      Check(raised, 'CreateJpegDirect refuses what is no JPEG');
+      data := FakeJpeg(4);
+      jpg.Clear;
+      jpg.WriteBuffer(pointer(data)^, length(data));
+      raised := false;
+      try
+        TPdfImage.CreateJpegDirect(PDF, jpg, true).Free;
+      except
+        on EPdfInvalidValue do
+          raised := true;
+      end;
+      Check(raised, 'CreateJpegDirect refuses a CMYK JPEG');
+    finally
+      PDF.Free;
+    end;
+  finally
+    jpg.Free;
   end;
 end;
 

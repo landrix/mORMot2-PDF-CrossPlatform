@@ -12965,6 +12965,8 @@ end;
 
 constructor TPdfImage.CreateJpeg(aDoc: TPdfDocument; aJpeg: pointer;
   aJpegLen: PtrInt; aWidth, aHeight: integer; DontAddToFXref: boolean);
+var
+  w, h, bits: integer;
 begin
   // before inherited Create: a raise there leaves nothing in the xref
   if (aJpeg = nil) or
@@ -12973,12 +12975,20 @@ begin
      (aHeight <= 0) then
     EPdfInvalidValue.RaiseUtf8('TPdfImage.CreateJpeg: no JPEG (% bytes, % x %)',
       [aJpegLen, aWidth, aHeight]);
+  // the colour space of the components the data says, RGB if unrecognized
+  if not GetJpegSize(aJpeg, aJpegLen, w, h, bits) then
+    bits := 24;
+  if bits = 32 then
+    EPdfInvalidValue.RaiseUtf8('TPdfImage.CreateJpeg: CMYK JPEG not supported', []);
   inherited Create(aDoc, DontAddToFXref);
   fPixelWidth := aWidth;
   fPixelHeight := aHeight;
   fAttributes.AddItem('Type', 'XObject');
   fAttributes.AddItem('Subtype', 'Image');
-  fAttributes.AddItem('ColorSpace', 'DeviceRGB');
+  if bits = 8 then
+    fAttributes.AddItem('ColorSpace', 'DeviceGray')
+  else
+    fAttributes.AddItem('ColorSpace', 'DeviceRGB');
   fFilter := 'DCTDecode';
   fWriter.Save; // flush to allow direct access to fDestStream
   fWriter.fDestStream.WriteBuffer(aJpeg^, aJpegLen);
@@ -13005,12 +13015,20 @@ end;
 constructor TPdfImage.CreateJpegDirect(aDoc: TPdfDocument;
   aJpegFile: TMemoryStream; DontAddToFXref: boolean);
 var
-  len, bits: integer;
+  len, w, h, bits: integer;
 begin
-  inherited Create(aDoc, DontAddToFXref);
+  // before inherited Create: a raise there leaves nothing in the xref
   len := aJpegFile.Size;
-  if not GetJpegSize(aJpegFile.Memory, len, fPixelWidth, fPixelHeight, bits) then
-    exit; // JPEG format expected
+  if not GetJpegSize(aJpegFile.Memory, len, w, h, bits) then
+    EPdfInvalidValue.RaiseUtf8('TPdfImage.CreateJpegDirect: no JPEG (% bytes)',
+      [len]);
+  if (bits <> 8) and
+     (bits <> 24) then
+    EPdfInvalidValue.RaiseUtf8(
+      'TPdfImage.CreateJpegDirect: % components not supported', [bits shr 3]);
+  inherited Create(aDoc, DontAddToFXref);
+  fPixelWidth := w;
+  fPixelHeight := h;
   fAttributes.AddItem('Type', 'XObject');
   fAttributes.AddItem('Subtype', 'Image');
   fFilter := 'DCTDecode';
@@ -13019,12 +13037,10 @@ begin
   fWriter.fDestStreamPosition := fWriter.fDestStream.Position;
   fAttributes.AddItem('Width', fPixelWidth);
   fAttributes.AddItem('Height', fPixelHeight);
-  case bits of
-    8:
-      fAttributes.AddItem('ColorSpace', 'DeviceGray');
-    24:
-      fAttributes.AddItem('ColorSpace', 'DeviceRGB');
-  end;
+  if bits = 8 then
+    fAttributes.AddItem('ColorSpace', 'DeviceGray')
+  else
+    fAttributes.AddItem('ColorSpace', 'DeviceRGB');
   fAttributes.AddItem('BitsPerComponent', 8);
 end;
 
