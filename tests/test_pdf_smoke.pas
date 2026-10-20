@@ -89,6 +89,8 @@ type
     procedure TestAddFontKeepsFallback;
     /// a face without an English PostScript name keeps its family name
     procedure TestPostScriptNameFallback;
+    /// switching PDF/A off renews the document, its metadata stream included
+    procedure TestNewDocDropsMetadata;
   private
     procedure CheckNoSimpleCmap(const aFamily, aCmap: RawUtf8);
   end;
@@ -2226,6 +2228,40 @@ begin
     Check(PosEx('/BaseFont/Fak', s) > 0, 'the family name as /BaseFont');
   finally
     FontProvider := previous;
+    Stream.Free;
+  end;
+end;
+
+procedure TPdfSmokeTests.TestNewDocDropsMetadata;
+var
+  PDF: TPdfDocument;
+  Stream: TMemoryStream;
+  s: RawByteString;
+begin
+  { NewDoc frees every object: the metadata stream of PDF/A stayed in
+    fMetaData, so the tagged setup took it as written and saved a freed one }
+  Check(EnsureTestFonts, 'the test fonts registered');
+  Stream := TMemoryStream.Create;
+  try
+    PDF := TPdfDocument.Create(false, 0, pdfa3U);
+    try
+      PDF.CompressionMethod := cmNone;
+      PDF.PdfA := pdfaNone; // NewDoc
+      PDF.Tagged := true;
+      PDF.AddPage;
+      PDF.Canvas.BeginStructContent(psrP);
+      PDF.Canvas.SetFont(TEST_SANS, 12, [], TEST_FONT_CHARSET);
+      DrawUtf8Text(PDF, 40, 700, 'Renewed');
+      PDF.Canvas.EndStructContent;
+      PDF.SaveToStream(Stream);
+    finally
+      PDF.Free;
+    end;
+    s := StreamToRaw(Stream);
+    Check(PosEx('/Metadata', s) > 0, 'a metadata stream');
+    Check(PosEx('pdfuaid:part', s) > 0, 'written by the tagged setup');
+    Check(PosEx('pdfaid:part', s) = 0, 'no PDF/A packet left');
+  finally
     Stream.Free;
   end;
 end;

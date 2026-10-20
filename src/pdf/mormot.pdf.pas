@@ -8850,6 +8850,17 @@ begin
   fBookMarks.Clear;
   fMissingBookmarks.Clear;
   FreeDoc;
+  // freed with the objects above: a later test of them must see nil
+  fMetaData := nil;
+  fOutputIntents := nil;
+  fOutlineRoot := nil;
+  fFontFile2 := nil;
+  if fCanvas <> nil then
+  begin
+    fCanvas.fPage := nil;
+    fCanvas.fContents := nil;
+    fCanvas.fPageFontList := nil;
+  end;
   fStructTree := nil;
   if fStructStack <> nil then
     fStructStack.Clear;
