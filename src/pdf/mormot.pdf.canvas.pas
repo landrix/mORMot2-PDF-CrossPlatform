@@ -443,7 +443,6 @@ type
     // in bigger pdf size
     // - tpKerningFromAveragePosition will compute average pdf Horizontal Scaling
     // in association with KerningHScaleBottom/KerningHScaleTop properties
-    // - replace deprecated property UseSetTextJustification
     property UseMetaFileTextPositioning: TPdfCanvasRenderMetaFileTextPositioning
       read fUseMetaFileTextPositioning write fUseMetaFileTextPositioning;
     /// defines how TMetaFile text clipping should be applied

@@ -386,9 +386,10 @@ Phase 1 is one PR to `synopse/mORMot2`.
   whole-face embedding read the collection with `'ttcf'`, computed an index
   with `GetTtcIndex` and never used it - the whole collection went to
   `/FontFile2` (9 to 21 MB, no font program; from the trunk original). Now
-  `IFontProvider.GetFaceFile` gives the face as one font file on every
-  platform (GDI: `TtcFaceIndex` and `ExtractSfntFromTtc`; FreeType: the
-  face it loaded), and `GetTtcIndex` is gone
+  `IFontProvider.GetFaceFile` (`IFontFace` since Phase 1b) gives the face
+  as one font file on every platform (GDI: `TtcFaceIndex` and
+  `ExtractSfntFromTtc`; FreeType: the face it loaded), and `GetTtcIndex` is
+  gone
 - `libharfbuzz` and `libharfbuzz-subset` stay separately loaded
 - The device-context interface moves unchanged, marked transitional
 
@@ -858,11 +859,13 @@ step its own PR, output byte-equal):
 - **`mormot.lib.*`:** the agreed final names; the Windows-shaped `tm*`,
   `otm*` and `abc*` fields of its records stay - renaming them costs every
   backend and gains nothing now
-- **Left for the formatting PRs** (source, no output): a stale
-  `UseSetTextJustification` in a comment of `mormot.pdf.canvas` (in the
-  trunk's original too), the unused POSIX `LOGPIXELSY` of `mormot.pdf`,
-  and `IFontProvider.GetFaceFile` in a comment of `mormot.lib.core`, which
-  is `IFontFace` now
+- **Stale names, not left for the formatting PRs after all** (source, no
+  output; removed 2026-10-20 on `pr/stale-comments`, beside #77's stale
+  comments): `UseSetTextJustification` in a comment of `mormot.pdf.canvas`
+  (in the trunk's original too), the unused POSIX `LOGPIXELSY` of
+  `mormot.pdf`; `IFontProvider.GetFaceFile` in a comment of
+  `mormot.lib.core` now reads `IFontFace` (the fork's `pdf-font-layer`), as
+  in ROADMAP "To Announce" and a test comment
 
 **At the move, not now:** `x:xmptk="mormot.ui.pdf"` becomes `mormot.pdf`
 (the only change of output, one new baseline on every machine), the

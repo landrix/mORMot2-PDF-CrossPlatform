@@ -197,7 +197,7 @@ v0.10.0 (2026-09-30).
   collection - megabytes, and no valid font program for a PDF reader or
   validator. Now only its face is embedded, as on Linux/macOS; a face that
   cannot be found in its collection fails the save (see below). A font backend of your
-  own implements the new `IFontProvider.GetFaceFile`; `IFontProvider` and
+  own implements the new `IFontFace.GetFaceFile`; `IFontProvider` and
   `IFontSubsetter` have new GUIDs
 - **One font path on every platform (R-28, refactoring Phase 1, step W3):**
   `TPdfDocument` and `TPdfFontTrueType` create, measure and read fonts
