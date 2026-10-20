@@ -73,6 +73,8 @@ type
     procedure TestShapedFallback;
     procedure TestShapedRunOutcomeUnset;
     procedure TestZeroRealIsWritten;
+    /// a backspace in a string is written as \b, the escape PDF defines
+    procedure TestEscapeBackspace;
   private
     procedure CheckNoSimpleCmap(const aFamily, aCmap: RawUtf8);
   end;
@@ -1871,6 +1873,117 @@ begin
     s := StreamToRaw(Stream);
     Check(Pos(RawByteString('/XYZ 0 700 0]'), s) > 0, 'outline zoom 0 written');
     Check(Pos(RawByteString('/ca 0'), s) > 0, 'fill alpha 0 written');
+  finally
+    Stream.Free;
+  end;
+end;
+
+function Nibble(c: AnsiChar): integer;
+begin
+  case c of
+    '0'..'9':
+      result := ord(c) - ord('0');
+    'A'..'F':
+      result := ord(c) - ord('A') + 10;
+    'a'..'f':
+      result := ord(c) - ord('a') + 10;
+  else
+    result := 0;
+  end;
+end;
+
+{ the literal or hex string after Key in s, as bytes: (..) unescaped, <..>
+  decoded - '' if not found }
+function PdfStringAfter(const s, Key: RawByteString): RawByteString;
+var
+  p, n, v: integer;
+begin
+  result := '';
+  p := PosEx(Key, s);
+  if p = 0 then
+    exit;
+  inc(p, length(Key));
+  while (p <= length(s)) and
+        (s[p] = ' ') do
+    inc(p);
+  if p > length(s) then
+    exit;
+  if s[p] = '<' then
+  begin
+    inc(p);
+    while (p + 1 <= length(s)) and
+          (s[p] <> '>') do
+    begin
+      result := result + AnsiChar(Nibble(s[p]) shl 4 + Nibble(s[p + 1]));
+      inc(p, 2);
+    end;
+    exit;
+  end;
+  if s[p] <> '(' then
+    exit;
+  inc(p);
+  while (p <= length(s)) and
+        (s[p] <> ')') do
+  begin
+    if s[p] = '\' then
+    begin
+      inc(p);
+      case s[p] of
+        'n':
+          result := result + #10;
+        'r':
+          result := result + #13;
+        't':
+          result := result + #9;
+        'b':
+          result := result + #8;
+        'f':
+          result := result + #12;
+        '0'..'7':
+          begin
+            v := 0;
+            n := 0;
+            while (n < 3) and
+                  (s[p] in ['0'..'7']) do
+            begin
+              v := v * 8 + ord(s[p]) - ord('0');
+              inc(p);
+              inc(n);
+            end;
+            result := result + AnsiChar(v);
+            continue;
+          end;
+      else
+        result := result + s[p]; // \( \) \\
+      end;
+    end
+    else
+      result := result + s[p];
+    inc(p);
+  end;
+end;
+
+procedure TPdfSmokeTests.TestEscapeBackspace;
+var
+  PDF: TPdfDocument;
+  Stream: TMemoryStream;
+  s: RawByteString;
+begin
+  { ISO 32000-1 7.3.4.2 defines \b; a reader takes \B as a plain B }
+  Stream := TMemoryStream.Create;
+  try
+    PDF := TPdfDocument.Create(false, 0, pdfaNone);
+    try
+      PDF.CompressionMethod := cmNone;
+      PDF.Info.Data.AddItemText('Subject', 'a'#8'b');
+      PDF.AddPage;
+      PDF.SaveToStream(Stream);
+    finally
+      PDF.Free;
+    end;
+    s := StreamToRaw(Stream);
+    Check(PosEx('(a\bb)', s) > 0, 'a backspace written as \b');
+    CheckEqual(PdfStringAfter(s, '/Subject'), 'a'#8'b', 'and read back');
   finally
     Stream.Free;
   end;

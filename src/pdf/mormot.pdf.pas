@@ -5135,7 +5135,7 @@ begin
           inc(fB, 2);
         end;
       #8:
-        PWord(fB)^ := ord('\') + ord('B') shl 8;
+        PWord(fB)^ := ord('\') + ord('b') shl 8;
       #9:
         PWord(fB)^ := ord('\') + ord('t') shl 8;
       #10:
