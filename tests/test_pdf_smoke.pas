@@ -95,6 +95,8 @@ type
     procedure TestCatalogGetters;
     /// a JPEG's colour space follows its components; a non-JPEG is refused
     procedure TestJpegColorSpace;
+    /// a glyph that advances by 0 measures 0
+    procedure TestZeroAdvanceMeasured;
   private
     procedure CheckNoSimpleCmap(const aFamily, aCmap: RawUtf8);
   end;
@@ -2394,6 +2396,39 @@ begin
     end;
   finally
     jpg.Free;
+  end;
+end;
+
+procedure TPdfSmokeTests.TestZeroAdvanceMeasured;
+const
+  FATHA: array[0..1] of WideChar = (WideChar($064E), #0);
+var
+  PDF: TPdfDocument;
+begin
+  { a combining mark advances by 0 (hmtx of the test font); it was taken
+    for a character the face lacks and measured by /DW or the fallback }
+  Check(EnsureTestFonts, 'the test fonts registered');
+  PDF := TPdfDocument.Create(false, 0, pdfaNone);
+  try
+    PDF.EmbeddedTtf := true;
+    PDF.AddPage;
+    PDF.Canvas.SetFont(TEST_ARABIC, 12, [], TEST_FONT_CHARSET);
+    CheckSame(PDF.Canvas.UnicodeTextWidth(@FATHA), 0, 1E-6, 'fatha measures 0');
+  finally
+    PDF.Free;
+  end;
+  // a face without the mark: measured in the fallback font, also at 0
+  PDF := TPdfDocument.Create(false, 0, pdfaNone);
+  try
+    PDF.EmbeddedTtf := true;
+    PDF.UseFontFallBack := true;
+    PDF.FontFallBackName := TEST_ARABIC;
+    PDF.AddPage;
+    PDF.Canvas.SetFont(TEST_SANS, 12, [], TEST_FONT_CHARSET);
+    CheckSame(PDF.Canvas.UnicodeTextWidth(@FATHA), 0, 1E-6,
+      'fatha measures 0 in the fallback font');
+  finally
+    PDF.Free;
   end;
 end;
 

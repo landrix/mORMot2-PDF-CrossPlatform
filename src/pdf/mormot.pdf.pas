@@ -3002,6 +3002,9 @@ type
     function WinAnsiMissing(aAnsi: integer): boolean;
     // true if a character this font lacks is drawn by the fallback font
     function FallbackOn: boolean;
+    /// true when GetWideCharWidth returns 0 for a character the face lacks,
+    // not for a glyph whose advance is 0 (a combining mark)
+    function WideCharMissing(aWideChar: WideChar): boolean;
     // the width of aWideChar in the fallback font: its advance there, or the
     // /DW of that font for one it lacks too - drawn as glyph 0, which /W
     // leaves out, so a viewer advances /DW
@@ -6961,7 +6964,9 @@ begin
     // font, or as glyph 0 of this one, which advances its /DW
     result := WinAnsiFont.GetWideCharWidth(
       WideChar(WinAnsiConvert.AnsiToWide[ord(AText[APos])]));
-    if result = 0 then
+    if (result = 0) and
+       WinAnsiFont.WideCharMissing(
+         WideChar(WinAnsiConvert.AnsiToWide[ord(AText[APos])])) then
       if FallbackOn then
         result := FallbackCharWidth(
           WideChar(WinAnsiConvert.AnsiToWide[ord(AText[APos])]))
@@ -8187,6 +8192,25 @@ begin
     fDoc, fTrueTypeFontsIndex - 1, fStyle, fLogFont, self);
 end;
 
+function TPdfFontTrueType.WideCharMissing(aWideChar: WideChar): boolean;
+var
+  i: integer;
+begin
+  if fUnicode then
+  begin
+    result := WinAnsiFont.WideCharMissing(aWideChar);
+    exit;
+  end;
+  if (WideCharToWinAnsi(ord(aWideChar)) >= 0) and
+     not Type0Only then
+    result := true // a WinAnsi character at 0 is drawn by the fallback font
+  else
+  begin
+    i := FindOrAddUsedWideChar(aWideChar);
+    result := fUsedWide[i].Glyph = 0;
+  end;
+end;
+
 function TPdfFontTrueType.FallbackOn: boolean;
 begin
   result := (fDoc.Canvas <> nil) and
@@ -8202,7 +8226,8 @@ begin
   fallback := fDoc.Canvas.SetFont('', 1, fStyle, -1,
     fDoc.fFontFallBackIndex) as TPdfFontTrueType;
   result := fallback.WinAnsiFont.GetWideCharWidth(aWideChar);
-  if result = 0 then
+  if (result = 0) and
+     fallback.WinAnsiFont.WideCharMissing(aWideChar) then
     result := fallback.WinAnsiFont.fDefaultWidth;
 end;
 
@@ -12103,7 +12128,8 @@ begin
         w2 := wa.GetWideCharWidth(PW^);
         // a character the font lacks: where it is drawn - the fallback
         // font, or glyph 0 of this font, whose advance is its /DW
-        if w2 = 0 then
+        if (w2 = 0) and
+           wa.WideCharMissing(PW^) then
           if wa.FallbackOn then
             w2 := wa.FallbackCharWidth(PW^)
           else
