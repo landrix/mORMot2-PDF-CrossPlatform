@@ -34,6 +34,30 @@ here until the post is written, then the list is emptied. It is the only such
 list: the CHANGELOG entry of the next release is written from it. Emptied for
 v0.10.0 (2026-09-30).
 
+- **Fixed (encryption):** a text string beyond WinAnsi (`/Title`, `/Author`
+  and the other `TPdfInfo` entries) was written unreadable in an encrypted
+  document - the bytes swapped after encrypting, the byte order mark in
+  clear - and an `/Alt` text beyond WinAnsi was encrypted twice. A
+  backspace in a string was written `\B` instead of `\b`, which also
+  corrupted encrypted strings now and then. `TPdfWrite.AddUnicodeHex`
+  never encrypts now; `AddUnicodeHexString` writes an object's text string
+- **Changed (`TPdfImage`):** `CreateJpeg` takes the colour space from the
+  JPEG - a grayscale one is `DeviceGray` now, not `DeviceRGB` - and raises
+  `EPdfInvalidValue` for a CMYK JPEG; `CreateJpegDirect` raises for data
+  that is no JPEG or a CMYK one, where it returned an image without data
+  or colour space
+- **Fixed (fonts):** a combining mark (any glyph that advances by 0) was
+  measured with the default width or in the fallback font; a face without
+  an English PostScript name and a family name beyond ASCII got an empty
+  `/BaseFont`; `AddTrueTypeFont` made the fallback font and the font name
+  cache point at another face; a tagged or PDF/A WinAnsi font of more than
+  100 characters wrote a `/ToUnicode` block over the CMap limit of 100
+- **Fixed (`TPdfDocument`):** `CreateOutline` with a position before the
+  first page raised and then freed the entry twice; setting `PdfA` or
+  `UseOptionalContent`, which renews the document, kept the freed metadata
+  stream, outline root and font files of the old one;
+  `TPdfDictionaryWrapper.HasData` was inverted and
+  `TPdfCatalog.NonFullScreenPageMode` always read `pmUseNone`
 - **Fixed (EMF, Windows):** a world transform that only scales, alike on
   both axes, drew the text of a metafile turned by 180 degrees
   (`TPdfDocumentGdi`, `RenderMetaFile`) - the trunk's fix of 2026-10-08,
@@ -622,6 +646,38 @@ width beside `Pen.Width` (as `TextOutFrac` does for text positions), then a
 `TTableLayout.GridWidth` in 1/100 mm, 0 = today's pixel. Delphi 7 draws
 through the bridge reference too (R-20), so both paths need it.
 
+### Review Findings Not Fixed Yet — bugs, after R-28
+
+A review of `src/pdf` and the `mormot.lib.*` units on 2026-10-20 (Sonnet
+agents, each claim verified again by Codex) found 28 bugs; the ones fixed
+then are in "To Announce". These wait, each with a test that fails before
+its fix. Items 1, 2 and 4 are also in the trunk's `mormot.ui.pdf`.
+
+1. **Malformed fonts** (`mormot.pdf`): `TPdfTtf.LoadCmap` checks only the
+   offset of a format 4 subtable, not its header, `segCountX2` or the
+   subtable count, and `TPdfTtf.Create` reads `glyphIndexArray` unchecked;
+   `TtfFontPostcriptName` reads the `name` records unchecked. A corrupt
+   face reads past its table
+2. **EMF** (`mormot.pdf.canvas`, Windows): `EMR_ALPHABLEND` takes the
+   `BLENDFUNCTION` for a colour key; `EMR_POLYPOLYLINE`(16) closes each
+   polyline; `EMR_RESTOREDC` ignores a relative depth other than -1, and
+   the state stack is checked by asserts only; `ArcSin`/`ArcCos` of a world
+   transform that scales and rotates get arguments out of their domain;
+   `EMR_EXTTEXTOUTA` reads its ANSI text as UTF-16; `EMR_STRETCHDIBITS`
+   writes into the record it is handed; `CurrentPrinterRes` returns 0 when
+   `CreateDC` fails, which divides by 0 in the isotropic mapping
+3. **Preview** (`mormot.pdf.report.preview`): the window takes its size
+   from page 0 and the report's current margins, for every page
+4. **Bidi levels** (`mormot.lib.uniscribe`): the level passed to
+   `ScriptLayout` keeps the state bits above the 5 level bits, so text with
+   embedding or override controls may be ordered wrongly
+5. **`Columns2` over a page break** (`mormot.pdf.report`): when the first
+   column breaks onto a new page, the second one is recorded there, at the
+   Y of the first page. Recording it on the first page instead splits the
+   first column's paragraph in the tagged reading order (the renderer
+   continues a block only from the command before): it needs the structure
+   elements kept by block, decided with the tagging
+
 ### Underline and Strike-Out Are Not Drawn — bug, fix after R-28
 
 Found on 2026-10-10 in `invoice_demo` (branch `feature/invoice-demo`), whose
@@ -1048,7 +1104,8 @@ chart library's bitmap is to be built only when someone asks for it.
 
 ### EMF/MetaFile and GDI+ Gradients — no work planned
 
-Windows-only (`TPdfDocumentGdi`), not portable.
+Windows-only (`TPdfDocumentGdi`), not portable. Its known bugs wait in
+"Review Findings Not Fixed Yet", item 2.
 
 ---
 

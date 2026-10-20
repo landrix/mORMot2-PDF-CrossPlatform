@@ -399,7 +399,8 @@ px.Size := BufferBytes;           // >= (H - 1) * Abs(Stride) + one row
 px.Palette := Rgb768;             // ipfIndexed8 only: 256 x R, G, B
 px.HasColorKey := true; px.ColorKey := $BBGGRR; // /Mask, RGB formats only
 Name := Doc.CreateOrGetImage(px, @DrawAt, @ClipRc); // reuse by row bytes + palette
-// JPEG bytes as they are (/DeviceRGB; grayscale: CreateJpegDirect):
+// JPEG bytes as they are, the colour space from their components (gray or
+// RGB; CMYK raises EPdfInvalidValue, as CreateJpegDirect does for no JPEG):
 Img := TPdfImage.CreateJpeg(Doc, Data, Len, W, H, {DontAddToFXref=}false);
 Name := Doc.RegisterImage(Img);   // 'SynImg<n>'; AddXObject or RegisterXObject by xref state
 Doc.DrawImage(Name, @DrawAt);
@@ -780,6 +781,13 @@ raises `EPdfInvalidOperation` (`TestPdfAWithEncryptionRaises`).
 
 AES-128 output size: `16 (IV) + (N div 16 + 1) * 16` bytes (PKCS#7 adds a
 whole block when N is a multiple of 16) per encrypted object/string. The stream `Length` attribute is updated automatically before writing.
+
+A string is encrypted whole: a text string beyond WinAnsi as its byte order
+mark and UTF-16BE together (`TPdfWrite.AddUnicodeHexString`). A string
+inside a content stream is not encrypted on its own - the stream is, as a
+whole - so `AddUnicodeHex` and `AddEscape` never encrypt; `AddEscapeContent`
+does, for an object's string. With RC4 every string of one object starts
+its key stream again (`TestEncryptedUnicodeString` relies on it).
 
 ---
 
