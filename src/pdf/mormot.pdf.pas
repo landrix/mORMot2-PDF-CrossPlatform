@@ -840,7 +840,12 @@ type
     // - Ansi to Unicode conversion uses the CodePage set by Create() constructor
     function AddToUnicodeHex(const Text: PdfString): TPdfWrite;
     /// write some unicode text as as Big-Endian 4 hexadecimal characters
+    // - never encrypted: for a string inside a content stream, which is
+    // encrypted as a whole
     function AddUnicodeHex(PW: PWideChar; WideCharCount: integer): TPdfWrite;
+    /// write a text string of an object as <FEFF...>: the BOM and the
+    // UTF-16BE characters, encrypted together when the document is
+    function AddUnicodeHexString(PW: PWideChar; WideCharCount: integer): TPdfWrite;
     /// convert some text into unicode characters, then write it as PDF Text
     // - Ansi to Unicode conversion uses the CodePage set by Create() constructor
     // - use (...) for all WinAnsi characters, or <..hexa..> for Unicode characters
@@ -4270,12 +4275,18 @@ end;
 { TPdfText }
 
 procedure TPdfText.InternalWriteTo(W: TPdfWrite);
+var
+  tmp: TSynTempBuffer;
 begin
   // if the value has multibyte character, convert the value to hex unicode.
   // otherwise, escape characters.
   if SysLocale.FarEast and
     HasMultiByteString(pointer(fValue)) then
-    W.Add('<FEFF').AddToUnicodeHex(fValue).Add('>')
+  begin
+    W.ToWideChar(fValue, tmp);
+    W.AddUnicodeHexString(tmp.buf, tmp.len);
+    tmp.Done;
+  end
   else
     W.Add('(').AddEscapeContent(fValue).Add(')');
 end;
@@ -4311,7 +4322,7 @@ begin
   else
   begin
     utf16 := Utf8DecodeToUnicodeRawByteString(fValue);
-    W.Add('<FEFF').AddUnicodeHex(pointer(utf16), Length(utf16) shr 1).Add('>');
+    W.AddUnicodeHexString(pointer(utf16), Length(utf16) shr 1);
   end;
 end;
 
@@ -5420,21 +5431,9 @@ function TPdfWrite.AddUnicodeHex(PW: PWideChar; WideCharCount: integer): TPdfWri
 
 var
   L: PtrInt;
-  {$ifdef USE_PDFSECURITY}
-  sectmp: TSynTempBuffer;
-  {$endif USE_PDFSECURITY}
 begin
   if WideCharCount > 0 then
   begin
-    {$ifdef USE_PDFSECURITY}
-    if fDoc.fEncryption <> nil then
-    begin
-      sectmp.Init(integer(fDoc.fEncryption.GetEncryptedSize(WideCharCount * 2)));
-      fDoc.fEncryption.EncodeBuffer(PW^, sectmp.buf^, WideCharCount * 2);
-      PW := sectmp.buf;
-      WideCharCount := sectmp.len div 2; // adjust for AES-padded output
-    end;
-    {$endif USE_PDFSECURITY}
     repeat
       L := WideCharCount;
       if fBEnd - fB <= L * 4 then
@@ -5448,12 +5447,39 @@ begin
       inc(fB, L * 4);
       dec(WideCharCount, L);
     until WideCharCount = 0;
-    {$ifdef USE_PDFSECURITY}
-    if fDoc.fEncryption <> nil then
-      sectmp.Done;
-    {$endif USE_PDFSECURITY}
   end;
   result := self;
+end;
+
+function TPdfWrite.AddUnicodeHexString(PW: PWideChar;
+  WideCharCount: integer): TPdfWrite;
+{$ifdef USE_PDFSECURITY}
+var
+  be, enc: RawByteString;
+  p: PByteArray;
+  i: PtrInt;
+{$endif USE_PDFSECURITY}
+begin
+  {$ifdef USE_PDFSECURITY}
+  if fDoc.fEncryption <> nil then
+  begin
+    // ISO 32000-1 7.6.2: the whole string is encrypted, its BOM included
+    SetLength(be, WideCharCount * 2 + 2);
+    p := pointer(be);
+    p[0] := $fe;
+    p[1] := $ff;
+    for i := 0 to WideCharCount - 1 do
+    begin
+      p[i * 2 + 2] := PWordArray(PW)[i] shr 8;
+      p[i * 2 + 3] := PWordArray(PW)[i] and $ff;
+    end;
+    SetLength(enc, fDoc.fEncryption.GetEncryptedSize(length(be)));
+    fDoc.fEncryption.EncodeBuffer(pointer(be)^, pointer(enc)^, length(be));
+    result := Add('<').AddHex(enc).Add('>');
+    exit;
+  end;
+  {$endif USE_PDFSECURITY}
+  result := Add('<FEFF').AddUnicodeHex(PW, WideCharCount).Add('>');
 end;
 
 const

@@ -75,6 +75,12 @@ type
     procedure TestZeroRealIsWritten;
     /// a backspace in a string is written as \b, the escape PDF defines
     procedure TestEscapeBackspace;
+    {$ifndef NO_USE_PDFSECURITY}
+    /// an encrypted text string holds its BOM and UTF-16BE, all encrypted
+    procedure TestEncryptedUnicodeString;
+    /// AddUnicodeHex writes the hex of a content stream: never encrypted
+    procedure TestUnicodeHexNotEncrypted;
+    {$endif NO_USE_PDFSECURITY}
   private
     procedure CheckNoSimpleCmap(const aFamily, aCmap: RawUtf8);
   end;
@@ -1988,5 +1994,92 @@ begin
     Stream.Free;
   end;
 end;
+
+{$ifndef NO_USE_PDFSECURITY}
+
+procedure TPdfSmokeTests.TestEncryptedUnicodeString;
+const
+  // omega alpha beta: no WinAnsi character, so a <FEFF...> text string
+  GREEK: RawUtf8 = {$ifdef HASCODEPAGE} #$03C9#$03B1#$03B2
+    {$else} #$CF#$89#$CE#$B1#$CE#$B2 {$endif};
+  PLAIN: array[0..7] of byte = ($FE, $FF, $03, $C9, $03, $B1, $03, $B2);
+var
+  PDF: TPdfDocument;
+  Stream: TMemoryStream;
+  s, title, author: RawByteString;
+  i: integer;
+  ok: boolean;
+begin
+  { RC4 restarts its key stream for each string of an object: the plain
+    ASCII Author of the same Info dictionary gives the key stream, which
+    must decrypt the Title to its BOM and big-endian UTF-16 }
+  Stream := TMemoryStream.Create;
+  try
+    PDF := TPdfDocument.Create(false, 0, pdfaNone,
+      TPdfEncryption.New(elRC4_128, '', 'owner', PDF_PERMISSION_ALL));
+    try
+      PDF.CompressionMethod := cmNone;
+      PDF.Info.Data.AddItemTextUtf8('Title', GREEK);
+      PDF.Info.Data.AddItemText('Author', 'AAAAAAAA');
+      PDF.AddPage;
+      PDF.SaveToStream(Stream);
+    finally
+      PDF.Free;
+    end;
+    s := StreamToRaw(Stream);
+    title := PdfStringAfter(s, '/Title');
+    author := PdfStringAfter(s, '/Author');
+    CheckEqual(length(title), 8, 'BOM and three characters, encrypted');
+    CheckEqual(length(author), 8, 'the author, encrypted');
+    ok := (length(title) = 8) and
+          (length(author) = 8);
+    if ok then
+      for i := 1 to 8 do
+        if ord(title[i]) xor ord(author[i]) xor ord('A') <> PLAIN[i - 1] then
+          ok := false;
+    Check(ok, 'the title decrypts to FEFF and UTF-16BE');
+  finally
+    Stream.Free;
+  end;
+end;
+
+type
+  // the object number an encryption key is computed from
+  TPdfDocumentObjectNumber = class(TPdfDocument);
+
+procedure TPdfSmokeTests.TestUnicodeHexNotEncrypted;
+const
+  AB: array[0..1] of WideChar = ('A', 'B');
+var
+  PDF: TPdfDocument;
+  Stream: TMemoryStream;
+  W: TPdfWrite;
+begin
+  { a content stream is encrypted as a whole: a string in it, such as an
+    /Alt text, must not be encrypted a second time }
+  Stream := TMemoryStream.Create;
+  try
+    PDF := TPdfDocument.Create(false, 0, pdfaNone,
+      TPdfEncryption.New(elRC4_128, '', 'owner', PDF_PERMISSION_ALL));
+    try
+      // object 0 is never written, and its RC4 key never computed
+      TPdfDocumentObjectNumber(PDF).fCurrentObjectNumber := 5;
+      W := TPdfWrite.Create(PDF, Stream);
+      try
+        W.AddUnicodeHex(@AB, 2);
+        W.Save;
+      finally
+        W.Free;
+      end;
+    finally
+      PDF.Free;
+    end;
+    CheckEqual(StreamToRaw(Stream), '00410042', 'plain big-endian hex');
+  finally
+    Stream.Free;
+  end;
+end;
+
+{$endif NO_USE_PDFSECURITY}
 
 end.
