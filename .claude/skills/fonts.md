@@ -857,7 +857,9 @@ text (`UseUniscribe`) the part the font lacks is shaped again in the fallback fa
 
 The shaper itemizes exactly the text (`Len` code units) and takes every
 item `ScriptLayout` orders: `for j := 0 to count - 1 do i :=
-VisualToLogical[j]`. Do not itemize the `#0` after the text and skip the
+VisualToLogical[j]`. The level `ScriptLayout` gets is `uBidiLevel and $1f`:
+the byte holds state bits above the five level bits (an override control
+sets one), which would reorder the runs. Do not itemize the `#0` after the text and skip the
 last item as a sentinel: the RTL level places that item at visual
 position 0, and it may hold real text before the `#0`.
 
