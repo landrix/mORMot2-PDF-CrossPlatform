@@ -781,7 +781,8 @@ is compact, but it is two tables in the structure tree. Two ways to get one:
    is current at export time (`invoice_demo` ends with `SetFont`). Wanted:
    several lines, left/centre/right parts, a font of their own
 6. **List items**: `DrawListItem` writes the bullet into `LBody` (no `Lbl`)
-   and does not wrap, so a long item runs past the margin
+   and does not wrap, so a long item runs past the margin; nor does it
+   check the page: an item at the bottom is drawn below the margin
 7. **Tagged links** (was R-18; asked for on 2026-10-04, also layer 1).
    `CreateHyperLink` writes a link annotation, but the engine has no `Link`
    structure element: `TPdfStructRole` has no `psrLink`, and nothing writes
