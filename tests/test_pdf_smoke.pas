@@ -83,6 +83,8 @@ type
     {$endif NO_USE_PDFSECURITY}
     /// a WinAnsi ToUnicode CMap holds at most 100 entries per bfchar block
     procedure TestWinAnsiToUnicodeBlocks;
+    /// an outline entry refused before the first page leaves the document sound
+    procedure TestOutlineBeforePage;
   private
     procedure CheckNoSimpleCmap(const aFamily, aCmap: RawUtf8);
   end;
@@ -2131,6 +2133,42 @@ begin
     Check(most > 0, 'a ToUnicode CMap written');
     Check(most <= 100, 'at most 100 entries per bfchar block');
     Check(PosEx('<FF> <00FF>', s) > 0, 'the last WinAnsi character mapped');
+  finally
+    Stream.Free;
+  end;
+end;
+
+procedure TPdfSmokeTests.TestOutlineBeforePage;
+var
+  PDF: TPdfDocument;
+  Stream: TMemoryStream;
+  s: RawByteString;
+  raised: boolean;
+begin
+  { the refused entry was already in the object list: freed by the failed
+    constructor and again by the document, and counted by its parent }
+  Stream := TMemoryStream.Create;
+  try
+    PDF := TPdfDocument.Create({AUseOutlines=}true);
+    try
+      PDF.CompressionMethod := cmNone;
+      raised := false;
+      try
+        PDF.CreateOutline('Early', 1, 700);
+      except
+        on EPdfInvalidOperation do
+          raised := true;
+      end;
+      Check(raised, 'an outline position before the first page is refused');
+      PDF.AddPage;
+      PDF.CreateOutline('Top', 1, 700);
+      PDF.SaveToStream(Stream);
+    finally
+      PDF.Free;
+    end;
+    s := StreamToRaw(Stream);
+    Check(PosEx('/Count 1', s) > 0, 'one outline entry counted');
+    Check(PosEx('/Count 2', s) = 0, 'not the refused one');
   finally
     Stream.Free;
   end;

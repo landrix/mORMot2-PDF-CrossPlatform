@@ -8378,13 +8378,16 @@ begin
     raise EPdfInvalidValue.Create('CreateEntry');
   fParent := AParent;
   fDoc := AParent.Doc;
+  // before registering: a failed constructor frees itself, and an entry in
+  // fObjectList would be freed a second time by the document
+  if (TopPosition >= 0) and
+     (fDoc.Canvas.fPage = nil) then
+    fDoc.RaiseInvalidOperation;
   Data := TPdfDictionary.Create(fDoc.fXRef);
   fDoc.fXRef.AddObject(Data);
   fDoc.fObjectList.Add(self);
   if TopPosition >= 0 then
   begin
-    if fDoc.Canvas.fPage = nil then
-      fDoc.RaiseInvalidOperation;
     fDest := fDoc.CreateDestination;
     fDest.DestinationType := dtXYZ;
     fDest.Zoom := 0; // will leave Zoom factor unchanged
@@ -8404,6 +8407,7 @@ function TPdfOutlineEntry.AddChild(TopPosition: integer): TPdfOutlineEntry;
 var
   TmpEntry: TPdfOutlineEntry;
 begin
+  result := TPdfOutlineEntry.Create(self, TopPosition); // may raise
   // increment total Count variable
   inc(fCount);
   TmpEntry := Parent;
@@ -8412,7 +8416,6 @@ begin
     TmpEntry.fCount := TmpEntry.fCount + 1;
     TmpEntry := TmpEntry.Parent;
   end;
-  result := TPdfOutlineEntry.Create(self, TopPosition);
   if fFirst = nil then
     fFirst := result;
   if fLast <> nil then
