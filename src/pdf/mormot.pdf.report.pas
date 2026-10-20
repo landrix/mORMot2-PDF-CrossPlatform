@@ -1332,10 +1332,11 @@ begin
       PDF.Canvas.SetPage(PDF.RawPages.List[HeadingRec.PageNum]);
 
     { Convert Y from top-down 1/100mm to PDF bottom-up points.
-      Full page H = PageHeight + fMarginTop + fMarginBottom.
-      Top of printable area from page bottom = PageHeight + fMarginBottom.
+      Full page H = PageHeight + MarginTop + MarginBottom of that page.
+      Top of printable area from page bottom = PageHeight + MarginBottom.
       Heading sits HeadingRec.Y below the printable top. }
-    YInPoints := (fPages[HeadingRec.PageNum].PageHeight + fMarginBottom - HeadingRec.Y) * 72 / 2540;
+    YInPoints := (fPages[HeadingRec.PageNum].PageHeight +
+      fPages[HeadingRec.PageNum].MarginBottom - HeadingRec.Y) * 72 / 2540;
 
     { Create outline entry for this heading }
     PDF.CreateOutline(Utf8ToString(HeadingRec.Title), HeadingRec.Level, YInPoints);

@@ -61,6 +61,8 @@ type
     procedure TestExportClosesOpenList;
     /// a table header row that does not fit moves to the next page
     procedure TestTableHeaderPageBreak;
+    /// an outline destination uses the bottom margin of its own page
+    procedure TestOutlinePerPageMargin;
     /// a call out of order or with a wrong argument raises EPdfReport
     procedure TestMisuseRaises;
   private
@@ -1362,6 +1364,62 @@ begin
   finally
     Report.Free;
   end;
+end;
+
+{ the Y values of the /XYZ destinations of an outlined two-heading report }
+function OutlineYs(ChangeMargin: boolean): RawUtf8;
+var
+  Report: TGDIPages;
+  MS: TMemoryStream;
+  s: RawUtf8;
+  p, q: integer;
+begin
+  result := '';
+  Report := TGDIPages.Create(nil);
+  MS := TMemoryStream.Create;
+  try
+    Report.UseOutlines := true;
+    Report.NewPage;
+    Report.DrawHeading(1, 'First');
+    if ChangeMargin then
+      Report.MarginBottom := 4000;
+    Report.NewPage;
+    Report.DrawHeading(1, 'Second');
+    Report.EndDoc;
+    Report.ExportPdfStream(MS);
+    SetString(s, PAnsiChar(MS.Memory), MS.Size);
+    s := InflatePdf(s);
+    p := PosEx('/XYZ 0 ', s);
+    while p > 0 do
+    begin
+      inc(p, 7);
+      q := p;
+      while (q <= length(s)) and
+            (s[q] in ['0'..'9', '.', '-']) do
+        inc(q);
+      result := result + copy(s, p, q - p) + ' ';
+      p := PosEx('/XYZ 0 ', s, q);
+    end;
+  finally
+    MS.Free;
+    Report.Free;
+  end;
+end;
+
+procedure TReportTests.TestOutlinePerPageMargin;
+var
+  same, changed: RawUtf8;
+  sp, cp: integer;
+begin
+  { a heading's destination used the bottom margin current at export, not
+    the one of its page: a margin changed later moved the earlier ones }
+  same := OutlineYs(false);
+  changed := OutlineYs(true);
+  sp := PosEx(' ', same);
+  cp := PosEx(' ', changed);
+  Check(sp > 1, 'two destinations written');
+  CheckEqual(copy(changed, 1, cp - 1), copy(same, 1, sp - 1),
+    'the first heading keeps its destination');
 end;
 
 end.
