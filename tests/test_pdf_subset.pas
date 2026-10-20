@@ -1111,7 +1111,7 @@ var
   saved: IFontSubsetter;
 begin
   { a face of a .ttc embedded whole is extracted from its collection
-    (FontProvider.GetFaceFile): Windows used to write the whole collection
+    (IFontFace.GetFaceFile): Windows used to write the whole collection
     to /FontFile2, which is no font program - with EmbeddedWholeTtf, for
     PDF/A-1 and without a subsetter }
   CheckTtcFaces(true, pdfaNone, false, 'EmbeddedWholeTtf');
