@@ -59,6 +59,8 @@ type
     procedure TestLegacyTableLayoutStack;
     /// an export closes a list left open, as EndDoc does
     procedure TestExportClosesOpenList;
+    /// a table header row that does not fit moves to the next page
+    procedure TestTableHeaderPageBreak;
     /// a call out of order or with a wrong argument raises EPdfReport
     procedure TestMisuseRaises;
   private
@@ -1315,6 +1317,51 @@ var
 begin
   for i := 0 to high(MISUSE) do
     CheckRaised(RunMisuse, [i], EPdfReport, MISUSE[i]);
+end;
+
+{ the index of the first page holding a text command of AText, -1 if none }
+function PageOfText(Report: TGDIPages; const AText: RawUtf8): integer;
+var
+  p, i: integer;
+begin
+  for p := 0 to Report.PageCount - 1 do
+    for i := 0 to high(Report.Pages[p].Commands) do
+      if (Report.Pages[p].Commands[i].Kind = dckDrawText) and
+         (Report.Pages[p].Commands[i].Text = AText) then
+      begin
+        result := p;
+        exit;
+      end;
+  result := -1;
+end;
+
+procedure TReportTests.TestTableHeaderPageBreak;
+var
+  Report: TGDIPages;
+  Layout: TTableLayout;
+begin
+  { DrawTableRow and DrawTableFooter break before a row that does not fit;
+    the header row was drawn past the bottom margin }
+  Report := TGDIPages.Create(nil);
+  try
+    Report.NewPage;
+    Report.AddVerticalSpace((Report.PageHeight - 100) div 100);
+    FillChar(Layout, SizeOf(Layout), 0);
+    SetLength(Layout.ColumnWidths, 1);
+    SetLength(Layout.ColumnAligns, 1);
+    Layout.ColumnWidths[0] := 17000;
+    Layout.ColumnAligns[0] := tcaLeft;
+    Layout.HeaderFontSize := 12;
+    Report.BeginTable(Layout);
+    Report.DrawTableHeader(['HEAD']);
+    Report.DrawTableRow(['ROW']);
+    Report.EndTable;
+    Report.EndDoc;
+    CheckEqual(PageOfText(Report, 'HEAD'), 1, 'the header on the next page');
+    CheckEqual(PageOfText(Report, 'ROW'), 1, 'its row below it');
+  finally
+    Report.Free;
+  end;
 end;
 
 end.

@@ -2131,10 +2131,22 @@ end;
 procedure TGDIPages.DrawTableHeader(const Headers: array of RawUtf8);
 var
   i: integer;
-  kind: integer;
+  kind, siz: integer;
 begin
   if not fTableInProgress then
     EPdfReport.RaiseUtf8('%.DrawTableHeader: BeginTable not called', [self]);
+
+  { a header row that does not fit starts the table on the next page, as
+    DrawTableRow and DrawTableFooter break before their rows }
+  if not fTableHeaderRepeat then
+  begin
+    siz := fTableLayout.HeaderFontSize;
+    if siz <= 0 then
+      siz := fFontSize;
+    if fCurrentY + PointsToMM100(siz * fLineHeightFactor) + CELL_PADDING >
+         fPageHeight then
+      ForceNewPage;
+  end;
 
   // Save header content for automatic repetition on continuation pages
   SetLength(fTableSavedHeaders, length(Headers));
