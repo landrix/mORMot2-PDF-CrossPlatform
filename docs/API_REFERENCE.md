@@ -222,7 +222,7 @@ Table colours are fields of `TTableLayout`, not of a format.
 | `Code` | Monospace inline | 90% mono font, dark red | 0 before/after |
 | `Quote` | Block quote | body font, italic, grey | 200 before, 300 after |
 | `LI` | List item | body font | 0 before, 100 after |
-| `Caption` | Image caption | 80% body font | 200 before, 0 after |
+| `Caption` | Image caption | 80% body font | 100 before, 200 after |
 
 **Not applied yet (ROADMAP R-29, item 4):** `DrawHeading` ignores the
 `SpaceBefore` and `SpaceAfter` of the `Hx` formats, and the `SpaceBefore` of
