@@ -81,6 +81,8 @@ type
     /// AddUnicodeHex writes the hex of a content stream: never encrypted
     procedure TestUnicodeHexNotEncrypted;
     {$endif NO_USE_PDFSECURITY}
+    /// a WinAnsi ToUnicode CMap holds at most 100 entries per bfchar block
+    procedure TestWinAnsiToUnicodeBlocks;
   private
     procedure CheckNoSimpleCmap(const aFamily, aCmap: RawUtf8);
   end;
@@ -2081,5 +2083,57 @@ begin
 end;
 
 {$endif NO_USE_PDFSECURITY}
+
+procedure TPdfSmokeTests.TestWinAnsiToUnicodeBlocks;
+var
+  PDF: TPdfDocument;
+  Stream: TMemoryStream;
+  s, ansi: RawByteString;
+  p, q, n, most: integer;
+begin
+  { a CMap bfchar block holds at most 100 entries (Adobe CMap specification
+    5014, 7.4); a tagged WinAnsi font of more characters wrote one block }
+  Check(EnsureTestFonts, 'the test fonts registered');
+  ansi := '';
+  for n := 33 to 126 do
+    ansi := ansi + AnsiChar(n);
+  for n := 161 to 255 do
+    ansi := ansi + AnsiChar(n);
+  Stream := TMemoryStream.Create;
+  try
+    PDF := TPdfDocument.Create(false, 0, pdfaNone);
+    try
+      PDF.CompressionMethod := cmNone;
+      PDF.Tagged := true;
+      PDF.AddPage;
+      PDF.Canvas.BeginStructContent(psrP);
+      PDF.Canvas.SetFont(TEST_SANS, 8, [], TEST_FONT_CHARSET);
+      DrawUtf8Text(PDF, 20, 700, WinAnsiToUtf8(ansi));
+      PDF.Canvas.EndStructContent;
+      PDF.SaveToStream(Stream);
+    finally
+      PDF.Free;
+    end;
+    s := StreamToRaw(Stream);
+    most := 0;
+    p := PosEx(' beginbfchar', s);
+    while p > 0 do
+    begin
+      q := p - 1;
+      while (q > 0) and
+            (s[q] in ['0'..'9']) do
+        dec(q);
+      n := GetInteger(pointer(copy(s, q + 1, p - q - 1)));
+      if n > most then
+        most := n;
+      p := PosEx(' beginbfchar', s, p + 1);
+    end;
+    Check(most > 0, 'a ToUnicode CMap written');
+    Check(most <= 100, 'at most 100 entries per bfchar block');
+    Check(PosEx('<FF> <00FF>', s) > 0, 'the last WinAnsi character mapped');
+  finally
+    Stream.Free;
+  end;
+end;
 
 end.
