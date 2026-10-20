@@ -650,8 +650,11 @@ through the bridge reference too (R-20), so both paths need it.
 
 A review of `src/pdf` and the `mormot.lib.*` units on 2026-10-20 (Sonnet
 agents, each claim verified again by Codex) found 28 bugs; the ones fixed
-then are in "To Announce". These wait, each with a test that fails before
-its fix. Items 1, 2 and 4 are also in the trunk's `mormot.ui.pdf`.
+then are in "To Announce" - in `mormot.pdf`, in the report and the bridge,
+and in the Uniscribe backend (`ReduceTtf`, the bidi levels) - and `{#}` and
+`{total}` in body text are documented behaviour. These wait, each with a
+test that fails before its fix. Items 1 and 2 are also in the trunk's
+`mormot.ui.pdf`.
 
 1. **Malformed fonts** (`mormot.pdf`): `TPdfTtf.LoadCmap` checks only the
    offset of a format 4 subtable, not its header, `segCountX2` or the
@@ -668,10 +671,7 @@ its fix. Items 1, 2 and 4 are also in the trunk's `mormot.ui.pdf`.
    `CreateDC` fails, which divides by 0 in the isotropic mapping
 3. **Preview** (`mormot.pdf.report.preview`): the window takes its size
    from page 0 and the report's current margins, for every page
-4. **Bidi levels** (`mormot.lib.uniscribe`): the level passed to
-   `ScriptLayout` keeps the state bits above the 5 level bits, so text with
-   embedding or override controls may be ordered wrongly
-5. **`Columns2` over a page break** (`mormot.pdf.report`): when the first
+4. **`Columns2` over a page break** (`mormot.pdf.report`): when the first
    column breaks onto a new page, the second one is recorded there, at the
    Y of the first page. Recording it on the first page instead splits the
    first column's paragraph in the tagged reading order (the renderer

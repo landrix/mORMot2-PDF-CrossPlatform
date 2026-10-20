@@ -87,6 +87,8 @@ type
     procedure TestOutlineBeforePage;
     /// AddTrueTypeFont keeps the fallback font it sorts past
     procedure TestAddFontKeepsFallback;
+    /// AddTrueTypeFont keeps the fonts created before it usable
+    procedure TestAddFontKeepsCreatedFonts;
     /// a face without an English PostScript name keeps its family name
     procedure TestPostScriptNameFallback;
     /// switching PDF/A off renews the document, its metadata stream included
@@ -2150,6 +2152,31 @@ begin
   end;
 end;
 
+{ the /Count entry of the /Type/Outlines dictionary of s, '' if none }
+function OutlinesDictionary(const s: RawByteString): RawByteString;
+var
+  p, b, e, c: integer;
+begin
+  result := '';
+  p := PosEx('/Type/Outlines', s);
+  if p = 0 then
+    exit;
+  b := p;
+  while (b > 1) and
+        (copy(s, b, 2) <> '<<') do
+    dec(b);
+  e := PosEx('>>', s, p);
+  c := PosEx('/Count ', s, b);
+  if (c = 0) or
+     (c > e) then
+    exit;
+  e := c + 7;
+  while (e <= length(s)) and
+        (s[e] in ['0'..'9']) do
+    inc(e);
+  result := copy(s, c, e - c);
+end;
+
 procedure TPdfSmokeTests.TestOutlineBeforePage;
 var
   PDF: TPdfDocument;
@@ -2179,8 +2206,8 @@ begin
       PDF.Free;
     end;
     s := StreamToRaw(Stream);
-    Check(PosEx('/Count 1', s) > 0, 'one outline entry counted');
-    Check(PosEx('/Count 2', s) = 0, 'not the refused one');
+    CheckEqual(OutlinesDictionary(s), '/Count 1',
+      'the outlines count one entry, not the refused one');
   finally
     Stream.Free;
   end;
@@ -2201,6 +2228,38 @@ begin
     CheckEqual(StringToUtf8(PDF.FontFallBackName), TEST_SANS, 'kept');
   finally
     PDF.Free;
+  end;
+end;
+
+procedure TPdfSmokeTests.TestAddFontKeepsCreatedFonts;
+var
+  PDF: TPdfDocument;
+  Stream: TMemoryStream;
+  s: RawByteString;
+begin
+  { a font created before AddTrueTypeFont kept the index the sort moved: the
+    next SetFont of its face did not find it and created a second one }
+  Check(EnsureTestFonts, 'the test fonts registered');
+  Stream := TMemoryStream.Create;
+  try
+    PDF := TPdfDocument.Create(false, 0, pdfaNone);
+    try
+      PDF.CompressionMethod := cmNone;
+      PDF.AddPage;
+      PDF.Canvas.SetFont(TEST_SANS, 12, [], TEST_FONT_CHARSET);
+      PDF.Canvas.TextOut(40, 700, 'Before');
+      PDF.AddTrueTypeFont('!sorts first');
+      PDF.Canvas.SetFont(TEST_SANS, 12, [], TEST_FONT_CHARSET);
+      PDF.Canvas.TextOut(40, 680, 'After');
+      PDF.SaveToStream(Stream);
+    finally
+      PDF.Free;
+    end;
+    s := StreamToRaw(Stream);
+    CheckEqual(CountOccurrences('/BaseFont/mORMotTestSans', s), 1,
+      'one font object for the face');
+  finally
+    Stream.Free;
   end;
 end;
 
@@ -2391,6 +2450,14 @@ begin
           raised := true;
       end;
       Check(raised, 'CreateJpegDirect refuses a CMYK JPEG');
+      raised := false;
+      try
+        TPdfImage.CreateJpeg(PDF, pointer(data), length(data), 32, 16, true).Free;
+      except
+        on EPdfInvalidValue do
+          raised := true;
+      end;
+      Check(raised, 'CreateJpeg refuses a CMYK JPEG');
     finally
       PDF.Free;
     end;
