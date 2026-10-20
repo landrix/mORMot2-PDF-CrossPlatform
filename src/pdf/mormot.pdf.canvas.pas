@@ -101,8 +101,6 @@ type
     fMeasureDC: HDC; // dummy DC so the LCL fallback works without a widget
     fMeasurer: TPdfFontMeasurer; // metrics of the font the PDF really uses
     // cached state for SetFont (expensive) and SetRGBStrokeColor
-    fLastPenColor: TColor;
-    fLastPenWidth: integer;
     fLastFontName: string;
     fLastFontSize: integer;
     fLastFontStyle: TFontStyles;
@@ -550,8 +548,6 @@ end;
 
 procedure TPdfVclCanvas.ResetState;
 begin
-  fLastPenColor := clBlack;
-  fLastPenWidth := 1;
   fLastFontName := 'Helvetica';
   fLastFontSize := 10;
   fLastFontStyle := [];
@@ -577,11 +573,8 @@ end;
 
 procedure TPdfVclCanvas.SyncPen;
 begin
-  if fStateValid and (Pen.Color = fLastPenColor) and
-     (Pen.Width = fLastPenWidth) then
-    exit;
-  fLastPenColor := Pen.Color;
-  fLastPenWidth := Pen.Width;
+  // always written: fStateValid is the font's, and a skipped pen once left a
+  // line after text at the PDF default of 1 pt
   fPdfCanvas.SetRGBStrokeColor(ColorToRGB(Pen.Color));
   fPdfCanvas.SetLineWidth(Pen.Width * fScale.ScaleX);
 end;

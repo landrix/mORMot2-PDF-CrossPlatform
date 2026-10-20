@@ -45,6 +45,8 @@ type
     procedure TestVclCanvasUnknownFace;
     procedure TestVclCanvasThroughTCanvas;
     procedure TestVclCanvasScreenLogPixels;
+    /// a line after text on a new page writes the pen width
+    procedure TestVclCanvasPenAfterText;
     {$ifndef NO_USE_PDFSECURITY}
     procedure TestVclCanvasEncryption;
     {$endif NO_USE_PDFSECURITY}
@@ -2498,5 +2500,38 @@ begin
     PDF.Free;
   end;
 end;
+
+{$ifdef PDF_HASVCLCANVAS}
+procedure TPdfSmokeTests.TestVclCanvasPenAfterText;
+var
+  PDF: TPdfDocumentVcl;
+  Stream: TMemoryStream;
+  s: RawByteString;
+begin
+  { SyncFont marked the whole state valid: a line drawn with the default pen
+    after text on a new page wrote no line width, so it was 1 pt, not 0.75 }
+  Stream := TMemoryStream.Create;
+  try
+    PDF := TPdfDocumentVcl.Create(false, 0, pdfaNone);
+    try
+      PDF.CompressionMethod := cmNone;
+      PDF.StandardFontsReplace := true;
+      PDF.ScreenLogPixels := 96; // a 1 px pen is 0.75 pt, whatever the screen
+      PDF.AddPage;
+      PDF.VclCanvas.Font.Name := 'Helvetica';
+      PDF.VclCanvas.TextOut(40, 40, 'Text first');
+      PDF.VclCanvas.MoveTo(40, 100);
+      PDF.VclCanvas.LineTo(200, 100);
+      PDF.SaveToStream(Stream);
+    finally
+      PDF.Free;
+    end;
+    s := StreamToRaw(Stream);
+    Check(PosEx('0.75 w', s) > 0, 'the 1 px pen written as 0.75 pt');
+  finally
+    Stream.Free;
+  end;
+end;
+{$endif PDF_HASVCLCANVAS}
 
 end.
