@@ -77,6 +77,14 @@ v0.10.0 (2026-09-30).
 - **Fixed (`TGDIPages`):** `ExportPdfStream` closes a list left open, as
   `EndDoc` does; a tagged export without `EndDoc` failed with "struct
   element(s) left open"
+- **Fixed (TCanvas bridge):** a line drawn with the default pen after text
+  on a new page was 1 pt wide instead of the pen's 0.75 pt (1 px); lines
+  after text now carry their stroke colour and width - the PDF of such a
+  drawing gains those operators
+- **Fixed (`TGDIPages`):** a table header row that does not fit on the page
+  starts the table on the next page, as body and footer rows already did;
+  a heading's outline destination uses the bottom margin of its own page,
+  not the one current at export
 - **New: `docs/MIGRATION.md`** for programs on the trunk's `mormot.ui.pdf`
   and `mormot.ui.report`, which go at the 2.5 merge: which unit each name
   is in now, the calls that change (`CreateOrGetBitmapImage`,

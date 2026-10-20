@@ -367,7 +367,7 @@ Report.EndTable;
 - this `BeginTable` saves the layout and `EndTable` restores it, as with
   `BeginTable(Layout)`
 
-**Automatic page break:** When a data row no longer fits, it moves to the next page and the column headers are automatically repeated at the top. Header content is saved internally when `DrawTableHeader` is called; `EndTable` clears the saved headers. The repetition is recorded as `dckBeginTR` with `Color = 2`; a tagged export renders it inside `BeginArtifact`/`EndArtifact` with no struct elements, so the struct tree holds the header once. Running page header/footer text is an artifact too. A tagged export with an empty `Title` takes the first H1 as the document title. A single row taller than the page is not split (R-10).
+**Automatic page break:** When a data row no longer fits, it moves to the next page and the column headers are automatically repeated at the top. A header row that does not fit moves the table to the next page first, and a footer row breaks the same way. Header content is saved internally when `DrawTableHeader` is called; `EndTable` clears the saved headers. The repetition is recorded as `dckBeginTR` with `Color = 2`; a tagged export renders it inside `BeginArtifact`/`EndArtifact` with no struct elements, so the struct tree holds the header once. Running page header/footer text is an artifact too. A tagged export with an empty `Title` takes the first H1 as the document title. A single row taller than the page is not split (R-10).
 
 ---
 

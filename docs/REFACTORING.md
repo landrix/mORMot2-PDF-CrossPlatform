@@ -883,6 +883,17 @@ defines include by relative path, the formatting of tests and demos.
   heading spacing in ROADMAP R-29 item 4; the legacy header repetition, a
   report bitmap with alt text (`feature/invoice-demo`) and cell colours -
   features.
+- **Bug fixes found by a review** (2026-10-20: Sonnet agents found 28,
+  Codex verified each; decided with Sven): three PRs by area, a commit per
+  fix, each with a test that fails before it - `mormot.pdf`, the report and
+  the bridge, the Uniscribe backend in the fork. Accepted differences:
+  lines drawn after text through the bridge gain their stroke colour and
+  width, five golden cases change by those operators; on Windows the
+  subsets of hinted system faces change by their checkSumAdjustment, seven
+  golden cases - new baselines on every machine. Left out, in ROADMAP
+  "Review Findings Not Fixed Yet": malformed fonts, the EMF batch, the
+  preview and `Columns2` over a page break; `{#}` and `{total}` in body
+  text are documented behaviour.
 - **R-32 step 1 during the freeze** (decided 2026-10-17 with Sven, Codex
   and Fable): the used characters keyed by code point instead of UTF-16
   unit (ROADMAP R-32). An internal change, no feature: golden files on
