@@ -91,6 +91,8 @@ type
     procedure TestPostScriptNameFallback;
     /// switching PDF/A off renews the document, its metadata stream included
     procedure TestNewDocDropsMetadata;
+    /// the catalog getters read what the setters wrote
+    procedure TestCatalogGetters;
   private
     procedure CheckNoSimpleCmap(const aFamily, aCmap: RawUtf8);
   end;
@@ -2263,6 +2265,21 @@ begin
     Check(PosEx('pdfaid:part', s) = 0, 'no PDF/A packet left');
   finally
     Stream.Free;
+  end;
+end;
+
+procedure TPdfSmokeTests.TestCatalogGetters;
+var
+  PDF: TPdfDocument;
+begin
+  PDF := TPdfDocument.Create(false, 0, pdfaNone);
+  try
+    Check(PDF.Root.HasData, 'the catalog has its dictionary');
+    PDF.Root.NonFullScreenPageMode := pmUseOutlines;
+    Check(PDF.Root.NonFullScreenPageMode = pmUseOutlines,
+      'NonFullScreenPageMode read where it is written');
+  finally
+    PDF.Free;
   end;
 end;
 
