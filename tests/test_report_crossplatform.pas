@@ -59,6 +59,10 @@ type
     procedure TestLegacyTableLayoutStack;
     /// an export closes a list left open, as EndDoc does
     procedure TestExportClosesOpenList;
+    /// a table header row that does not fit moves to the next page
+    procedure TestTableHeaderPageBreak;
+    /// an outline destination uses the bottom margin of its own page
+    procedure TestOutlinePerPageMargin;
     /// a call out of order or with a wrong argument raises EPdfReport
     procedure TestMisuseRaises;
   private
@@ -1315,6 +1319,108 @@ var
 begin
   for i := 0 to high(MISUSE) do
     CheckRaised(RunMisuse, [i], EPdfReport, MISUSE[i]);
+end;
+
+{ the index of the first page holding a text command of AText, -1 if none }
+function PageOfText(Report: TGDIPages; const AText: RawUtf8): integer;
+var
+  p, i: integer;
+begin
+  for p := 0 to Report.PageCount - 1 do
+    for i := 0 to high(Report.Pages[p].Commands) do
+      if (Report.Pages[p].Commands[i].Kind = dckDrawText) and
+         (Report.Pages[p].Commands[i].Text = AText) then
+      begin
+        result := p;
+        exit;
+      end;
+  result := -1;
+end;
+
+procedure TReportTests.TestTableHeaderPageBreak;
+var
+  Report: TGDIPages;
+  Layout: TTableLayout;
+begin
+  { DrawTableRow and DrawTableFooter break before a row that does not fit;
+    the header row was drawn past the bottom margin }
+  Report := TGDIPages.Create(nil);
+  try
+    Report.NewPage;
+    Report.AddVerticalSpace((Report.PageHeight - 100) div 100);
+    FillChar(Layout, SizeOf(Layout), 0);
+    SetLength(Layout.ColumnWidths, 1);
+    SetLength(Layout.ColumnAligns, 1);
+    Layout.ColumnWidths[0] := 17000;
+    Layout.ColumnAligns[0] := tcaLeft;
+    Layout.HeaderFontSize := 12;
+    Report.BeginTable(Layout);
+    Report.DrawTableHeader(['HEAD']);
+    Report.DrawTableRow(['ROW']);
+    Report.EndTable;
+    Report.EndDoc;
+    CheckEqual(PageOfText(Report, 'HEAD'), 1, 'the header on the next page');
+    CheckEqual(PageOfText(Report, 'ROW'), 1, 'its row below it');
+  finally
+    Report.Free;
+  end;
+end;
+
+{ the Y values of the /XYZ destinations of an outlined two-heading report }
+function OutlineYs(ChangeMargin: boolean): RawUtf8;
+var
+  Report: TGDIPages;
+  MS: TMemoryStream;
+  s: RawUtf8;
+  p, q: integer;
+begin
+  result := '';
+  Report := TGDIPages.Create(nil);
+  MS := TMemoryStream.Create;
+  try
+    Report.UseOutlines := true;
+    Report.NewPage;
+    Report.DrawHeading(1, 'First');
+    if ChangeMargin then
+      Report.MarginBottom := 4000;
+    Report.NewPage;
+    Report.DrawHeading(1, 'Second');
+    Report.EndDoc;
+    Report.ExportPdfStream(MS);
+    SetString(s, PAnsiChar(MS.Memory), MS.Size);
+    s := InflatePdf(s);
+    p := PosEx('/XYZ 0 ', s);
+    while p > 0 do
+    begin
+      inc(p, 7);
+      q := p;
+      while (q <= length(s)) and
+            (s[q] in ['0'..'9', '.', '-']) do
+        inc(q);
+      result := result + copy(s, p, q - p) + ' ';
+      p := PosEx('/XYZ 0 ', s, q);
+    end;
+  finally
+    MS.Free;
+    Report.Free;
+  end;
+end;
+
+procedure TReportTests.TestOutlinePerPageMargin;
+var
+  same, changed: RawUtf8;
+  sp, cp: integer;
+begin
+  { a heading's destination used the bottom margin current at export, not
+    the one of its page: a margin changed later moved the earlier ones }
+  same := OutlineYs(false);
+  changed := OutlineYs(true);
+  sp := PosEx(' ', same);
+  cp := PosEx(' ', changed);
+  Check((sp > 1) and
+        (PosEx(' ', same, sp + 1) > sp + 1), 'two destinations written');
+  CheckEqual(copy(changed, 1, cp - 1), copy(same, 1, sp - 1),
+    'the first heading keeps its destination');
 end;
 
 end.
