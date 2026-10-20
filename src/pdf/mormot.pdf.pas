@@ -9051,12 +9051,20 @@ begin
 end;
 
 function TPdfDocument.AddTrueTypeFont(const TtfName: RawUtf8): boolean;
+var
+  fallback: RawUtf8;
 begin
   result := GetTrueTypeFontIndex(TtfName) < 0;
   if not result then
     exit;
+  if fFontFallBackIndex >= 0 then
+    fallback := fTrueTypeFonts[fFontFallBackIndex];
   AddRawUtf8(fTrueTypeFonts, TtfName);
   QuickSortRawUtf8(fTrueTypeFonts, length(fTrueTypeFonts), nil, @StrIComp);
+  // the sort moves the indexes: the cached one and the fallback's
+  fTrueTypeFontLastName := '';
+  if fallback <> '' then
+    fFontFallBackIndex := GetTrueTypeFontIndex(fallback);
 end;
 
 procedure TPdfDocument.FreeDoc;

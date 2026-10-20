@@ -85,6 +85,8 @@ type
     procedure TestWinAnsiToUnicodeBlocks;
     /// an outline entry refused before the first page leaves the document sound
     procedure TestOutlineBeforePage;
+    /// AddTrueTypeFont keeps the fallback font it sorts past
+    procedure TestAddFontKeepsFallback;
   private
     procedure CheckNoSimpleCmap(const aFamily, aCmap: RawUtf8);
   end;
@@ -2171,6 +2173,24 @@ begin
     Check(PosEx('/Count 2', s) = 0, 'not the refused one');
   finally
     Stream.Free;
+  end;
+end;
+
+procedure TPdfSmokeTests.TestAddFontKeepsFallback;
+var
+  PDF: TPdfDocument;
+begin
+  { AddTrueTypeFont sorts the font list: the fallback index and the name
+    cache pointed at the font that moved into their place }
+  Check(EnsureTestFonts, 'the test fonts registered');
+  PDF := TPdfDocument.Create(false, 0, pdfaNone);
+  try
+    PDF.FontFallBackName := TEST_SANS;
+    CheckEqual(StringToUtf8(PDF.FontFallBackName), TEST_SANS, 'set');
+    Check(PDF.AddTrueTypeFont('!sorts first'), 'a new name added');
+    CheckEqual(StringToUtf8(PDF.FontFallBackName), TEST_SANS, 'kept');
+  finally
+    PDF.Free;
   end;
 end;
 
