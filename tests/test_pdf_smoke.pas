@@ -73,6 +73,32 @@ type
     procedure TestShapedFallback;
     procedure TestShapedRunOutcomeUnset;
     procedure TestZeroRealIsWritten;
+    /// a backspace in a string is written as \b, the escape PDF defines
+    procedure TestEscapeBackspace;
+    {$ifndef NO_USE_PDFSECURITY}
+    /// an encrypted text string holds its BOM and UTF-16BE, all encrypted
+    procedure TestEncryptedUnicodeString;
+    /// AddUnicodeHex writes the hex of a content stream: never encrypted
+    procedure TestUnicodeHexNotEncrypted;
+    {$endif NO_USE_PDFSECURITY}
+    /// a WinAnsi ToUnicode CMap holds at most 100 entries per bfchar block
+    procedure TestWinAnsiToUnicodeBlocks;
+    /// an outline entry refused before the first page leaves the document sound
+    procedure TestOutlineBeforePage;
+    /// AddTrueTypeFont keeps the fallback font it sorts past
+    procedure TestAddFontKeepsFallback;
+    /// AddTrueTypeFont keeps the fonts created before it usable
+    procedure TestAddFontKeepsCreatedFonts;
+    /// a face without an English PostScript name keeps its family name
+    procedure TestPostScriptNameFallback;
+    /// switching PDF/A off renews the document, its metadata stream included
+    procedure TestNewDocDropsMetadata;
+    /// the catalog getters read what the setters wrote
+    procedure TestCatalogGetters;
+    /// a JPEG's colour space follows its components; a non-JPEG is refused
+    procedure TestJpegColorSpace;
+    /// a glyph that advances by 0 measures 0
+    procedure TestZeroAdvanceMeasured;
   private
     procedure CheckNoSimpleCmap(const aFamily, aCmap: RawUtf8);
   end;
@@ -1873,6 +1899,603 @@ begin
     Check(Pos(RawByteString('/ca 0'), s) > 0, 'fill alpha 0 written');
   finally
     Stream.Free;
+  end;
+end;
+
+function Nibble(c: AnsiChar): integer;
+begin
+  case c of
+    '0'..'9':
+      result := ord(c) - ord('0');
+    'A'..'F':
+      result := ord(c) - ord('A') + 10;
+    'a'..'f':
+      result := ord(c) - ord('a') + 10;
+  else
+    result := 0;
+  end;
+end;
+
+{ the literal or hex string after Key in s, as bytes: (..) unescaped, <..>
+  decoded - '' if not found }
+function PdfStringAfter(const s, Key: RawByteString): RawByteString;
+var
+  p, n, v: integer;
+begin
+  result := '';
+  p := PosEx(Key, s);
+  if p = 0 then
+    exit;
+  inc(p, length(Key));
+  while (p <= length(s)) and
+        (s[p] = ' ') do
+    inc(p);
+  if p > length(s) then
+    exit;
+  if s[p] = '<' then
+  begin
+    inc(p);
+    while (p + 1 <= length(s)) and
+          (s[p] <> '>') do
+    begin
+      result := result + AnsiChar(Nibble(s[p]) shl 4 + Nibble(s[p + 1]));
+      inc(p, 2);
+    end;
+    exit;
+  end;
+  if s[p] <> '(' then
+    exit;
+  inc(p);
+  while (p <= length(s)) and
+        (s[p] <> ')') do
+  begin
+    if s[p] = '\' then
+    begin
+      inc(p);
+      case s[p] of
+        'n':
+          result := result + #10;
+        'r':
+          result := result + #13;
+        't':
+          result := result + #9;
+        'b':
+          result := result + #8;
+        'f':
+          result := result + #12;
+        '0'..'7':
+          begin
+            v := 0;
+            n := 0;
+            while (n < 3) and
+                  (s[p] in ['0'..'7']) do
+            begin
+              v := v * 8 + ord(s[p]) - ord('0');
+              inc(p);
+              inc(n);
+            end;
+            result := result + AnsiChar(v);
+            continue;
+          end;
+      else
+        result := result + s[p]; // \( \) \\
+      end;
+    end
+    else
+      result := result + s[p];
+    inc(p);
+  end;
+end;
+
+procedure TPdfSmokeTests.TestEscapeBackspace;
+var
+  PDF: TPdfDocument;
+  Stream: TMemoryStream;
+  s: RawByteString;
+begin
+  { ISO 32000-1 7.3.4.2 defines \b; a reader takes \B as a plain B }
+  Stream := TMemoryStream.Create;
+  try
+    PDF := TPdfDocument.Create(false, 0, pdfaNone);
+    try
+      PDF.CompressionMethod := cmNone;
+      PDF.Info.Data.AddItemText('Subject', 'a'#8'b');
+      PDF.AddPage;
+      PDF.SaveToStream(Stream);
+    finally
+      PDF.Free;
+    end;
+    s := StreamToRaw(Stream);
+    Check(PosEx('(a\bb)', s) > 0, 'a backspace written as \b');
+    CheckEqual(PdfStringAfter(s, '/Subject'), 'a'#8'b', 'and read back');
+  finally
+    Stream.Free;
+  end;
+end;
+
+{$ifndef NO_USE_PDFSECURITY}
+
+procedure TPdfSmokeTests.TestEncryptedUnicodeString;
+const
+  // omega alpha beta: no WinAnsi character, so a <FEFF...> text string
+  GREEK: RawUtf8 = {$ifdef HASCODEPAGE} #$03C9#$03B1#$03B2
+    {$else} #$CF#$89#$CE#$B1#$CE#$B2 {$endif};
+  PLAIN: array[0..7] of byte = ($FE, $FF, $03, $C9, $03, $B1, $03, $B2);
+var
+  PDF: TPdfDocument;
+  Stream: TMemoryStream;
+  s, title, author: RawByteString;
+  i: integer;
+  ok: boolean;
+begin
+  { RC4 restarts its key stream for each string of an object: the plain
+    ASCII Author of the same Info dictionary gives the key stream, which
+    must decrypt the Title to its BOM and big-endian UTF-16 }
+  Stream := TMemoryStream.Create;
+  try
+    PDF := TPdfDocument.Create(false, 0, pdfaNone,
+      TPdfEncryption.New(elRC4_128, '', 'owner', PDF_PERMISSION_ALL));
+    try
+      PDF.CompressionMethod := cmNone;
+      PDF.Info.Data.AddItemTextUtf8('Title', GREEK);
+      PDF.Info.Data.AddItemText('Author', 'AAAAAAAA');
+      PDF.AddPage;
+      PDF.SaveToStream(Stream);
+    finally
+      PDF.Free;
+    end;
+    s := StreamToRaw(Stream);
+    title := PdfStringAfter(s, '/Title');
+    author := PdfStringAfter(s, '/Author');
+    CheckEqual(length(title), 8, 'BOM and three characters, encrypted');
+    CheckEqual(length(author), 8, 'the author, encrypted');
+    ok := (length(title) = 8) and
+          (length(author) = 8);
+    if ok then
+      for i := 1 to 8 do
+        if ord(title[i]) xor ord(author[i]) xor ord('A') <> PLAIN[i - 1] then
+          ok := false;
+    Check(ok, 'the title decrypts to FEFF and UTF-16BE');
+  finally
+    Stream.Free;
+  end;
+end;
+
+type
+  // the object number an encryption key is computed from
+  TPdfDocumentObjectNumber = class(TPdfDocument);
+
+procedure TPdfSmokeTests.TestUnicodeHexNotEncrypted;
+const
+  AB: array[0..1] of WideChar = ('A', 'B');
+var
+  PDF: TPdfDocument;
+  Stream: TMemoryStream;
+  W: TPdfWrite;
+begin
+  { a content stream is encrypted as a whole: a string in it, such as an
+    /Alt text, must not be encrypted a second time }
+  Stream := TMemoryStream.Create;
+  try
+    PDF := TPdfDocument.Create(false, 0, pdfaNone,
+      TPdfEncryption.New(elRC4_128, '', 'owner', PDF_PERMISSION_ALL));
+    try
+      // object 0 is never written, and its RC4 key never computed
+      TPdfDocumentObjectNumber(PDF).fCurrentObjectNumber := 5;
+      W := TPdfWrite.Create(PDF, Stream);
+      try
+        W.AddUnicodeHex(@AB, 2);
+        W.Save;
+      finally
+        W.Free;
+      end;
+    finally
+      PDF.Free;
+    end;
+    CheckEqual(StreamToRaw(Stream), '00410042', 'plain big-endian hex');
+  finally
+    Stream.Free;
+  end;
+end;
+
+{$endif NO_USE_PDFSECURITY}
+
+procedure TPdfSmokeTests.TestWinAnsiToUnicodeBlocks;
+var
+  PDF: TPdfDocument;
+  Stream: TMemoryStream;
+  s, ansi: RawByteString;
+  p, q, n, most: integer;
+begin
+  { a CMap bfchar block holds at most 100 entries (Adobe CMap specification
+    5014, 7.4); a tagged WinAnsi font of more characters wrote one block }
+  Check(EnsureTestFonts, 'the test fonts registered');
+  ansi := '';
+  for n := 33 to 126 do
+    ansi := ansi + AnsiChar(n);
+  for n := 161 to 255 do
+    ansi := ansi + AnsiChar(n);
+  Stream := TMemoryStream.Create;
+  try
+    PDF := TPdfDocument.Create(false, 0, pdfaNone);
+    try
+      PDF.CompressionMethod := cmNone;
+      PDF.Tagged := true;
+      PDF.AddPage;
+      PDF.Canvas.BeginStructContent(psrP);
+      PDF.Canvas.SetFont(TEST_SANS, 8, [], TEST_FONT_CHARSET);
+      DrawUtf8Text(PDF, 20, 700, WinAnsiToUtf8(ansi));
+      PDF.Canvas.EndStructContent;
+      PDF.SaveToStream(Stream);
+    finally
+      PDF.Free;
+    end;
+    s := StreamToRaw(Stream);
+    most := 0;
+    p := PosEx(' beginbfchar', s);
+    while p > 0 do
+    begin
+      q := p - 1;
+      while (q > 0) and
+            (s[q] in ['0'..'9']) do
+        dec(q);
+      n := GetInteger(pointer(copy(s, q + 1, p - q - 1)));
+      if n > most then
+        most := n;
+      p := PosEx(' beginbfchar', s, p + 1);
+    end;
+    Check(most > 0, 'a ToUnicode CMap written');
+    Check(most <= 100, 'at most 100 entries per bfchar block');
+    Check(PosEx('<FF> <00FF>', s) > 0, 'the last WinAnsi character mapped');
+  finally
+    Stream.Free;
+  end;
+end;
+
+{ the /Count entry of the /Type/Outlines dictionary of s, '' if none }
+function OutlinesDictionary(const s: RawByteString): RawByteString;
+var
+  p, b, e, c: integer;
+begin
+  result := '';
+  p := PosEx('/Type/Outlines', s);
+  if p = 0 then
+    exit;
+  b := p;
+  while (b > 1) and
+        (copy(s, b, 2) <> '<<') do
+    dec(b);
+  e := PosEx('>>', s, p);
+  c := PosEx('/Count ', s, b);
+  if (c = 0) or
+     (c > e) then
+    exit;
+  e := c + 7;
+  while (e <= length(s)) and
+        (s[e] in ['0'..'9']) do
+    inc(e);
+  result := copy(s, c, e - c);
+end;
+
+procedure TPdfSmokeTests.TestOutlineBeforePage;
+var
+  PDF: TPdfDocument;
+  Stream: TMemoryStream;
+  s: RawByteString;
+  raised: boolean;
+begin
+  { the refused entry was already in the object list: freed by the failed
+    constructor and again by the document, and counted by its parent }
+  Stream := TMemoryStream.Create;
+  try
+    PDF := TPdfDocument.Create({AUseOutlines=}true);
+    try
+      PDF.CompressionMethod := cmNone;
+      raised := false;
+      try
+        PDF.CreateOutline('Early', 1, 700);
+      except
+        on EPdfInvalidOperation do
+          raised := true;
+      end;
+      Check(raised, 'an outline position before the first page is refused');
+      PDF.AddPage;
+      PDF.CreateOutline('Top', 1, 700);
+      PDF.SaveToStream(Stream);
+    finally
+      PDF.Free;
+    end;
+    s := StreamToRaw(Stream);
+    CheckEqual(OutlinesDictionary(s), '/Count 1',
+      'the outlines count one entry, not the refused one');
+  finally
+    Stream.Free;
+  end;
+end;
+
+procedure TPdfSmokeTests.TestAddFontKeepsFallback;
+var
+  PDF: TPdfDocument;
+begin
+  { AddTrueTypeFont sorts the font list: the fallback index and the name
+    cache pointed at the font that moved into their place }
+  Check(EnsureTestFonts, 'the test fonts registered');
+  PDF := TPdfDocument.Create(false, 0, pdfaNone);
+  try
+    PDF.FontFallBackName := TEST_SANS;
+    CheckEqual(StringToUtf8(PDF.FontFallBackName), TEST_SANS, 'set');
+    Check(PDF.AddTrueTypeFont('!sorts first'), 'a new name added');
+    CheckEqual(StringToUtf8(PDF.FontFallBackName), TEST_SANS, 'kept');
+  finally
+    PDF.Free;
+  end;
+end;
+
+procedure TPdfSmokeTests.TestAddFontKeepsCreatedFonts;
+var
+  PDF: TPdfDocument;
+  Stream: TMemoryStream;
+  s: RawByteString;
+begin
+  { a font created before AddTrueTypeFont kept the index the sort moved: the
+    next SetFont of its face did not find it and created a second one }
+  Check(EnsureTestFonts, 'the test fonts registered');
+  Stream := TMemoryStream.Create;
+  try
+    PDF := TPdfDocument.Create(false, 0, pdfaNone);
+    try
+      PDF.CompressionMethod := cmNone;
+      PDF.AddPage;
+      PDF.Canvas.SetFont(TEST_SANS, 12, [], TEST_FONT_CHARSET);
+      PDF.Canvas.TextOut(40, 700, 'Before');
+      PDF.AddTrueTypeFont('!sorts first');
+      PDF.Canvas.SetFont(TEST_SANS, 12, [], TEST_FONT_CHARSET);
+      PDF.Canvas.TextOut(40, 680, 'After');
+      PDF.SaveToStream(Stream);
+    finally
+      PDF.Free;
+    end;
+    s := StreamToRaw(Stream);
+    CheckEqual(CountOccurrences('/BaseFont/mORMotTestSans', s), 1,
+      'one font object for the face');
+  finally
+    Stream.Free;
+  end;
+end;
+
+procedure TPdfSmokeTests.TestPostScriptNameFallback;
+const
+  // a family name beyond ASCII, so TtfFontPostcriptName reads the name table
+  FAKE_NAME: RawUtf8 = {$ifdef HASCODEPAGE} 'Fak'#$00E9' Face'
+    {$else} 'Fak'#$C3#$A9' Face' {$endif};
+var
+  PDF: TPdfDocument;
+  Stream: TMemoryStream;
+  previous: IFontProvider;
+  s: RawByteString;
+begin
+  { a face without an English (3,1) PostScript name gave an empty /BaseFont }
+  Stream := TMemoryStream.Create;
+  previous := SwapInNamelessFace(FAKE_NAME);
+  try
+    PDF := TPdfDocument.Create(false, 0, pdfaNone);
+    try
+      PDF.CompressionMethod := cmNone;
+      PDF.AddTrueTypeFont(FAKE_NAME);
+      PDF.AddPage;
+      PDF.Canvas.SetFont(FAKE_NAME, 12, [], PDF_DEFAULT_CHARSET);
+      PDF.Canvas.TextOut(40, 700, 'Wi');
+      PDF.SaveToStream(Stream);
+    finally
+      PDF.Free;
+    end;
+    s := StreamToRaw(Stream);
+    Check(PosEx('/BaseFont/Fak', s) > 0, 'the family name as /BaseFont');
+  finally
+    FontProvider := previous;
+    Stream.Free;
+  end;
+end;
+
+procedure TPdfSmokeTests.TestNewDocDropsMetadata;
+var
+  PDF: TPdfDocument;
+  Stream: TMemoryStream;
+  s: RawByteString;
+begin
+  { NewDoc frees every object: the metadata stream of PDF/A stayed in
+    fMetaData, so the tagged setup took it as written and saved a freed one }
+  Check(EnsureTestFonts, 'the test fonts registered');
+  Stream := TMemoryStream.Create;
+  try
+    PDF := TPdfDocument.Create(false, 0, pdfa3U);
+    try
+      PDF.CompressionMethod := cmNone;
+      PDF.PdfA := pdfaNone; // NewDoc
+      PDF.Tagged := true;
+      PDF.AddPage;
+      PDF.Canvas.BeginStructContent(psrP);
+      PDF.Canvas.SetFont(TEST_SANS, 12, [], TEST_FONT_CHARSET);
+      DrawUtf8Text(PDF, 40, 700, 'Renewed');
+      PDF.Canvas.EndStructContent;
+      PDF.SaveToStream(Stream);
+    finally
+      PDF.Free;
+    end;
+    s := StreamToRaw(Stream);
+    Check(PosEx('/Metadata', s) > 0, 'a metadata stream');
+    Check(PosEx('pdfuaid:part', s) > 0, 'written by the tagged setup');
+    Check(PosEx('pdfaid:part', s) = 0, 'no PDF/A packet left');
+  finally
+    Stream.Free;
+  end;
+end;
+
+procedure TPdfSmokeTests.TestCatalogGetters;
+var
+  PDF: TPdfDocument;
+begin
+  PDF := TPdfDocument.Create(false, 0, pdfaNone);
+  try
+    Check(PDF.Root.HasData, 'the catalog has its dictionary');
+    PDF.Root.NonFullScreenPageMode := pmUseOutlines;
+    Check(PDF.Root.NonFullScreenPageMode = pmUseOutlines,
+      'NonFullScreenPageMode read where it is written');
+  finally
+    PDF.Free;
+  end;
+end;
+
+{ the header of a JPEG of Components (1 gray, 3 RGB, 4 CMYK), long enough
+  for GetJpegSize - the scan data does not matter to the writer; built from
+  numbers, as binary data must be }
+function FakeJpeg(Components: integer): RawByteString;
+const
+  // SOI, APP0 of 90 bytes (its 88 data bytes follow as zeros)
+  HEAD: array[0..5] of byte = ($ff, $d8, $ff, $e0, $00, $5a);
+  // SOF0 of 17 bytes: 8 bits, 16 x 32, then the component count
+  SOF: array[0..8] of byte = ($ff, $c0, $00, $11, $08, $00, $10, $00, $20);
+var
+  p: PByteArray;
+  i, n: integer;
+begin
+  n := length(HEAD) + 88 + length(SOF) + 1 + Components * 3 + 2 + 8;
+  SetLength(result, n);
+  FillCharFast(pointer(result)^, n, 0);
+  p := pointer(result);
+  MoveFast(HEAD, p[0], length(HEAD));
+  i := length(HEAD) + 88;
+  MoveFast(SOF, p[i], length(SOF));
+  inc(i, length(SOF));
+  p[i] := Components;
+  inc(i);
+  FillCharFast(p[i], Components * 3, 1);
+  inc(i, Components * 3);
+  p[i] := $ff; // EOI
+  p[i + 1] := $d9;
+end;
+
+function JpegPdf(Components: integer; Direct: boolean): RawByteString;
+var
+  PDF: TPdfDocument;
+  Stream, jpg: TMemoryStream;
+  img: TPdfImage;
+  data: RawByteString;
+begin
+  data := FakeJpeg(Components);
+  Stream := TMemoryStream.Create;
+  jpg := TMemoryStream.Create;
+  try
+    PDF := TPdfDocument.Create(false, 0, pdfaNone);
+    try
+      PDF.CompressionMethod := cmNone;
+      PDF.AddPage;
+      if Direct then
+      begin
+        jpg.WriteBuffer(pointer(data)^, length(data));
+        img := TPdfImage.CreateJpegDirect(PDF, jpg, true);
+      end
+      else
+        img := TPdfImage.CreateJpeg(PDF, pointer(data), length(data), 32, 16, true);
+      PDF.AddXObject('img', img);
+      PDF.Canvas.DrawXObject(0, 0, 32, 16, 'img');
+      PDF.SaveToStream(Stream);
+    finally
+      PDF.Free;
+    end;
+    result := StreamToRaw(Stream);
+  finally
+    jpg.Free;
+    Stream.Free;
+  end;
+end;
+
+procedure TPdfSmokeTests.TestJpegColorSpace;
+var
+  PDF: TPdfDocument;
+  jpg: TMemoryStream;
+  data: RawByteString;
+  raised: boolean;
+begin
+  Check(PosEx('/ColorSpace/DeviceGray', JpegPdf(1, false)) > 0,
+    'CreateJpeg: a gray JPEG is DeviceGray');
+  Check(PosEx('/ColorSpace/DeviceRGB', JpegPdf(3, false)) > 0,
+    'CreateJpeg: an RGB JPEG is DeviceRGB');
+  Check(PosEx('/ColorSpace/DeviceGray', JpegPdf(1, true)) > 0,
+    'CreateJpegDirect: gray');
+  { not a JPEG, or one of four components: CreateJpegDirect left an image
+    without data or colour space; both raise now }
+  data := 'not a JPEG at all';
+  jpg := TMemoryStream.Create;
+  try
+    jpg.WriteBuffer(pointer(data)^, length(data));
+    PDF := TPdfDocument.Create(false, 0, pdfaNone);
+    try
+      raised := false;
+      try
+        TPdfImage.CreateJpegDirect(PDF, jpg, true).Free;
+      except
+        on EPdfInvalidValue do
+          raised := true;
+      end;
+      Check(raised, 'CreateJpegDirect refuses what is no JPEG');
+      data := FakeJpeg(4);
+      jpg.Clear;
+      jpg.WriteBuffer(pointer(data)^, length(data));
+      raised := false;
+      try
+        TPdfImage.CreateJpegDirect(PDF, jpg, true).Free;
+      except
+        on EPdfInvalidValue do
+          raised := true;
+      end;
+      Check(raised, 'CreateJpegDirect refuses a CMYK JPEG');
+      raised := false;
+      try
+        TPdfImage.CreateJpeg(PDF, pointer(data), length(data), 32, 16, true).Free;
+      except
+        on EPdfInvalidValue do
+          raised := true;
+      end;
+      Check(raised, 'CreateJpeg refuses a CMYK JPEG');
+    finally
+      PDF.Free;
+    end;
+  finally
+    jpg.Free;
+  end;
+end;
+
+procedure TPdfSmokeTests.TestZeroAdvanceMeasured;
+const
+  FATHA: array[0..1] of WideChar = (WideChar($064E), #0);
+var
+  PDF: TPdfDocument;
+begin
+  { a combining mark advances by 0 (hmtx of the test font); it was taken
+    for a character the face lacks and measured by /DW or the fallback }
+  Check(EnsureTestFonts, 'the test fonts registered');
+  PDF := TPdfDocument.Create(false, 0, pdfaNone);
+  try
+    PDF.EmbeddedTtf := true;
+    PDF.AddPage;
+    PDF.Canvas.SetFont(TEST_ARABIC, 12, [], TEST_FONT_CHARSET);
+    CheckSame(PDF.Canvas.UnicodeTextWidth(@FATHA), 0, 1E-6, 'fatha measures 0');
+  finally
+    PDF.Free;
+  end;
+  // a face without the mark: measured in the fallback font, also at 0
+  PDF := TPdfDocument.Create(false, 0, pdfaNone);
+  try
+    PDF.EmbeddedTtf := true;
+    PDF.UseFontFallBack := true;
+    PDF.FontFallBackName := TEST_ARABIC;
+    PDF.AddPage;
+    PDF.Canvas.SetFont(TEST_SANS, 12, [], TEST_FONT_CHARSET);
+    CheckSame(PDF.Canvas.UnicodeTextWidth(@FATHA), 0, 1E-6,
+      'fatha measures 0 in the fallback font');
+  finally
+    PDF.Free;
   end;
 end;
 
