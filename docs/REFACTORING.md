@@ -93,7 +93,11 @@ session (Windows: per compiler) does exactly this:
    `mormot_demo` print that date: with the same valid value, unchanged demo
    output compares equal across days. A folder made before (Phase 1b) differs
    in the printed date, and possibly in what it moves (the text after it, the
-   subset) - look at every difference
+   subset) - look at every difference. `mormot_demo` prints the rows of
+   `examples/mormot_demo/data/mormot_demo.db`, which is not versioned: a
+   missing one is created with the demo's sample data, 200 orders, while a
+   filled one is kept - a `Project10.db` from before 2026-10-12, 205
+   orders, gives a longer table. Delete it once
 5. `tagged_unicode_<system>.pdf` from `test_runner`'s folder copied into it
 6. Reported: the count, the golden result, `pdfcheck`'s output
 
