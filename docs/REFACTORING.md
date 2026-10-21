@@ -233,7 +233,13 @@ checked against that record:
    `mormot.lib.core`, `46ea111a1` and `15fb2328a` the table directory
    checksum of `ReduceTtf` and the bidi level in `mormot.lib.uniscribe`;
    checked in PR #82 - the fixes and their tests are Windows only, so the
-   Linux CI pin in `linux.yml` stays at `287ef426f`).
+   Linux CI pin in `linux.yml` stayed at `287ef426f`; after it `3d9cc3ffb`,
+   a comment of `mormot.lib.uniscribe`), then `86bca4996`
+   (2026-10-21, `mormot.lib.freetype` and `mormot.lib.harfbuzz` in the
+   source form: no column alignment, the trunk's spelling, one statement
+   per line - the same object code on Linux aarch64 - and no `with` in the
+   subsetter; `test_runner` 1371/1371 on Linux aarch64, 1404/1404 on macOS
+   aarch64, golden files unchanged; the Linux CI pin moves with it).
    **Checked:** against `d60cc6e80`, today's `main`,
    `test_runner` 259/259 on Windows (FPC Win64, Delphi 7, Delphi 2010),
    298/298 on Linux, 317/317 on macOS (fpcupdeluxe, FPC 3.2.3). Against
