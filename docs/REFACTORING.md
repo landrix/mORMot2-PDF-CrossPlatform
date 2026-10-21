@@ -232,8 +232,8 @@ checked against that record:
    `15fb2328a` (2026-10-20, the review fixes: `c3b4cb38b` a comment in
    `mormot.lib.core`, `46ea111a1` and `15fb2328a` the table directory
    checksum of `ReduceTtf` and the bidi level in `mormot.lib.uniscribe`;
-   checked in PR #82 - Windows only, so the Linux CI pin in `linux.yml`
-   stays at `287ef426f`).
+   checked in PR #82 - the fixes and their tests are Windows only, so the
+   Linux CI pin in `linux.yml` stays at `287ef426f`).
    **Checked:** against `d60cc6e80`, today's `main`,
    `test_runner` 259/259 on Windows (FPC Win64, Delphi 7, Delphi 2010),
    298/298 on Linux, 317/317 on macOS (fpcupdeluxe, FPC 3.2.3). Against

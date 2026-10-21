@@ -24,7 +24,8 @@ concurrency:
 env:
   # the pinned commit (docs/REFACTORING.md, Phase 0 step 3): during the
   # refactoring a commit of the font-layer branch of landrix/mORMot2, which
-  # is the trunk (merged in, last on 2026-10-18) plus the new mormot.lib.* units
+  # is the trunk (merged in, last on 2026-10-18) plus the new mormot.lib.* units;
+  # Linux stays at 287ef426f, the later pins change no code Linux compiles
   MORMOT2_REPO: landrix/mORMot2
   MORMOT2_COMMIT: 287ef426fc504b3ba0e5adf3a390eda1b76c92e2
   TARGET: x86_64-linux
