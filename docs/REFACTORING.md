@@ -93,7 +93,14 @@ session (Windows: per compiler) does exactly this:
    `mormot_demo` print that date: with the same valid value, unchanged demo
    output compares equal across days. A folder made before (Phase 1b) differs
    in the printed date, and possibly in what it moves (the text after it, the
-   subset) - look at every difference
+   subset) - look at every difference. `mormot_demo` prints the rows of
+   `examples/mormot_demo/data/mormot_demo.db`, which is not versioned: a
+   missing one is seeded with the demo's 200 orders, a filled one is kept.
+   A session uses the seeded data: the larger `Project10.db` the demo's
+   README offers (205 orders of 1988-1996) gives a different table on every
+   page. Where it was saved as `data/mormot_demo.db`, delete that file once
+   per checkout; the next run seeds it. A folder made with it differs from
+   a seeded session in `mormot_demo`
 5. `tagged_unicode_<system>.pdf` from `test_runner`'s folder copied into it
 6. Reported: the count, the golden result, `pdfcheck`'s output
 

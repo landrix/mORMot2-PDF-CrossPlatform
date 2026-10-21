@@ -63,6 +63,9 @@ curl -L -o data/mormot_demo.db \
   https://raw.githubusercontent.com/martin-doyle/mORMot2-Examples/main/10-InvoiceExample/Data/Project10.db
 ```
 
+A check session uses the seeded data instead
+([A Check Session](../../docs/REFACTORING.md#a-check-session--the-same-on-every-platform)).
+
 On Linux the batch mode still needs a display, because the LCL measures the
 text — on a headless machine run it under `xvfb-run`. macOS needs none.
 
