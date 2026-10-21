@@ -228,7 +228,12 @@ checked against that record:
    `test_runner` 1277/1277 on Windows aarch64 (FPC 3.3.1), Delphi 7 and
    Delphi 13 Win32/Win64, the dproj built with msbuild, 1305/1305 on Linux
    aarch64, 1338/1338 on macOS aarch64, golden files unchanged everywhere;
-   the demo PDFs identical to the old pin - 7 on Windows, 8 on Linux).
+   the demo PDFs identical to the old pin - 7 on Windows, 8 on Linux), then
+   `15fb2328a` (2026-10-20, the review fixes: `c3b4cb38b` a comment in
+   `mormot.lib.core`, `46ea111a1` and `15fb2328a` the table directory
+   checksum of `ReduceTtf` and the bidi level in `mormot.lib.uniscribe`;
+   checked in PR #82 - the fixes and their tests are Windows only, so the
+   Linux CI pin in `linux.yml` stays at `287ef426f`).
    **Checked:** against `d60cc6e80`, today's `main`,
    `test_runner` 259/259 on Windows (FPC Win64, Delphi 7, Delphi 2010),
    298/298 on Linux, 317/317 on macOS (fpcupdeluxe, FPC 3.2.3). Against
