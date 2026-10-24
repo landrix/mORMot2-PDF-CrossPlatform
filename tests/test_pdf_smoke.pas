@@ -101,6 +101,16 @@ type
     procedure TestPostScriptNameFallback;
     /// switching PDF/A off renews the document, its metadata stream included
     procedure TestNewDocDropsMetadata;
+    {$ifndef NO_USE_PDFSECURITY}
+    /// an encrypted document renewed by NewDoc saves with its /Encrypt
+    procedure TestNewDocKeepsEncryption;
+    /// a document renewed by NewDoc encrypts with its own RC4 object keys
+    procedure TestNewDocRenewsObjectKeys;
+    {$endif NO_USE_PDFSECURITY}
+    /// NewDoc ends a direct save left open
+    procedure TestNewDocEndsDirectSave;
+    /// NewDoc closes an artifact left open on the freed page
+    procedure TestNewDocClosesArtifact;
     /// the catalog getters read what the setters wrote
     procedure TestCatalogGetters;
     /// a JPEG's colour space follows its components; a non-JPEG is refused
@@ -2416,6 +2426,121 @@ begin
     Check(PosEx('pdfaid:part', s) = 0, 'no PDF/A packet left');
   finally
     Stream.Free;
+  end;
+end;
+
+{$ifndef NO_USE_PDFSECURITY}
+
+procedure TPdfSmokeTests.TestNewDocKeepsEncryption;
+var
+  PDF: TPdfDocument;
+  Stream: TMemoryStream;
+begin
+  { NewDoc freed the /Encrypt dictionary with the old trailer but kept the
+    reference: attaching the encryption again wrote into the freed object }
+  Stream := TMemoryStream.Create;
+  try
+    PDF := TPdfDocument.Create(false, 0, pdfaNone,
+      TPdfEncryption.New(elRC4_40, '', 'owner', PDF_PERMISSION_ALL));
+    try
+      PDF.CompressionMethod := cmNone;
+      PDF.AddPage;
+      PDF.NewDoc;
+      PDF.AddPage;
+      PDF.SaveToStream(Stream);
+    finally
+      PDF.Free;
+    end;
+    Check(PosEx('/Encrypt', StreamToRaw(Stream)) > 0, 'still encrypted');
+  finally
+    Stream.Free;
+  end;
+end;
+
+procedure TPdfSmokeTests.TestNewDocRenewsObjectKeys;
+var
+  PDF: TPdfDocument;
+  Stream: TMemoryStream;
+  first, second: RawByteString;
+begin
+  { RC4 caches the key of the last object it encrypted: the Info dictionary
+    is the last of one save and the first of the next, under the same object
+    number, so the document renewed by NewDoc kept the key of the old file ID }
+  Stream := TMemoryStream.Create;
+  try
+    PDF := TPdfDocument.Create(false, 0, pdfaNone,
+      TPdfEncryption.New(elRC4_128, '', 'owner', PDF_PERMISSION_ALL));
+    try
+      PDF.CompressionMethod := cmNone;
+      PDF.Info.Data.AddItemText('Author', 'AAAAAAAA');
+      PDF.AddPage;
+      PDF.SaveToStream(Stream);
+      first := PdfStringAfter(StreamToRaw(Stream), '/Author');
+      PDF.NewDoc; // a new file ID, so a new key
+      PDF.Info.Data.AddItemText('Author', 'AAAAAAAA');
+      PDF.AddPage;
+      Stream.Clear;
+      PDF.SaveToStream(Stream);
+      second := PdfStringAfter(StreamToRaw(Stream), '/Author');
+    finally
+      PDF.Free;
+    end;
+    CheckEqual(length(second), 8, 'the author, encrypted');
+    Check(second <> first, 'encrypted with the key of the new document');
+  finally
+    Stream.Free;
+  end;
+end;
+
+{$endif NO_USE_PDFSECURITY}
+
+procedure TPdfSmokeTests.TestNewDocEndsDirectSave;
+var
+  PDF: TPdfDocument;
+  left, Stream: TMemoryStream;
+begin
+  { the writer of a SaveToStreamDirectBegin never ended stayed after NewDoc:
+    the next save raised "called twice" }
+  left := TMemoryStream.Create;
+  Stream := TMemoryStream.Create;
+  try
+    PDF := TPdfDocument.Create(false, 0, pdfaNone);
+    try
+      PDF.CompressionMethod := cmNone;
+      PDF.AddPage;
+      PDF.SaveToStreamDirectBegin(left);
+      PDF.NewDoc;
+      PDF.AddPage;
+      PDF.SaveToStream(Stream);
+    finally
+      PDF.Free;
+    end;
+    Check(PosEx('%%EOF', StreamToRaw(Stream)) > 0, 'saved after NewDoc');
+  finally
+    Stream.Free;
+    left.Free;
+  end;
+end;
+
+procedure TPdfSmokeTests.TestNewDocClosesArtifact;
+var
+  PDF: TPdfDocument;
+begin
+  { an artifact open on the page NewDoc freed made the next BeginArtifact
+    raise: the canvas still took it as open }
+  PDF := TPdfDocument.Create(false, 0, pdfaNone);
+  try
+    PDF.Tagged := true;
+    PDF.AddPage;
+    PDF.Canvas.BeginArtifact;
+    PDF.NewDoc;
+    PDF.Tagged := true;
+    PDF.AddPage;
+    PDF.Canvas.BeginArtifact;
+    PDF.Canvas.EndArtifact;
+    Check(true, 'an artifact opened and closed after NewDoc');
+  finally
+    PDF.Free;
   end;
 end;
 
