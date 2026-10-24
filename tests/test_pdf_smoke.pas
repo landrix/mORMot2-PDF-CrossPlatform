@@ -91,6 +91,12 @@ type
     procedure TestAddFontKeepsFallback;
     /// AddTrueTypeFont keeps the fonts created before it usable
     procedure TestAddFontKeepsCreatedFonts;
+    /// AddTrueTypeFont keeps the face a raster font was resolved to
+    procedure TestAddFontKeepsRasterFont;
+    /// a raster font asked for as fixed-width is resolved as such
+    procedure TestRasterFontFixedWidth;
+    /// a raster font follows a change of the fallback font
+    procedure TestRasterFontFollowsFallback;
     /// a face without an English PostScript name keeps its family name
     procedure TestPostScriptNameFallback;
     /// switching PDF/A off renews the document, its metadata stream included
@@ -2262,6 +2268,86 @@ begin
       'one font object for the face');
   finally
     Stream.Free;
+  end;
+end;
+
+procedure TPdfSmokeTests.TestAddFontKeepsRasterFont;
+const
+  UNKNOWN = 'No Such mORMot Font';
+var
+  PDF: TPdfDocument;
+  form: TPdfFormWithCanvas;
+begin
+  { the index an unknown (raster) font name was resolved to is cached: after
+    the sort of AddTrueTypeFont it named the face before it - through the
+    canvas of a form as well }
+  Check(EnsureTestFonts, 'the test fonts registered');
+  PDF := TPdfDocument.Create(false, 0, pdfaNone);
+  try
+    PDF.FontFallBackName := TEST_SANS;
+    form := TPdfFormWithCanvas.Create(PDF, 200, 100);
+    PDF.AddXObject('FormR', form); // owned by the document from here
+    form.Canvas.SetFont(UNKNOWN, 12, [], TEST_FONT_CHARSET); // resolved, cached
+    PDF.AddPage;
+    PDF.Canvas.SetFont(UNKNOWN, 12, [], TEST_FONT_CHARSET);
+    Check(PDF.AddTrueTypeFont('!sorts first'), 'a new name added');
+    // a style not created yet: made from the cached index
+    Check(PDF.Canvas.SetFont(UNKNOWN, 12, [pfsBold], TEST_FONT_CHARSET) =
+          PDF.Canvas.SetFont(TEST_SANS, 12, [pfsBold], TEST_FONT_CHARSET),
+      'the raster font is still the fallback face');
+    Check(form.Canvas.SetFont(UNKNOWN, 12, [pfsItalic], TEST_FONT_CHARSET) =
+          PDF.Canvas.SetFont(TEST_SANS, 12, [pfsItalic], TEST_FONT_CHARSET),
+      'on the canvas of a form too');
+    form.CloseCanvas;
+  finally
+    PDF.Free;
+  end;
+end;
+
+procedure TPdfSmokeTests.TestRasterFontFixedWidth;
+const
+  UNKNOWN = 'No Such mORMot Font';
+var
+  PDF: TPdfDocument;
+begin
+  { the cache of a resolved raster font name ignored AIsFixedWidth: a name
+    resolved to the proportional fallback stayed it when asked for as fixed
+    width, which takes Courier New - where Courier New is missing, both are
+    the fallback }
+  Check(EnsureTestFonts, 'the test fonts registered');
+  PDF := TPdfDocument.Create(false, 0, pdfaNone);
+  try
+    PDF.FontFallBackName := TEST_SANS;
+    PDF.AddPage;
+    PDF.Canvas.SetFont(UNKNOWN, 12, [], TEST_FONT_CHARSET); // resolved, cached
+    Check(PDF.Canvas.SetFont(UNKNOWN, 12, [], TEST_FONT_CHARSET, -1, true) =
+          PDF.Canvas.SetFont('Courier New', 12, [], TEST_FONT_CHARSET),
+      'fixed width: Courier New');
+  finally
+    PDF.Free;
+  end;
+end;
+
+procedure TPdfSmokeTests.TestRasterFontFollowsFallback;
+const
+  UNKNOWN = 'No Such mORMot Font';
+var
+  PDF: TPdfDocument;
+begin
+  { the cache of a resolved raster font name kept the fallback font it was
+    resolved to after FontFallBackName named another one }
+  Check(EnsureTestFonts, 'the test fonts registered');
+  PDF := TPdfDocument.Create(false, 0, pdfaNone);
+  try
+    PDF.FontFallBackName := TEST_SANS;
+    PDF.AddPage;
+    PDF.Canvas.SetFont(UNKNOWN, 12, [], TEST_FONT_CHARSET); // resolved, cached
+    PDF.FontFallBackName := TEST_ARABIC;
+    Check(PDF.Canvas.SetFont(UNKNOWN, 12, [], TEST_FONT_CHARSET) =
+          PDF.Canvas.SetFont(TEST_ARABIC, 12, [], TEST_FONT_CHARSET),
+      'the new fallback font');
+  finally
+    PDF.Free;
   end;
 end;
 
