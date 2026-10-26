@@ -512,13 +512,32 @@ of `ExtTextOut` are stored as called: `BoxExclI`. `BoxI` takes one logical
 unit off; the EMF renderer no longer uses it for shapes and fills, but still
 for `EMR_INTERSECTCLIPRECT` and the clip rectangle of `ExtTextOut`, which are
 exclusive too - one unit too narrow there (ROADMAP "Review Findings Not
-Fixed Yet", item 5). The corners of
+Fixed Yet", item 4). The corners of
 `RoundRectI` go through the mapping as the coordinates do. The pixel is one
 of the mapping `fWinSize`/`fViewSize`; the metric map modes set that mapping
 from `fPrinterPxPerInch` (`TPdfEnum.ScaleMatrix`), not from the reference DC,
 so there it is an approximation. Under a world scale the pixel is not
 divided by the world factor: the record holds integer logical units, what GDI
-rounds to is not measured yet (ROADMAP, item 6).
+rounds to is not measured yet (ROADMAP, item 5).
+
+The clip of `EMR_EXTSELECTCLIPRGN` is a `q ... W n` of the canvas: PDF can
+only narrow a clip, so a new one needs the `Q` of the one before. `TPdfEnum`
+keeps every region as PDF boxes (`fClipRegions`), each state names its own
+(`ClipRegion`, saved and restored with the state), and `SelectClip` makes the
+canvas hold that one (`fClipActive`): from `ExtSelectClipRgn`, `RestoreDC`
+and, with 0, at the end of `RenderMetaFile`. `SetMetaRgn` keeps the `q` of the
+clip as part of the meta region: a node of `fMetaClips` inside the ones kept
+before it, named by the state (`MetaClip`); a later clip opens its `q` inside,
+and `SelectClip` closes a node only when the state it restores lies outside.
+A `Q` restores the PDF colours, line width and dash, so `SelectClip` forgets
+the cached `fFillColor`, `fStrokeColor`, `fPenWidth` and `fPenStyle`. `q` and
+`Q` are not allowed within a path, while GDI may change the clip between
+`BeginPath` and `StrokePath`: the engine writes the path as it comes, so
+`SelectClip` waits while `fPathOpen` and `PathEnded` (the painting records,
+`EMR_ABORTPATH`, `EMR_SELECTCLIPPATH`) applies the clip after - the path is
+painted under the clip of before (ROADMAP "Review Findings Not Fixed Yet",
+item 6). `ScaleMatrix` does not stroke a pending line then either, and
+`RenderMetaFile` ends a path never painted (`MetaFileClipRestoreDC`).
 
 Records `TPdfEnum` reads through its own declarations: `EMR_CREATEBRUSHINDIRECT`
 and `EMR_EXTCREATEPEN` (`TEmrCreateBrushIndirect32`, `TEmrExtCreatePen32`).
