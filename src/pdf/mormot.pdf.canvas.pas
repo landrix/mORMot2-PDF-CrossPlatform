@@ -2008,6 +2008,12 @@ type
     MetaRgn: TPdfBox;      //clipping
     ClipRgn: TPdfBox;      //clipping
     ClipRgnNull: boolean;  //clipping
+    // the region of EMR_EXTSELECTCLIPRGN, 1-based in TPdfEnum.fClipRegions:
+    // 0 if none
+    ClipRegion: integer;
+    // the regions EMR_SETMETARGN made part of the meta region, 1-based in
+    // TPdfEnum.fMetaClips: 0 if none
+    MetaClip: integer;
     MappingMode: integer;
     PolyFillMode: integer;
     StretchBltMode: integer;
@@ -2069,10 +2075,27 @@ type
     // the saved states, as deep as the metafile saves them: grown by SaveDC
     // only, so the st pointer of EnumEMFFunc stays valid after other records
     fDC: array of TPdfEnumState;
+    // the clip regions as PDF boxes, kept so that RestoreDC can apply the
+    // one of the state it restores
+    fClipRegions: array of array of TPdfBox;
+    // a region SetMetaRgn kept, inside the ones kept before it (Parent)
+    fMetaClips: array of record
+      Region, Parent: integer;
+    end;
+    // what the q of the canvas hold: fMetaActive, then fClipActive; 0 if none
+    fMetaActive: integer;
+    fClipActive: integer;
+    // from EMR_BEGINPATH until the path is painted or aborted
+    fPathOpen: boolean;
   public
     constructor Create(ACanvas: TPdfCanvas);
     procedure SaveDC;
     procedure RestoreDC(Relative: integer);
+    // make Meta and Region (0 = none) the clip of the canvas: Q of the q
+    // that are not part of it
+    procedure SelectClip(Meta, Region: integer);
+    // the path is painted or aborted: the clip selected meanwhile applies
+    procedure PathEnded;
     procedure NeedPen;
     procedure NeedBrushAndPen;
     procedure FlushPenBrush;
@@ -2763,6 +2786,7 @@ begin
       st^.MappingMode := PEMRSetMapMode(R)^.iMode;
     EMR_BEGINPATH:
       begin
+        E.fPathOpen := true;
         E.fCanvas.NewPath;
         if not st^.Moved then
         begin
@@ -2772,10 +2796,12 @@ begin
       end;
     EMR_ENDPATH:
       E.fCanvas.fNewPath := false;
-    EMR_ABORTPATH:
+    EMR_ABORTPATH,
+    EMR_SELECTCLIPPATH: // the clip of a path is not applied
       begin
         E.fCanvas.NewPath;
         E.fCanvas.fNewPath := false;
+        E.PathEnded;
       end;
     EMR_CLOSEFIGURE:
       E.fCanvas.ClosePath;
@@ -2788,6 +2814,7 @@ begin
         end;
         E.fCanvas.NewPath;
         E.fCanvas.fNewPath := false;
+        E.PathEnded;
       end;
     EMR_STROKEPATH:
       begin
@@ -2798,6 +2825,7 @@ begin
         end;
         E.fCanvas.NewPath;
         E.fCanvas.fNewPath := false;
+        E.PathEnded;
       end;
     EMR_STROKEANDFILLPATH:
       begin
@@ -2822,6 +2850,7 @@ begin
         end;
         E.fCanvas.NewPath;
         E.fCanvas.fNewPath := false;
+        E.PathEnded;
       end;
     EMR_SETPOLYFILLMODE:
       st^.PolyFillMode := PEMRSetPolyFillMode(R)^.iMode;
@@ -2925,6 +2954,11 @@ begin
       EnumEnhMetaFile(TPdfDocumentAccess(A.fDoc).EmfDC, MF.Handle, @EnumEMFFunc, E, TRect(R));
       {$endif FPC}
     finally
+      if E.fPathOpen then
+        C.NewPath; // a path never painted, before the Q
+      E.fPathOpen := false;
+      E.SelectClip(0, 0); // the q of a clip still selected
+      A.fNewPath := false;
       C.GRestore;
     end;
   finally
@@ -3434,6 +3468,7 @@ begin
      (Relative < -fDCIndex) then
     exit;
   inc(fDCIndex, Relative);
+  SelectClip(fDC[fDCIndex].MetaClip, fDC[fDCIndex].ClipRegion);
 end;
 
 procedure TPdfEnum.SaveDC;
@@ -3453,7 +3488,8 @@ begin
   if fInlined then
   begin
     fInlined := false;
-    if not fDC[fDCIndex].pen.null then
+    if not fDC[fDCIndex].pen.null and
+       not fPathOpen then // StrokePath paints a path
       fCanvas.Stroke;
   end;
   fCanvas.fViewSize := fDC[fDCIndex].ViewSize;
@@ -3603,7 +3639,25 @@ begin
 end;
 
 procedure TPdfEnum.SetMetaRgn;
+var
+  n: integer;
 begin
+  if fDC[fDCIndex].ClipRegion <> 0 then
+  begin
+    n := length(fMetaClips);
+    SetLength(fMetaClips, n + 1);
+    fMetaClips[n].Region := fDC[fDCIndex].ClipRegion;
+    fMetaClips[n].Parent := fDC[fDCIndex].MetaClip;
+    if (fClipActive = fDC[fDCIndex].ClipRegion) and
+       (fMetaActive = fDC[fDCIndex].MetaClip) then
+    begin
+      // the q of the clip stays, as part of the meta region
+      fMetaActive := n + 1;
+      fClipActive := 0;
+    end; // else a path is open: SelectClip makes up for it after
+    fDC[fDCIndex].MetaClip := n + 1;
+    fDC[fDCIndex].ClipRegion := 0;
+  end;
   try
     if not fDC[fDCIndex].ClipRgnNull then
     begin
@@ -3642,8 +3696,7 @@ end;
 
 procedure TPdfEnum.ExtSelectClipRgn(data: PEMRExtSelectClipRgn);
 var
-  box: TPdfBox;
-  i: integer;
+  i, n: integer;
   d: PRgnData;
   pr: PRect;
   r: TRect;
@@ -3651,35 +3704,98 @@ begin
   // see http://www.codeproject.com/Articles/1944/Guide-to-WIN-Regions
   if data^.iMode <> RGN_COPY then
     exit; // we are handling RGN_COPY (5) only
-  if not fDC[fDCIndex].ClipRgnNull then // if current clip then finish
-  begin
-    fCanvas.GRestore;
-    fCanvas.NewPath;
-    fCanvas.fNewPath := false;
-    fDC[fDCIndex].ClipRgnNull := true;
-    fFillColor := -1;
-  end;
   if Data^.cbRgnData > 0 then
   begin
-    fCanvas.GSave;
-    fCanvas.NewPath;
-    fDC[fDCIndex].ClipRgnNull := false;
     d := @Data^.RgnData;
     pr := @d^.Buffer;
-    for i := 1 to d^.rdh.nCount do
+    n := length(fClipRegions);
+    SetLength(fClipRegions, n + 1);
+    SetLength(fClipRegions[n], d^.rdh.nCount);
+    for i := 0 to integer(d^.rdh.nCount) - 1 do
     begin
       r := pr^;
       inc(r.Bottom);
       inc(r.Right);
-      box := fCanvas.BoxI(r, false);
-      fCanvas.Rectangle(box.Left, box.Top, box.Width, box.Height);
+      fClipRegions[n][i] := fCanvas.BoxI(r, false);
       inc(pr);
     end;
+    fDC[fDCIndex].ClipRegion := n + 1;
+  end
+  else
+    fDC[fDCIndex].ClipRegion := 0;
+  fDC[fDCIndex].ClipRgnNull := fDC[fDCIndex].ClipRegion = 0;
+  SelectClip(fDC[fDCIndex].MetaClip, fDC[fDCIndex].ClipRegion);
+end;
+
+procedure TPdfEnum.SelectClip(Meta, Region: integer);
+
+  procedure Pop;
+  begin
+    fCanvas.GRestore;
+    fCanvas.NewPath;
+    // Q has restored the colours, the line width and the dash of before
+    fFillColor := -1;
+    fStrokeColor := -1;
+    fPenWidth := -1;
+    fPenStyle := -1;
+  end;
+
+  procedure Push(Index: integer);
+  var
+    i: integer;
+  begin
+    fCanvas.GSave;
+    fCanvas.NewPath;
+    for i := 0 to high(fClipRegions[Index - 1]) do
+      fCanvas.Rectangle(fClipRegions[Index - 1][i].Left,
+        fClipRegions[Index - 1][i].Top, fClipRegions[Index - 1][i].Width,
+        fClipRegions[Index - 1][i].Height);
     fCanvas.Closepath;
     fCanvas.Clip;
     fCanvas.NewPath;
-    fCanvas.FNewPath := false;
   end;
+
+  function Holds(Node, Target: integer): boolean;
+  begin // Node is Target or one it was kept inside
+    while (Target <> 0) and
+          (Target <> Node) do
+      Target := fMetaClips[Target - 1].Parent;
+    result := Target = Node;
+  end;
+
+  procedure PushMeta(Node: integer);
+  begin
+    if Node = fMetaActive then
+      exit;
+    PushMeta(fMetaClips[Node - 1].Parent);
+    Push(fMetaClips[Node - 1].Region);
+  end;
+
+begin
+  if fPathOpen or // q and Q are not allowed within a path: see PathEnded
+     ((Meta = fMetaActive) and
+      (Region = fClipActive)) then
+    exit;
+  if fClipActive <> 0 then
+    Pop;
+  while not Holds(fMetaActive, Meta) do
+  begin
+    Pop;
+    fMetaActive := fMetaClips[fMetaActive - 1].Parent;
+  end;
+  PushMeta(Meta);
+  fMetaActive := Meta;
+  if Region <> 0 then
+    Push(Region);
+  fClipActive := Region;
+  fCanvas.fNewPath := false;
+end;
+
+procedure TPdfEnum.PathEnded;
+begin
+  fPathOpen := false;
+  fDC[fDCIndex].Moved := false; // the next segment starts with its own m
+  SelectClip(fDC[fDCIndex].MetaClip, fDC[fDCIndex].ClipRegion);
 end;
 
 function TPdfEnum.GetClipRect: TPdfBox;

@@ -8,8 +8,8 @@ it produced in `.claude/skills/` — this file repeats neither.
 tagged output passes PAC 2024 with accepted hints only (W-1, W-2) and veraPDF
 `ua1`; PDF/A-3U with PDF/UA-1 is verified (R-17). Fonts are embedded and subset
 on all three platforms; tables carry `THead`/`TBody`/`TFoot` row groups.
-`test_runner` is green with 1448 assertions on Windows (FPC, Delphi 7,
-Delphi 2010 and Delphi 13), 1497 on macOS and 1464 on Linux (2026-10-26, pin `964874b88`). **Delphi:** layer
+`test_runner` is green with 1461 assertions on Windows (FPC, Delphi 7,
+Delphi 2010 and Delphi 13), 1510 on macOS and 1477 on Linux (2026-10-26, pin `964874b88`). **Delphi:** layer
 1, the TCanvas bridge and the `TGDIPages` core build on Delphi 7 (R-19, R-20
 steps 1–6) and on Delphi 2010, a Unicode Delphi (R-25); all six console demos
 and the `--export` of the two GUI demos give the same PDF as FPC. Delphi 13
@@ -72,6 +72,21 @@ v0.10.0 (2026-09-30).
   artifact left open made the next `BeginArtifact` raise;
   `TPdfDictionaryWrapper.HasData` was inverted and
   `TPdfCatalog.NonFullScreenPageMode` always read `pmUseNone`
+- **Fixed (EMF, Windows):** `EMR_RESTOREDC` kept the clip of
+  `EMR_EXTSELECTCLIPRGN` (`SelectClipRgn`): what was drawn after the
+  restore stayed clipped by the inner region, and a clip selected after
+  `SaveDC` left its `q` open - the content stream of such a metafile had
+  more `q` than `Q`, as had one that `SetMetaRgn` made part of the meta
+  region. The restored state's clip and meta region apply now, and every
+  clip is closed at the end. After a new clip the pen's colour, width and dash
+  are set again: the `Q` before it had reset them in the PDF, so a line
+  drawn with the same pen took those of before the old clip. A clip
+  changed between `BeginPath` and the painting of the path applies after
+  it (GDI paints the path under it: "Review Findings Not Fixed Yet", item
+  6): its `q` or `Q` came inside the path, and a `RestoreDC` there stroked
+  the path drawn so far, leaving the next segment without a start. A path
+  ended by `SelectClipPath` (whose clip is still not applied) or never
+  painted no longer keeps the next records in a path
 - **Fixed (EMF, Windows):** a world transform that only scales, alike on
   both axes, drew the text of a metafile turned by 180 degrees
   (`TPdfDocumentGdi`, `RenderMetaFile`) - the trunk's fix of 2026-10-08,
@@ -709,38 +724,41 @@ agents, each claim verified again by Codex) found 28 bugs; the ones fixed
 then are in "To Announce" - in `mormot.pdf`, in the report and the bridge,
 and in the Uniscribe backend (`ReduceTtf`, the bidi levels) - and `{#}` and
 `{total}` in body text are documented behaviour. These wait, each with a
-test that fails before its fix. Items 1 and 2 are also in the trunk's
-`mormot.ui.pdf`.
+test that fails before its fix. Items 1, 4, 5 and 6 are also in the
+trunk's `mormot.ui.pdf`.
 
 1. **Malformed fonts** (`mormot.pdf`): `TtfFontPostcriptName` reads the
    `name` records unchecked, `TPdfTtf.Create` and `GlyphHmtxWidth` the
    `head` and `hhea` fields (`UnitsPerEm`, `numOfLongHorMetrics`) without a
    length check - a corrupt face reads past its table. The format 4 `cmap`
    is checked since 2026-10-26 (To Announce)
-2. **EMF clipping after `RestoreDC`** (`mormot.pdf.canvas`, Windows):
-   `EMR_RESTOREDC` restores the saved state but not the PDF clip that
-   `EMR_EXTSELECTCLIPRGN` set with `q ... W n`: what is drawn after the
-   restore stays clipped, and the `q`/`Q` pairs can come out unbalanced.
-   Found with the EMF fixes of 2026-10-24; a small fix of its own
-3. **Preview** (`mormot.pdf.report.preview`): the window takes its size
+2. **Preview** (`mormot.pdf.report.preview`): the window takes its size
    from page 0 and the report's current margins, for every page
-4. **`Columns2` over a page break** (`mormot.pdf.report`): when the first
+3. **`Columns2` over a page break** (`mormot.pdf.report`): when the first
    column breaks onto a new page, the second one is recorded there, at the
    Y of the first page. Recording it on the first page instead splits the
    first column's paragraph in the tagged reading order (the renderer
    continues a block only from the command before): it needs the structure
    elements kept by block, decided with the tagging
-5. **EMF clip rectangles one unit too narrow** (`mormot.pdf.canvas`,
+4. **EMF clip rectangles one unit too narrow** (`mormot.pdf.canvas`,
    Windows): `EMR_INTERSECTCLIPRECT` and the clip rectangle of `ExtTextOut`
    are exclusive, as GDI records them, but still go through `BoxI`, which
    takes one logical unit off. Found with the boxes of #89; next: measure
    them as the shapes were (`MetaFileBoxes`), then `BoxExclI` with a test
-6. **The device pixel of a box under a world scale** (`mormot.pdf.canvas`,
+5. **The device pixel of a box under a world scale** (`mormot.pdf.canvas`,
    Windows): `DevPixelX`/`DevPixelY` (#89) are not divided by the world
    factor, so a shape under a world scale grows by more than one device
    pixel; the record holds integer logical units, so what GDI rounds to has
    to be measured first. For the metric map modes the pixel comes from
    `fPrinterPxPerInch`, not from the reference DC, an approximation too
+6. **EMF paths painted under the clip of before** (`mormot.pdf.canvas`,
+   Windows): the renderer writes a GDI path's operators as the records come,
+   and PDF allows no `q`/`Q` within a path, so a clip selected between
+   `BeginPath` and `StrokePath`/`FillPath` applies only after the painting;
+   GDI paints under it. The pen's `w`, `RG` and `d` also come between the
+   last segment and the paint operator, inside the path object. Next: buffer
+   the path from `EMR_BEGINPATH` and write it at the painting record after
+   the clip and the pen, as LibreOffice's EMF reader does; its own PR
 
 ### Underline and Strike-Out Are Not Drawn — bug, fix after R-28
 
@@ -1200,7 +1218,7 @@ chart library's bitmap is to be built only when someone asks for it.
 ### EMF/MetaFile and GDI+ Gradients — no work planned
 
 Windows-only (`TPdfDocumentGdi`), not portable. Its known bugs wait in
-"Review Findings Not Fixed Yet", item 2.
+"Review Findings Not Fixed Yet", items 4 to 6.
 
 ---
 
