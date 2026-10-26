@@ -769,8 +769,10 @@ trunk's `mormot.ui.pdf`.
    pen, so with `NULL_PEN` their `m l` - and in a tagged document their
    `/Artifact BMC` - stay open on the page until the next painting
    operator, which paints them too. The painting records of a path end them
-   first (`PathPaint`); the others not yet. Next: end them with `n` as
-   `EMR_POLYLINE` does, with a test
+   first (`PathPaint`); the others not yet. And a `LineTo` outside a path
+   strokes at once but stays pending (`fInlined`), so the next shape writes
+   a lone `S` before its own path. Next: end them with `n` as
+   `EMR_POLYLINE` does, drop the pending stroke, with a test
 
 ### Underline and Strike-Out Are Not Drawn — bug, fix after R-28
 

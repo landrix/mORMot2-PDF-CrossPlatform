@@ -1937,7 +1937,10 @@ begin
             (op = 'RG') or
             (op = 'rg') or
             (op = 'gs') or
-            (op = 'cm') then
+            (op = 'cm') or
+            (op = 'BMC') or
+            (op = 'BDC') or
+            (op = 'EMC') then
     begin
       if inpath then
         exit;
