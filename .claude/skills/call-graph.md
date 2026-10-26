@@ -686,7 +686,7 @@ CreateOrGetBitmapImage(Doc, Bitmap, DrawAt, ClipRc): name   (mormot.pdf.canvas)
 │                                custom PixelFormat converted to pf24bit first
 │    Doc.GetXObjectImageName(hash, W, H) - existing image: reuse its name
 │  new image:
-│        ForceJPEGCompression = 0:
+│        ForceJPEGCompression = 0, or a tmFixed bitmap (JPEG drops the key):
 │          CreateGraphicImage(Doc, Bitmap, true)
 │            VCL: ScanLine[] → TPdfImagePixels (ipfBgr24 / ipfBgrx32 /
 │            ipfIndexed8 with its palette; pf1/pf4 drawn to pf8)

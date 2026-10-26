@@ -70,6 +70,8 @@ type
     procedure BitmapReuse;
     procedure BitmapKeys;
     procedure BitmapJpeg;
+    /// a bitmap with a colour key stays lossless under ForceJPEGCompression
+    procedure BitmapJpegKey;
     procedure BitmapBridge;
     procedure MetaFileCanvas;
     procedure MetaFileRender;
@@ -92,6 +94,11 @@ type
     procedure MetaFileDIBitsKept;
     /// a printer resolution of 0 is asked again, not divided by
     procedure MetaFilePrinterRes;
+    /// the boxes as GDI records them: one device pixel inside for the shapes,
+    // exclusive for the fills, the corners of EMR_ROUNDRECT mapped
+    procedure MetaFileBoxes;
+    /// brushes and extended pens read in the layout of the EMF records
+    procedure MetaFileRecordLayout;
   end;
 
 {$endif PDF_HASVCLCANVAS}
@@ -1055,6 +1062,40 @@ begin
   CheckGolden('images_jpeg', pdf);
 end;
 
+procedure TPdfImageGoldenTests.BitmapJpegKey;
+var
+  doc: TPdfDocument;
+  plain, keyed: TBitmap;
+  b: TPdfBox;
+  txt, err: RawUtf8;
+begin
+  { ForceJPEGCompression made a JPEG of a bitmap with a colour key too: the
+    /Mask was lost, and the key colour altered (synopse/mORMot2#686) }
+  plain := NewBitmap(pf24bit, 7);
+  keyed := NewBitmap(pf24bit, 8);
+  doc := TPdfDocument.Create;
+  try
+    doc.Info.CreationDate := GOLDEN_DATE;
+    doc.StandardFontsReplace := true;
+    doc.ForceJPEGCompression := 80;
+    doc.AddPage;
+    b := Box(40, 700, IMG_W * 4, IMG_H * 8);
+    CreateOrGetBitmapImage(doc, plain, @b);
+    keyed.TransparentColor := $0000FF;
+    keyed.TransparentMode := tmFixed;
+    b := Box(40, 600, IMG_W * 4, IMG_H * 8);
+    CreateOrGetBitmapImage(doc, keyed, @b);
+    txt := NormalizePdf(SaveDoc(doc), err);
+  finally
+    doc.Free;
+    plain.Free;
+    keyed.Free;
+  end;
+  CheckEqual(err, '');
+  CheckEqual(CountOccurrences('/DCTDecode', txt), 1, 'the bitmap without a key');
+  CheckEqual(CountOccurrences('/Mask', txt), 1, 'the colour key kept');
+end;
+
 {$ifdef OSWINDOWS}
 
 // drawn the same into a TPdfDocumentGdi page and into a TMetaFile
@@ -1385,10 +1426,12 @@ const
   R_SAVEDC = 33;
   R_SELECTOBJECT = 37;
   R_RESTOREDC = 34;
+  R_CREATEBRUSHINDIRECT = 39;
   R_STRETCHDIBITS = 81;
   R_EXTTEXTOUTA = 83;
   R_EXTTEXTOUTW = 84;
   R_POLYPOLYLINE16 = 90;
+  R_EXTCREATEPEN = 95;
   R_POLYPOLYGON16 = 91;
   R_ALPHABLEND = 114;
 
@@ -1493,6 +1536,91 @@ end;
 // text of a metafile under world transforms: a pure uniform scale is no
 // rotation - the EMF TextOut took it for one and drew the text turned by 180
 // degrees, its text matrix negated (the trunk's a86d7e6fc)
+// the paths of the content that are painted, one item per path: its
+// construction lines (m, l, c, re); a path ended by n (a clip) is dropped
+function PaintedPaths(const Txt: RawUtf8): TRawUtf8DynArray;
+var
+  lines: TRawUtf8DynArray;
+  path, op: RawUtf8;
+  i, j, n: PtrInt;
+begin
+  result := nil;
+  lines := nil;
+  CsvToRawUtf8DynArray(pointer(Txt), lines, #10);
+  path := '';
+  for i := 0 to high(lines) do
+  begin
+    j := length(lines[i]);
+    while (j > 0) and
+          (lines[i][j] <> ' ') do
+      dec(j);
+    op := copy(lines[i], j + 1, maxInt);
+    if (op = 'm') or (op = 'l') or (op = 'c') or (op = 're') then
+      path := path + lines[i] + #10
+    else if op = 'n' then
+      path := ''
+    else if (op = 'f') or (op = 'f*') or (op = 'S') or (op = 's') or
+            (op = 'B') or (op = 'B*') or (op = 'b') or (op = 'b*') then
+    begin
+      if path <> '' then
+      begin
+        n := length(result);
+        SetLength(result, n + 1);
+        result[n] := path;
+      end;
+      path := '';
+    end;
+  end;
+end;
+
+// the box around the points of a path of PaintedPaths
+function PathBox(const Path: RawUtf8): TPdfBox;
+var
+  lines, v: TRawUtf8DynArray;
+  num: TDoubleDynArray;
+  x1, y1, x2, y2: double;
+  i, j, n: PtrInt;
+  first: boolean;
+begin
+  lines := nil;
+  CsvToRawUtf8DynArray(pointer(Path), lines, #10);
+  first := true;
+  x1 := 0;
+  y1 := 0;
+  x2 := 0;
+  y2 := 0;
+  for i := 0 to high(lines) do
+  begin
+    v := nil;
+    CsvToRawUtf8DynArray(pointer(lines[i]), v, ' ');
+    n := length(v) - 1; // the numbers, without the operator
+    SetLength(num, n);
+    for j := 0 to n - 1 do
+      num[j] := GetExtended(pointer(v[j]));
+    if v[n] = 're' then
+    begin
+      // x y w h: the second corner
+      num[2] := num[0] + num[2];
+      num[3] := num[1] + num[3];
+    end;
+    j := 0;
+    while j + 1 < n do
+    begin
+      if first or (num[j] < x1) then
+        x1 := num[j];
+      if first or (num[j] > x2) then
+        x2 := num[j];
+      if first or (num[j + 1] < y1) then
+        y1 := num[j + 1];
+      if first or (num[j + 1] > y2) then
+        y2 := num[j + 1];
+      first := false;
+      inc(j, 2);
+    end;
+  end;
+  result := Box(x1, y1, x2 - x1, y2 - y1);
+end;
+
 procedure TPdfImageGoldenTests.MetaFileWorldTransform;
 
   // how many text matrices of the content turn the text by 180 degrees
@@ -2071,6 +2199,136 @@ begin
   CheckEqual(zero, auto, 'asked again');
 end;
 
+procedure TPdfImageGoldenTests.MetaFileBoxes;
+
+  // the painted paths of a polygon and of four shapes on its corners,
+  // recorded at K logical units per pixel, VX and VY < 0 mirroring an axis
+  function Shapes(K, VX, VY: integer): TRawUtf8DynArray;
+  var
+    mf: TMetaFile;
+    mc: TMetaFileCanvas;
+    r: Windows.TRect; // not the TRect of mormot.pdf
+    pts: array[0..3] of Windows.TPoint;
+    i: integer;
+  begin
+    mf := TMetaFile.Create;
+    try
+      mf.Width := 100;
+      mf.Height := 100;
+      mc := TMetaFileCanvas.Create(mf, 0);
+      try
+        if K > 1 then
+        begin
+          SetMapMode(mc.Handle, MM_ANISOTROPIC);
+          SetWindowExtEx(mc.Handle, 100 * K, 100 * K, nil);
+          SetViewportExtEx(mc.Handle, VX, VY, nil);
+          SetViewportOrgEx(mc.Handle, 60 * ord(VX < 0), 60 * ord(VY < 0), nil);
+        end;
+        // the reference: GDI records the points of a polygon as they are
+        for i := 0 to 3 do
+        begin
+          pts[i].X := (10 + 40 * ord(i in [1, 2])) * K;
+          pts[i].Y := (10 + 40 * ord(i >= 2)) * K;
+        end;
+        Windows.Polygon(mc.Handle, pts, 4);
+        Windows.Rectangle(mc.Handle, 10 * K, 10 * K, 50 * K, 50 * K);
+        Windows.Ellipse(mc.Handle, 10 * K, 10 * K, 50 * K, 50 * K);
+        Windows.RoundRect(mc.Handle, 10 * K, 10 * K, 50 * K, 50 * K,
+          16 * K, 16 * K);
+        r.Left := 10 * K;
+        r.Top := 10 * K;
+        r.Right := 50 * K;
+        r.Bottom := 50 * K;
+        Windows.FillRect(mc.Handle, r, GetStockObject(BLACK_BRUSH));
+      finally
+        mc.Free;
+      end;
+      result := PaintedPaths(RenderedEmf(mf));
+    finally
+      mf.Free;
+    end;
+  end;
+
+  // each shape on the box of the polygon
+  procedure SameBoxes(const Paths: TRawUtf8DynArray; const Msg: string);
+  var
+    ref, b: TPdfBox;
+    i: integer;
+  begin
+    if CheckFailed(length(Paths) = 5, Msg) then
+      exit;
+    ref := PathBox(Paths[0]);
+    for i := 1 to 4 do
+    begin
+      b := PathBox(Paths[i]);
+      Check((Abs(b.Left - ref.Left) < 0.02) and
+            (Abs(b.Top - ref.Top) < 0.02) and
+            (Abs(b.Width - ref.Width) < 0.02) and
+            (Abs(b.Height - ref.Height) < 0.02), Msg);
+    end;
+  end;
+
+var
+  px, mapped: TRawUtf8DynArray;
+  i: integer;
+begin
+  { GDI records the right and bottom of Rectangle, Ellipse and RoundRect one
+    device pixel inside (49 for 50, 490 for 500 at 10 units per pixel; 500,110
+    for 100..500 with the axis mirrored) and a FillRect as an exclusive
+    EMR_BITBLT: BoxI removed one logical unit more from all of them,
+    RoundRectI none, and its corners were not mapped (synopse/mORMot2#686) }
+  px := Shapes(1, 100, 100);
+  mapped := Shapes(10, 100, 100);
+  SameBoxes(px, 'on the polygon');
+  SameBoxes(mapped, 'on the polygon at 10 units per pixel');
+  SameBoxes(Shapes(10, -100, -100), 'on the polygon, mirrored');
+  if length(mapped) = length(px) then
+    for i := 0 to high(px) do
+      CheckEqual(mapped[i], px[i], 'the same at 10 units per pixel');
+end;
+
+procedure TPdfImageGoldenTests.MetaFileRecordLayout;
+var
+  mf: TMetaFile;
+  mc: TMetaFileCanvas;
+  lb: TLogBrush;
+  bytes: RawByteString;
+  txt: RawUtf8;
+begin
+  { the windows unit of FPC 3.2.2 declares EMR_CREATEBRUSHINDIRECT and
+    EMR_EXTCREATEPEN with the native LOGBRUSH and EXTLOGPEN, whose ULONG_PTR
+    hatch moves the fields on Win64: every brush and extended pen was black }
+  mf := TMetaFile.Create;
+  try
+    mf.Width := 100;
+    mf.Height := 100;
+    mc := TMetaFileCanvas.Create(mf, 0);
+    try
+      DeleteObject(SelectObject(mc.Handle, CreateSolidBrush(RGB(255, 0, 0))));
+      Windows.Rectangle(mc.Handle, 10, 10, 50, 50);
+      lb.lbStyle := BS_SOLID;
+      lb.lbColor := RGB(0, 0, 255);
+      lb.lbHatch := 0;
+      DeleteObject(SelectObject(mc.Handle,
+        ExtCreatePen(PS_GEOMETRIC or PS_SOLID, 4, lb, 0, nil)));
+      MoveToEx(mc.Handle, 10, 80, nil);
+      LineTo(mc.Handle, 90, 80);
+    finally
+      mc.Free;
+    end;
+    bytes := EmfBytes(mf);
+    Check(length(EmfRecords(bytes, R_CREATEBRUSHINDIRECT)) > 0,
+      'recorded as EMR_CREATEBRUSHINDIRECT');
+    CheckEqual(length(EmfRecords(bytes, R_EXTCREATEPEN)), 1,
+      'recorded as EMR_EXTCREATEPEN');
+    txt := RenderedEmf(mf);
+  finally
+    mf.Free;
+  end;
+  Check(PosEx(#10'1 0 0 rg'#10, txt) > 0, 'the brush colour');
+  Check(PosEx(#10'0 0 1 RG'#10, txt) > 0, 'the extended pen colour');
+end;
+
 {$else}
 
 procedure TPdfImageGoldenTests.MetaFileCanvas;
@@ -2174,6 +2432,22 @@ var
   i: integer;
 begin
   for i := 1 to 3 do
+    Check(true, 'SKIP: metafiles are Windows only');
+end;
+
+procedure TPdfImageGoldenTests.MetaFileBoxes;
+var
+  i: integer;
+begin
+  for i := 1 to 20 do
+    Check(true, 'SKIP: metafiles are Windows only');
+end;
+
+procedure TPdfImageGoldenTests.MetaFileRecordLayout;
+var
+  i: integer;
+begin
+  for i := 1 to 4 do
     Check(true, 'SKIP: metafiles are Windows only');
 end;
 
