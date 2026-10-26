@@ -87,6 +87,8 @@ type
     /// EMR_RESTOREDC restores the clip of EMR_EXTSELECTCLIPRGN and of
     // EMR_SETMETARGN, q and Q balanced
     procedure MetaFileClipRestoreDC;
+    /// the pen after the Q of a clipped text with an underline is set again
+    procedure MetaFileUnderlineClipped;
     /// a scaled rotation is drawn, without ArcSin/ArcCos of a value past 1
     procedure MetaFileScaledRotation;
     /// EMR_EXTTEXTOUTA reads bytes in the code page of the font
@@ -2256,6 +2258,57 @@ begin
   Check(PosEx(' l'#10'S'#10, two) > 0, 'a line after a path never painted');
 end;
 
+procedure TPdfImageGoldenTests.MetaFileUnderlineClipped;
+var
+  mf: TMetaFile;
+  mc: TMetaFileCanvas;
+  font: HFONT;
+  pen: HPEN;
+  r: Windows.TRect;
+  s: WideString;
+  txt: RawUtf8;
+begin
+  { the Q after a clipped text forgot only the fill colour, while its
+    underline had set the pen and then the one of before again: a line of
+    that pen kept the width of before the q }
+  mf := TMetaFile.Create;
+  try
+    mf.Width := 400;
+    mf.Height := 400;
+    mc := TMetaFileCanvas.Create(mf, 0);
+    try
+      pen := CreatePen(PS_SOLID, 1, 0); // of a width: NeedPen caches it
+      SelectObject(mc.Handle, pen);
+      font := CreateFontW(-20, 0, 0, 0, FW_NORMAL, 0, 1, 0, DEFAULT_CHARSET,
+        0, 0, 0, 0, 'Arial');
+      SelectObject(mc.Handle, font);
+      SetTextColor(mc.Handle, RGB(255, 0, 0));
+      r.Left := 10;
+      r.Top := 10;
+      r.Right := 300;
+      r.Bottom := 60;
+      s := 'Under';
+      ExtTextOutW(mc.Handle, 10, 10, ETO_CLIPPED, @r, pointer(s), length(s), nil);
+      MoveToEx(mc.Handle, 20, 200, nil); // the pen of before the text
+      LineTo(mc.Handle, 200, 200);
+      s := 'End';
+      TextOutW(mc.Handle, 10, 300, pointer(s), length(s));
+      SelectObject(mc.Handle, GetStockObject(SYSTEM_FONT));
+      SelectObject(mc.Handle, GetStockObject(BLACK_PEN));
+      DeleteObject(font);
+      DeleteObject(pen);
+    finally
+      mc.Free;
+    end;
+    txt := RenderedEmf(mf);
+  finally
+    mf.Free;
+  end;
+  Check(PosEx('(Under)', txt) > 0, 'the text');
+  Check(PosBefore(txt, '(End)', ' w'#10) > PosBefore(txt, '(End)', #10'Q'#10),
+    'the pen width after the Q of the text');
+end;
+
 procedure TPdfImageGoldenTests.MetaFileScaledRotation;
 var
   mf: TMetaFile;
@@ -2817,6 +2870,14 @@ var
   i: integer;
 begin
   for i := 1 to 24 do
+    Check(true, 'SKIP: metafiles are Windows only');
+end;
+
+procedure TPdfImageGoldenTests.MetaFileUnderlineClipped;
+var
+  i: integer;
+begin
+  for i := 1 to 2 do
     Check(true, 'SKIP: metafiles are Windows only');
 end;
 

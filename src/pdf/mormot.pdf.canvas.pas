@@ -2106,6 +2106,8 @@ type
     // make Meta and Region (0 = none) the clip of the canvas: Q of the q
     // that are not part of it
     procedure SelectClip(Meta, Region: integer);
+    // after a Q: the colours, the line width and the dash are those of before
+    procedure GStateRestored;
     // EMR_BEGINPATH: record the path apart, PDF allows no q/Q within it
     procedure PathBegin;
     // around a record of the path's geometry: to its stream and back
@@ -3800,11 +3802,7 @@ procedure TPdfEnum.SelectClip(Meta, Region: integer);
   begin
     fCanvas.GRestore;
     fCanvas.NewPath;
-    // Q has restored the colours, the line width and the dash of before
-    fFillColor := -1;
-    fStrokeColor := -1;
-    fPenWidth := -1;
-    fPenStyle := -1;
+    GStateRestored;
   end;
 
   procedure Push(Index: integer);
@@ -3856,6 +3854,14 @@ begin
   fClipActive := Region;
   // the path recorded meanwhile goes on: its geometry is not on the page
   fCanvas.fNewPath := fPathRecording;
+end;
+
+procedure TPdfEnum.GStateRestored;
+begin
+  fFillColor := -1;
+  fStrokeColor := -1;
+  fPenWidth := -1;
+  fPenStyle := -1;
 end;
 
 procedure TPdfEnum.PathBegin;
@@ -4370,7 +4376,7 @@ begin
     if clipped then
     begin
       fCanvas.GRestore;
-      fFillColor := -1; // force set drawing color
+      GStateRestored; // the pen of an underline too
     end;
     // restore previous text justification (after GRestore if clipped)
     case po of
