@@ -128,10 +128,10 @@ v0.10.0 (2026-09-30).
   in `MM_ISOTROPIC`, and `CurrentPrinterRes` and `CurrentPrinterPaperSize`
   passed `GetProfileString` a size in bytes, twice the buffer on Unicode
   compilers
-- **Fixed (EMF, Windows):** the shapes of a metafile were a device pixel too
-  small - GDI records the right and bottom of `Rectangle`, `Ellipse` and
-  `RoundRect` one device pixel inside, and one more unit was taken off; a
-  `FillRect` lost one unit too. The corners of a `RoundRect` ignored the
+- **Fixed (EMF, Windows):** the shapes of a metafile were too small - GDI
+  records the right and bottom of `Rectangle`, `Ellipse` and `RoundRect` one
+  device pixel inside, which was not added back, and a `Rectangle` and an
+  `Ellipse` lost one more unit; a `FillRect` lost one unit too. The corners of a `RoundRect` ignored the
   window/viewport mapping. With `ForceJPEGCompression`, a bitmap with a
   colour key (`EMR_TRANSPARENTBLT`, or `TransparentMode = tmFixed`) became
   a JPEG and lost its transparency; it stays lossless now (trunk #686). With

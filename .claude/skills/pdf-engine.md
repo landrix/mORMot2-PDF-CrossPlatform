@@ -509,7 +509,9 @@ recorded Right/Bottom first and normalize after (`EMR_ROUNDRECT` passes the
 record as it is); #686 normalized first, which shifts a mirrored shape. A
 `FillRect` (`EMR_BITBLT` with `PATCOPY`), `FillRgn` and the opaque rectangle
 of `ExtTextOut` are stored as called: `BoxExclI`. `BoxI` takes one logical
-unit off; the EMF renderer no longer uses it for shapes. The corners of
+unit off; the EMF renderer no longer uses it for shapes and fills, but still
+for `EMR_INTERSECTCLIPRECT` and the clip rectangle of `ExtTextOut`, which are
+exclusive too - one unit too narrow there (BACKLOG). The corners of
 `RoundRectI` go through the mapping as the coordinates do. The pixel is one
 of the mapping `fWinSize`/`fViewSize`; the metric map modes set that mapping
 from `fPrinterPxPerInch` (`TPdfEnum.ScaleMatrix`), not from the reference DC,

@@ -2269,7 +2269,8 @@ procedure TPdfImageGoldenTests.MetaFileBoxes;
   end;
 
 var
-  px, mapped: TRawUtf8DynArray;
+  px, mapped, mirrored: TRawUtf8DynArray;
+  a, b: TPdfBox;
   i: integer;
 begin
   { GDI records the right and bottom of Rectangle, Ellipse and RoundRect one
@@ -2281,7 +2282,20 @@ begin
   mapped := Shapes(10, 100, 100);
   SameBoxes(px, 'on the polygon');
   SameBoxes(mapped, 'on the polygon at 10 units per pixel');
-  SameBoxes(Shapes(10, -100, -100), 'on the polygon, mirrored');
+  mirrored := Shapes(10, -100, -100);
+  SameBoxes(mirrored, 'on the polygon, mirrored');
+  // mirrored at the origin 60: the polygon covers the same device pixels
+  if (mirrored <> nil) and
+     (px <> nil) then
+  begin
+    a := PathBox(mirrored[0]);
+    b := PathBox(px[0]);
+    Check((Abs(a.Left - b.Left) < 0.02) and (Abs(a.Top - b.Top) < 0.02) and
+          (Abs(a.Width - b.Width) < 0.02) and (Abs(a.Height - b.Height) < 0.02),
+      'mirrored: the same place');
+  end
+  else
+    Check(false, 'mirrored: the same place');
   if length(mapped) = length(px) then
     for i := 0 to high(px) do
       CheckEqual(mapped[i], px[i], 'the same at 10 units per pixel');
@@ -2439,7 +2453,7 @@ procedure TPdfImageGoldenTests.MetaFileBoxes;
 var
   i: integer;
 begin
-  for i := 1 to 20 do
+  for i := 1 to 21 do
     Check(true, 'SKIP: metafiles are Windows only');
 end;
 
