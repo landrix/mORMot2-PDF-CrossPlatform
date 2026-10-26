@@ -254,13 +254,14 @@ checked against that record:
    of `mormot.lib.gdiplus`, which it does not call (it links the unit
    through `mormot.ui.gdiplus` for `TJpegImage`) - and changes in `db`,
    `orm` and `net`; no file both sides changed - and `150b07217`, `ReduceTtf`
-   within the subset and its result, synopse/mORMot2#673 row 22; checked:
-   `test_runner` 1397/1397 on Windows with Delphi 7, Delphi 13 Win32/Win64,
-   FPC 3.3.1 aarch64 and FPC 3.2.2 Win64, 1413/1413 on Linux aarch64,
-   1446/1446 on macOS aarch64, the golden files recorded on the old pin
-   unchanged; with #88 to #90 merged 1442/1442, 1458/1458 and 1491/1491;
-   FPC 3.2.2 Win32 has the 11 failures of the old pin; the Linux CI pin
-   moves with it).
+   within the subset and its result, synopse/mORMot2#673 row 22; checked on
+   #91 with #88 to #90 merged: `test_runner` 1442/1442 on Windows (FPC
+   3.2.2 Win64, Delphi 7, Delphi 2010, Delphi 13 Win32/Win64, FPC 3.3.1
+   aarch64), 1458/1458 on Linux aarch64, 1491/1491 on macOS aarch64, the
+   golden files recorded on the old pin unchanged, the 45 demo PDFs of
+   `2026-10-26_pr91` identical to `2026-10-25_pr86` after normalizing,
+   veraPDF `ua1` and `3u` and Mustang pass; FPC 3.2.2 Win32 has the 11
+   failures of the old pin; the Linux CI pin moves with it).
    **Checked:** against `d60cc6e80`, today's `main`,
    `test_runner` 259/259 on Windows (FPC Win64, Delphi 7, Delphi 2010),
    298/298 on Linux, 317/317 on macOS (fpcupdeluxe, FPC 3.2.3). Against
