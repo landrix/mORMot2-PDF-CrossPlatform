@@ -1337,7 +1337,10 @@ begin
   if result = '' then
   begin
      // create new if no existing TPdfImage match
-    if Doc.ForceJPEGCompression = 0 then
+    // a colour-keyed bitmap (e.g. from EMR_TRANSPARENTBLT) must stay lossless:
+    // JPEG would drop its /Mask and alter the key colour
+    if (Doc.ForceJPEGCompression = 0) or
+       (B.TransparentMode = tmFixed) then
       img := CreateGraphicImage(Doc, B, true)
     else
     begin
@@ -1932,6 +1935,25 @@ type
     Width: single;
   end;
 
+  /// EMR_CREATEBRUSHINDIRECT as the EMF stores it, with a 32-bit LOGBRUSH
+  // - the windows unit of FPC 3.2.2 declares lb as LOGBRUSH, whose ULONG_PTR
+  // lbHatch moves the fields on Win64: every brush was read as black there
+  TEmrCreateBrushIndirect32 = record
+    emr: TEMR;
+    ihBrush: cardinal;
+    lbStyle, lbColor, lbHatch: cardinal;
+  end;
+  PEmrCreateBrushIndirect32 = ^TEmrCreateBrushIndirect32;
+
+  /// EMR_EXTCREATEPEN as the EMF stores it, with a 32-bit EXTLOGPEN
+  // - the same with FPC 3.2.2 on Win64: elpHatch is a ULONG_PTR there
+  TEmrExtCreatePen32 = record
+    emr: TEMR;
+    ihPen, offBmi, cbBmi, offBits, cbBits: cardinal;
+    elpPenStyle, elpWidth, elpBrushStyle, elpColor, elpHatch: cardinal;
+  end;
+  PEmrExtCreatePen32 = ^TEmrExtCreatePen32;
+
   /// a state of the EMF enumeration engine, for the PDF canvas
   // - used also for the SaveDC/RestoreDC stack
   TPdfEnumState = record
@@ -2141,13 +2163,13 @@ begin
       end;
     EMR_CREATEBRUSHINDIRECT:
       begin
-        n := PEMRCreateBrushIndirect(R)^.ihBrush - 1;
+        n := PEmrCreateBrushIndirect32(R)^.ihBrush - 1;
         if n < cardinal(length(E.fObj)) then
         begin
           E.fObj[n].kind := OBJ_BRUSH;
-          E.fObj[n].BrushColor := PEMRCreateBrushIndirect(R)^.lb.lbColor;
-          E.fObj[n].BrushNull := (PEMRCreateBrushIndirect(R)^.lb.lbStyle = BS_NULL);
-          E.fObj[n].BrushStyle := PEMRCreateBrushIndirect(R)^.lb.lbStyle;
+          E.fObj[n].BrushColor := PEmrCreateBrushIndirect32(R)^.lbColor;
+          E.fObj[n].BrushNull := (PEmrCreateBrushIndirect32(R)^.lbStyle = BS_NULL);
+          E.fObj[n].BrushStyle := PEmrCreateBrushIndirect32(R)^.lbStyle;
         end;
       end;
     EMR_EXTCREATEFONTINDIRECTW:
@@ -2186,7 +2208,7 @@ begin
     EMR_ELLIPSE:
       begin
         E.NeedBrushAndPen;
-        box := E.fCanvas.BoxI(TRect(PEMRRectangle(R)^.rclBox), true);
+        box := E.fCanvas.BoxInclI(TRect(PEMRRectangle(R)^.rclBox));
         case R^.iType of
           EMR_RECTANGLE:
             E.fCanvas.Rectangle(box.Left, box.Top, box.Width, box.Height);
@@ -2197,7 +2219,6 @@ begin
       end;
     EMR_ROUNDRECT:
       begin
-        NormalizeRect(PRect(@PEMRRoundRect(R)^.rclBox)^);
         E.NeedBrushAndPen;
         rr := PEMRRoundRect(R);
         E.fCanvas.RoundRectI(rr^.rclBox.left, rr^.rclBox.top, rr^.rclBox.right,
@@ -2676,13 +2697,13 @@ begin
       E.ScaleMatrix(@PEMRModifyWorldTransform(R)^.xform, PEMRModifyWorldTransform(R)^.iMode);
     EMR_EXTCREATEPEN: // approx. - fast solution
       begin
-        n := PEMRExtCreatePen(R)^.ihPen - 1;
+        n := PEmrExtCreatePen32(R)^.ihPen - 1;
         if n < cardinal(length(E.fObj)) then
         begin
           E.fObj[n].kind := OBJ_PEN;
-          E.fObj[n].PenColor := PEMRExtCreatePen(R)^.elp.elpColor;
-          E.fObj[n].PenWidth := PEMRExtCreatePen(R)^.elp.elpWidth;
-          E.fObj[n].PenStyle := PEMRExtCreatePen(R)^.elp.elpPenStyle and
+          E.fObj[n].PenColor := PEmrExtCreatePen32(R)^.elpColor;
+          E.fObj[n].PenWidth := PEmrExtCreatePen32(R)^.elpWidth;
+          E.fObj[n].PenStyle := PEmrExtCreatePen32(R)^.elpPenStyle and
             (PS_STYLE_MASK or PS_ENDCAP_MASK);
         end;
       end;
@@ -3138,7 +3159,7 @@ begin
     exit;
   fCanvas.NewPath;
   FillColor := fDC[fDCIndex].brush.color;
-  box := fCanvas.BoxI(Rect, true);
+  box := fCanvas.BoxExclI(Rect);
   fCanvas.Rectangle(box.Left, box.Top, box.Width, box.Height);
   fCanvas.Fill;
   if ResetNewPath then

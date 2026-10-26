@@ -2173,6 +2173,14 @@ type
     procedure PointI(x, y: single);
       {$ifdef HASINLINE}inline;{$endif}
     function RectI(const Rect: TRect; Normalize: boolean): TPdfRect;
+    // size of one device pixel of the metafile, in logical units - negative
+    // when the mapping mirrors that axis
+    function DevPixelX: single;
+    function DevPixelY: single;
+    // inclusive-inclusive GDI box (EMR_RECTANGLE, EMR_ELLIPSE)
+    function BoxInclI(Box: TRect): TPdfBox;
+    // exclusive GDI box (FillRect = EMR_BITBLT PATCOPY)
+    function BoxExclI(Box: TRect): TPdfBox;
     procedure DrawXObjectPrepare(const AXObjectName: PdfString);
     // wrappers about offset calculation
     function ViewOffsetX(X: single): single;
@@ -3702,6 +3710,24 @@ begin
   result := round(2.8346456693 * MM);
 end;
 
+
+procedure NormalizeRect(var Rect: TRect); overload;
+var
+  tmp: integer;
+begin // PDF can't draw twisted rects -> normalize such values
+  if Rect.Right < Rect.Left then
+  begin
+    tmp := Rect.Left;
+    Rect.Left := Rect.Right;
+    Rect.Right := tmp;
+  end;
+  if Rect.Bottom < Rect.Top then
+  begin
+    tmp := Rect.Top;
+    Rect.Top := Rect.Bottom;
+    Rect.Bottom := tmp;
+  end;
+end;
 
 procedure NormalizeRect(var Rect: TPdfRect); overload;
 var
@@ -12315,9 +12341,20 @@ begin
 end;
 
 procedure TPdfCanvas.RoundRectI(x1, y1, x2, y2, cx, cy: integer);
+var
+  r: TPdfRect;
 begin
-  RoundRect(I2X(x1), I2Y(y1), I2X(x2), I2Y(y2),
-    cx * fDevScaleX * fWorldFactorX, -cy * fDevScaleY * fWorldFactorY);
+  // the corner size goes through the same window/viewport mapping as the
+  // coordinates (MM_ANISOTROPIC metafiles), and the GDI box is
+  // inclusive-inclusive: one device pixel is added to the recorded
+  // right/bottom edges, before normalizing - see BoxInclI
+  r.Left   := I2X(x1);
+  r.Right  := S2X(x2 + DevPixelX);
+  r.Top    := I2Y(y1);
+  r.Bottom := S2Y(y2 + DevPixelY);
+  NormalizeRect(r);
+  RoundRect(r.Left, r.Bottom, r.Right, r.Top,
+    Abs(I2X(x1 + cx) - I2X(x1)), -Abs(I2Y(y1 + cy) - I2Y(y1)));
 end;
 
 procedure TPdfCanvas.ArcI(centerx, centery, W, H, Sx, Sy, Ex, Ey: integer;
@@ -12372,6 +12409,63 @@ begin
   result.Bottom := I2Y(Rect.Bottom - 1);
   if Normalize then
     NormalizeRect(result);
+end;
+
+function TPdfCanvas.DevPixelX: single;
+begin
+  if (fViewSize.cx <> 0) and
+     (fWinSize.cx <> 0) then
+    result := fWinSize.cx / fViewSize.cx
+  else
+    result := 1;
+end;
+
+function TPdfCanvas.DevPixelY: single;
+begin
+  if (fViewSize.cy <> 0) and
+     (fWinSize.cy <> 0) then
+    result := fWinSize.cy / fViewSize.cy
+  else
+    result := 1;
+end;
+
+function PdfRectToBox(r: TPdfRect): TPdfBox;
+begin
+  NormalizeRect(r);
+  result.Left   := r.Left;
+  result.Top    := r.Top;
+  result.Width  := r.Right - r.Left;
+  result.Height := r.Bottom - r.Top;
+end;
+
+// GDI records the Right/Bottom of Rectangle/Ellipse one DEVICE pixel inside
+// the shape, i.e. several logical units with a screen reference DC: RectI()
+// removed one logical unit instead, and shapes were too small
+// - under a mirrored mapping the recorded Right is the smaller value (500,110
+// for 100..500 at -10 units per pixel): the signed pixel is added before the
+// box is normalized
+function TPdfCanvas.BoxInclI(Box: TRect): TPdfBox;
+var
+  r: TPdfRect;
+begin
+  r.Left   := I2X(Box.Left);
+  r.Right  := S2X(Box.Right + DevPixelX);
+  r.Top    := I2Y(Box.Top);
+  r.Bottom := S2Y(Box.Bottom + DevPixelY);
+  result := PdfRectToBox(r);
+end;
+
+// FillRect() boxes are exclusive: no pixel nor unit to remove
+function TPdfCanvas.BoxExclI(Box: TRect): TPdfBox;
+var
+  r: TPdfRect;
+begin
+  NormalizeRect(Box);
+  r.Left   := I2X(Box.Left);
+  r.Right  := I2X(Box.Right);
+  r.Top    := I2Y(Box.Top);
+  r.Bottom := I2Y(Box.Bottom);
+  result := PdfRectToBox(r);
 end;
 
 procedure TPdfCanvas.BeginMarkedContent(Group: TPdfOptionalContentGroup);

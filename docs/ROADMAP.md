@@ -128,6 +128,15 @@ v0.10.0 (2026-09-30).
   in `MM_ISOTROPIC`, and `CurrentPrinterRes` and `CurrentPrinterPaperSize`
   passed `GetProfileString` a size in bytes, twice the buffer on Unicode
   compilers
+- **Fixed (EMF, Windows):** the shapes of a metafile were too small - GDI
+  records the right and bottom of `Rectangle`, `Ellipse` and `RoundRect` one
+  device pixel inside, which was not added back, and a `Rectangle` and an
+  `Ellipse` lost one more unit; a `FillRect` lost one unit too. The corners of a `RoundRect` ignored the
+  window/viewport mapping. With `ForceJPEGCompression`, a bitmap with a
+  colour key (`EMR_TRANSPARENTBLT`, or `TransparentMode = tmFixed`) became
+  a JPEG and lost its transparency; it stays lossless now (trunk #686). With
+  FPC 3.2.2 on Win64, every brush and extended pen of a metafile was drawn
+  black: the `windows` unit declares their records in another layout
 - **Builds on Windows aarch64 (FPC):** the fork's copy of
   `mormot.lib.uniscribe` is gone - the `mormot2` package ships the unit and
   hid the copy; `mormot.ui.core` and `mormot.ui.gdiplus` are the trunk

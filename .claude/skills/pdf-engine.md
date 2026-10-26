@@ -165,7 +165,7 @@ document.
 | `UseOptionalContent` | boolean | Enable PDF optional content (layers); forces PDF 1.5; the setter calls `NewDoc` |
 | `UseFontFallBack` | boolean | Draw glyphs missing from the current face with `FontFallBackName`; default true |
 | `FontFallBackName` | string | Face used for glyphs missing from the current one |
-| `ForceJPEGCompression` | integer | 0 (default) = bitmaps as they are; a quality (e.g. 60, 80) = the `TBitmap`/`TGraphic` images of `mormot.pdf.canvas` stored as JPEG; no effect on raw pixels |
+| `ForceJPEGCompression` | integer | 0 (default) = bitmaps as they are; a quality (e.g. 60, 80) = the `TBitmap`/`TGraphic` images of `mormot.pdf.canvas` stored as JPEG, except a bitmap with `TransparentMode = tmFixed` (lossless, its `/Mask` kept); no effect on raw pixels |
 | `ForceNoBitmapReuse` | boolean | True = no lookup of identical images (faster, larger) |
 | `ScreenLogPixels` | integer | DPI the pixel coordinates are mapped with: 96, the screen's on Windows for `TPdfDocumentVcl`/`TPdfDocumentGdi`; 0 or less raises `EPdfInvalidValue` |
 | `FileFormat` | `TPdfFileFormat` | PDF version header: `pdf13`..`pdf17` (default `pdf13`); PDF/A raises it (A-1 to `pdf14`, A-2/A-3 to `pdf17`), as does `Tagged` (`pdf17`) |
@@ -420,7 +420,9 @@ images. `CreateGraphicImage(Doc, Graphic, ..)` and
 How the image paths behave (covered by `tests/test_pdf_images.pas`):
 
 - `CreateOrGetBitmapImage`: pf24bit and pf32bit become `/DeviceRGB` (alpha
-  dropped); a pf24bit bitmap with `TransparentMode = tmFixed` writes `/Mask`.
+  dropped); a pf24bit bitmap with `TransparentMode = tmFixed` writes `/Mask`,
+  and stays lossless under `ForceJPEGCompression` (a JPEG has no colour key).
+  `EMR_TRANSPARENTBLT` comes this way: `TPdfEnum.DrawBitmap` sets the key
   The same pixels give the same image, across pages too. An empty bitmap (no
   width or no height) gives no image: it returns ''
 - `BitmapHash` (public) is that reuse key: CRC32C lanes over the rows - the
@@ -492,7 +494,37 @@ ArcI(centerx, centery, W, H, Sx, Sy, Ex, Ey: integer; clockwise: boolean;
   arctype: TPdfCanvasArcType; var position: TPoint);
 BoxI(Rect, Normalize);   // TRect -> TPdfBox
 RectI(Rect, Normalize);  // TRect -> TPdfRect
+BoxInclI(Rect);          // EMR_RECTANGLE, EMR_ELLIPSE: + one device pixel
+BoxExclI(Rect);          // the fills of TPdfEnum.FillRectangle: as they are
+DevPixelX; DevPixelY;    // one device pixel in logical units: Win / View, signed
 ```
+
+How GDI records a box (measured, `MetaFileBoxes`): `Rectangle`, `Ellipse`
+and `RoundRect(10, 10, 50, 50)` are stored as 10,10,49,49 - one **device**
+pixel inside, so 100,100,490,490 at 10 logical units per pixel
+(`MM_ANISOTROPIC`). With an axis mirrored (viewport extent -100) the box is
+recorded as 500,100,110,490: the recorded Right is the device-right edge, the
+smaller value. `BoxInclI` and `RoundRectI` add the signed pixel to the
+recorded Right/Bottom first and normalize after (`EMR_ROUNDRECT` passes the
+record as it is); #686 normalized first, which shifts a mirrored shape. A
+`FillRect` (`EMR_BITBLT` with `PATCOPY`), `FillRgn` and the opaque rectangle
+of `ExtTextOut` are stored as called: `BoxExclI`. `BoxI` takes one logical
+unit off; the EMF renderer no longer uses it for shapes and fills, but still
+for `EMR_INTERSECTCLIPRECT` and the clip rectangle of `ExtTextOut`, which are
+exclusive too - one unit too narrow there (BACKLOG). The corners of
+`RoundRectI` go through the mapping as the coordinates do. The pixel is one
+of the mapping `fWinSize`/`fViewSize`; the metric map modes set that mapping
+from `fPrinterPxPerInch` (`TPdfEnum.ScaleMatrix`), not from the reference DC,
+so there it is an approximation. Under a world scale the pixel is not
+divided by the world factor: the record holds integer logical units, what GDI
+rounds to is not measured yet (BACKLOG).
+
+Records `TPdfEnum` reads through its own declarations: `EMR_CREATEBRUSHINDIRECT`
+and `EMR_EXTCREATEPEN` (`TEmrCreateBrushIndirect32`, `TEmrExtCreatePen32`).
+The `windows` unit of FPC 3.2.2 declares them with the native `LOGBRUSH` and
+`EXTLOGPEN`, whose `ULONG_PTR` hatch moves the fields on Win64 (`lbColor` at
+offset 20 instead of 16): every brush and extended pen was black there.
+FPC trunk and Delphi have the 32-bit layout (`MetaFileRecordLayout`).
 
 ### Text Metrics
 
