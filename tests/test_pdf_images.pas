@@ -1898,15 +1898,12 @@ begin
   result := CountOccurrences('q'#10, s) - CountOccurrences('Q'#10, s);
 end;
 
-// not in the windows unit of FPC
-function GdiSelectClipPath(DC: HDC; Mode: integer): BOOL; stdcall;
-  external 'gdi32.dll' name 'SelectClipPath';
-
 // no q or Q within a path, no l or c without a current point
 function ValidPaths(const Txt: RawUtf8): boolean;
 var
   p: PUtf8Char;
-  line: RawUtf8;
+  line, op: RawUtf8;
+  i: PtrInt;
   inpath: boolean;
 begin
   result := false;
@@ -1915,11 +1912,16 @@ begin
   while p <> nil do
   begin
     line := GetNextLine(p, p);
-    if EndWith(line, ' M') or // EndWith compares upper case
-       EndWith(line, ' RE') then
+    i := length(line);
+    while (i > 0) and
+          (line[i] <> ' ') do
+      dec(i);
+    op := copy(line, i + 1, length(line)); // case matters: M is the miter limit
+    if (op = 'm') or
+       (op = 're') then
       inpath := true
-    else if EndWith(line, ' L') or
-            EndWith(line, ' C') then
+    else if (op = 'l') or
+            (op = 'c') then
     begin
       if not inpath then
         exit;
@@ -2046,7 +2048,7 @@ begin
       LineTo(mc.Handle, 200, 260);
       MoveToEx(mc.Handle, 20, 265, nil);
       EndPath(mc.Handle);
-      GdiSelectClipPath(mc.Handle, RGN_COPY);
+      SelectClipPath(mc.Handle, RGN_COPY);
       LineTo(mc.Handle, 200, 265); // after the path: a line of its own
       Clip(0, 0, 350, 350);
       Text(270, 'After');
