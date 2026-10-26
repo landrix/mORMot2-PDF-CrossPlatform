@@ -41,6 +41,13 @@ v0.10.0 (2026-09-30).
   backspace in a string was written `\B` instead of `\b`, which also
   corrupted encrypted strings now and then. `TPdfWrite.AddUnicodeHex`
   never encrypts now; `AddUnicodeHexString` writes an object's text string
+- **Fixed (malformed fonts):** the format 4 `cmap` of a face was read past
+  its table - a directory of more records than the table holds, a subtable
+  header or `segCountX2` arrays past its end, an `idRangeOffset` outside
+  the glyph array - and a segment ending before its start made the code
+  count negative (an `ERangeError`, or a write past the arrays). Such a
+  `cmap` is not read now, such a glyph is 0 and such a segment holds no
+  code (trunk #673, row 14)
 - **Changed (`TPdfImage`):** `CreateJpeg` takes the colour space from the
   JPEG - a grayscale one is `DeviceGray` now, not `DeviceRGB` - and raises
   `EPdfInvalidValue` for a CMYK JPEG; `CreateJpegDirect` raises for data
@@ -128,13 +135,6 @@ v0.10.0 (2026-09-30).
   in `MM_ISOTROPIC`, and `CurrentPrinterRes` and `CurrentPrinterPaperSize`
   passed `GetProfileString` a size in bytes, twice the buffer on Unicode
   compilers
-- **Fixed (malformed fonts):** the format 4 `cmap` of a face was read past
-  its table - a directory of more records than the table holds, a subtable
-  header or `segCountX2` arrays past its end, an `idRangeOffset` outside
-  the glyph array - and a segment ending before its start made the code
-  count negative (an `ERangeError`, or a write past the arrays). Such a
-  `cmap` is not read now, such a glyph is 0 and such a segment holds no
-  code (trunk #673, row 14)
 - **Builds on Windows aarch64 (FPC):** the fork's copy of
   `mormot.lib.uniscribe` is gone - the `mormot2` package ships the unit and
   hid the copy; `mormot.ui.core` and `mormot.ui.gdiplus` are the trunk
