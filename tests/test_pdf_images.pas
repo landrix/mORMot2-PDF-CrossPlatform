@@ -2120,6 +2120,7 @@ begin
       mc.Draw(10, 40, bmp);
       MoveToEx(mc.Handle, 20, 80, nil);
       LineTo(mc.Handle, 200, 80);
+      SelectObject(mc.Handle, GetStockObject(BLACK_PEN)); // a pen of the bracket
       LineTo(mc.Handle, 200, 120);
       EndPath(mc.Handle);
       StrokePath(mc.Handle);
@@ -2233,7 +2234,8 @@ begin
   CheckEqual(OpenBefore(meta, '(Free)'), 1, 'the meta region restored');
   Check(ValidPaths(meta), 'valid paths');
   CheckEqual(CountOccurrences(' l'#10, meta), 6, 'every segment kept');
-  Check(PosEx('0 842 22.5 -262.5 re', meta) < PosEx('15 624.5 m', meta),
+  Check((PosEx('0 842 22.5 -262.5 re', meta) > 0) and
+        (PosEx('0 842 22.5 -262.5 re', meta) < PosEx('15 624.5 m', meta)),
     'the path under the clip of its painting');
   CheckEqual(CountOccurrences('BMC'#10, tagged) + CountOccurrences(' BDC'#10, tagged),
     CountOccurrences('EMC'#10, tagged), 'marked content balanced');

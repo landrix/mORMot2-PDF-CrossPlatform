@@ -3340,6 +3340,7 @@ begin
       NULL_PEN:
         begin
           if fInLined and
+             not fPathRecording and // StrokePath paints a path
              ((fDC[fDCIndex].pen.style <> PS_NULL) or not fDC[fDCIndex].pen.null) then
           begin
             fInLined := false;
@@ -3353,6 +3354,7 @@ begin
       BLACK_PEN:
         begin
           if fInLined and
+             not fPathRecording and
              ((fDC[fDCIndex].pen.color <> STOCKPENCOLOR[iObject]) or
               not fDC[fDCIndex].pen.null) then
           begin
@@ -3370,6 +3372,7 @@ begin
       OBJ_PEN:
         begin
           if fInLined and
+             not fPathRecording and
              ((fDC[fDCIndex].pen.color <> fObj[iObject - 1].PenColor) or
               (fDC[fDCIndex].pen.width <> fObj[iObject - 1].PenWidth) or
               (fDC[fDCIndex].pen.style <> fObj[iObject - 1].PenStyle)) then
