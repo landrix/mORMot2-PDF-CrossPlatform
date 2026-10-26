@@ -202,7 +202,8 @@ checked against that record:
 
    **Pinned:** `d60cc6e80` (2026-10-02); from Phase 1 on a commit of the
    `pdf-font-layer` branch of `landrix/mORMot2`, which is the trunk - since
-   `287ef426f` the trunk of 2026-10-18, before it `d60cc6e80` - plus the new
+   `964874b88` the trunk of 2026-10-26, from `287ef426f` that of 2026-10-18,
+   before it `d60cc6e80` - plus the new
    `mormot.lib.*` units (see Phase 1, "Where the code lives"):
    `89d652a77` (2026-10-04, `mormot.lib.core` added, no other change), then
    `5a1fb60fc` (2026-10-04, `mormot.lib.freetype` and `mormot.lib.harfbuzz`
@@ -240,13 +241,26 @@ checked against that record:
    `mormot.lib.core`, `46ea111a1` and `15fb2328a` the table directory
    checksum of `ReduceTtf` and the bidi level in `mormot.lib.uniscribe`;
    checked in PR #82 - the fixes and their tests are Windows only, so the
-   Linux CI pin in `linux.yml` stayed at `287ef426f`; after it `3d9cc3ffb`,
-   a comment of `mormot.lib.uniscribe`), then `86bca4996`
+   Linux CI pin in `linux.yml` stayed at `287ef426f`), then `3d9cc3ffb`
+   (2026-10-21, a comment of `mormot.lib.uniscribe`), then `86bca4996`
    (2026-10-21, `mormot.lib.freetype` and `mormot.lib.harfbuzz` in the
    source form: no column alignment, the trunk's spelling, one statement
    per line - the same object code on Linux aarch64 - and no `with` in the
    subsetter; `test_runner` 1371/1371 on Linux aarch64, 1404/1404 on macOS
-   aarch64, golden files unchanged; the Linux CI pin moves with it).
+   aarch64, golden files unchanged; the Linux CI pin moves with it), then
+   `964874b88` (2026-10-26, the trunk of that day merged in - 50 commits,
+   among them synopse/mORMot2#684, #685 and #687 (ours), #679 and #686 -
+   `mormot.ui.pdf`, which the engine does not use, and the EMF conversion
+   of `mormot.lib.gdiplus`, which it does not call (it links the unit
+   through `mormot.ui.gdiplus` for `TJpegImage`) - and changes in `db`,
+   `orm` and `net`; no file both sides changed - and `150b07217`, `ReduceTtf`
+   within the subset and its result, synopse/mORMot2#673 row 22; checked:
+   `test_runner` 1397/1397 on Windows with Delphi 7, Delphi 13 Win32/Win64,
+   FPC 3.3.1 aarch64 and FPC 3.2.2 Win64, 1413/1413 on Linux aarch64,
+   1446/1446 on macOS aarch64, the golden files recorded on the old pin
+   unchanged; with #88 to #90 merged 1442/1442, 1458/1458 and 1491/1491;
+   FPC 3.2.2 Win32 has the 11 failures of the old pin; the Linux CI pin
+   moves with it).
    **Checked:** against `d60cc6e80`, today's `main`,
    `test_runner` 259/259 on Windows (FPC Win64, Delphi 7, Delphi 2010),
    298/298 on Linux, 317/317 on macOS (fpcupdeluxe, FPC 3.2.3). Against

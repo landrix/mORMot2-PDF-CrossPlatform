@@ -8,8 +8,9 @@ it produced in `.claude/skills/` — this file repeats neither.
 tagged output passes PAC 2024 with accepted hints only (W-1, W-2) and veraPDF
 `ua1`; PDF/A-3U with PDF/UA-1 is verified (R-17). Fonts are embedded and subset
 on all three platforms; tables carry `THead`/`TBody`/`TFoot` row groups.
-`test_runner` is green with 1277 assertions on Windows (FPC, Delphi 7,
-Delphi 2010 and Delphi 13), 1338 on macOS and 1305 on Linux. **Delphi:** layer
+`test_runner` is green with 1442 assertions on Windows (FPC, Delphi 7 and
+Delphi 13; Delphi 2010 last measured with 1277), 1491 on macOS and 1458 on
+Linux (2026-10-26, pin `964874b88`, with #88 to #90). **Delphi:** layer
 1, the TCanvas bridge and the `TGDIPages` core build on Delphi 7 (R-19, R-20
 steps 1–6) and on Delphi 2010, a Unicode Delphi (R-25); all six console demos
 and the `--export` of the two GUI demos give the same PDF as FPC. Delphi 13
@@ -118,6 +119,13 @@ v0.10.0 (2026-09-30).
   checkers report it, viewers mostly ignore it; text with bidi override
   controls (LRO, RLO) could be shaped in the wrong visual order. Needs
   `pdf-font-layer` at `15fb2328a` or later
+- **Fixed (Windows, `mormot.lib.uniscribe`):** `ReduceTtf` read a broken
+  FontSub subset past its end - a directory longer than the subset, a table
+  past it - and could write past its result when entries shared one table;
+  such a subset is now embedded as FontSub gave it. The table directory of
+  a subset of eight, nine or more than ten tables had a wrong `rangeShift`
+  (font checkers report it, viewers ignore it). Needs `pdf-font-layer` at
+  `964874b88` or later
 - **Fixed (EMF, Windows):** `PT_BEZIERTO` in `EMR_POLYDRAW`/`EMR_POLYDRAW16`
   took the points i+1..i+3 instead of i..i+2, so a metafile curve drawn
   with `PolyDraw` came out distorted (trunk d76f5d793, SynPDF #84);
