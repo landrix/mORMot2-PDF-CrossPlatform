@@ -511,13 +511,14 @@ record as it is); #686 normalized first, which shifts a mirrored shape. A
 of `ExtTextOut` are stored as called: `BoxExclI`. `BoxI` takes one logical
 unit off; the EMF renderer no longer uses it for shapes and fills, but still
 for `EMR_INTERSECTCLIPRECT` and the clip rectangle of `ExtTextOut`, which are
-exclusive too - one unit too narrow there (BACKLOG). The corners of
+exclusive too - one unit too narrow there (ROADMAP "Review Findings Not
+Fixed Yet", item 5). The corners of
 `RoundRectI` go through the mapping as the coordinates do. The pixel is one
 of the mapping `fWinSize`/`fViewSize`; the metric map modes set that mapping
 from `fPrinterPxPerInch` (`TPdfEnum.ScaleMatrix`), not from the reference DC,
 so there it is an approximation. Under a world scale the pixel is not
 divided by the world factor: the record holds integer logical units, what GDI
-rounds to is not measured yet (BACKLOG).
+rounds to is not measured yet (ROADMAP, item 6).
 
 Records `TPdfEnum` reads through its own declarations: `EMR_CREATEBRUSHINDIRECT`
 and `EMR_EXTCREATEPEN` (`TEmrCreateBrushIndirect32`, `TEmrExtCreatePen32`).

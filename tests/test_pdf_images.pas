@@ -90,6 +90,8 @@ type
     procedure MetaFileAnsiText;
     /// EMR_EXTTEXTOUTA after a stock font reads bytes in the system code page
     procedure MetaFileAnsiStockFont;
+    /// a stock font reads its bytes in the code page of its own charset
+    procedure MetaFileStockCodePages;
     /// EMR_STRETCHDIBITS under a flipped transform flips a copy of its header
     procedure MetaFileDIBitsKept;
     /// a printer resolution of 0 is asked again, not divided by
@@ -2109,6 +2111,19 @@ begin
   CheckEqual(a, w, 'decoded in the code page of the stock font');
 end;
 
+procedure TPdfImageGoldenTests.MetaFileStockCodePages;
+begin
+  { ANSI_FIXED_FONT and ANSI_VAR_FONT got CP_ACP, though their charset is
+    ANSI_CHARSET, cp1252 (Martin on #88): the decoded text differs only where
+    the system code page is not 1252, the code page everywhere }
+  CheckEqual(StockFontCodePage(ANSI_VAR_FONT), 1252, 'ANSI_VAR_FONT');
+  CheckEqual(StockFontCodePage(ANSI_FIXED_FONT), 1252, 'ANSI_FIXED_FONT');
+  CheckEqual(StockFontCodePage(OEM_FIXED_FONT), CP_OEMCP, 'OEM_FIXED_FONT');
+  CheckEqual(FontCharSetCodePage(DEFAULT_CHARSET), CP_ACP, 'DEFAULT_CHARSET');
+  CheckEqual(FontCharSetCodePage(GREEK_CHARSET), 1253, 'GREEK_CHARSET');
+  CheckEqual(StockFontCodePage(BLACK_BRUSH), CP_ACP, 'no font');
+end;
+
 procedure TPdfImageGoldenTests.MetaFileDIBitsKept;
 var
   mf: TMetaFile;
@@ -2430,6 +2445,14 @@ var
   i: integer;
 begin
   for i := 1 to 4 do
+    Check(true, 'SKIP: metafiles are Windows only');
+end;
+
+procedure TPdfImageGoldenTests.MetaFileStockCodePages;
+var
+  i: integer;
+begin
+  for i := 1 to 6 do
     Check(true, 'SKIP: metafiles are Windows only');
 end;
 

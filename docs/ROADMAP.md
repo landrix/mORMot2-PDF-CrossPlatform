@@ -8,9 +8,8 @@ it produced in `.claude/skills/` — this file repeats neither.
 tagged output passes PAC 2024 with accepted hints only (W-1, W-2) and veraPDF
 `ua1`; PDF/A-3U with PDF/UA-1 is verified (R-17). Fonts are embedded and subset
 on all three platforms; tables carry `THead`/`TBody`/`TFoot` row groups.
-`test_runner` is green with 1442 assertions on Windows (FPC, Delphi 7 and
-Delphi 13; Delphi 2010 last measured with 1277), 1491 on macOS and 1458 on
-Linux (2026-10-26, pin `964874b88`, with #88 to #90). **Delphi:** layer
+`test_runner` is green with 1448 assertions on Windows (FPC, Delphi 7,
+Delphi 2010 and Delphi 13), 1497 on macOS and 1464 on Linux (2026-10-26, pin `964874b88`). **Delphi:** layer
 1, the TCanvas bridge and the `TGDIPages` core build on Delphi 7 (R-19, R-20
 steps 1–6) and on Delphi 2010, a Unicode Delphi (R-25); all six console demos
 and the `--export` of the two GUI demos give the same PDF as FPC. Delphi 13
@@ -123,7 +122,7 @@ v0.10.0 (2026-09-30).
   FontSub subset past its end - a directory longer than the subset, a table
   past it - and could write past its result when entries shared one table;
   such a subset is now embedded as FontSub gave it. The table directory of
-  a subset of eight, nine or more than ten tables had a wrong `rangeShift`
+  a subset of eight or nine tables had a wrong `rangeShift`
   (font checkers report it, viewers ignore it). Needs `pdf-font-layer` at
   `964874b88` or later
 - **Fixed (EMF, Windows):** `PT_BEZIERTO` in `EMR_POLYDRAW`/`EMR_POLYDRAW16`
@@ -731,6 +730,17 @@ test that fails before its fix. Items 1 and 2 are also in the trunk's
    first column's paragraph in the tagged reading order (the renderer
    continues a block only from the command before): it needs the structure
    elements kept by block, decided with the tagging
+5. **EMF clip rectangles one unit too narrow** (`mormot.pdf.canvas`,
+   Windows): `EMR_INTERSECTCLIPRECT` and the clip rectangle of `ExtTextOut`
+   are exclusive, as GDI records them, but still go through `BoxI`, which
+   takes one logical unit off. Found with the boxes of #89; next: measure
+   them as the shapes were (`MetaFileBoxes`), then `BoxExclI` with a test
+6. **The device pixel of a box under a world scale** (`mormot.pdf.canvas`,
+   Windows): `DevPixelX`/`DevPixelY` (#89) are not divided by the world
+   factor, so a shape under a world scale grows by more than one device
+   pixel; the record holds integer logical units, so what GDI rounds to has
+   to be measured first. For the metric map modes the pixel comes from
+   `fPrinterPxPerInch`, not from the reference DC, an approximation too
 
 ### Underline and Strike-Out Are Not Drawn — bug, fix after R-28
 
