@@ -58,6 +58,9 @@ type
     /// the format 12 reader on cmap tables built in code: the subtable
     // selection, the clipping at U+FFFF and the rejections
     procedure Format12CmapTables;
+    /// the format 4 reader on broken cmap tables: the directory, the arrays
+    // and the glyph array within the table, a segment ending before it starts
+    procedure Format4CmapBounds;
     /// the widths of the glyphs past the last (advance, bearing) pair of
     // hmtx: the advance of that pair (OpenType hmtx), in /W and TextWidth;
     // past the end of a hmtx shorter than hhea says: the width of .notdef
@@ -1682,6 +1685,129 @@ begin
   Rejected([$41, $41, 1], 'its length past the table', 1000);
   Rejected([$41, $41, 1], 'its length below its header', 12);
   Rejected([$1f600, $1f600, 1], 'no group in the BMP');
+end;
+
+// a format 4 subtable of Segments (start, end, delta, idRangeOffset) and
+// Glyphs, the glyphIndexArray; SegCountX2: its field, 0 for the right one
+function Format4Subtable(const Segments, Glyphs: array of integer;
+  SegCountX2: integer = 0): RawByteString;
+var
+  i, n: PtrInt;
+  ends, starts, deltas, ranges, ids: RawByteString;
+begin
+  n := length(Segments) div 4;
+  ends := '';
+  starts := '';
+  deltas := '';
+  ranges := '';
+  for i := 0 to n - 1 do
+  begin
+    starts := starts + Card16(Segments[i * 4]);
+    ends := ends + Card16(Segments[i * 4 + 1]);
+    deltas := deltas + Card16(Segments[i * 4 + 2] and $ffff);
+    ranges := ranges + Card16(Segments[i * 4 + 3]);
+  end;
+  ids := '';
+  for i := 0 to high(Glyphs) do
+    ids := ids + Card16(Glyphs[i]);
+  if SegCountX2 = 0 then
+    SegCountX2 := n * 2;
+  result := Card16(4) + Card16(16 + n * 8 + length(Glyphs) * 2) + Card16(0) +
+    Card16(SegCountX2) + Card16(0) + Card16(0) + Card16(0) + ends + Card16(0) +
+    starts + deltas + ranges + ids;
+end;
+
+// a face of FakeFace's tables with Cmap as its 'cmap'
+function FakeFaceOfCmap(const Cmap: RawByteString): IFontFace;
+var
+  fake: TFakeFace;
+begin
+  fake := TFakeFace.Create;
+  result := fake;
+  fake.AddTable('cmap', Cmap);
+  fake.AddTable('head', FakeHead);
+  fake.AddTable('hhea', FakeHhea);
+  fake.AddTable('hmtx', FakeHmtx);
+  fake.AddTable('maxp', FakeMaxp);
+  fake.Seal(#0#1#0#0);
+end;
+
+procedure TPdfCffTests.Format4CmapBounds;
+const
+  // U+0100 U+0101: out of WinAnsi, so through the Unicode font of the face
+  TWO_CHARS: RawUtf8 = {$ifdef HASCODEPAGE} #$0100#$0101 {$else} #$C4#$80#$C4#$81 {$endif};
+var
+  ttf: TPdfTtf;
+  sub, table: RawByteString;
+  s: RawUtf8;
+
+  function Read(const Table: RawByteString): boolean;
+  var
+    t: TPdfTtf;
+  begin
+    t := CmapOf(Table);
+    try
+      result := t.HasCmap;
+    finally
+      t.Free;
+    end;
+  end;
+
+begin
+  { only the start of the subtable was checked against the table: not the
+    directory, the format 4 header and arrays, nor the glyph array in
+    TPdfTtf.Create; a segment ending before its start made the count of the
+    codes negative (synopse/mORMot2#673, row 14) }
+  sub := Format4Subtable([$100, $101, 2 - $100, 0, $ffff, $ffff, 1, 0], []);
+  Check(Read(CmapTable([3, 1, 0], [sub])), 'a sane table');
+  // a directory of 50 records in a table of one: its first, sane record
+  // is not read either, as LoadCmap12 does
+  table := CmapTable([3, 1, 0], [sub]);
+  table := Card16(0) + Card16(50) + copy(table, 5, MaxInt);
+  Check(not Read(table), 'a directory past the table');
+  Check(not Read(CmapTable([3, 1, 0], [Card16(4)])), 'a header past the table');
+  Check(not Read(#0), 'a table of one byte');
+  // the table's own length, not that of the words read: 45 bytes, the
+  // subtable at the odd offset 13
+  table := Card16(0) + Card16(1) + Card16(3) + Card16(1) + Card32(13) + #0 + sub;
+  ttf := CmapOf(table);
+  try
+    Check(ttf.HasCmap, 'a table of odd length, at an odd offset');
+    CheckEqual(ttf.GlyphOf($101), 3, 'its glyphs');
+  finally
+    ttf.Free;
+  end;
+  Check(not Read(CmapTable([3, 1, 0], [Format4Subtable(
+    [$100, $101, 2 - $100, 0, $ffff, $ffff, 1, 0], [], 200)])),
+    'arrays past the table');
+  // U+0100 reads glyphIndexArray[-2] - idRangeOffset[1] - in the table,
+  // before the glyph array; U+0101 its glyphIndexArray[0]
+  sub := Format4Subtable([$100, $100, 0, 2, $101, $101, 0, 4,
+    $ffff, $ffff, 1, 0], [5]);
+  ttf := CmapOf(CmapTable([3, 1, 0], [sub]));
+  try
+    CheckEqual(ttf.GlyphOf($100), 0, 'GlyphOf: before the glyph array');
+    CheckEqual(ttf.GlyphOf($101), 5, 'GlyphOf: in the glyph array');
+  finally
+    ttf.Free;
+  end;
+  // a glyph word cut at the end of the table: not completed by the pad
+  table := CmapTable([3, 1, 0], [Format4Subtable([$101, $101, 0, 4,
+    $ffff, $ffff, 1, 0], [$0500])]);
+  ttf := CmapOf(copy(table, 1, length(table) - 1));
+  try
+    CheckEqual(ttf.GlyphOf($101), 0, 'GlyphOf: half a glyph word');
+  finally
+    ttf.Free;
+  end;
+  s := FakeFacePdf(FakeFaceOfCmap(CmapTable([3, 1, 0], [sub])), TWO_CHARS);
+  Check(PosEx('<0005>', s) > 0, 'U+0101 drawn');
+  Check(PosEx('<00040005>', s) = 0, 'U+0100 not drawn by idRangeOffset[1]');
+  // a segment U+0160..U+0150: no code, not a count of -15
+  sub := Format4Subtable([$100, $101, 2 - $100, 0, $160, $150, 0, 0,
+    $ffff, $ffff, 1, 0], []);
+  s := FakeFacePdf(FakeFaceOfCmap(CmapTable([3, 1, 0], [sub])), TWO_CHARS);
+  Check(PosEx('<00020003>', s) > 0, 'drawn after a broken segment');
 end;
 
 // Test Format12 with hmtx cut after glyph 66: glyph 67 ('b') is the first

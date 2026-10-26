@@ -422,6 +422,15 @@ Preference order, in `TPdfTtf.LoadCmap`:
 
 Formats 4 and 12 are parsed; `HasCmap` says whether one was read.
 
+Bounds of format 4 (`Format4CmapBounds`): the directory, the subtable
+header and its four arrays (`segCountX2 * 4 + 2` bytes) must lie in the table
+- else no cmap is read, as `LoadCmap12` rejects a broken format 12. The bound
+is the table's own byte length, `fcmapSize` (`GetTtfData`'s `Size`), which
+may be odd: `fcmap` holds one zero word more, and a glyph word half in it is
+no glyph. Every read of `glyphIndexArray` goes through `TPdfTtf.GlyphIndex`
+(0 before the array or past the table), in `GlyphOf` and in `Create` alike;
+a segment with `startCode > endCode` holds no code.
+
 ### Odd subtable offsets
 
 `GetTtfData` byte-swaps the table as 16-bit words, so a subtable at an **odd**

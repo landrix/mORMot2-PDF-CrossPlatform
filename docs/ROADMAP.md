@@ -41,6 +41,13 @@ v0.10.0 (2026-09-30).
   backspace in a string was written `\B` instead of `\b`, which also
   corrupted encrypted strings now and then. `TPdfWrite.AddUnicodeHex`
   never encrypts now; `AddUnicodeHexString` writes an object's text string
+- **Fixed (malformed fonts):** the format 4 `cmap` of a face was read past
+  its table - a directory of more records than the table holds, a subtable
+  header or `segCountX2` arrays past its end, an `idRangeOffset` outside
+  the glyph array - and a segment ending before its start made the code
+  count negative (an `ERangeError`, or a write past the arrays). Such a
+  `cmap` is not read now, such a glyph is 0 and such a segment holds no
+  code (trunk #673, row 14)
 - **Changed (`TPdfImage`):** `CreateJpeg` takes the colour space from the
   JPEG - a grayscale one is `DeviceGray` now, not `DeviceRGB` - and raises
   `EPdfInvalidValue` for a CMYK JPEG; `CreateJpegDirect` raises for data
@@ -698,11 +705,11 @@ and in the Uniscribe backend (`ReduceTtf`, the bidi levels) - and `{#}` and
 test that fails before its fix. Items 1 and 2 are also in the trunk's
 `mormot.ui.pdf`.
 
-1. **Malformed fonts** (`mormot.pdf`): `TPdfTtf.LoadCmap` checks only the
-   offset of a format 4 subtable, not its header, `segCountX2` or the
-   subtable count, and `TPdfTtf.Create` reads `glyphIndexArray` unchecked;
-   `TtfFontPostcriptName` reads the `name` records unchecked. A corrupt
-   face reads past its table
+1. **Malformed fonts** (`mormot.pdf`): `TtfFontPostcriptName` reads the
+   `name` records unchecked, `TPdfTtf.Create` and `GlyphHmtxWidth` the
+   `head` and `hhea` fields (`UnitsPerEm`, `numOfLongHorMetrics`) without a
+   length check - a corrupt face reads past its table. The format 4 `cmap`
+   is checked since 2026-10-26 (To Announce)
 2. **EMF clipping after `RestoreDC`** (`mormot.pdf.canvas`, Windows):
    `EMR_RESTOREDC` restores the saved state but not the PDF clip that
    `EMR_EXTSELECTCLIPRGN` set with `q ... W n`: what is drawn after the
