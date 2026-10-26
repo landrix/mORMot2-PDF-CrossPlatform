@@ -1962,8 +1962,10 @@ type
       Align: integer;
       BkMode, BkColor: integer;
       Spec: TFontSpec;
-      // a font of the metafile is selected, not the initial stock font
+      // a font of the metafile is selected, not a stock font
       Selected: boolean;
+      // the code page of the stock font while none is: CP_ACP or CP_OEMCP
+      StockCodePage: cardinal;
       LogFont: TLogFontW; // better be the last entry in TPdfEnumState record
     end;
   end;
@@ -3171,6 +3173,18 @@ begin
           fDC[fDCIndex].brush.color := STOCKBRUSHCOLOR[iObject];
           fDC[fDCIndex].brush.null := false;
         end;
+      OEM_FIXED_FONT..DEVICE_DEFAULT_FONT,
+      SYSTEM_FIXED_FONT,
+      DEFAULT_GUI_FONT:
+        begin
+          // its LogFont is not known: EMR_EXTTEXTOUTA decodes in the code
+          // page of its charset, not in the one of the font selected before
+          fDC[fDCIndex].Font.Selected := false;
+          if iObject = OEM_FIXED_FONT then
+            fDC[fDCIndex].Font.StockCodePage := CP_OEMCP
+          else
+            fDC[fDCIndex].Font.StockCodePage := CP_ACP;
+        end;
       NULL_PEN:
         begin
           if fInLined and
@@ -3708,7 +3722,7 @@ begin
     begin
       // bytes in the code page of the font's charset, as ExtTextOutA reads them
       if not fDC[fDCIndex].Font.Selected then
-        cp := CP_ACP // the initial stock font, of the system charset
+        cp := fDC[fDCIndex].Font.StockCodePage // CP_ACP (0) at the start
       else
         case fDC[fDCIndex].Font.LogFont.lfCharSet of
           DEFAULT_CHARSET:
@@ -3991,7 +4005,7 @@ begin
       repeat
         tmp2[0] := tmp[cur];
         fCanvas.ShowText(@tmp2, false);
-        if cur = n - 1 then
+        if integer(cur) = n - 1 then
           break;
         xs := xs + dx^[cur];
         fCanvas.EndText;
