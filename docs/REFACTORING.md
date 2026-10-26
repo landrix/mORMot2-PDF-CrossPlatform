@@ -257,9 +257,10 @@ checked against that record:
    within the subset and its result, synopse/mORMot2#673 row 22; checked:
    `test_runner` 1397/1397 on Windows with Delphi 7, Delphi 13 Win32/Win64,
    FPC 3.3.1 aarch64 and FPC 3.2.2 Win64, 1413/1413 on Linux aarch64,
-   1446/1446 on macOS aarch64; the golden files recorded on the old pin
-   unchanged; FPC 3.2.2 Win32 has the 11 failures of the old pin; the Linux
-   CI pin moves with it).
+   1446/1446 on macOS aarch64, the golden files recorded on the old pin
+   unchanged; with #88 to #90 merged 1442/1442, 1458/1458 and 1491/1491;
+   FPC 3.2.2 Win32 has the 11 failures of the old pin; the Linux CI pin
+   moves with it).
    **Checked:** against `d60cc6e80`, today's `main`,
    `test_runner` 259/259 on Windows (FPC Win64, Delphi 7, Delphi 2010),
    298/298 on Linux, 317/317 on macOS (fpcupdeluxe, FPC 3.2.3). Against
