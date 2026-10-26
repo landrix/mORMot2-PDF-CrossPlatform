@@ -8,8 +8,9 @@ it produced in `.claude/skills/` — this file repeats neither.
 tagged output passes PAC 2024 with accepted hints only (W-1, W-2) and veraPDF
 `ua1`; PDF/A-3U with PDF/UA-1 is verified (R-17). Fonts are embedded and subset
 on all three platforms; tables carry `THead`/`TBody`/`TFoot` row groups.
-`test_runner` is green with 1277 assertions on Windows (FPC, Delphi 7,
-Delphi 2010 and Delphi 13), 1338 on macOS and 1305 on Linux. **Delphi:** layer
+`test_runner` is green with 1397 assertions on Windows (FPC, Delphi 7 and
+Delphi 13; Delphi 2010 last measured with 1277), 1446 on macOS and 1413 on
+Linux (2026-10-26, pin `964874b88`). **Delphi:** layer
 1, the TCanvas bridge and the `TGDIPages` core build on Delphi 7 (R-19, R-20
 steps 1–6) and on Delphi 2010, a Unicode Delphi (R-25); all six console demos
 and the `--export` of the two GUI demos give the same PDF as FPC. Delphi 13
@@ -128,6 +129,13 @@ v0.10.0 (2026-09-30).
   in `MM_ISOTROPIC`, and `CurrentPrinterRes` and `CurrentPrinterPaperSize`
   passed `GetProfileString` a size in bytes, twice the buffer on Unicode
   compilers
+- **Fixed (Windows, `mormot.lib.uniscribe`):** `ReduceTtf` read a broken
+  FontSub subset past its end - a directory longer than the subset, a table
+  past it - and could write past its result when entries shared one table;
+  such a subset is now embedded as FontSub gave it. The table directory of
+  a subset of eight, nine or more than ten tables had a wrong `rangeShift`
+  (font checkers report it, viewers ignore it). Needs `pdf-font-layer` at
+  `964874b88` or later
 - **Builds on Windows aarch64 (FPC):** the fork's copy of
   `mormot.lib.uniscribe` is gone - the `mormot2` package ships the unit and
   hid the copy; `mormot.ui.core` and `mormot.ui.gdiplus` are the trunk
