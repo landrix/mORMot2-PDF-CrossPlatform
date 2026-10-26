@@ -112,6 +112,13 @@ v0.10.0 (2026-09-30).
   checkers report it, viewers mostly ignore it; text with bidi override
   controls (LRO, RLO) could be shaped in the wrong visual order. Needs
   `pdf-font-layer` at `15fb2328a` or later
+- **Fixed (Windows, `mormot.lib.uniscribe`):** `ReduceTtf` read a broken
+  FontSub subset past its end - a directory longer than the subset, a table
+  past it - and could write past its result when entries shared one table;
+  such a subset is now embedded as FontSub gave it. The table directory of
+  a subset of eight, nine or more than ten tables had a wrong `rangeShift`
+  (font checkers report it, viewers ignore it). Needs `pdf-font-layer` at
+  `964874b88` or later
 - **Fixed (EMF, Windows):** `PT_BEZIERTO` in `EMR_POLYDRAW`/`EMR_POLYDRAW16`
   took the points i+1..i+3 instead of i..i+2, so a metafile curve drawn
   with `PolyDraw` came out distorted (trunk d76f5d793, SynPDF #84);
@@ -129,13 +136,6 @@ v0.10.0 (2026-09-30).
   in `MM_ISOTROPIC`, and `CurrentPrinterRes` and `CurrentPrinterPaperSize`
   passed `GetProfileString` a size in bytes, twice the buffer on Unicode
   compilers
-- **Fixed (Windows, `mormot.lib.uniscribe`):** `ReduceTtf` read a broken
-  FontSub subset past its end - a directory longer than the subset, a table
-  past it - and could write past its result when entries shared one table;
-  such a subset is now embedded as FontSub gave it. The table directory of
-  a subset of eight, nine or more than ten tables had a wrong `rangeShift`
-  (font checkers report it, viewers ignore it). Needs `pdf-font-layer` at
-  `964874b88` or later
 - **Builds on Windows aarch64 (FPC):** the fork's copy of
   `mormot.lib.uniscribe` is gone - the `mormot2` package ships the unit and
   hid the copy; `mormot.ui.core` and `mormot.ui.gdiplus` are the trunk

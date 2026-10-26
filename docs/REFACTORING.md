@@ -250,9 +250,10 @@ checked against that record:
    aarch64, golden files unchanged; the Linux CI pin moves with it), then
    `964874b88` (2026-10-26, the trunk of that day merged in - 50 commits,
    among them synopse/mORMot2#684, #685 and #687 (ours), #679 and #686 -
-   `mormot.ui.pdf` and `mormot.lib.gdiplus`, which the engine does not use
-   (`mormot.ui.gdiplus` only for `TJpegImage`) - and changes in `db`, `orm`
-   and `net`; no file both sides changed - and `150b07217`, `ReduceTtf`
+   `mormot.ui.pdf`, which the engine does not use, and the EMF conversion
+   of `mormot.lib.gdiplus`, which it does not call (it links the unit
+   through `mormot.ui.gdiplus` for `TJpegImage`) - and changes in `db`,
+   `orm` and `net`; no file both sides changed - and `150b07217`, `ReduceTtf`
    within the subset and its result, synopse/mORMot2#673 row 22; checked:
    `test_runner` 1397/1397 on Windows with Delphi 7, Delphi 13 Win32/Win64,
    FPC 3.3.1 aarch64 and FPC 3.2.2 Win64, 1413/1413 on Linux aarch64,

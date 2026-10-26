@@ -1859,7 +1859,7 @@ var
   data, reduced: RawByteString;
   i: integer;
 
-  procedure Reset(At, Len: cardinal);
+  procedure ResetEntries(At, Len: cardinal);
   var
     j: integer;
   begin
@@ -1879,17 +1879,17 @@ begin
   FillCharFast(pointer(data)^, 1000, $78);
   for i := 0 to 9 do
     glyf[i] := TAGS[9];
-  Reset(12 + 16 * 10, 100);
+  ResetEntries(12 + 16 * 10, 100);
   Kept(copy(Font(TAGS, offs, lens, data), 1, 9), 'nine bytes: no header');
   Kept(copy(Font(TAGS, offs, lens, data), 1, 12 + 16), 'a directory past the subset');
   lens[9] := $7ffffff0;
   Kept(Font(TAGS, offs, lens, data), 'a table past the subset');
-  Reset(12 + 16 * 10, 100);
+  ResetEntries(12 + 16 * 10, 100);
   offs[9] := $7ffffff0;
   Kept(Font(TAGS, offs, lens, data), 'a table beyond the subset');
-  Reset(12 + 16 * 10, 1000);
+  ResetEntries(12 + 16 * 10, 1000);
   Kept(Font(glyf, offs, lens, data), 'ten entries of one table: more than the subset');
-  Reset(12 + 16 * 10, 100);
+  ResetEntries(12 + 16 * 10, 100);
   lens[0] := 8;
   Kept(Font(TAGS, offs, lens, data), 'a head too short for checkSumAdjustment');
   // nine tables: the binary search fields of nine, not those of ten
@@ -1897,7 +1897,7 @@ begin
   for i := 1 to 8 do
     nine[i] := TAGS[i + 1];
   nine[9] := 0;
-  Reset(12 + 16 * 9, 100);
+  ResetEntries(12 + 16 * 9, 100);
   data := Font(nine, offs, lens, data, 9);
   ReduceTtf(reduced, pointer(data), length(data));
   CheckEqual(BinToHex(copy(reduced, 5, 8)), '0009008000030010',
