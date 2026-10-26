@@ -56,6 +56,8 @@ type
     {$ifdef OSWINDOWS}
     /// a font ReduceTtf rebuilds keeps the checksum of the whole font
     procedure TestReducedFontChecksum;
+    /// ReduceTtf reads within the subset and writes within its result
+    procedure TestReducedFontBounds;
     {$endif OSWINDOWS}
   end;
 
@@ -1818,6 +1820,88 @@ begin
   ReduceTtf(reduced, pointer(font), length(font));
   Check(length(reduced) and 3 = 0, 'whole words');
   CheckEqual(TableSum(reduced), $B1B0AFBA, 'the whole font sums to $B1B0AFBA');
+end;
+
+procedure TPdfSubsetTests.TestReducedFontBounds;
+const
+  // ten tables ReduceTtf keeps: head cvt fpgm prep hhea maxp hmtx cmap loca glyf
+  TAGS: array[0..9] of cardinal = ($68656164, $63767420, $6670676D,
+    $70726570, $68686561, $6D617870, $686D7478, $636D6170, $6C6F6361,
+    $676C7966);
+
+  // a font of Count directory entries: Tags[i] at Offsets[i] for
+  // Lengths[i], followed by Data
+  function Font(const Tags, Offsets, Lengths: array of cardinal;
+    const Data: RawByteString; Count: integer = 10): RawByteString;
+  var
+    i: integer;
+  begin
+    result := BE32Bytes($00010000) + BE32Bytes(cardinal(Count) shl 16) +
+      BE32Bytes(0);
+    for i := 0 to Count - 1 do
+      result := result + BE32Bytes(Tags[i]) + BE32Bytes(0) +
+        BE32Bytes(Offsets[i]) + BE32Bytes(Lengths[i]);
+    result := result + Data;
+  end;
+
+  // ReduceTtf of Ttf gives it back as it is
+  procedure Kept(const Ttf: RawByteString; const Msg: string);
+  var
+    reduced: RawByteString;
+  begin
+    ReduceTtf(reduced, pointer(Ttf), length(Ttf));
+    Check(reduced = Ttf, Msg);
+  end;
+
+var
+  glyf, nine: array[0..9] of cardinal;
+  offs, lens: array[0..9] of cardinal;
+  data, reduced: RawByteString;
+  i: integer;
+
+  procedure Reset(At, Len: cardinal);
+  var
+    j: integer;
+  begin
+    for j := 0 to 9 do
+    begin
+      offs[j] := At;
+      lens[j] := Len;
+    end;
+  end;
+
+begin
+  { ReduceTtf checked SubsetSize against SizeOf(PTtfTableDirectory), the
+    pointer, not its 12 bytes, and none of the directory entries: a table
+    past the subset was read past it, and entries sharing one table wrote past
+    the result, which is as long as the subset (synopse/mORMot2#673, row 22) }
+  SetLength(data, 1000);
+  FillCharFast(pointer(data)^, 1000, $78);
+  for i := 0 to 9 do
+    glyf[i] := TAGS[9];
+  Reset(12 + 16 * 10, 100);
+  Kept(copy(Font(TAGS, offs, lens, data), 1, 9), 'nine bytes: no header');
+  Kept(copy(Font(TAGS, offs, lens, data), 1, 12 + 16), 'a directory past the subset');
+  lens[9] := $7ffffff0;
+  Kept(Font(TAGS, offs, lens, data), 'a table past the subset');
+  Reset(12 + 16 * 10, 100);
+  offs[9] := $7ffffff0;
+  Kept(Font(TAGS, offs, lens, data), 'a table beyond the subset');
+  Reset(12 + 16 * 10, 1000);
+  Kept(Font(glyf, offs, lens, data), 'ten entries of one table: more than the subset');
+  Reset(12 + 16 * 10, 100);
+  lens[0] := 8;
+  Kept(Font(TAGS, offs, lens, data), 'a head too short for checkSumAdjustment');
+  // nine tables: the binary search fields of nine, not those of ten
+  nine[0] := TAGS[0]; // head, then fpgm..glyf: no cvt
+  for i := 1 to 8 do
+    nine[i] := TAGS[i + 1];
+  nine[9] := 0;
+  Reset(12 + 16 * 9, 100);
+  data := Font(nine, offs, lens, data, 9);
+  ReduceTtf(reduced, pointer(data), length(data));
+  CheckEqual(BinToHex(copy(reduced, 5, 8)), '0009008000030010',
+    'nine tables: searchRange 128, entrySelector 3, rangeShift 16');
 end;
 
 {$endif OSWINDOWS}
