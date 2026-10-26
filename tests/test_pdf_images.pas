@@ -1898,7 +1898,8 @@ begin
   result := CountOccurrences('q'#10, s) - CountOccurrences('Q'#10, s);
 end;
 
-// no q or Q within a path, no l or c without a current point
+// no q, Q or other graphics state operator within a path, no l, c or
+// painting operator without a path
 function ValidPaths(const Txt: RawUtf8): boolean;
 var
   p: PUtf8Char;
@@ -1927,7 +1928,16 @@ begin
         exit;
     end
     else if (line = 'q') or
-            (line = 'Q') then
+            (line = 'Q') or
+            (op = 'w') or
+            (op = 'd') or
+            (op = 'J') or
+            (op = 'j') or
+            (op = 'M') or
+            (op = 'RG') or
+            (op = 'rg') or
+            (op = 'gs') or
+            (op = 'cm') then
     begin
       if inpath then
         exit;
@@ -1936,8 +1946,13 @@ begin
             (line = 'f') or
             (line = 'f*') or
             (line = 'B') or
-            (line = 'B*') or
-            (line = 'n') then
+            (line = 'B*') then
+    begin
+      if not inpath then
+        exit;
+      inpath := false;
+    end
+    else if line = 'n' then
       inpath := false;
   end;
   result := true;
@@ -1948,10 +1963,13 @@ var
   mf, mf2: TMetaFile;
   mc: TMetaFileCanvas;
   pen: HPEN;
+  bmp: TBitmap;
+  pts: array[0..2] of TPoint;
   doc: TPdfDocumentGdi;
   ms: TMemoryStream;
   pdf: RawByteString;
-  txt, meta, two, err: RawUtf8;
+  txt, meta, two, tagged, more, fill, err: RawUtf8;
+  i: PtrInt;
 
   procedure Text(Y: integer; const Value: WideString);
   begin
@@ -2052,10 +2070,102 @@ begin
       LineTo(mc.Handle, 200, 265); // after the path: a line of its own
       Clip(0, 0, 350, 350);
       Text(270, 'After');
+      BeginPath(mc.Handle); // painted under the clip of StrokePath, as GDI
+      MoveToEx(mc.Handle, 20, 290, nil);
+      LineTo(mc.Handle, 200, 290);
+      Clip(0, 0, 30, 350);
+      EndPath(mc.Handle);
+      StrokePath(mc.Handle);
     finally
       mc.Free;
     end;
     meta := RenderedEmf(mf, 0, 0, tcNeverClip);
+    // tagged: a recorded path takes its /Artifact BMC along
+    ms := TMemoryStream.Create;
+    doc := TPdfDocumentGdi.Create;
+    try
+      doc.Info.CreationDate := GOLDEN_DATE;
+      doc.Tagged := true;
+      doc.AddPage;
+      RenderMetaFile(doc.Canvas, mf, 1, 1, 0, 0, tpSetTextJustification,
+        99, 101, tcNeverClip);
+      doc.SaveToStream(ms, GOLDEN_DATE);
+      FastSetRawByteString(pdf, ms.Memory, ms.Size);
+      tagged := InflatePdf(NormalizePdf(pdf, err));
+    finally
+      doc.Free;
+      ms.Free;
+    end;
+  finally
+    mf.Free;
+  end;
+  // what is drawn in a path bracket but is no geometry goes to the page
+  mf := TMetaFile.Create;
+  bmp := TBitmap.Create;
+  try
+    mf.Width := 400;
+    mf.Height := 400;
+    bmp.PixelFormat := pf24bit;
+    bmp.Width := 4;
+    bmp.Height := 4;
+    mc := TMetaFileCanvas.Create(mf, 0);
+    try
+      BeginPath(mc.Handle);
+      Text(20, 'InPath');
+      mc.Draw(10, 40, bmp);
+      MoveToEx(mc.Handle, 20, 80, nil);
+      LineTo(mc.Handle, 200, 80);
+      LineTo(mc.Handle, 200, 120);
+      EndPath(mc.Handle);
+      StrokePath(mc.Handle);
+      BeginPath(mc.Handle); // a shape adds to the path, painted once
+      Rectangle(mc.Handle, 250, 250, 300, 300);
+      EndPath(mc.Handle);
+      SelectObject(mc.Handle, GetStockObject(NULL_PEN));
+      MoveToEx(mc.Handle, 20, 350, nil);
+      LineTo(mc.Handle, 200, 350); // its geometry left open on the page
+      FillPath(mc.Handle);
+    finally
+      mc.Free;
+    end;
+    more := RenderedEmf(mf, 0, 0, tcNeverClip);
+  finally
+    bmp.Free;
+    mf.Free;
+  end;
+  // the painting records as GDI paints: fill mode, closed figures
+  mf := TMetaFile.Create;
+  try
+    mf.Width := 400;
+    mf.Height := 400;
+    mc := TMetaFileCanvas.Create(mf, 0);
+    try
+      SetPolyFillMode(mc.Handle, ALTERNATE);
+      SelectObject(mc.Handle, GetStockObject(NULL_PEN));
+      SelectObject(mc.Handle, GetStockObject(NULL_BRUSH));
+      pts[0].X := 20;
+      pts[0].Y := 20;
+      pts[1].X := 100;
+      pts[1].Y := 20;
+      pts[2].X := 60;
+      pts[2].Y := 90;
+      BeginPath(mc.Handle); // kept although neither pen nor brush shows it
+      Polygon(mc.Handle, pts, 3);
+      EndPath(mc.Handle);
+      SelectObject(mc.Handle, GetStockObject(GRAY_BRUSH));
+      FillPath(mc.Handle); // f* for ALTERNATE
+      SelectObject(mc.Handle, GetStockObject(BLACK_PEN));
+      BeginPath(mc.Handle); // an open triangle, closed by StrokeAndFillPath
+      MoveToEx(mc.Handle, 20, 200, nil);
+      LineTo(mc.Handle, 100, 200);
+      LineTo(mc.Handle, 60, 290);
+      Rectangle(mc.Handle, 150, 200, 200, 250); // a figure of its own
+      EndPath(mc.Handle);
+      StrokeAndFillPath(mc.Handle);
+    finally
+      mc.Free;
+    end;
+    fill := RenderedEmf(mf, 0, 0, tcNeverClip);
   finally
     mf.Free;
   end;
@@ -2118,6 +2228,26 @@ begin
   CheckEqual(OpenBefore(meta, '(Free)'), 1, 'the meta region restored');
   Check(ValidPaths(meta), 'valid paths');
   CheckEqual(CountOccurrences(' l'#10, meta), 6, 'every segment kept');
+  Check(PosEx('0 842 22.5 -262.5 re', meta) < PosEx('15 624.5 m', meta),
+    'the path under the clip of its painting');
+  CheckEqual(CountOccurrences('BMC'#10, tagged) + CountOccurrences(' BDC'#10, tagged),
+    CountOccurrences('EMC'#10, tagged), 'marked content balanced');
+  Check(ValidPaths(tagged), 'valid tagged paths');
+  Check(PosEx('(InPath)', more) > 0, 'text in a path');
+  Check(PosEx(' Do'#10, more) > 0, 'a bitmap in a path');
+  Check(ValidPaths(more), 'valid paths with text and bitmap');
+  CheckEqual(CountOccurrences('S'#10, more), 1, 'the path stroked once');
+  CheckEqual(CountOccurrences(#10'B'#10, more) + CountOccurrences(#10'f'#10, more) +
+    CountOccurrences(#10'B*'#10, more) + CountOccurrences(#10'f*'#10, more), 1,
+    'the shape painted once');
+  Check(PosEx('75 827 l'#10, fill) > 0, 'a polygon of no pen nor brush kept');
+  CheckEqual(CountOccurrences(#10'f*'#10, fill), 1, 'FillPath in ALTERNATE mode');
+  i := PosEx(' re'#10, fill);
+  while (i > 1) and
+        (fill[i - 1] <> #10) do
+    dec(i);
+  Check((i > 2) and
+        (copy(fill, i - 2, 2) = 'h'#10), 'StrokeAndFillPath closes the figure');
   Check(PosBefore(meta, '(After)', ' re'#10) > PosBefore(meta, '(After)', ' l'#10),
     'a clip after SelectClipPath');
   Check(PosEx(' l'#10'S'#10, two) > 0, 'a line after a path never painted');
@@ -2683,7 +2813,7 @@ procedure TPdfImageGoldenTests.MetaFileClipRestoreDC;
 var
   i: integer;
 begin
-  for i := 1 to 13 do
+  for i := 1 to 24 do
     Check(true, 'SKIP: metafiles are Windows only');
 end;
 

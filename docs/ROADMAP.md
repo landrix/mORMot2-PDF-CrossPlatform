@@ -8,8 +8,8 @@ it produced in `.claude/skills/` — this file repeats neither.
 tagged output passes PAC 2024 with accepted hints only (W-1, W-2) and veraPDF
 `ua1`; PDF/A-3U with PDF/UA-1 is verified (R-17). Fonts are embedded and subset
 on all three platforms; tables carry `THead`/`TBody`/`TFoot` row groups.
-`test_runner` is green with 1461 assertions on Windows (FPC, Delphi 7,
-Delphi 2010 and Delphi 13), 1510 on macOS and 1477 on Linux (2026-10-26, pin `964874b88`). **Delphi:** layer
+`test_runner` is green with 1472 assertions on Windows (FPC, Delphi 7,
+Delphi 2010 and Delphi 13), 1521 on macOS and 1488 on Linux (2026-10-26, pin `964874b88`). **Delphi:** layer
 1, the TCanvas bridge and the `TGDIPages` core build on Delphi 7 (R-19, R-20
 steps 1–6) and on Delphi 2010, a Unicode Delphi (R-25); all six console demos
 and the `--export` of the two GUI demos give the same PDF as FPC. Delphi 13
@@ -80,13 +80,21 @@ v0.10.0 (2026-09-30).
   region. The restored state's clip and meta region apply now, and every
   clip is closed at the end. After a new clip the pen's colour, width and dash
   are set again: the `Q` before it had reset them in the PDF, so a line
-  drawn with the same pen took those of before the old clip. A clip
-  changed between `BeginPath` and the painting of the path applies after
-  it (GDI paints the path under it: "Review Findings Not Fixed Yet", item
-  6): its `q` or `Q` came inside the path, and a `RestoreDC` there stroked
-  the path drawn so far, leaving the next segment without a start. A path
-  ended by `SelectClipPath` (whose clip is still not applied) or never
-  painted no longer keeps the next records in a path
+  drawn with the same pen took those of before the old clip. A path
+  between `BeginPath` and its painting is written at the painting record
+  now, after the clip and the pen then selected, as GDI paints it: a clip
+  changed meanwhile wrote its `q` or `Q` inside the path, the pen's `w`,
+  `RG` and `d` came between the last segment and the painting operator,
+  and a `RestoreDC` there stroked the path drawn so far, leaving the next
+  segment without a start. Text or a bitmap drawn between `BeginPath` and
+  `EndPath`, and an `Arc` there, stroked the path drawn so far; a
+  rectangle, ellipse, pie, chord, polygon or polyline there was painted at
+  once, and the painting record painted it again. `FillPath` fills by the
+  polygon fill mode (`f*` for `ALTERNATE`), `StrokeAndFillPath` closes each
+  figure as GDI does, and a polygon recorded with a null pen and brush stays
+  in the path. A path ended
+  by `SelectClipPath` (whose clip is still not applied), aborted or never
+  painted is dropped
 - **Fixed (EMF, Windows):** a world transform that only scales, alike on
   both axes, drew the text of a metafile turned by 180 degrees
   (`TPdfDocumentGdi`, `RenderMetaFile`) - the trunk's fix of 2026-10-08,
@@ -724,7 +732,7 @@ agents, each claim verified again by Codex) found 28 bugs; the ones fixed
 then are in "To Announce" - in `mormot.pdf`, in the report and the bridge,
 and in the Uniscribe backend (`ReduceTtf`, the bidi levels) - and `{#}` and
 `{total}` in body text are documented behaviour. These wait, each with a
-test that fails before its fix. Items 1, 4, 5 and 6 are also in the
+test that fails before its fix. Items 1 and 4 to 7 are also in the
 trunk's `mormot.ui.pdf`.
 
 1. **Malformed fonts** (`mormot.pdf`): `TtfFontPostcriptName` reads the
@@ -751,14 +759,18 @@ trunk's `mormot.ui.pdf`.
    pixel; the record holds integer logical units, so what GDI rounds to has
    to be measured first. For the metric map modes the pixel comes from
    `fPrinterPxPerInch`, not from the reference DC, an approximation too
-6. **EMF paths painted under the clip of before** (`mormot.pdf.canvas`,
-   Windows): the renderer writes a GDI path's operators as the records come,
-   and PDF allows no `q`/`Q` within a path, so a clip selected between
-   `BeginPath` and `StrokePath`/`FillPath` applies only after the painting;
-   GDI paints under it. The pen's `w`, `RG` and `d` also come between the
-   last segment and the paint operator, inside the path object. Next: buffer
-   the path from `EMR_BEGINPATH` and write it at the painting record after
-   the clip and the pen, as LibreOffice's EMF reader does; its own PR
+6. **EMF text in a path** (`mormot.pdf.canvas`, Windows): GDI adds the
+   outlines of `TextOut` between `BeginPath` and `EndPath` to the path,
+   painted or dropped with it; the renderer draws the text at once. PDF
+   text cannot join a path: it would need the text kept with the path, or
+   drawn in a clip text mode. Found with the path buffer of 2026-10-26
+7. **EMF lines of a null pen** (`mormot.pdf.canvas`, Windows): `LineTo`,
+   `ArcTo` and the other line records outside a path stroke only with a
+   pen, so with `NULL_PEN` their `m l` - and in a tagged document their
+   `/Artifact BMC` - stay open on the page until the next painting
+   operator, which paints them too. The painting records of a path end them
+   first (`PathPaint`); the others not yet. Next: end them with `n` as
+   `EMR_POLYLINE` does, with a test
 
 ### Underline and Strike-Out Are Not Drawn — bug, fix after R-28
 
@@ -1218,7 +1230,7 @@ chart library's bitmap is to be built only when someone asks for it.
 ### EMF/MetaFile and GDI+ Gradients — no work planned
 
 Windows-only (`TPdfDocumentGdi`), not portable. Its known bugs wait in
-"Review Findings Not Fixed Yet", items 4 to 6.
+"Review Findings Not Fixed Yet", items 4 to 7.
 
 ---
 
