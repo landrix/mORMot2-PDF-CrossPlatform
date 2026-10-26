@@ -2890,6 +2890,8 @@ type
     // be used directly by the Intel x86 code; integer (32-bit) values
     // must take care of this byte swapping
     fcmap, fhead, fhhea, fhmtx: TWordDynArray;
+    // the bytes of the cmap table, which may be odd: fcmap ends with a pad
+    fcmapSize: cardinal;
   public
     // these are pointers to the useful data of the true Type Font:
     /// Font header
@@ -2920,6 +2922,8 @@ type
     function LoadCmap(const aFace: IFontFace): boolean;
     // read the format 12 cmap of aFace into Groups: (3,10), (0,4), another (0,x)
     function LoadCmap12(const aFace: IFontFace): boolean;
+    // glyphIndexArray[Index], 0 outside the table read
+    function GlyphIndex(Index: PtrInt): integer;
   public
     /// create Unicode glyph description for a supplied true Type Font
     // - reads the tables of its face (aUnicodeTtf.fFace)
@@ -3815,7 +3819,7 @@ begin
 end;
 
 function GetTtfData(const aFace: IFontFace; aTableName: PAnsiChar;
-  var Ref: TWordDynArray): pointer;
+  var Ref: TWordDynArray; Size: PCardinal = nil): pointer;
 var
   L: cardinal;
   tag: cardinal;
@@ -3825,6 +3829,8 @@ begin
   L := aFace.GetFontData(tag, 0, nil, 0);
   if L = FONT_DATA_ERROR then
     exit;
+  if Size <> nil then
+    Size^ := L; // the bytes of the table, without the word added below
   SetLength(Ref, L shr 1 + 1);
   if aFace.GetFontData(tag, 0, pointer(Ref), L) = FONT_DATA_ERROR then
     exit;
@@ -6391,16 +6397,21 @@ var
   SubTable: ^TCmapSubTableArray absolute P;
   Header: ^TCmapHeader;
   i: PtrInt;
-  off, uni: cardinal;
+  off, uni, len: cardinal;
 begin
   result := false;
   // retrieve the 'cmap' (character code mapping) table
   // see http://developer.apple.com/fonts/TTRefMan/RM06/Chap6cmap.html
   // and http://www.microsoft.com/typography/OTSPEC/cmap.htm
-  P := GetTtfData(aFace, 'cmap', fcmap);
-  if P = nil then
+  P := GetTtfData(aFace, 'cmap', fcmap, @fcmapSize);
+  if (P = nil) or
+     (fcmapSize < cardinal(SizeOf(TCmapHeader))) then
     exit;
+  len := fcmapSize;
   Header := P;
+  if cardinal(SizeOf(TCmapHeader)) +
+     cardinal(Header^.numberSubtables) * cardinal(SizeOf(SubTable^[0])) > len then
+    exit; // a directory past the table, as LoadCmap12 rejects it
   inc(PByte(P), SizeOf(TCmapHeader));
   off := 0;
   uni := 0;
@@ -6442,7 +6453,8 @@ begin
   i := LongRec(off).Lo; // offset swap to bswap conversion :)
   LongRec(off).Lo := LongRec(off).Hi;
   LongRec(off).Hi := i;
-  if off > cardinal(Length(fcmap) * 2) then
+  if (off > len) or
+     (len - off < cardinal(SizeOf(TCmapFmt4))) then
   begin
     result := LoadCmap12(aFace); // a broken offset: maybe a format 12 one
     exit;
@@ -6461,7 +6473,11 @@ begin
       (cardinal(length(fcmap) * 2) - off) shr 1);  // swap at the odd boundary
   end;
   fmt4 := pointer(PtrUInt(fcmap) + off);
-  if fmt4^.format <> 4 then
+  // the four arrays and reservedPad within the table, the glyphs checked by
+  // GlyphIndex
+  if (fmt4^.format <> 4) or
+     (len - off - cardinal(SizeOf(TCmapFmt4)) <
+      cardinal(fmt4^.segCountX2) * 4 + 2) then
   begin
     fmt4 := nil;
     result := LoadCmap12(aFace); // not format 4: maybe format 12
@@ -6588,6 +6604,16 @@ begin
   result := k > 0; // Symbol as LoadCmap left it: true from a (3,0) only
 end;
 
+function TPdfTtf.GlyphIndex(Index: PtrInt): integer;
+begin
+  // within the table read: a broken cmap is no glyph, not a GPF
+  if (Index < 0) or
+     (PtrUInt(@glyphIndexArray[Index]) + 2 > PtrUInt(fcmap) + fcmapSize) then
+    result := 0
+  else
+    result := glyphIndexArray[Index];
+end;
+
 constructor TPdfTtf.CreateCmap(const aFace: IFontFace);
 begin
   inherited Create;
@@ -6655,12 +6681,7 @@ begin
       else
       begin
         ndx := idRangeOffset[i] shr 1 + i - n + PtrInt(aCode) - startCode[i];
-        // within the table read: a broken cmap is no glyph, not a GPF
-        if (ndx < 0) or
-           (PtrUInt(@glyphIndexArray[ndx]) + 2 >
-            PtrUInt(fcmap) + PtrUInt(length(fcmap)) * 2) then
-          exit;
-        result := glyphIndexArray[ndx];
+        result := GlyphIndex(ndx);
         if result <> 0 then
           result := (result + idDelta[i]) and $ffff;
       end;
@@ -6715,7 +6736,8 @@ begin
   begin
     n := fmt4^.segCountX2 shr 1;
     for i := 0 to n - 1 do
-      inc(aUnicodeTtf.fUsedWideChar.Count, endCode[i] - startCode[i] + 1);
+      if startCode[i] <= endCode[i] then // a broken segment holds no code
+        inc(aUnicodeTtf.fUsedWideChar.Count, endCode[i] - startCode[i] + 1);
     SetLength(aUnicodeTtf.fUsedWideChar.Values, aUnicodeTtf.fUsedWideChar.Count);
     SetLength(aUnicodeTtf.fUsedWide, aUnicodeTtf.fUsedWideChar.Count);
     ndx := 0;
@@ -6732,7 +6754,7 @@ begin
           glyph := code + delta
         else
         begin
-          glyph := glyphIndexArray[offs + code];
+          glyph := GlyphIndex(offs + code);
           if glyph <> 0 then
             inc(glyph, delta);
         end;
