@@ -2463,9 +2463,10 @@ var
   Stream: TMemoryStream;
   first, second: RawByteString;
 begin
-  { RC4 caches the key of the last object it encrypted: the Info dictionary
-    is the last of one save and the first of the next, under the same object
-    number, so the document renewed by NewDoc kept the key of the old file ID }
+  { RC4 caches the key of the last object it encrypted: with empty pages the
+    Info dictionary is the last object one save encrypts and the first the
+    next does, under the same number, so the document renewed by NewDoc kept
+    the key of the old file ID }
   Stream := TMemoryStream.Create;
   try
     PDF := TPdfDocument.Create(false, 0, pdfaNone,

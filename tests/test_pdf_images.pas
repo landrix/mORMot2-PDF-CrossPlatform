@@ -86,6 +86,8 @@ type
     procedure MetaFileScaledRotation;
     /// EMR_EXTTEXTOUTA reads bytes in the code page of the font
     procedure MetaFileAnsiText;
+    /// EMR_EXTTEXTOUTA after a stock font reads bytes in the system code page
+    procedure MetaFileAnsiStockFont;
     /// EMR_STRETCHDIBITS under a flipped transform flips a copy of its header
     procedure MetaFileDIBitsKept;
     /// a printer resolution of 0 is asked again, not divided by
@@ -1377,13 +1379,11 @@ begin
     'the word spacing of the page after the form');
 end;
 
-// text of a metafile under world transforms: a pure uniform scale is no
-// rotation - the EMF TextOut took it for one and drew the text turned by 180
-// degrees, its text matrix negated (the trunk's a86d7e6fc)
 const
   // the record types, by number: the windows unit of FPC lacks some names
   R_POLYPOLYLINE = 7;
   R_SAVEDC = 33;
+  R_SELECTOBJECT = 37;
   R_RESTOREDC = 34;
   R_STRETCHDIBITS = 81;
   R_EXTTEXTOUTA = 83;
@@ -1465,7 +1465,7 @@ end;
 // the operands of the last Op (' rg', ' Tm') before Marker in the content
 function OperandsBefore(const Txt, Marker, Op: RawUtf8): RawUtf8;
 var
-  p, i, j: PtrInt;
+  p, i, j, k: PtrInt;
 begin
   result := '';
   p := PosEx(Marker, Txt);
@@ -1476,16 +1476,23 @@ begin
        (j > p) then
       break;
     i := j + length(Op);
-    result := '';
-    while (j > 1) and
-          not (Txt[j - 1] in [#10, #13]) do
-    begin
-      dec(j);
-      result := Txt[j] + result;
-    end;
+    k := j;
+    while (k > 1) and
+          not (Txt[k - 1] in [#10, #13]) do
+      dec(k);
+    result := copy(Txt, k, j - k);
   until false;
 end;
 
+// binary data from numbers, as CLAUDE.md wants it (W1058 on Delphi 2010)
+function BinaryOf(const B: array of byte): RawByteString;
+begin
+  FastSetRawByteString(result, @B[0], length(B));
+end;
+
+// text of a metafile under world transforms: a pure uniform scale is no
+// rotation - the EMF TextOut took it for one and drew the text turned by 180
+// degrees, its text matrix negated (the trunk's a86d7e6fc)
 procedure TPdfImageGoldenTests.MetaFileWorldTransform;
 
   // how many text matrices of the content turn the text by 180 degrees
@@ -1873,8 +1880,8 @@ begin
       mf.Handle := SetEnhMetaFileBits(length(bytes), pointer(bytes));
       w := RenderedEmf(mf);
       ToAnsi(recs[0], 'Ab');
-      ToAnsi(recs[1], AnsiChar($E1) + AnsiChar($E2)); // code page 1253
-      ToAnsi(recs[2], 'A' + AnsiChar($82) + AnsiChar($A0) + 'B'); // code page 932
+      ToAnsi(recs[1], BinaryOf([$E1, $E2])); // code page 1253
+      ToAnsi(recs[2], BinaryOf([ord('A'), $82, $A0, ord('B')])); // code page 932
       WideDx(recs[2]);
       mf.Handle := SetEnhMetaFileBits(length(bytes), pointer(bytes));
       a := RenderedEmf(mf);
@@ -1884,6 +1891,94 @@ begin
   end;
   Check(w <> '', 'the W metafile rendered');
   CheckEqual(a, w, 'the A records draw as the W ones');
+end;
+
+procedure TPdfImageGoldenTests.MetaFileAnsiStockFont;
+const
+  ANSI: array[0..1] of byte = ($E1, $E2);
+var
+  mf: TMetaFile;
+  mc: TMetaFileCanvas;
+  lf: TLogFontW;
+  f, old: HFONT;
+  bytes: RawByteString;
+  recs: TIntegerDynArray;
+  w, a: RawUtf8;
+  str: PtrInt;
+  i, stock: integer;
+
+  // the bytes as CodePage reads them, drawn as a W record after the stock
+  // font - one character on a DBCS code page (932, 936, 950)
+  procedure Text(Y: integer; StockFont, CodePage: cardinal);
+  var
+    ws: array[0..1] of WideChar;
+    n: integer;
+  begin
+    SelectObject(mc.Handle, GetStockObject(StockFont));
+    n := MultiByteToWideChar(CodePage, 0, @ANSI, 2, @ws, 2);
+    TextOutW(mc.Handle, 10, Y, @ws, n);
+  end;
+
+begin
+  { a stock font selected after a font of the metafile left the code page of
+    that font: an EMR_EXTTEXTOUTA drawn then decoded its bytes in it, not in
+    the code page of the stock font - the system one, the OEM one for
+    OEM_FIXED_FONT }
+  mf := TMetaFile.Create;
+  try
+    mf.Width := 400;
+    mf.Height := 400;
+    mc := TMetaFileCanvas.Create(mf, 0);
+    try
+      FillChar(lf, SizeOf(lf), 0);
+      lf.lfHeight := -16;
+      lf.lfCharSet := GREEK_CHARSET;
+      Utf8ToWideChar(@lf.lfFaceName, 'Arial');
+      f := CreateFontIndirectW(lf);
+      old := SelectObject(mc.Handle, f);
+      Text(10, SYSTEM_FONT, CP_ACP);
+      SelectObject(mc.Handle, f);
+      Text(40, OEM_FIXED_FONT, CP_OEMCP);
+      SelectObject(mc.Handle, old);
+      DeleteObject(f);
+    finally
+      mc.Free;
+    end;
+    bytes := EmfBytes(mf);
+    recs := EmfRecords(bytes, R_SELECTOBJECT);
+    stock := 0; // the VCL canvas may select a stock font of its own
+    for i := 0 to high(recs) do
+      case PCardinal(@PByteArray(bytes)[recs[i] + 8])^ of
+        $80000000 + SYSTEM_FONT:
+          stock := stock or 1;
+        $80000000 + OEM_FIXED_FONT:
+          stock := stock or 2;
+      end;
+    CheckEqual(stock, 3, 'both stock fonts selected');
+    recs := EmfRecords(bytes, R_EXTTEXTOUTW);
+    if CheckEqual(length(recs), 2, 'two W records') then
+    begin
+      for i := 0 to 1 do
+        PCardinal(@PByteArray(bytes)[recs[i] + 72])^ := 0; // no dx: see AnsiText
+      mf.Handle := SetEnhMetaFileBits(length(bytes), pointer(bytes));
+      w := RenderedEmf(mf);
+      // the W records as A records of the two bytes
+      for i := 0 to 1 do
+      begin
+        PCardinal(@PByteArray(bytes)[recs[i]])^ := R_EXTTEXTOUTA;
+        PCardinal(@PByteArray(bytes)[recs[i] + 44])^ := 2; // EMRTEXT.nChars
+        str := recs[i] + PInteger(@PByteArray(bytes)[recs[i] + 48])^;
+        FillChar(PByteArray(bytes)[str], 4, 0);
+        MoveFast(ANSI, PByteArray(bytes)[str], 2);
+      end;
+      mf.Handle := SetEnhMetaFileBits(length(bytes), pointer(bytes));
+      a := RenderedEmf(mf);
+    end;
+  finally
+    mf.Free;
+  end;
+  Check(w <> '', 'the W metafile rendered');
+  CheckEqual(a, w, 'decoded in the code page of the stock font');
 end;
 
 procedure TPdfImageGoldenTests.MetaFileDIBitsKept;
@@ -2055,6 +2150,14 @@ var
   i: integer;
 begin
   for i := 1 to 6 do
+    Check(true, 'SKIP: metafiles are Windows only');
+end;
+
+procedure TPdfImageGoldenTests.MetaFileAnsiStockFont;
+var
+  i: integer;
+begin
+  for i := 1 to 4 do
     Check(true, 'SKIP: metafiles are Windows only');
 end;
 

@@ -62,7 +62,7 @@ v0.10.0 (2026-09-30).
   document raised an access violation there; after `NewDoc` an RC4 document
   encrypted its `/Info` with the key of the old one, a
   `SaveToStreamDirectBegin` left open made the next save raise, and an
-  artifact left open the next `BeginArtifact`;
+  artifact left open made the next `BeginArtifact` raise;
   `TPdfDictionaryWrapper.HasData` was inverted and
   `TPdfCatalog.NonFullScreenPageMode` always read `pmUseNone`
 - **Fixed (EMF, Windows):** a world transform that only scales, alike on
