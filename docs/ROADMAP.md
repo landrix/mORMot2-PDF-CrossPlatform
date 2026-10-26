@@ -697,8 +697,10 @@ test that fails before its fix. Items 1 and 2 are also in the trunk's
 `mormot.ui.pdf`.
 
 1. **Malformed fonts** (`mormot.pdf`): `TtfFontPostcriptName` reads the
-   `name` records unchecked - a corrupt face reads past its table. The
-   format 4 `cmap` is checked since 2026-10-26 (To Announce)
+   `name` records unchecked, `TPdfTtf.Create` and `GlyphHmtxWidth` the
+   `head` and `hhea` fields (`UnitsPerEm`, `numOfLongHorMetrics`) without a
+   length check - a corrupt face reads past its table. The format 4 `cmap`
+   is checked since 2026-10-26 (To Announce)
 2. **EMF clipping after `RestoreDC`** (`mormot.pdf.canvas`, Windows):
    `EMR_RESTOREDC` restores the saved state but not the PDF clip that
    `EMR_EXTSELECTCLIPRGN` set with `q ... W n`: what is drawn after the
