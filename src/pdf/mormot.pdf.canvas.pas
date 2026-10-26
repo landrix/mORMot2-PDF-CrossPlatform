@@ -2085,8 +2085,20 @@ type
     // what the q of the canvas hold: fMetaActive, then fClipActive; 0 if none
     fMetaActive: integer;
     fClipActive: integer;
-    // from EMR_BEGINPATH until the path is painted or aborted
-    fPathOpen: boolean;
+    // from EMR_BEGINPATH to EMR_ENDPATH: the path's geometry goes to a stream
+    // of its own, all else (pen, text, bitmaps) to the page
+    fPathRecording: boolean;
+    fPathStream: TPdfStream;
+    // within a geometry record: the page's contents and path artifact
+    fPathIn: boolean;
+    fPathSaved: TPdfStream;
+    fPathSavedArtifact: boolean;
+    // the path artifact the geometry opened in fPathStream
+    fPathArtifact: boolean;
+    // the recorded path until its painting record, and whether it opened a
+    // path artifact, which the painting operator closes
+    fPathBuf: RawByteString;
+    fPathBufArtifact: boolean;
   public
     constructor Create(ACanvas: TPdfCanvas);
     procedure SaveDC;
@@ -2094,8 +2106,22 @@ type
     // make Meta and Region (0 = none) the clip of the canvas: Q of the q
     // that are not part of it
     procedure SelectClip(Meta, Region: integer);
-    // the path is painted or aborted: the clip selected meanwhile applies
-    procedure PathEnded;
+    // after a Q: the colours, the line width and the dash are those of before
+    procedure GStateRestored;
+    // EMR_BEGINPATH: record the path apart, PDF allows no q/Q within it
+    procedure PathBegin;
+    // around a record of the path's geometry: to its stream and back
+    procedure PathIn;
+    procedure PathOut;
+    // EMR_ENDPATH: back to the page's contents, the path kept
+    procedure PathClose;
+    // a painting record: back to the page, what it left open ended
+    procedure PathPaint;
+    // write the kept path, after the clip and the pen of its painting
+    // - CloseFigures for EMR_STROKEANDFILLPATH, which closes each figure
+    procedure PathReplay(CloseFigures: boolean = false);
+    // the path is painted or dropped
+    procedure PathDone;
     procedure NeedPen;
     procedure NeedBrushAndPen;
     procedure FlushPenBrush;
@@ -2167,6 +2193,16 @@ var
 begin
   result := true;
   st := @E.fDC[E.fDCIndex];
+  if E.fPathRecording then
+    case R^.iType of
+      EMR_MOVETOEX, EMR_LINETO, EMR_RECTANGLE, EMR_ELLIPSE, EMR_ROUNDRECT,
+      EMR_ARC, EMR_ARCTO, EMR_PIE, EMR_CHORD, EMR_POLYGON, EMR_POLYLINE,
+      EMR_POLYGON16, EMR_POLYLINE16, EMR_POLYPOLYGON, EMR_POLYPOLYGON16,
+      EMR_POLYPOLYLINE, EMR_POLYPOLYLINE16, EMR_POLYBEZIER, EMR_POLYBEZIER16,
+      EMR_POLYBEZIERTO, EMR_POLYBEZIERTO16, EMR_POLYLINETO, EMR_POLYLINETO16,
+      EMR_POLYDRAW, EMR_POLYDRAW16, EMR_CLOSEFIGURE:
+        E.PathIn;
+    end;
   case R^.iType of
     EMR_HEADER:
       begin
@@ -2300,7 +2336,8 @@ begin
           PEMRARC(R)^.ptlStart.x, PEMRARC(R)^.ptlStart.y,
           PEMRARC(R)^.ptlEnd.x, PEMRARC(R)^.ptlEnd.y,
           E.fDC[E.fDCIndex].ArcDirection = AD_CLOCKWISE, acArc, st^.position);
-        E.fCanvas.Stroke;
+        if not E.fCanvas.fNewPath then
+          E.fCanvas.Stroke;
       end;
     EMR_ARCTO:
       begin
@@ -2332,10 +2369,11 @@ begin
           PEMRPie(R)^.ptlStart.x, PEMRPie(R)^.ptlStart.y,
           PEMRPie(R)^.ptlEnd.x, PEMRPie(R)^.ptlEnd.y,
           E.fDC[E.fDCIndex].ArcDirection = AD_CLOCKWISE, acPie, st^.position);
-        if st^.pen.null then
-          E.fCanvas.Fill
-        else
-          E.fCanvas.FillStroke;
+        if not E.fPathRecording then // else painted by the painting record
+          if st^.pen.null then
+            E.fCanvas.Fill
+          else
+            E.fCanvas.FillStroke;
       end;
     EMR_CHORD:
       begin
@@ -2347,10 +2385,11 @@ begin
           PEMRChord(R)^.ptlStart.x, PEMRChord(R)^.ptlStart.y,
           PEMRChord(R)^.ptlEnd.x, PEMRChord(R)^.ptlEnd.y,
           E.fDC[E.fDCIndex].ArcDirection = AD_CLOCKWISE, acChoord, st^.position);
-        if st^.pen.null then
-          E.fCanvas.Fill
-        else
-          E.fCanvas.FillStroke;
+        if not E.fPathRecording then // else painted by the painting record
+          if st^.pen.null then
+            E.fCanvas.Fill
+          else
+            E.fCanvas.FillStroke;
       end;
     EMR_FILLRGN:
       begin
@@ -2363,7 +2402,8 @@ begin
     EMR_POLYLINE,
     EMR_POLYGON16,
     EMR_POLYLINE16:
-      if not st^.brush.null or
+      if E.fPathRecording or // a path keeps it for a brush selected later
+         not st^.brush.null or
          not st^.pen.null then
       begin
         if R^.iType in [EMR_POLYGON, EMR_POLYGON16] then
@@ -2403,10 +2443,11 @@ begin
           E.fCanvas.Closepath;
           E.FlushPenBrush;
         end
-        else if not st^.pen.null then
-          E.fCanvas.Stroke
-        else // for lines
-          E.fCanvas.NewPath;
+        else if not E.fPathRecording then // else painted by the painting record
+          if not st^.pen.null then
+            E.fCanvas.Stroke
+          else // for lines
+            E.fCanvas.NewPath;
       end;
     EMR_POLYPOLYGON,
     EMR_POLYPOLYGON16,
@@ -2786,8 +2827,9 @@ begin
       st^.MappingMode := PEMRSetMapMode(R)^.iMode;
     EMR_BEGINPATH:
       begin
-        E.fPathOpen := true;
         E.fCanvas.NewPath;
+        E.PathBegin;
+        E.PathIn; // its first point
         if not st^.Moved then
         begin
           E.fCanvas.MoveToI(st^.position.X, st^.position.Y);
@@ -2795,44 +2837,58 @@ begin
         end;
       end;
     EMR_ENDPATH:
-      E.fCanvas.fNewPath := false;
+      begin
+        E.fCanvas.fNewPath := false;
+        E.PathClose;
+      end;
     EMR_ABORTPATH,
     EMR_SELECTCLIPPATH: // the clip of a path is not applied
       begin
-        E.fCanvas.NewPath;
+        E.PathDone;
         E.fCanvas.fNewPath := false;
-        E.PathEnded;
       end;
     EMR_CLOSEFIGURE:
       E.fCanvas.ClosePath;
     EMR_FILLPATH:
       begin
+        E.PathPaint;
         if not st^.brush.Null then
-        begin
           E.FillColor := st^.brush.color;
-          E.fCanvas.Fill;
-        end;
+        E.PathReplay;
+        if not st^.brush.Null then
+          if st^.PolyFillMode = ALTERNATE then
+            E.fCanvas.EoFill
+          else
+            E.fCanvas.Fill;
         E.fCanvas.NewPath;
         E.fCanvas.fNewPath := false;
-        E.PathEnded;
+        E.PathDone;
       end;
     EMR_STROKEPATH:
       begin
+        E.PathPaint;
         if not st^.pen.null then
-        begin
           E.NeedPen;
+        E.PathReplay;
+        if not st^.pen.null then
           E.fCanvas.Stroke;
-        end;
         E.fCanvas.NewPath;
         E.fCanvas.fNewPath := false;
-        E.PathEnded;
+        E.PathDone;
       end;
     EMR_STROKEANDFILLPATH:
       begin
+        E.PathPaint;
         if not st^.brush.Null then
         begin
           E.NeedPen;
           E.FillColor := st^.brush.color;
+        end
+        else if not st^.pen.null then
+          E.NeedPen;
+        E.PathReplay(true);
+        if not st^.brush.Null then
+        begin
           if not st^.pen.null then
             if st^.PolyFillMode = ALTERNATE then
               E.fCanvas.EofillStroke
@@ -2844,13 +2900,10 @@ begin
             E.fCanvas.Fill
         end
         else if not st^.pen.null then
-        begin
-          E.NeedPen;
           E.fCanvas.Stroke;
-        end;
         E.fCanvas.NewPath;
         E.fCanvas.fNewPath := false;
-        E.PathEnded;
+        E.PathDone;
       end;
     EMR_SETPOLYFILLMODE:
       st^.PolyFillMode := PEMRSetPolyFillMode(R)^.iMode;
@@ -2901,6 +2954,9 @@ begin
   else
     R^.iType := R^.iType; // for debug purpose (breakpoint)
   end;
+  E.PathOut;
+  if E.fPathRecording then
+    E.fCanvas.fNewPath := true; // text or a bitmap of the bracket reset it
   case R^.iType of
     EMR_RESTOREDC,
     EMR_SETWINDOWEXTEX,
@@ -2954,9 +3010,7 @@ begin
       EnumEnhMetaFile(TPdfDocumentAccess(A.fDoc).EmfDC, MF.Handle, @EnumEMFFunc, E, TRect(R));
       {$endif FPC}
     finally
-      if E.fPathOpen then
-        C.NewPath; // a path never painted, before the Q
-      E.fPathOpen := false;
+      E.PathDone; // a path never painted
       E.SelectClip(0, 0); // the q of a clip still selected
       A.fNewPath := false;
       C.GRestore;
@@ -3198,6 +3252,8 @@ begin
         end;
       end;
   end;
+  if fPathRecording then
+    exit; // painted by the painting record
   if iType in [EMR_POLYPOLYLINE, EMR_POLYPOLYLINE16] then
   begin // stroke
     if not fDC[fDCIndex].pen.null then
@@ -3244,6 +3300,8 @@ end;
 
 procedure TPdfEnum.FlushPenBrush;
 begin
+  if fPathRecording then
+    exit; // painted by the painting record
   if fDC[fDCIndex].brush.null then
   begin
     if not fDC[fDCIndex].pen.null then
@@ -3282,6 +3340,7 @@ begin
       NULL_PEN:
         begin
           if fInLined and
+             not fPathRecording and // StrokePath paints a path
              ((fDC[fDCIndex].pen.style <> PS_NULL) or not fDC[fDCIndex].pen.null) then
           begin
             fInLined := false;
@@ -3295,6 +3354,7 @@ begin
       BLACK_PEN:
         begin
           if fInLined and
+             not fPathRecording and
              ((fDC[fDCIndex].pen.color <> STOCKPENCOLOR[iObject]) or
               not fDC[fDCIndex].pen.null) then
           begin
@@ -3312,6 +3372,7 @@ begin
       OBJ_PEN:
         begin
           if fInLined and
+             not fPathRecording and
              ((fDC[fDCIndex].pen.color <> fObj[iObject - 1].PenColor) or
               (fDC[fDCIndex].pen.width <> fObj[iObject - 1].PenWidth) or
               (fDC[fDCIndex].pen.style <> fObj[iObject - 1].PenStyle)) then
@@ -3403,10 +3464,18 @@ end;
 
 procedure TPdfEnum.NeedBrushAndPen;
 begin
+  if fPathIn then
+  begin
+    PathOut; // no w, RG or rg within a path
+    NeedBrushAndPen;
+    PathIn;
+    exit;
+  end;
   if fInlined then
   begin
     fInlined := false;
-    fCanvas.Stroke;
+    if not fPathRecording then // StrokePath paints a path
+      fCanvas.Stroke;
   end;
   NeedPen;
   if not fDC[fDCIndex].brush.null then
@@ -3415,6 +3484,13 @@ end;
 
 procedure TPdfEnum.NeedPen;
 begin
+  if fPathIn then
+  begin
+    PathOut; // no w, RG or d within a path
+    NeedPen;
+    PathIn;
+    exit;
+  end;
   if not fDC[fDCIndex].pen.null then
   begin
     StrokeColor := fDC[fDCIndex].pen.color;
@@ -3489,7 +3565,7 @@ begin
   begin
     fInlined := false;
     if not fDC[fDCIndex].pen.null and
-       not fPathOpen then // StrokePath paints a path
+       not fPathRecording then // StrokePath paints a path
       fCanvas.Stroke;
   end;
   fCanvas.fViewSize := fDC[fDCIndex].ViewSize;
@@ -3648,13 +3724,9 @@ begin
     SetLength(fMetaClips, n + 1);
     fMetaClips[n].Region := fDC[fDCIndex].ClipRegion;
     fMetaClips[n].Parent := fDC[fDCIndex].MetaClip;
-    if (fClipActive = fDC[fDCIndex].ClipRegion) and
-       (fMetaActive = fDC[fDCIndex].MetaClip) then
-    begin
-      // the q of the clip stays, as part of the meta region
-      fMetaActive := n + 1;
-      fClipActive := 0;
-    end; // else a path is open: SelectClip makes up for it after
+    // the q of the clip stays, as part of the meta region
+    fMetaActive := n + 1;
+    fClipActive := 0;
     fDC[fDCIndex].MetaClip := n + 1;
     fDC[fDCIndex].ClipRegion := 0;
   end;
@@ -3733,11 +3805,7 @@ procedure TPdfEnum.SelectClip(Meta, Region: integer);
   begin
     fCanvas.GRestore;
     fCanvas.NewPath;
-    // Q has restored the colours, the line width and the dash of before
-    fFillColor := -1;
-    fStrokeColor := -1;
-    fPenWidth := -1;
-    fPenStyle := -1;
+    GStateRestored;
   end;
 
   procedure Push(Index: integer);
@@ -3772,9 +3840,8 @@ procedure TPdfEnum.SelectClip(Meta, Region: integer);
   end;
 
 begin
-  if fPathOpen or // q and Q are not allowed within a path: see PathEnded
-     ((Meta = fMetaActive) and
-      (Region = fClipActive)) then
+  if (Meta = fMetaActive) and
+     (Region = fClipActive) then
     exit;
   if fClipActive <> 0 then
     Pop;
@@ -3788,14 +3855,135 @@ begin
   if Region <> 0 then
     Push(Region);
   fClipActive := Region;
-  fCanvas.fNewPath := false;
+  // the path recorded meanwhile goes on: its geometry is not on the page
+  fCanvas.fNewPath := fPathRecording;
 end;
 
-procedure TPdfEnum.PathEnded;
+procedure TPdfEnum.GStateRestored;
 begin
-  fPathOpen := false;
+  fFillColor := -1;
+  fStrokeColor := -1;
+  fPenWidth := -1;
+  fPenStyle := -1;
+end;
+
+procedure TPdfEnum.PathBegin;
+begin
+  if fPathRecording or
+     (fPathBuf <> '') then
+    PathDone; // a path begun again drops the one before, as in GDI
+  fPathRecording := true;
+  fPathArtifact := false;
+  if fCanvas.fContents <> nil then
+    fPathStream := TPdfStream.Create(fCanvas.fDoc, true);
+end;
+
+procedure TPdfEnum.PathIn;
+begin
+  if fPathIn or
+     (fPathStream = nil) then
+    exit;
+  fPathIn := true;
+  fPathSaved := fCanvas.fContents;
+  fPathSavedArtifact := fCanvas.fPathArtifact;
+  fCanvas.fContents := fPathStream;
+  fCanvas.fPathArtifact := fPathArtifact;
+end;
+
+procedure TPdfEnum.PathOut;
+begin
+  if not fPathIn then
+    exit;
+  fPathIn := false;
+  fPathArtifact := fCanvas.fPathArtifact;
+  fCanvas.fContents := fPathSaved;
+  fCanvas.fPathArtifact := fPathSavedArtifact;
+  fPathSaved := nil;
+end;
+
+procedure TPdfEnum.PathClose;
+begin
+  if not fPathRecording then
+    exit;
+  PathOut;
+  fPathRecording := false;
+  fInlined := false; // its lines are painted by the painting record
+  if fPathStream = nil then
+    exit;
+  fPathBuf := fPathStream.Writer.ToPdfString;
+  FreeAndNil(fPathStream);
+  fPathBufArtifact := fPathArtifact;
+end;
+
+procedure TPdfEnum.PathPaint;
+begin
+  PathClose;
+  if fPathBuf <> '' then
+    // a line of a null pen leaves its geometry, and its artifact, open
+    fCanvas.NewPath;
+end;
+
+procedure TPdfEnum.PathReplay(CloseFigures: boolean);
+var
+  p, n: PtrInt;
+  segment: boolean;
+  line: RawByteString;
+begin
+  PathClose;
+  if fPathBuf = '' then
+    exit;
+  if not CloseFigures then
+  begin
+    fCanvas.fContents.Writer.Add(fPathBuf);
+    fPathBuf := '';
+    fCanvas.fPathArtifact := fPathBufArtifact; // closed by the painting
+    exit;
+  end;
+  // an h before each move or re and at the end, after a figure of a segment
+  // or more
+  segment := false;
+  p := 1;
+  while p <= length(fPathBuf) do
+  begin
+    n := PosEx(#10, fPathBuf, p);
+    if n = 0 then
+      n := length(fPathBuf) + 1;
+    line := copy(fPathBuf, p, n - p);
+    p := n + 1;
+    if line = 'h' then
+      segment := false
+    else if (length(line) > 3) and
+            (copy(line, length(line) - 2, 3) = ' re') then
+    begin
+      if segment then
+        fCanvas.fContents.Writer.Add('h'#10);
+      segment := false;
+    end
+    else if (length(line) > 2) and
+            (line[length(line) - 1] = ' ') then
+      case line[length(line)] of
+        'm':
+          begin
+            if segment then
+              fCanvas.fContents.Writer.Add('h'#10);
+            segment := false;
+          end;
+        'l', 'c', 'v', 'y':
+          segment := true;
+      end;
+    fCanvas.fContents.Writer.Add(line).Add(#10);
+  end;
+  if segment then
+    fCanvas.fContents.Writer.Add('h'#10);
+  fPathBuf := '';
+  fCanvas.fPathArtifact := fPathBufArtifact; // closed by the painting
+end;
+
+procedure TPdfEnum.PathDone;
+begin
+  PathClose;
+  fPathBuf := ''; // dropped when not painted, with its artifact
   fDC[fDCIndex].Moved := false; // the next segment starts with its own m
-  SelectClip(fDC[fDCIndex].MetaClip, fDC[fDCIndex].ClipRegion);
 end;
 
 function TPdfEnum.GetClipRect: TPdfBox;
@@ -4191,7 +4379,7 @@ begin
     if clipped then
     begin
       fCanvas.GRestore;
-      fFillColor := -1; // force set drawing color
+      GStateRestored; // the pen of an underline too
     end;
     // restore previous text justification (after GRestore if clipped)
     case po of

@@ -530,14 +530,28 @@ clip as part of the meta region: a node of `fMetaClips` inside the ones kept
 before it, named by the state (`MetaClip`); a later clip opens its `q` inside,
 and `SelectClip` closes a node only when the state it restores lies outside.
 A `Q` restores the PDF colours, line width and dash, so `SelectClip` forgets
-the cached `fFillColor`, `fStrokeColor`, `fPenWidth` and `fPenStyle`. `q` and
-`Q` are not allowed within a path, while GDI may change the clip between
-`BeginPath` and `StrokePath`: the engine writes the path as it comes, so
-`SelectClip` waits while `fPathOpen` and `PathEnded` (the painting records,
-`EMR_ABORTPATH`, `EMR_SELECTCLIPPATH`) applies the clip after - the path is
-painted under the clip of before (ROADMAP "Review Findings Not Fixed Yet",
-item 6). `ScaleMatrix` does not stroke a pending line then either, and
-`RenderMetaFile` ends a path never painted (`MetaFileClipRestoreDC`).
+the cached `fFillColor`, `fStrokeColor`, `fPenWidth` and `fPenStyle`.
+
+A GDI path is painted under the clip and with the pen of its painting record,
+while PDF allows no `q`/`Q` or `w`/`RG`/`d` within a path. So from
+`EMR_BEGINPATH` (`PathBegin`) to `EMR_ENDPATH` (`PathClose`) the records of
+the path's geometry (moves, lines, curves, shapes, `EMR_CLOSEFIGURE`) write
+to a stream of its own: `EnumEMFFunc` calls `PathIn` before them and
+`PathOut` after. Everything else goes to the page as it comes - clips, pen
+operators (`NeedPen` and `NeedBrushAndPen` step out of the path's stream),
+text, bitmaps, the miter limit - so the canvas's caches and the order stay
+right; the shapes (`FlushPenBrush`, pie, chord, polylines, `PolyPoly`) do not
+paint while recording. The painting records end what the page left open
+(`PathPaint`: a line of a null pen, ROADMAP "Review Findings Not Fixed Yet"
+item 7), set the pen and the brush, then `PathReplay` writes the path - with
+an `h` closing each figure for `EMR_STROKEANDFILLPATH` - then the painting
+operator (`f*` for `ALTERNATE`); `EMR_ABORTPATH`,
+`EMR_SELECTCLIPPATH` and the end of `RenderMetaFile` drop it (`PathDone`).
+A tagged document's `/Artifact BMC` goes with the path's stream, its `EMC`
+with the painting operator (`fPathArtifact`, `fPathBufArtifact`). While a
+path is recorded `fNewPath` stays set (text and bitmaps clear it), and
+`ScaleMatrix` and `NeedBrushAndPen` do not stroke a pending line
+(`MetaFileClipRestoreDC`). Text in a path is drawn at once (item 6).
 
 Records `TPdfEnum` reads through its own declarations: `EMR_CREATEBRUSHINDIRECT`
 and `EMR_EXTCREATEPEN` (`TEmrCreateBrushIndirect32`, `TEmrExtCreatePen32`).
