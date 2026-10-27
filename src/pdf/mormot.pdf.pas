@@ -2023,6 +2023,8 @@ type
     /// enable Tagged PDF (ISO 32000-1 14) accessibility structure tags
     // - adds /MarkInfo, /Lang and /StructTreeRoot to the document catalog
     // - must be set before the first AddPage call
+    // - raises EPdfInvalidOperation when the encryption does not allow
+    // epContentExtraction: PDF/UA-1 7.16 needs /P bit 10
     // - H1..H6 headings and paragraph text are wrapped in BDC/EMC operators
     property Tagged: boolean
       read fTagged write SetTagged;
@@ -10759,6 +10761,15 @@ begin
      (fRawPages.Count > 0) then
     raise ESynException.Create('TPdfDocument.Tagged must be set before the ' +
       'first AddPage: it selects the fonts the document is measured with');
+  {$ifdef USE_PDFSECURITY}
+  // PDF/UA-1 7.16: assistive technology may extract the content of an
+  // encrypted file - P bit 10, always set by RC4-40
+  if Value and
+     (fEncryption <> nil) and
+     (fEncryption.fFlags and $200 = 0) then
+    raise EPdfInvalidOperation.Create('TPdfDocument.Tagged (PDF/UA) needs ' +
+      'epContentExtraction in the encryption permissions');
+  {$endif USE_PDFSECURITY}
   fTagged := Value;
   if not fTagged then
     exit;

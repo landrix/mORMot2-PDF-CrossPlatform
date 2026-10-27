@@ -112,6 +112,8 @@ type
     procedure TestNewDocKeepsEncryption;
     /// a document renewed by NewDoc encrypts with its own RC4 object keys
     procedure TestNewDocRenewsObjectKeys;
+    /// Tagged refuses an encryption that keeps assistive technology out
+    procedure TestTaggedEncryptionNeedsAccessibility;
     {$endif NO_USE_PDFSECURITY}
     /// NewDoc ends a direct save left open
     procedure TestNewDocEndsDirectSave;
@@ -2609,6 +2611,62 @@ begin
 end;
 
 {$ifndef NO_USE_PDFSECURITY}
+
+procedure TPdfSmokeTests.TestTaggedEncryptionNeedsAccessibility;
+var
+  level: TPdfEncryptionLevel;
+  PDF: TPdfDocument;
+  Stream: TMemoryStream;
+  s: RawByteString;
+  raised: boolean;
+  p, flags: integer;
+begin
+  { PDF/UA-1 7.16: an encrypted tagged file lets assistive technology
+    extract its content - P bit 10, apart from the copy bit 5 }
+  for level := elRC4_40 to high(level) do
+  begin
+    PDF := TPdfDocument.Create(false, 0, pdfaNone,
+      TPdfEncryption.New(level, '', 'owner', PDF_PERMISSION_NOCOPY));
+    try
+      raised := false;
+      try
+        PDF.Tagged := true;
+      except
+        on EPdfInvalidOperation do
+          raised := true;
+      end;
+      // the R=2 of RC4-40 always sets bit 10
+      Check(raised = (level <> elRC4_40), 'no accessibility, no Tagged');
+      Check(PDF.Tagged = (level = elRC4_40), 'left untagged');
+    finally
+      PDF.Free;
+    end;
+    Stream := TMemoryStream.Create;
+    try
+      PDF := TPdfDocument.Create(false, 0, pdfaNone, TPdfEncryption.New(
+        level, '', 'owner', PDF_PERMISSION_NOCOPY + [epContentExtraction]));
+      try
+        PDF.CompressionMethod := cmNone;
+        PDF.Tagged := true;
+        PDF.AddPage;
+        PDF.SaveToStream(Stream);
+      finally
+        PDF.Free;
+      end;
+      s := StreamToRaw(Stream);
+    finally
+      Stream.Free;
+    end;
+    flags := 0;
+    p := PosEx('/Standard', s);
+    if p > 0 then
+      p := PosEx('/P ', s, p);
+    if p > 0 then
+      flags := GetInteger(@s[p + 3]);
+    Check(flags and $200 <> 0, 'accessibility allowed');
+    Check(flags and $10 = 0, 'copying still refused');
+  end;
+end;
 
 procedure TPdfSmokeTests.TestNewDocKeepsEncryption;
 var

@@ -96,7 +96,9 @@ protected font DC (`GetDCWithFont`): fonts are `TFontRequest`,
   without its file. With plain `EmbeddedTtf`, `EmbeddedTtfIgnore` writes such
   a font unembedded
 - **New: `Tagged`** (PDF/UA): set it before the first `AddPage`; it embeds
-  every font and switches `StandardFontsReplace` off
+  every font and switches `StandardFontsReplace` off. With an encryption
+  it needs `epContentExtraction` in the permissions, and raises without it
+  (`elRC4_40` always grants it)
 - **New: fonts from memory** with `RegisterFontData`, before the document is
   created
 - **New: `elAES_128` and `elAES_256`** encryption, AES-128 (revision 4) and

@@ -458,7 +458,8 @@ when `Protect` or `Encrypt` is true - neither is implemented, and a
 protection asked for must not silently give an open file (the trunk's
 `ExportPdfEncryption*` properties are open work, see ROADMAP;
 `TPdfDocumentVcl.Create` already takes a `TPdfEncryption`, PDF/A refuses
-one, PDF/UA needs `epContentExtraction`); otherwise the export's own
+one, PDF/UA needs `/P` bit 10 - `Tagged` raises without
+`epContentExtraction`, which RC4-40 always sets); otherwise the export's own
 exception or that of writing the file (`EPdfInvalidOperation`,
 `EFCreateError`, ...). `ATitle` replaces `Title`, `ACompany` becomes
 `ExportPdfSubject`. The PDF is built in a `TMemoryStream` and the file is
