@@ -91,6 +91,9 @@ Application
          encLen := GetEncryptedSize(buflen) = 16 (IV) + ((buflen div 16)+1)*16
          /Length := encLen BEFORE the dictionary is written
          separate tmpEnc buffer; EncodeBuffer writes IV||ciphertext
+       TPdfEncryptionAES256 → AES-256-CBC with the file key itself, no
+         per-object key: TAesCbc.EncryptPkcs7Buffer (IV at the beginning),
+         the same sizes as AES-128 (Path 8)
 ```
 
 ---
@@ -768,7 +771,7 @@ TPdfDocument.CreateHyperLink(Rect, 'https://...')
 
 ---
 
-## Path 8 — AES-128 Encryption
+## Path 8 — AES Encryption (AES-128, AES-256)
 
 ```
 TPdfEncryption.New(elAES_128, userPw, ownerPw, perms)
@@ -801,6 +804,22 @@ GetEncryptedSize(InSize): 16 + ((InSize div 16)+1)*16
   → TPdfStream.InternalWriteTo uses this to pre-set /Length and allocate tmpEnc
   → string encryption callers (TPdfWrite.AddEscapeContent, AddUnicodeHex)
     allocate via GetEncryptedSize
+```
+
+AES-256 (`elAES_256`, ISO 32000-2 R=6) has no per-object key:
+
+```
+TPdfEncryptionAES256.AttachDocument(aDoc)   ← from NewDoc
+  aDoc.fFileFormat raised to pdf17 if lower
+  TAesPrng → fFileKey[32]; fAes := TAesCbc.Create(fFileKey, 256)
+  Wrap(user UTF-8, no user key) → /U = Hash2B(validation salt) + 2 salts,
+    /UE = AES-256-CBC(Hash2B(key salt), IV 0) of fFileKey
+  Wrap(owner UTF-8, user key = the 48 bytes of /U) → /O, /OE
+  /Perms = AES-256-ECB(fFileKey) of P, FFFFFFFF, 'T', 'adb', 4 random bytes
+  dictionary V=5, R=6, Length=256, StdCF { CFM=AESV3, Length=32 }
+  catalog /Extensions /ADBE { BaseVersion 1.7, ExtensionLevel 8 }
+Hash2B = Algorithm 2.B: SHA-256, then >= 64 rounds of AES-128-CBC and
+  SHA-256/384/512 chosen by the first 16 bytes of each round modulo 3
 ```
 
 PDF/A and encryption exclude each other: `NewDoc` raises `EPdfInvalidOperation`.

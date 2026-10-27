@@ -398,8 +398,10 @@ type
   /// the available encryption levels
   // - RC4 40-bit and RC4 128-bit correspond to PDF 1.3 and PDF 1.4 formats
   // - elAES_128 uses AES-128-CBC (PDF 1.6, Standard Security Handler R=4)
-  // - elAES_256 uses AES-256-CBC (PDF 1.7, Standard Security Handler R=6)
-  // - for RC4 and AES, passwords are restricted to 32 Latin-1 characters
+  // - elAES_256 uses AES-256-CBC (ISO 32000-2, Standard Security Handler R=6),
+  // written as PDF 1.7 with the Adobe extension level 8
+  // - for RC4 and AES-128, passwords are restricted to 32 Latin-1 characters;
+  // for AES-256 they are UTF-8, cut at 127 bytes
   TPdfEncryptionLevel = (
     elNone,
     elRC4_40,
@@ -699,12 +701,16 @@ type
     procedure AttachDocument(aDoc: TPdfDocument); virtual;
     /// returns the byte size of the encrypted output for a given input size
     // - default: returns InSize (RC4 is a stream cipher, same-length output)
-    // - AES subclasses override to return 16 + ceil(InSize/16)*16 (IV + padded)
+    // - AES subclasses override to return 16 + (InSize div 16 + 1) * 16: the
+    // IV, then PKCS#7 padding, a whole block when InSize is a multiple of 16
     function GetEncryptedSize(InSize: cardinal): cardinal; virtual;
     /// will create the expected TPdfEncryption instance, depending on aLevel
     // - to be called as parameter of TPdfDocument/TPdfDocumentGdi.Create()
-    // - elRC4_40, elRC4_128, and elAES_128 levels are implemented
-    // - both passwords are expected to be ASCII-7 characters only
+    // - elRC4_40, elRC4_128, elAES_128 and elAES_256 levels are implemented
+    // - for RC4 and AES-128, both passwords are expected to be ASCII-7
+    // characters only; elAES_256 takes any text as UTF-8, but without the
+    // SASLprep preparation of ISO 32000-2: beyond ASCII, give a password
+    // already prepared by SASLprep (RFC 4013) for readers that apply it
     // - aUserPassword will be asked at file opening: to be set to '' for not
     // blocking display, but optional permission
     // - aOwnerPassword shall not be '', and will be used internally to cypher
@@ -717,6 +723,8 @@ type
     // !   TPdfEncryption.New(elRC4_40,'','toto',PDF_PERMISSION_NOMODIF));
     // ! Doc := TPdfDocument.Create(false,0,false,
     // !   TPdfEncryption.New(elAES_128,'','toto',PDF_PERMISSION_NOCOPYNORPRINT));
+    // ! Doc := TPdfDocument.Create(false,0,false,
+    // !   TPdfEncryption.New(elAES_256,'user','owner',PDF_PERMISSION_NOMODIF));
     class function New(aLevel: TPdfEncryptionLevel;
       const aUserPassword, aOwnerPassword: string;
       aPermissions: TPdfEncryptionPermissions): TPdfEncryption;
@@ -724,6 +732,8 @@ type
 
   /// internal 32 bytes buffer, used during encryption process
   TPdfBuffer32 = array[0..31] of byte;
+  /// the 48 bytes of /U and /O of the AES-256 security handler
+  TPdfBuffer48 = array[0..47] of byte;
 
   /// handle PDF security with RC4+MD5 scheme in 40-bit and 128-bit
   // - allowed aLevel parameters for Create() are only elRC4_40 and elRC4_128
@@ -751,6 +761,28 @@ type
     /// the size of InSize bytes once encrypted: the IV and the PKCS#7 blocks
     function GetEncryptedSize(InSize: cardinal): cardinal; override;
     /// derive the keys from the passwords, add /Encrypt to the trailer
+    procedure AttachDocument(aDoc: TPdfDocument); override;
+  end;
+
+  /// handle PDF security with AES-256-CBC (ISO 32000-2, Standard Security
+  // Handler R=6), written as PDF 1.7 with the Adobe extension level 8
+  // - every string and stream is encrypted with the file key itself, after a
+  // random IV, with PKCS#7 padding - use GetEncryptedSize()
+  TPdfEncryptionAES256 = class(TPdfEncryption)
+  protected
+    fFileKey: THash256;
+    fAes: TAesCbc;
+    procedure EncodeBuffer(const BufIn; var BufOut; Count: cardinal); override;
+    // ISO 32000-2 7.6.4.3.4 Algorithm 2.B: the hash of a password for R=6
+    class procedure Hash2B(Pwd: pointer; PwdLen: integer; Salt, UserKey: pointer;
+      UserKeyLen: integer; out Hash: THash256);
+  public
+    /// release the cipher and erase the file key
+    destructor Destroy; override;
+    /// the size of InSize bytes once encrypted: the IV and the PKCS#7 blocks
+    function GetEncryptedSize(InSize: cardinal): cardinal; override;
+    /// a random file key, wrapped by both passwords in /UE and /OE; add
+    // /Encrypt to the trailer and the Adobe extension to the catalog
     procedure AttachDocument(aDoc: TPdfDocument); override;
   end;
 {$endif USE_PDFSECURITY}
@@ -13277,6 +13309,9 @@ begin
     elAES_128:
       result := TPdfEncryptionAES128.Create(aLevel, aPermissions, aUserPassword,
         aOwnerPassword);
+    elAES_256:
+      result := TPdfEncryptionAES256.Create(aLevel, aPermissions, aUserPassword,
+        aOwnerPassword);
   else
     result := nil;
   end;
@@ -13301,6 +13336,9 @@ const
     $28, $BF, $4E, $5E, $4E, $75, $8A, $41, $64, $00, $4E,
     $56, $FF, $FA, $01, $08, $2E, $2E, $00, $B6, $D0, $68,
     $3E, $80, $2F, $0C, $A9, $FE, $64, $53, $69, $7A);
+  // bit of each permission in /P, 0-based
+  PDF_FLAGBIT: array[TPdfEncryptionPermission] of byte = (
+    2, 3, 4, 5, 8, 9, 10, 11);
 
 procedure TPdfEncryptionRC4MD5.AttachDocument(aDoc: TPdfDocument);
 
@@ -13329,8 +13367,6 @@ const
       (v: 2; r: 3; L: 128));
   FLAGPATTERN: array[elRC4_40..elRC4_128] of cardinal = (
     $FFFFFFC0, $FFFFF0C0);
-  FLAGBIT: array[TPdfEncryptionPermission] of byte = (
-    2, 3, 4, 5, 8, 9, 10, 11);
 var
   rc4: TRC4;
   md5: TMD5;
@@ -13344,7 +13380,7 @@ begin
   fFlags := FLAGPATTERN[fLevel];
   for f := low(f) to high(f) do
     if f in fPermissions then
-      fFlags := fFlags or (1 shl FLAGBIT[f]);
+      fFlags := fFlags or (1 shl PDF_FLAGBIT[f]);
   if fDoc.fFileFormat < pdf14 then
     fDoc.fFileFormat := pdf14;
   // calc fOwnerPass key (Algorithm 3.3 in PDF reference doc)
@@ -13476,8 +13512,6 @@ procedure TPdfEncryptionAES128.AttachDocument(aDoc: TPdfDocument);
 
 const
   AES128_FLAGS  = cardinal($FFFFF0C0); // AES-128 uses same flag pattern as RC4-128
-  FLAGBIT: array[TPdfEncryptionPermission] of byte = (
-    2, 3, 4, 5, 8, 9, 10, 11);
 var
   rc4: TRC4;
   md5: TMD5;
@@ -13492,7 +13526,7 @@ begin
   fFlags := integer(AES128_FLAGS);
   for f := low(f) to high(f) do
     if f in fPermissions then
-      fFlags := fFlags or (1 shl FLAGBIT[f]);
+      fFlags := fFlags or (1 shl PDF_FLAGBIT[f]);
   if aDoc.fFileFormat < pdf16 then
     aDoc.fFileFormat := pdf16; // AES-128 requires PDF 1.6+
   // derive owner key (Algorithm 3.3, step 1-3 identical for all R>=2)
@@ -13601,6 +13635,223 @@ begin
   finally
     FreeMem(padBuf);
   end;
+end;
+
+
+{ TPdfEncryptionAES256 }
+
+class procedure TPdfEncryptionAES256.Hash2B(Pwd: pointer; PwdLen: integer;
+  Salt, UserKey: pointer; UserKeyLen: integer; out Hash: THash256);
+var
+  k: array[0..63] of byte; // the current hash: 32, 48 or 64 bytes
+  klen, onelen, len, rnd, i, sum: integer;
+  k1, e: RawByteString;
+  p: PAnsiChar;
+  aes: TAesCbc;
+  sha256: TSha256;
+  sha384: TSha384;
+  sha512: TSha512;
+begin
+  // one allocation for the largest K1, wiped whole at the end
+  len := (PwdLen + SizeOf(k) + UserKeyLen) * 64;
+  SetLength(k1, len);
+  SetLength(e, len);
+  try
+    // K = SHA-256(password + salt + user key)
+    p := pointer(k1);
+    MoveFast(Pwd^, p^, PwdLen);
+    MoveFast(Salt^, p[PwdLen], 8);
+    MoveFast(UserKey^, p[PwdLen + 8], UserKeyLen);
+    sha256.Full(p, PwdLen + 8 + UserKeyLen, PSha256Digest(@k)^);
+    klen := SizeOf(TSha256Digest);
+    rnd := 0;
+    repeat
+      // K1 = 64 repetitions of (password + K + user key)
+      onelen := PwdLen + klen + UserKeyLen;
+      len := onelen * 64;
+      p := pointer(k1);
+      for i := 1 to 64 do
+      begin
+        MoveFast(Pwd^, p^, PwdLen);
+        MoveFast(k, p[PwdLen], klen);
+        MoveFast(UserKey^, p[PwdLen + klen], UserKeyLen);
+        inc(p, onelen);
+      end;
+      // E = AES-128-CBC(K1), key K[0..15], IV K[16..31], no padding
+      aes := TAesCbc.Create(k, 128, @k[16]);
+      try
+        aes.Encrypt(pointer(k1), pointer(e), len);
+      finally
+        aes.Free;
+      end;
+      // the first 16 bytes of E as a big-endian number modulo 3: as
+      // 256 mod 3 = 1, the sum of these bytes modulo 3
+      sum := 0;
+      for i := 0 to 15 do
+        inc(sum, PByteArray(e)[i]);
+      case sum mod 3 of
+        0:
+          begin
+            sha256.Full(pointer(e), len, PSha256Digest(@k)^);
+            klen := SizeOf(TSha256Digest);
+          end;
+        1:
+          begin
+            sha384.Full(pointer(e), len, PSha384Digest(@k)^);
+            klen := SizeOf(TSha384Digest);
+          end;
+      else
+        begin
+          sha512.Full(pointer(e), len, PSha512Digest(@k)^);
+          klen := SizeOf(TSha512Digest);
+        end;
+      end;
+      inc(rnd);
+    until (rnd >= 64) and
+          (PByteArray(e)[len - 1] <= rnd - 32);
+    MoveFast(k, Hash, SizeOf(Hash));
+  finally
+    FillCharFast(k, SizeOf(k), 0);
+    FillZero(k1);
+    FillZero(e);
+  end;
+end;
+
+// R=6 passwords are UTF-8, cut at 127 bytes as ISO 32000-2 says, even within
+// a character; SASLprep is not applied
+function PdfPasswordUtf8(const Password: string): RawUtf8;
+begin
+  result := StringToUtf8(Password);
+  if length(result) > 127 then
+    SetLength(result, 127);
+end;
+
+destructor TPdfEncryptionAES256.Destroy;
+begin
+  fAes.Free;
+  FillZero(fFileKey);
+  inherited Destroy;
+end;
+
+function TPdfEncryptionAES256.GetEncryptedSize(InSize: cardinal): cardinal;
+begin
+  result := 16 + ((InSize div 16) + 1) * 16;
+end;
+
+procedure TPdfEncryptionAES256.AttachDocument(aDoc: TPdfDocument);
+
+  // Algorithms 8 and 9: hash + validation salt + key salt in U or O, the file
+  // key wrapped by the hash of the key salt in UE or OE
+  procedure Wrap(const Pwd: RawUtf8; UserKey: pointer; UserKeyLen: integer;
+    out Key: TPdfBuffer48; out Wrapped: THash256);
+  var
+    salt: array[0..15] of byte;
+    h: THash256;
+    aes: TAesCbc;
+  begin
+    TAesPrng.Main.FillRandom(@salt, SizeOf(salt));
+    try
+      Hash2B(pointer(Pwd), length(Pwd), @salt[0], UserKey, UserKeyLen, h);
+      MoveFast(h, Key[0], 32);
+      MoveFast(salt, Key[32], 16);
+      Hash2B(pointer(Pwd), length(Pwd), @salt[8], UserKey, UserKeyLen, h);
+      aes := TAesCbc.Create(h, 256); // IV = 0, no padding
+      try
+        aes.Encrypt(@fFileKey, @Wrapped, SizeOf(Wrapped));
+      finally
+        aes.Free;
+      end;
+    finally
+      FillZero(h);
+    end;
+  end;
+
+var
+  f: TPdfEncryptionPermission;
+  pwd: RawUtf8;
+  u, o: TPdfBuffer48;
+  ue, oe: THash256;
+  perms, encperms: TAesBlock;
+  aes: TAesEcb;
+  cf, stdcf, ext, adbe: TPdfDictionary;
+begin
+  inherited;
+  fFlags := integer($FFFFF0C0);
+  for f := low(f) to high(f) do
+    if f in fPermissions then
+      fFlags := fFlags or (1 shl PDF_FLAGBIT[f]);
+  if aDoc.fFileFormat < pdf17 then
+    aDoc.fFileFormat := pdf17;
+  TAesPrng.Main.FillRandom(fFileKey);
+  FreeAndNil(fAes); // a second NewDoc gets a new key
+  fAes := TAesCbc.Create(fFileKey, 256);
+  pwd := PdfPasswordUtf8(fUserPassword);
+  try
+    Wrap(pwd, nil, 0, u, ue);
+    FillZero(RawByteString(pwd));
+    pwd := PdfPasswordUtf8(fOwnerPassword);
+    Wrap(pwd, @u, SizeOf(u), o, oe); // the owner hashes take the 48 bytes of U
+  finally
+    FillZero(RawByteString(pwd));
+  end;
+  // Algorithm 10: /Perms = P little-endian, FFFFFFFF, 'T' (metadata are
+  // encrypted), 'adb', 4 random bytes - one block of AES-256-ECB
+  TAesPrng.Main.FillRandom(perms);
+  perms[0] := fFlags and $ff;
+  perms[1] := (fFlags shr 8) and $ff;
+  perms[2] := (fFlags shr 16) and $ff;
+  perms[3] := (fFlags shr 24) and $ff;
+  perms[4] := $ff;
+  perms[5] := $ff;
+  perms[6] := $ff;
+  perms[7] := $ff;
+  perms[8] := ord('T');
+  perms[9] := ord('a');
+  perms[10] := ord('d');
+  perms[11] := ord('b');
+  aes := TAesEcb.Create(fFileKey, 256);
+  try
+    aes.Encrypt(@perms, @encperms, SizeOf(perms));
+  finally
+    aes.Free;
+  end;
+  if aDoc.fEncryptionObject = nil then
+    aDoc.fEncryptionObject := TPdfDictionary.Create(aDoc.fXRef);
+  stdcf := TPdfDictionary.Create(aDoc.fXRef);
+  stdcf.AddItem('AuthEvent', 'DocOpen');
+  stdcf.AddItem('CFM', 'AESV3');
+  stdcf.AddItem('Length', 32); // bytes, as Acrobat and qpdf write it
+  cf := TPdfDictionary.Create(aDoc.fXRef);
+  cf.AddItem('StdCF', stdcf);
+  aDoc.fEncryptionObject.AddItem('Filter', 'Standard');
+  aDoc.fEncryptionObject.AddItem('V', 5);
+  aDoc.fEncryptionObject.AddItem('R', 6);
+  aDoc.fEncryptionObject.AddItem('Length', 256);
+  aDoc.fEncryptionObject.AddItem('CF', cf);
+  aDoc.fEncryptionObject.AddItem('StmF', 'StdCF');
+  aDoc.fEncryptionObject.AddItem('StrF', 'StdCF');
+  aDoc.fEncryptionObject.AddItem('P', fFlags);
+  aDoc.fEncryptionObject.AddItem('O', TPdfClearText.Create(@o, SizeOf(o)));
+  aDoc.fEncryptionObject.AddItem('U', TPdfClearText.Create(@u, SizeOf(u)));
+  aDoc.fEncryptionObject.AddItem('OE', TPdfClearText.Create(@oe, SizeOf(oe)));
+  aDoc.fEncryptionObject.AddItem('UE', TPdfClearText.Create(@ue, SizeOf(ue)));
+  aDoc.fEncryptionObject.AddItem('Perms',
+    TPdfClearText.Create(@encperms, SizeOf(encperms)));
+  aDoc.fTrailer.Attributes.AddItem('Encrypt', aDoc.fEncryptionObject);
+  // R=6 came to PDF 1.7 as the Adobe extension level 8
+  adbe := TPdfDictionary.Create(aDoc.fXRef);
+  adbe.AddItem('BaseVersion', '1.7');
+  adbe.AddItem('ExtensionLevel', 8);
+  ext := TPdfDictionary.Create(aDoc.fXRef);
+  ext.AddItem('ADBE', adbe);
+  aDoc.fRoot.Data.AddItem('Extensions', ext);
+end;
+
+procedure TPdfEncryptionAES256.EncodeBuffer(const BufIn; var BufOut;
+  Count: cardinal);
+begin
+  // ISO 32000-2 7.6.3: a random IV, then AES-256-CBC with PKCS#7 padding
+  fAes.EncryptPkcs7Buffer(@BufIn, @BufOut, Count, GetEncryptedSize(Count), true);
 end;
 
 {$endif USE_PDFSECURITY}

@@ -99,6 +99,10 @@ protected font DC (`GetDCWithFont`): fonts are `TFontRequest`,
   every font and switches `StandardFontsReplace` off
 - **New: fonts from memory** with `RegisterFontData`, before the document is
   created
+- **New: `elAES_128` and `elAES_256`** encryption, AES-128 (revision 4) and
+  AES-256 (revision 6). `elAES_128` comes before `elAES_256`, which is 4 here
+  and 3 in synopse/mORMot2#690: code written against #690 that stores a
+  `TPdfEncryptionLevel` as a number, not by name, has to map it
 
 ### Output That Differs
 
