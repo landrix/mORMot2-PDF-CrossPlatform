@@ -543,16 +543,22 @@ operators (`NeedPen` and `NeedBrushAndPen` step out of the path's stream),
 text, bitmaps, the miter limit - so the canvas's caches and the order stay
 right; the shapes (`FlushPenBrush`, pie, chord, polylines, `PolyPoly`) do not
 paint while recording. The painting records end what the page left open
-(`PathPaint`: a line of a null pen, ROADMAP "Review Findings Not Fixed Yet"
-item 7), set the pen and the brush, then `PathReplay` writes the path - with
+(`PathPaint`), set the pen and the brush, then `PathReplay` writes the path - with
 an `h` closing each figure for `EMR_STROKEANDFILLPATH` - then the painting
 operator (`f*` for `ALTERNATE`); `EMR_ABORTPATH`,
 `EMR_SELECTCLIPPATH` and the end of `RenderMetaFile` drop it (`PathDone`).
 A tagged document's `/Artifact BMC` goes with the path's stream, its `EMC`
-with the painting operator (`fPathArtifact`, `fPathBufArtifact`). While a
-path is recorded `fNewPath` stays set (text and bitmaps clear it), and
-`ScaleMatrix` and `NeedBrushAndPen` do not stroke a pending line
-(`MetaFileClipRestoreDC`). Text in a path is drawn at once (item 6).
+with the painting operator (`fPathArtifact`, `fPathBufArtifact`).
+`TPdfCanvas.fNewPath` means "a GDI path is being recorded" and is read by
+the enumeration alone (`TPdfForm.Create` only saves and restores it):
+`PathBegin` sets it, `PathClose` clears it, and
+`TPdfCanvas.NewPath` only writes `n`. When `NewPath` also set it, every `n`
+outside a path left the enumeration as if inside one: the next line had no
+`S`, and without a `MoveTo` no `m`, and `PolylineTo` was never stroked. Outside a path each line
+record strokes with a pen or ends with `n` in its own record, so no stroke
+is ever pending (`MetaFileNullPenLines`, `MetaFileLineAfterEndedPath`).
+Text in a path is drawn at once (ROADMAP "Review Findings Not Fixed Yet",
+item 6).
 
 Records `TPdfEnum` reads through its own declarations: `EMR_CREATEBRUSHINDIRECT`
 and `EMR_EXTCREATEPEN` (`TEmrCreateBrushIndirect32`, `TEmrExtCreatePen32`).
