@@ -1496,6 +1496,7 @@ begin
   doc := TPdfDocumentGdi.Create;
   try
     doc.Info.CreationDate := GOLDEN_DATE;
+    doc.ScreenLogPixels := 96; // the coordinates the checks expect, any screen
     doc.EmbeddedTTF := false;
     doc.StandardFontsReplace := true;
     TPdfDocumentGdiAccess(doc).fPrinterPxPerInch.X := PxX;
