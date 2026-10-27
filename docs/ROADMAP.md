@@ -8,8 +8,8 @@ it produced in `.claude/skills/` — this file repeats neither.
 tagged output passes PAC 2024 with accepted hints only (W-1, W-2) and veraPDF
 `ua1`; PDF/A-3U with PDF/UA-1 is verified (R-17). Fonts are embedded and subset
 on all three platforms; tables carry `THead`/`TBody`/`TFoot` row groups.
-`test_runner` is green with 1495 assertions on Windows (FPC, Delphi 7,
-Delphi 2010 and Delphi 13), 1544 on macOS and 1511 on Linux (2026-10-27, pin `964874b88`). **Delphi:** layer
+`test_runner` is green with 1511 assertions on Windows (FPC, Delphi 7,
+Delphi 2010 and Delphi 13), 1560 on macOS and 1527 on Linux (2026-10-27, pin `964874b88`). **Delphi:** layer
 1, the TCanvas bridge and the `TGDIPages` core build on Delphi 7 (R-19, R-20
 steps 1–6) and on Delphi 2010, a Unicode Delphi (R-25); all six console demos
 and the `--export` of the two GUI demos give the same PDF as FPC. Delphi 13
@@ -34,6 +34,14 @@ here until the post is written, then the list is emptied. It is the only such
 list: the CHANGELOG entry of the next release is written from it. Emptied for
 v0.10.0 (2026-09-30).
 
+- **Changed (tagged and encrypted):** `Tagged := true` raises
+  `EPdfInvalidOperation` when the encryption does not allow content
+  extraction for accessibility (`epContentExtraction`, `/P` bit 10), which
+  PDF/UA-1 requires; `PDF_PERMISSION_NOCOPY` and
+  `PDF_PERMISSION_NOCOPYNORPRINT` lack it (`elRC4_40` always sets the
+  bit). Such a file was written as PDF/UA, against veraPDF's rule 7.16-1.
+  Use `PDF_PERMISSION_NOCOPY + [epContentExtraction]`: copying stays
+  refused
 - **New (encryption):** `elAES_256` - AES-256 with the security handler of
   ISO 32000-2 (revision 6), written as PDF 1.7 with the Adobe extension
   level 8, as current readers expect. `TPdfEncryption.New` returned nil for
@@ -1146,7 +1154,8 @@ trunk's `TGdiPages` properties `ExportPdfEncryptionLevel`,
 `ExportPdfEncryptionPermissions`, passed as `TPdfEncryption.New(..)` to the
 `TPdfDocumentVcl` that `ExportPdfStream` creates (its constructor takes
 one). Needs a password and permission policy; PDF/A
-refuses encryption (the engine raises), PDF/UA needs `epContentExtraction`.
+refuses encryption (the engine raises), PDF/UA needs `epContentExtraction`
+(`Tagged` raises without it; RC4-40 always sets the bit).
 
 ### R-10 — Table Row Pagination — unprioritised
 

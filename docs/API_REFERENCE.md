@@ -120,6 +120,11 @@ Doc := TPdfDocumentVcl.Create(false, 0, pdfaNone, Enc);
 | `elAES_128` | 1.6+ | AES-128-CBC + MD5; 16-byte random IV per object |
 | `elAES_256` | 1.7 + Adobe extension level 8 | AES-256-CBC, ISO 32000-2 revision 6; UTF-8 passwords up to 127 bytes, not SASLprep-prepared: beyond ASCII, give a password already prepared by SASLprep (RFC 4013) for readers that apply it |
 
+A tagged document (PDF/UA) needs `/P` bit 10, `epContentExtraction`:
+`Tagged := true` raises `EPdfInvalidOperation` without it (`elRC4_40`
+always sets the bit). `PDF_PERMISSION_NOCOPY + [epContentExtraction]` keeps
+copying refused.
+
 Predefined permission sets:
 
 | Constant | Meaning |

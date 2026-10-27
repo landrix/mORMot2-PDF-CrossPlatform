@@ -172,7 +172,7 @@ document.
 | `FileFormat` | `TPdfFileFormat` | PDF version header: `pdf13`..`pdf17` (default `pdf13`); PDF/A raises it (A-1 to `pdf14`, A-2/A-3 to `pdf17`), as does `Tagged` (`pdf17`) |
 | `HeaderFileFormat` | `TPdfFileFormat` | Read-only: the version actually streamed in the header |
 | `GeneratePdf15File` | boolean | Compatibility alias, as in the trunk: below `pdf16`, `true` = `pdf15` and `false` = `pdf14`; from `pdf16` on it changes nothing |
-| `Tagged` | boolean | Enable Tagged PDF (ISO 32000-1 §14); set before the first `AddPage` (raises `ESynException` later); `true` raises `FileFormat` to `pdf17` and selects the fonts (Font Strategy) |
+| `Tagged` | boolean | Enable Tagged PDF (ISO 32000-1 §14); set before the first `AddPage` (raises `ESynException` later; `EPdfInvalidOperation` with an encryption without `/P` bit 10, see PDF Encryption); `true` raises `FileFormat` to `pdf17` and selects the fonts (Font Strategy) |
 | `DefaultLanguage` | `RawUtf8` | BCP-47 tag for `/Lang` when tagged; default `'en'` |
 | `UseUniscribe` | boolean | The one shaping switch: Uniscribe on Windows, HarfBuzz on Linux/macOS; `Canvas.RightToLeftText` is the direction only (`platform-backends.md`, Registration) |
 
@@ -839,7 +839,13 @@ Doc := TPdfDocument.Create(false, 0, pdfaNone, Enc);
 
 The `TPdfEncryption` object is owned by `TPdfDocument` after passing to
 constructor. PDF/A forbids encryption: a PDF/A level with an encryption
-raises `EPdfInvalidOperation` (`TestPdfAWithEncryptionRaises`).
+raises `EPdfInvalidOperation` (`TestPdfAWithEncryptionRaises`). PDF/UA-1
+(7.16) needs `/P` bit 10, `epContentExtraction`: `Tagged := true` raises
+`EPdfInvalidOperation` without it - write `PDF_PERMISSION_NOCOPY +
+[epContentExtraction]`, copying stays refused (bit 5). RC4-40 (R=2) always
+sets bit 10 (`TestTaggedEncryptionNeedsAccessibility`). The check sits in
+`SetTagged` alone: the encryption is fixed at `Create`, `fTagged` set nowhere
+else.
 
 | Level | Class | PDF version | Cipher | Key derivation |
 |---|---|---|---|---|
@@ -887,7 +893,9 @@ with retained glyph IDs, which keeps `/ToUnicode` valid — by hb-subset on
 Linux/macOS, by `CreateFontPackage` with a glyph keep list on Windows. Only
 without a subsetter (no `libharfbuzz-subset`, no `FontSub.dll`) is the whole
 face embedded. Set `EmbeddedWholeTtf := True` afterwards to force the whole
-face. `Tagged` raises `ESynException` when set after the first `AddPage`.
+face. `Tagged` raises `ESynException` when set after the first `AddPage`,
+and `EPdfInvalidOperation` with an encryption that refuses
+`epContentExtraction` (PDF Encryption).
 PDF/A and tagged documents get a `/ToUnicode` CMap for every font, the
 WinAnsi one included. Resolve font names with `GetPdfFonts` *after* setting
 `Tagged`.
