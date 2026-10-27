@@ -25,6 +25,9 @@ uses
   mormot.core.os,       // FileFromString
   mormot.core.test,
   mormot.core.unicode,  // StringToUtf8
+  {$ifndef NO_USE_PDFSECURITY}
+  mormot.crypt.core,    // TAesCbc
+  {$endif NO_USE_PDFSECURITY}
   mormot.lib.core,      // FontShaper
   mormot.pdf,        // TPdfDocument, TPdfCanvas
   test_pdf_cff,         // SwapInFakeFace
@@ -82,6 +85,9 @@ type
     procedure TestEncryptedUnicodeString;
     /// AddUnicodeHex writes the hex of a content stream: never encrypted
     procedure TestUnicodeHexNotEncrypted;
+    /// elAES_256 writes the R=6 handler: both passwords unwrap the file key,
+    // strings, streams and /Perms decrypt with it
+    procedure TestEncryptionAES256;
     {$endif NO_USE_PDFSECURITY}
     /// a WinAnsi ToUnicode CMap holds at most 100 entries per bfchar block
     procedure TestWinAnsiToUnicodeBlocks;
@@ -2077,6 +2083,179 @@ begin
   finally
     Stream.Free;
   end;
+end;
+
+type
+  // the file key and the password hash of the AES-256 handler
+  TPdfEncryptionAES256Key = class(TPdfEncryptionAES256);
+
+// the file key that Pwd unwraps from Wrapped (/UE or /OE) by the key salt of
+// Key (/U or /O), all zero when Pwd does not match its validation salt
+function UnwrapAES256Key(const Pwd, Key, Wrapped, UserKey: RawByteString): THash256;
+var
+  h: THash256;
+  aes: TAesCbc;
+begin
+  FillZero(result);
+  if (length(Key) <> 48) or
+     (length(Wrapped) <> 32) then
+    exit;
+  TPdfEncryptionAES256Key.Hash2B(pointer(Pwd), length(Pwd), @Key[33],
+    pointer(UserKey), length(UserKey), h);
+  if not CompareMem(@h, pointer(Key), 32) then
+    exit;
+  TPdfEncryptionAES256Key.Hash2B(pointer(Pwd), length(Pwd), @Key[41],
+    pointer(UserKey), length(UserKey), h);
+  aes := TAesCbc.Create(h, 256); // IV = 0, no padding
+  try
+    aes.Decrypt(pointer(Wrapped), @result, 32);
+  finally
+    aes.Free;
+  end;
+end;
+
+const
+  AES256_SUBJECT = 'Hello AES-256 !'; // 15 bytes: one block once padded
+
+// a page of text encrypted with elAES_256, and its file key
+function SavedAES256(const User: string; out Key: THash256): RawByteString;
+var
+  PDF: TPdfDocument;
+  Enc: TPdfEncryption;
+  Stream: TMemoryStream;
+begin
+  FillZero(Key);
+  result := '';
+  Enc := TPdfEncryption.New(elAES_256, User, 'owner', PDF_PERMISSION_NOMODIF);
+  if Enc = nil then
+    exit;
+  Stream := TMemoryStream.Create;
+  try
+    PDF := TPdfDocument.Create(false, 0, pdfaNone, Enc);
+    try
+      PDF.CompressionMethod := cmNone;
+      PDF.Info.Subject := AES256_SUBJECT;
+      PDF.AddPage;
+      UseSansFont(PDF, 12);
+      DrawUtf8Text(PDF, 40, 740, 'Encrypted words');
+      PDF.SaveToStream(Stream);
+      Key := TPdfEncryptionAES256Key(Enc).fFileKey; // freed with PDF
+    finally
+      PDF.Free;
+    end;
+    result := StreamToRaw(Stream);
+  finally
+    Stream.Free;
+  end;
+end;
+
+procedure TPdfSmokeTests.TestEncryptionAES256;
+const
+  // Algorithm 2.B of pypdf 6.21 (AlgV5.calculate_hash) for salt 1..8:
+  // 'user' alone, 'owner' with the user key 100..147
+  USERHASH: THash256 = (
+    $17, $42, $4B, $40, $EA, $D3, $66, $F7, $DD, $EF, $0F, $F0, $73, $60, $8A,
+    $A6, $8B, $A7, $01, $71, $4B, $5C, $EF, $34, $09, $B9, $4C, $4F, $FA, $76,
+    $37, $26);
+  OWNERHASH: THash256 = (
+    $67, $08, $55, $51, $E2, $B2, $FD, $E5, $A1, $CB, $25, $70, $AD, $DB, $AD,
+    $32, $45, $9F, $E3, $7C, $0F, $55, $3D, $1A, $34, $35, $7F, $24, $DA, $2E,
+    $C6, $8F);
+var
+  s, d, sub, perms, body, u, o: RawByteString;
+  long: RawUtf8;
+  salt: array[0..7] of byte;
+  ukey: array[0..47] of byte;
+  key, h: THash256;
+  aes: TAesAbstract;
+  i, p, e, text: integer;
+begin
+  for i := 0 to high(salt) do
+    salt[i] := i + 1;
+  for i := 0 to high(ukey) do
+    ukey[i] := i + 100;
+  TPdfEncryptionAES256Key.Hash2B(PAnsiChar('user'), 4, @salt, nil, 0, h);
+  Check(CompareMem(@h, @USERHASH, 32), 'Algorithm 2.B, user');
+  TPdfEncryptionAES256Key.Hash2B(PAnsiChar('owner'), 5, @salt, @ukey,
+    SizeOf(ukey), h);
+  Check(CompareMem(@h, @OWNERHASH, 32), 'Algorithm 2.B, owner');
+  s := SavedAES256('user', key);
+  if CheckFailed(s <> '', 'elAES_256 is implemented') then
+    exit;
+  // the R=6 handler, as PDF 1.7 with the Adobe extension level 8
+  Check(copy(s, 1, 8) = '%PDF-1.7', 'header');
+  Check(PosEx('/V 5', s) > 0, 'V');
+  Check(PosEx('/AESV3', s) > 0, 'crypt filter');
+  Check(PosEx('/ExtensionLevel 8', s) > 0, 'Adobe extension');
+  // the encryption dictionary from /R on: no match within encrypted bytes
+  d := copy(s, PosEx('/R 6', s), maxInt);
+  Check(length(d) < length(s), 'R');
+  // both passwords unwrap the file key, another one does not
+  u := PdfStringAfter(copy(d, PosEx('/U(', d), maxInt), '/U');
+  o := PdfStringAfter(copy(d, PosEx('/O(', d), maxInt), '/O');
+  h := UnwrapAES256Key('user', u, PdfStringAfter(d, '/UE'), '');
+  Check(CompareMem(@h, @key, 32), 'the user password');
+  h := UnwrapAES256Key('owner', o, PdfStringAfter(d, '/OE'), u);
+  Check(CompareMem(@h, @key, 32), 'the owner password');
+  h := UnwrapAES256Key('owner', u, PdfStringAfter(d, '/UE'), '');
+  Check(IsZero(h), 'the owner password is no user password');
+  FillZero(h);
+  // the xref stream stays in clear, no object stream
+  Check(PosEx('/XRef', s) > 0, 'xref stream');
+  Check(PosEx('/ObjStm', s) = 0, 'no object stream');
+  // /Perms: P little-endian, FFFFFFFF, 'T', 'adb'
+  perms := PdfStringAfter(d, '/Perms');
+  if CheckEqual(length(perms), 16, 'Perms') then
+  begin
+    aes := TAesEcb.Create(key, 256);
+    try
+      aes.Decrypt(pointer(perms), pointer(perms), 16);
+    finally
+      aes.Free;
+    end;
+    Check(copy(perms, 9, 4) = 'Tadb', 'Perms marker');
+    p := PosEx('/P ', d);
+    Check((p > 0) and
+          (PInteger(perms)^ = GetInteger(@d[p + 3])), 'Perms holds P');
+  end;
+  // each string: a random IV, AES-256-CBC with the file key, PKCS#7 padding
+  sub := PdfStringAfter(s, '/Subject');
+  CheckEqual(length(sub), 16 + 16, 'IV and one padded block');
+  aes := TAesCbc.Create(key, 256);
+  try
+    Check(aes.DecryptPkcs7(sub, true, false) = AES256_SUBJECT,
+      'the string decrypts');
+    // the page content: the stream that decrypts to a text object
+    text := 0;
+    p := PosEx('stream'#10, s);
+    while p > 0 do
+    begin
+      inc(p, 7);
+      e := PosEx(#10'endstream', s, p);
+      if e = 0 then
+        break;
+      body := aes.DecryptPkcs7(copy(s, p, e - p), true, false);
+      if PosEx('BT', body) > 0 then
+        inc(text);
+      p := PosEx('stream'#10, s, e + 10);
+    end;
+    CheckEqual(text, 1, 'the content stream decrypts');
+  finally
+    aes.Free;
+  end;
+  // a password is cut at 127 bytes: those unwrap the key, all 130 hashed
+  // uncut do not
+  SetLength(long, 130);
+  FillCharFast(pointer(long)^, 130, ord('L'));
+  s := SavedAES256(Utf8ToString(long), key);
+  d := copy(s, PosEx('/R 6', s), maxInt);
+  u := PdfStringAfter(copy(d, PosEx('/U(', d), maxInt), '/U');
+  h := UnwrapAES256Key(copy(long, 1, 127), u, PdfStringAfter(d, '/UE'), '');
+  Check(CompareMem(@h, @key, 32), 'the first 127 bytes of a password');
+  h := UnwrapAES256Key(long, u, PdfStringAfter(d, '/UE'), '');
+  Check(IsZero(h), 'not all 130 bytes, uncut');
+  FillZero(h);
+  FillZero(key);
 end;
 
 type

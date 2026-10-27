@@ -98,7 +98,8 @@ TLineJoinStyle = (ljMiterJoin, ljRoundJoin, ljBevelJoin);
 
 // Encryption level (compile-time flag USE_PDFSECURITY required)
 // elAES_128: AES-128-CBC, PDF 1.6, Standard Security Handler R=4
-// elAES_256: declared, not implemented - TPdfEncryption.New returns nil
+// elAES_256: AES-256-CBC, ISO 32000-2 Standard Security Handler R=6, written
+//            as PDF 1.7 with the Adobe extension level 8
 TPdfEncryptionLevel = (elNone, elRC4_40, elRC4_128, elAES_128, elAES_256);
 
 // Encryption permission bits
@@ -823,10 +824,12 @@ Requires compile-time flag `USE_PDFSECURITY`.
 uses mormot.pdf;
 
 var Enc: TPdfEncryption;
-// RC4-40 (PDF 1.3), RC4-128 (PDF 1.4), AES-128-CBC (PDF 1.6):
+// RC4-40 (PDF 1.3), RC4-128 (PDF 1.4), AES-128-CBC (PDF 1.6),
+// AES-256-CBC (PDF 1.7 + Adobe extension level 8):
 Enc := TPdfEncryption.New(
-  elAES_128,             // TPdfEncryptionLevel: elNone, elRC4_40, elRC4_128, elAES_128
-  'user-pass',           // user password (max 32 Latin-1 chars; '' = no open-doc password)
+  elAES_128,             // TPdfEncryptionLevel: elNone, elRC4_40, elRC4_128, elAES_128, elAES_256
+  'user-pass',           // user password ('' = no open-doc password): RC4 and AES-128
+                         // max 32 Latin-1 chars, AES-256 UTF-8 cut at 127 bytes
   'owner-pass',          // owner password (must be non-empty)
   PDF_PERMISSION_NOMODIF // TPdfEncryptionPermissions
 );
@@ -843,9 +846,22 @@ raises `EPdfInvalidOperation` (`TestPdfAWithEncryptionRaises`).
 | `elRC4_40` | `TPdfEncryptionRC4MD5` | 1.3+ | RC4-40 | MD5 |
 | `elRC4_128` | `TPdfEncryptionRC4MD5` | 1.4+ | RC4-128 | MD5 (50 iter) |
 | `elAES_128` | `TPdfEncryptionAES128` | 1.6+ | AES-128-CBC | MD5 (same as RC4-128); IV prepended per object |
-| `elAES_256` | — | — | not implemented (`New` returns nil) | — |
+| `elAES_256` | `TPdfEncryptionAES256` | 1.7 + ADBE ext. 8 | AES-256-CBC | SHA-256/384/512 (Algorithm 2.B); random file key wrapped in `/UE` `/OE`; IV prepended per object |
 
-AES-128 output size: `16 (IV) + (N div 16 + 1) * 16` bytes (PKCS#7 adds a
+AES-256 (R=6) encrypts every string and stream with the 32-byte file key
+itself (no per-object key, `/CFM /AESV3`); `/Perms` holds `/P` again,
+encrypted, `T` for encrypted metadata. Its passwords are UTF-8, cut at 127
+bytes, **without SASLprep** (ISO 32000-2 asks for it): beyond ASCII, a
+reader that applies SASLprep opens the file only when the password was
+given already prepared (NFKC alone is not enough: SASLprep also drops
+characters such as the soft hyphen). `TestEncryptionAES256` checks
+`Hash2B` against vectors of pypdf, recovers the file key from `/UE` and
+`/OE` with both passwords, and decrypts with it; checked once with pypdf
+too: an empty user password, one beyond ASCII, one beyond 127 bytes.
+With encryption no object stream is written (`ToCrossReference`), the xref
+stream stays in clear.
+
+AES output size: `16 (IV) + (N div 16 + 1) * 16` bytes (PKCS#7 adds a
 whole block when N is a multiple of 16) per encrypted object/string. The stream `Length` attribute is updated automatically before writing.
 
 A string is encrypted whole: a text string beyond WinAnsi as its byte order

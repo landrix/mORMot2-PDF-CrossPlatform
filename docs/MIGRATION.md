@@ -99,6 +99,9 @@ protected font DC (`GetDCWithFont`): fonts are `TFontRequest`,
   every font and switches `StandardFontsReplace` off
 - **New: fonts from memory** with `RegisterFontData`, before the document is
   created
+- **New: `elAES_128` and `elAES_256`** encryption, AES-128 (revision 4) and
+  AES-256 (revision 6), in the order of synopse/mORMot2#690: `elAES_128`
+  before `elAES_256`
 
 ### Output That Differs
 
