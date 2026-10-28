@@ -557,8 +557,23 @@ outside a path left the enumeration as if inside one: the next line had no
 `S`, and without a `MoveTo` no `m`, and `PolylineTo` was never stroked. Outside a path each line
 record strokes with a pen or ends with `n` in its own record, so no stroke
 is ever pending (`MetaFileNullPenLines`, `MetaFileLineAfterEndedPath`).
-Text in a path is drawn at once (ROADMAP "Review Findings Not Fixed Yet",
-item 6).
+Text in a GDI path is part of the path: GDI adds its outlines, a
+rectangle for an underline or strike-out and for an opaque background (the
+`ETO_OPAQUE` rectangle, the box of the `OPAQUE` background mode), never
+uses the text colour, and adds nothing of `ETO_CLIPPED` text (measured
+with `GetPath`). PDF text cannot join a path, so `PathTextOut` writes the
+`BT`..`ET` to a stream of its own (`fPathText`, then `fPathTextBuf`) in a
+`q`..`Q` with its own `Tf` (`fFontReselect`), `Tc`, `Tw` and `Tz` - other
+text may change the page's before the painting - the page's text state kept.
+`TextOut` writes the rectangles to the path's stream, turned with the text,
+and an `m` to the current position after the text, which ends the figure
+in GDI. The painting
+record writes the text after its operator, in the render mode of its brush
+and pen (`PathTextPaint`, `Tr` 0, 1 or 2); a dropped path drops it. The text
+is painted after the other figures, not as one union with them, so the fill
+rule does not combine them (`MetaFileTextInPath`). A world rotation turns the
+text only: `ScaleMatrix` sets `fAngle`, which no coordinate reads, so every
+shape - the rectangles of text in a path too - is drawn unturned.
 
 Records `TPdfEnum` reads through its own declarations: `EMR_CREATEBRUSHINDIRECT`
 and `EMR_EXTCREATEPEN` (`TEmrCreateBrushIndirect32`, `TEmrExtCreatePen32`).

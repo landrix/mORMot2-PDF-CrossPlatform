@@ -2099,6 +2099,10 @@ type
     // path artifact, which the painting operator closes
     fPathBuf: RawByteString;
     fPathBufArtifact: boolean;
+    // the text of the path apart, as PDF text cannot join a path: painted
+    // after it in a text render mode
+    fPathText: TPdfStream;
+    fPathTextBuf: RawByteString;
   public
     constructor Create(ACanvas: TPdfCanvas);
     procedure SaveDC;
@@ -2120,6 +2124,8 @@ type
     // write the kept path, after the clip and the pen of its painting
     // - CloseFigures for EMR_STROKEANDFILLPATH, which closes each figure
     procedure PathReplay(CloseFigures: boolean = false);
+    // after the painting operator: the text of the path filled, stroked or both
+    procedure PathTextPaint(Fill, Stroke: boolean);
     // the path is painted or dropped
     procedure PathDone;
     procedure NeedPen;
@@ -2127,6 +2133,8 @@ type
     procedure FlushPenBrush;
     procedure SelectObjectFromIndex(iObject: integer);
     procedure TextOut(var r: TEMRExtTextOut);
+    // EMR_EXTTEXTOUTA/W between EMR_BEGINPATH and EMR_ENDPATH
+    procedure PathTextOut(var R: TEMRExtTextOut);
     procedure ScaleMatrix(Custom: PXForm; iMode: integer);
     procedure HandleComment(Kind: TPdfGdiComment; P: PAnsiChar; Len: integer);
     procedure CreateFont(ALogFont: PEMRExtCreateFontIndirect);
@@ -2244,7 +2252,10 @@ begin
       st^.Font.Align := PEMRSetTextAlign(R)^.iMode;
     EMR_EXTTEXTOUTA,
     EMR_EXTTEXTOUTW:
-      E.TextOut(PEMRExtTextOut(R)^);
+      if E.fPathRecording then
+        E.PathTextOut(PEMRExtTextOut(R)^)
+      else
+        E.TextOut(PEMRExtTextOut(R)^);
     EMR_SAVEDC:
       E.SaveDC;
     EMR_RESTOREDC:
@@ -2857,6 +2868,7 @@ begin
           else
             E.fCanvas.Fill;
         E.fCanvas.NewPath;
+        E.PathTextPaint(not st^.brush.Null, false);
         E.PathDone;
       end;
     EMR_STROKEPATH:
@@ -2868,6 +2880,7 @@ begin
         if not st^.pen.null then
           E.fCanvas.Stroke;
         E.fCanvas.NewPath;
+        E.PathTextPaint(false, not st^.pen.null);
         E.PathDone;
       end;
     EMR_STROKEANDFILLPATH:
@@ -2896,6 +2909,7 @@ begin
         else if not st^.pen.null then
           E.fCanvas.Stroke;
         E.fCanvas.NewPath;
+        E.PathTextPaint(not st^.brush.Null, not st^.pen.null);
         E.PathDone;
       end;
     EMR_SETPOLYFILLMODE:
@@ -3816,13 +3830,16 @@ end;
 procedure TPdfEnum.PathBegin;
 begin
   if fPathRecording or
-     (fPathBuf <> '') then
+     (fPathBuf <> '') or
+     (fPathTextBuf <> '') then
     PathDone; // a path begun again drops the one before, as in GDI
   fPathRecording := true;
   fCanvas.fNewPath := true; // the line records add to the path, unpainted
   fPathArtifact := false;
-  if fCanvas.fContents <> nil then
-    fPathStream := TPdfStream.Create(fCanvas.fDoc, true);
+  if fCanvas.fContents = nil then
+    exit;
+  fPathStream := TPdfStream.Create(fCanvas.fDoc, true);
+  fPathText := TPdfStream.Create(fCanvas.fDoc, true);
 end;
 
 procedure TPdfEnum.PathIn;
@@ -3860,6 +3877,8 @@ begin
   fPathBuf := fPathStream.Writer.ToPdfString;
   FreeAndNil(fPathStream);
   fPathBufArtifact := fPathArtifact;
+  fPathTextBuf := fPathText.Writer.ToPdfString;
+  FreeAndNil(fPathText);
 end;
 
 procedure TPdfEnum.PathPaint;
@@ -3926,10 +3945,28 @@ begin
   fCanvas.fPathArtifact := fPathBufArtifact; // closed by the painting
 end;
 
+procedure TPdfEnum.PathTextPaint(Fill, Stroke: boolean);
+begin
+  PathClose;
+  if (fPathTextBuf = '') or
+     not (Fill or Stroke) then
+    exit;
+  fCanvas.GSave; // Q restores Tr
+  if not Fill then
+    fCanvas.SetTextRenderingMode(trStroke)
+  else if Stroke then
+    fCanvas.SetTextRenderingMode(trFillThenStroke)
+  else
+    fCanvas.SetTextRenderingMode(trFill);
+  fCanvas.fContents.Writer.Add(fPathTextBuf);
+  fCanvas.GRestore;
+end;
+
 procedure TPdfEnum.PathDone;
 begin
   PathClose;
   fPathBuf := ''; // dropped when not painted, with its artifact
+  fPathTextBuf := '';
   fDC[fDCIndex].Moved := false; // the next segment starts with its own m
 end;
 
@@ -3975,7 +4012,7 @@ var
   dx: PIntegerArray; // not handled during drawing yet
   posi: TPoint;
   tmp: array of WideChar; // R.emrtext is not #0 terminated -> use tmp[]
-  hasdx, clipped, isopaque: boolean;
+  hasdx, clipped, isopaque, inpath: boolean;
   n: integer; // the WideChars of tmp, or the glyphs
   cp: cardinal;
   tmp2: array[0..1] of WideChar;
@@ -3989,10 +4026,64 @@ var
   siz: TSize;
   {$endif USE_UNISCRIBE}
 
+  procedure PathBox(const Rect: TRect);
+  var
+    box: TPdfBox;
+  begin
+    box := fCanvas.BoxExclI(Rect);
+    PathIn;
+    fCanvas.Rectangle(box.Left, box.Top, box.Width, box.Height);
+    PathOut;
+  end;
+
+  // a figure of the text's width, from Top to Bottom below its baseline,
+  // turned with the text as DrawLine's line
+  procedure PathFrame(Top, Bottom: single);
+  var
+    c, s, a: single;
+
+    procedure Corner(cx, cy: single; Move: boolean);
+    begin
+      cy := cy - h;
+      if Move then
+        fCanvas.MoveToS(posi.X + cx * c + cy * s, posi.Y + cy * c - cx * s)
+      else
+        fCanvas.LineToS(posi.X + cx * c + cy * s, posi.Y + cy * c - cx * s);
+    end;
+
+  begin
+    c := 1;
+    s := 0;
+    if fDC[fDCIndex].Font.spec.angle <> 0 then
+    begin
+      a := fDC[fDCIndex].Font.spec.angle * cPIdiv180; // before acos and asin
+      c := cos(a);
+      s := sin(a);
+    end;
+    PathIn;
+    Corner(-w, Top, true);
+    Corner(-w + ww, Top, false);
+    Corner(-w + ww, Bottom, false);
+    Corner(-w, Bottom, false);
+    fCanvas.ClosePath;
+    PathOut;
+  end;
+
   procedure DrawLine(var P: TPoint; aH: single);
   var
     tmp: TPdfEnumStatePen;
+    t: single;
   begin
+    if inpath then
+    begin
+      // GDI adds a rectangle of the line's width to the path
+      if fCanvas.fContents <> nil then
+      begin
+        t := ss / (fscaleY * 30); // half the pen width below
+        PathFrame(aH - t, aH + t);
+      end;
+      exit;
+    end;
     tmp := fDC[fDCIndex].Pen;
     fDC[fDCIndex].pen.color := fDC[fDCIndex].Font.color;
     fDC[fDCIndex].pen.width := ss / (fscaleY * 15);
@@ -4026,6 +4117,7 @@ var
   end;
 
 begin
+  inpath := fPathRecording;
   if R.emrtext.nChars > 0 then
   begin
     if (R.emr.iType = EMR_EXTTEXTOUTA) and
@@ -4197,7 +4289,24 @@ begin
     end
     else
       clipped := false;
-    isopaque := not fDC[fDCIndex].brush.null and
+    if inpath then
+    begin
+      // the painting record's clip: GDI adds nothing of ETO_CLIPPED text
+      clipped := false;
+      if fCanvas.fContents <> nil then
+      begin
+        // GDI adds the opaque rectangle and the background box
+        if (R.emrtext.fOptions and ETO_OPAQUE <> 0) and
+           (R.emrtext.rcl.Right > R.emrtext.rcl.Left) and
+           (R.emrtext.rcl.Bottom > R.emrtext.rcl.Top) then
+          PathBox(TRect(R.emrtext.rcl));
+        if fDC[fDCIndex].Font.BkMode = OPAQUE then
+          PathFrame(-abs(fDC[fDCIndex].Font.spec.ascent),
+            abs(fDC[fDCIndex].Font.spec.descent));
+      end;
+    end;
+    isopaque := not inpath and
+               not fDC[fDCIndex].brush.null and
                (fDC[fDCIndex].brush.Color <> clWhite) and
                ((R.emrtext.fOptions and ETO_OPAQUE <> 0) or
                 ((fDC[fDCIndex].Font.BkMode = OPAQUE) and
@@ -4235,7 +4344,8 @@ begin
       // don't handle rotation here, since should not be used much
       FillRectangle(back);
     // draw text
-    FillColor := fDC[fDCIndex].Font.color;
+    if not inpath then // else the brush or the pen of the painting record
+      FillColor := fDC[fDCIndex].Font.color;
     {$ifdef USE_UNISCRIBE}
     fCanvas.RightToLeftText := (R.emrtext.fOptions and ETO_RTLREADING) <> 0;
     {$endif USE_UNISCRIBE}
@@ -4355,6 +4465,40 @@ begin
       fDC[fDCIndex].position.X := posi.X + trunc(ww);
       fDC[fDCIndex].position.Y := posi.Y;
     end;
+    if inpath and
+       (fCanvas.fContents <> nil) then
+    begin
+      // the text ends the figure: the next line starts at the position
+      PathIn;
+      fCanvas.MoveToI(fDC[fDCIndex].position.X, fDC[fDCIndex].position.Y);
+      PathOut;
+    end;
+  end;
+end;
+
+procedure TPdfEnum.PathTextOut(var R: TEMRExtTextOut);
+var
+  saved: TPdfStream;
+begin
+  if R.emrtext.nChars = 0 then
+    exit; // no text: nothing for the path
+  saved := fCanvas.fContents;
+  if R.emrtext.fOptions and ETO_CLIPPED = 0 then
+    fCanvas.fContents := fPathText
+  else
+    fCanvas.fContents := nil; // GDI adds nothing of it to the path
+  fCanvas.GSave; // the page's text state stays, for the text after the path
+  try
+    // painted later, after other text maybe: its own Tf, Tc, Tw and Tz
+    fCanvas.fFontReselect := true;
+    if fCanvas.fContents <> nil then
+      fCanvas.fContents.Writer.AddWithSpace(fCanvas.fPage.CharSpace).
+        Add('Tc'#10).AddWithSpace(fCanvas.fPage.WordSpace).Add('Tw'#10).
+        Add(fCanvas.fPage.HorizontalScaling).Add(' Tz'#10);
+    TextOut(R);
+  finally
+    fCanvas.GRestore;
+    fCanvas.fContents := saved;
   end;
 end;
 
