@@ -11679,7 +11679,6 @@ begin
   Rectangle(ClipX, ClipY, ClipWidth, ClipHeight);
   Clip;
   NewPath;
-  fNewPath := false;
   ConcatToCTM(AWidth, 0, 0, AHeight, X, Y);
   ExecuteXObject(AXObjectName);
   GRestore;
@@ -11880,7 +11879,6 @@ end;
 
 procedure TPdfCanvas.NewPath;
 begin
-  fNewPath := true;
   if fContents <> nil then
     fContents.Writer.Add('n'#10);
   EndPathArtifact;
