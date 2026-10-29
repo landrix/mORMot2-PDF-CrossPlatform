@@ -2480,10 +2480,10 @@ begin
     txt := LineAfterEndedPathEmf(k);
     CheckEqual(CountOccurrences(#10'S'#10, txt), STROKES[k], WHAT[k]);
     CheckEqual(CountOccurrences(' l'#10, txt), LINES[k], WHAT[k]);
-    Check(ValidPaths(txt), WHAT[k]);
+    Check(ValidPaths(txt), Utf8ToString(WHAT[k]));
     Check(PosBefore(txt, 'endstream', ' l'#10) <
       MaxPtrInt(PosBefore(txt, 'endstream', #10'S'#10),
-        PosBefore(txt, 'endstream', #10'n'#10)), WHAT[k]); // no path left open
+        PosBefore(txt, 'endstream', #10'n'#10)), Utf8ToString(WHAT[k])); // no path left open
   end;
 end;
 
@@ -2629,14 +2629,14 @@ begin
     txt := TextInPathEmf(k);
     CheckEqual(CountOccurrences(#10'BT'#10, txt), TEXTS[k], WHAT[k]);
     if MODES[k] <> '' then
-      Check(PosEx(#10 + MODES[k] + #10, txt) > 0, WHAT[k])
+      Check(PosEx(#10 + MODES[k] + #10, txt) > 0, Utf8ToString(WHAT[k]))
     else
-      Check(PosEx(' Tr'#10, txt) = 0, WHAT[k]);
-    Check(ValidPaths(txt), WHAT[k]);
+      Check(PosEx(' Tr'#10, txt) = 0, Utf8ToString(WHAT[k]));
+    Check(ValidPaths(txt), Utf8ToString(WHAT[k]));
     CheckEqual(OpenBefore(txt, 'endstream'), 0, WHAT[k]);
     // the text colour only for the text drawn at once
-    Check((PosEx(#10'0 0 1 rg'#10, txt) > 0) = (k = 8), WHAT[k]);
-    Check(PosEx(#10'0 Tz'#10, txt) = 0, WHAT[k]); // no text scaled to nothing
+    Check((PosEx(#10'0 0 1 rg'#10, txt) > 0) = (k = 8), Utf8ToString(WHAT[k]));
+    Check(PosEx(#10'0 Tz'#10, txt) = 0, Utf8ToString(WHAT[k])); // no text scaled to nothing
     case k of
       6:
         begin
