@@ -4479,6 +4479,7 @@ end;
 procedure TPdfEnum.PathTextOut(var R: TEMRExtTextOut);
 var
   saved: TPdfStream;
+  hs: single;
 begin
   if R.emrtext.nChars = 0 then
     exit; // no text: nothing for the path
@@ -4491,10 +4492,13 @@ begin
   try
     // painted later, after other text maybe: its own Tf, Tc, Tw and Tz
     fCanvas.fFontReselect := true;
+    hs := fCanvas.fPage.HorizontalScaling;
+    if hs = 0 then
+      hs := 100; // no Tz written yet: the default of PDF
     if fCanvas.fContents <> nil then
       fCanvas.fContents.Writer.AddWithSpace(fCanvas.fPage.CharSpace).
         Add('Tc'#10).AddWithSpace(fCanvas.fPage.WordSpace).Add('Tw'#10).
-        Add(fCanvas.fPage.HorizontalScaling).Add(' Tz'#10);
+        Add(hs).Add(' Tz'#10);
     TextOut(R);
   finally
     fCanvas.GRestore;

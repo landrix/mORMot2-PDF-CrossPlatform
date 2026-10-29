@@ -2636,6 +2636,7 @@ begin
     CheckEqual(OpenBefore(txt, 'endstream'), 0, WHAT[k]);
     // the text colour only for the text drawn at once
     Check((PosEx(#10'0 0 1 rg'#10, txt) > 0) = (k = 8), WHAT[k]);
+    Check(PosEx(#10'0 Tz'#10, txt) = 0, WHAT[k]); // no text scaled to nothing
     case k of
       6:
         begin
@@ -3270,7 +3271,7 @@ procedure TPdfImageGoldenTests.MetaFileTextInPath;
 var
   i: integer;
 begin
-  for i := 1 to 63 do
+  for i := 1 to 74 do
     Check(true, 'SKIP: metafiles are Windows only');
 end;
 
