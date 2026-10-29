@@ -2155,9 +2155,13 @@ type
     // MetaRgn - clipping
     procedure InitMetaRgn(const ClientRect: TRect);
     procedure SetMetaRgn;
-    // intersect - clipping
+    // the part of two boxes both cover, normalized: empty if none
     function IntersectClipRect(
       const ClpRect: TPdfBox; const CurrRect: TPdfBox): TPdfBox;
+    // the box around the rectangles of Region (1-based in fClipRegions)
+    function RegionBox(Region: integer): TPdfBox;
+    // EMR_INTERSECTCLIPRECT: a new region, the current one within Rect
+    procedure IntersectClip(const Rect: TRect);
     procedure ExtSelectClipRgn(data: PEMRExtSelectClipRgn);
     // get current clipping area
     function GetClipRect: TPdfBox;
@@ -2834,8 +2838,7 @@ begin
     EMR_EXTSELECTCLIPRGN:
       E.ExtSelectClipRgn(PEMRExtSelectClipRgn(R));
     EMR_INTERSECTCLIPRECT:
-      st^.ClipRgn := E.IntersectClipRect(E.fCanvas.BoxI(
-        TRect(PEMRIntersectClipRect(R)^.rclClip), true), st^.ClipRgn);
+      E.IntersectClip(TRect(PEMRIntersectClipRect(R)^.rclClip));
     EMR_SETMAPMODE:
       st^.MappingMode := PEMRSetMapMode(R)^.iMode;
     EMR_BEGINPATH:
@@ -3705,27 +3708,115 @@ begin
   end;
 end;
 
+function SingleMin(A, B: single): single;
+begin
+  if A < B then
+    result := A
+  else
+    result := B;
+end;
+
+function SingleMax(A, B: single): single;
+begin
+  if A > B then
+    result := A
+  else
+    result := B;
+end;
+
+function NormalizedBox(const Box: TPdfBox): TPdfBox;
+begin
+  result := Box;
+  if result.Width < 0 then
+  begin
+    result.Left := result.Left + result.Width;
+    result.Width := -result.Width;
+  end;
+  if result.Height < 0 then
+  begin
+    result.Top := result.Top + result.Height;
+    result.Height := -result.Height;
+  end;
+end;
+
 function TPdfEnum.IntersectClipRect(const ClpRect: TPdfBox;
   const CurrRect: TPdfBox): TPdfBox;
+var
+  a, b: TPdfBox;
+  r, t: single;
 begin
-  result := CurrRect;
-  if (ClpRect.Width <> 0) or
-     (ClpRect.Height <> 0) then
-  begin // ignore null clipping area
-    if ClpRect.Left > result.Left then
-      result.Left := ClpRect.Left;
-    if ClpRect.Top > result.Top then
-      result.Top := ClpRect.Top;
-    if (ClpRect.Left + ClpRect.Width) < (result.Left + result.Width) then
-      result.Width := (ClpRect.Left + ClpRect.Width) - result.Left;
-    if (ClpRect.Top + ClpRect.Height) < (result.Top + result.Height) then
-      result.Height := (ClpRect.Top + ClpRect.Height) - result.Top;
-    // fix rect
-    if result.Width < 0 then
-      result.Width := 0;
-    if result.Height < 0 then
-      result.Height := 0;
+  // from both ends: the old code moved Left before it took the old right
+  a := NormalizedBox(ClpRect);
+  b := NormalizedBox(CurrRect);
+  result.Left := SingleMax(a.Left, b.Left);
+  result.Top := SingleMax(a.Top, b.Top);
+  r := SingleMin(a.Left + a.Width, b.Left + b.Width);
+  t := SingleMin(a.Top + a.Height, b.Top + b.Height);
+  result.Width := SingleMax(r - result.Left, 0);
+  result.Height := SingleMax(t - result.Top, 0);
+end;
+
+function TPdfEnum.RegionBox(Region: integer): TPdfBox;
+var
+  i: PtrInt;
+  b: TPdfBox;
+  r, t: single;
+begin
+  if fClipRegions[Region - 1] = nil then
+  begin
+    result := PdfBox(0, 0, 0, 0); // a region without rectangles
+    exit;
   end;
+  result := NormalizedBox(fClipRegions[Region - 1][0]);
+  r := result.Left + result.Width;
+  t := result.Top + result.Height;
+  for i := 1 to high(fClipRegions[Region - 1]) do
+  begin
+    b := NormalizedBox(fClipRegions[Region - 1][i]);
+    result.Left := SingleMin(result.Left, b.Left);
+    result.Top := SingleMin(result.Top, b.Top);
+    r := SingleMax(r, b.Left + b.Width);
+    t := SingleMax(t, b.Top + b.Height);
+  end;
+  result.Width := r - result.Left;
+  result.Height := t - result.Top;
+end;
+
+procedure TPdfEnum.IntersectClip(const Rect: TRect);
+var
+  box: TPdfBox;
+  cur, n, i, c: PtrInt;
+begin
+  // GDI clips all output to the current region within Rect, or to Rect
+  // without a region: a region of its own, selected as EMR_EXTSELECTCLIPRGN
+  box := fCanvas.BoxExclI(Rect); // exclusive, as GDI records it
+  cur := fDC[fDCIndex].ClipRegion;
+  n := length(fClipRegions);
+  SetLength(fClipRegions, n + 1);
+  if cur = 0 then
+  begin
+    SetLength(fClipRegions[n], 1);
+    fClipRegions[n][0] := box;
+  end
+  else
+  begin
+    SetLength(fClipRegions[n], length(fClipRegions[cur - 1]));
+    c := 0;
+    for i := 0 to high(fClipRegions[cur - 1]) do
+    begin
+      fClipRegions[n][c] := IntersectClipRect(box, fClipRegions[cur - 1][i]);
+      if (fClipRegions[n][c].Width > 0) and
+         (fClipRegions[n][c].Height > 0) then
+        inc(c);
+    end;
+    if c = 0 then
+      c := 1; // one empty box: it clips everything, as an empty region
+    SetLength(fClipRegions[n], c);
+  end;
+  fDC[fDCIndex].ClipRegion := n + 1;
+  fDC[fDCIndex].ClipRgn := RegionBox(n + 1);
+  fDC[fDCIndex].ClipRgnNull := false;
+  SelectClip(fDC[fDCIndex].MetaClip, n + 1);
 end;
 
 procedure TPdfEnum.ExtSelectClipRgn(data: PEMRExtSelectClipRgn);
@@ -3754,6 +3845,8 @@ begin
       inc(pr);
     end;
     fDC[fDCIndex].ClipRegion := n + 1;
+    // the text and bitmaps clip to its box: it was never set, so empty
+    fDC[fDCIndex].ClipRgn := RegionBox(n + 1);
   end
   else
     fDC[fDCIndex].ClipRegion := 0;
@@ -4270,7 +4363,7 @@ begin
       clipped := (R.emrtext.rcl.Right > R.emrtext.rcl.Left) and
                  (R.emrtext.rcl.Bottom > R.emrtext.rcl.Top);
       if clipped then
-        clip := fCanvas.BoxI(TRect(R.emrtext.rcl), true)
+        clip := fCanvas.BoxExclI(TRect(R.emrtext.rcl)) // exclusive
       else
       begin
         if fCanvas.fUseMetaFileTextClipping = tcClipExplicit then

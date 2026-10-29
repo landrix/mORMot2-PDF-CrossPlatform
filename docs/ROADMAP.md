@@ -8,8 +8,8 @@ it produced in `.claude/skills/` — this file repeats neither.
 tagged output passes PAC 2024 with accepted hints only (W-1, W-2) and veraPDF
 `ua1`; PDF/A-3U with PDF/UA-1 is verified (R-17). Fonts are embedded and subset
 on all three platforms; tables carry `THead`/`TBody`/`TFoot` row groups.
-`test_runner` is green with 1632 assertions on Windows (FPC, Delphi 7,
-Delphi 2010 and Delphi 13), 1664 on macOS and 1648 on Linux (2026-10-29, pin `964874b88`). **Delphi:** layer
+`test_runner` is green with 1669 assertions on Windows (FPC, Delphi 7,
+Delphi 2010 and Delphi 13), 1664 on macOS and 1685 on Linux (2026-10-29, pin `964874b88`). **Delphi:** layer
 1, the TCanvas bridge and the `TGDIPages` core build on Delphi 7 (R-19, R-20
 steps 1–6) and on Delphi 2010, a Unicode Delphi (R-25); all six console demos
 and the `--export` of the two GUI demos give the same PDF as FPC. Delphi 13
@@ -34,6 +34,11 @@ here until the post is written, then the list is emptied. It is the only such
 list: the CHANGELOG entry of the next release is written from it. Emptied for
 v0.10.0 (2026-09-30).
 
+- **Fixed (EMF):** `IntersectClipRect` clipped nothing, and text after a
+  `SelectClipRgn` was clipped away. `IntersectClipRect` now clips all
+  output to the current clip within its rectangle, as GDI does: shapes,
+  text and bitmaps. The clip rectangles of `IntersectClipRect` and of
+  `ExtTextOut` with `ETO_CLIPPED` were one logical unit too narrow
 - **Fixed (EMF):** text between `BeginPath` and `EndPath` was drawn at
   once, in the text colour, whatever became of the path. GDI adds it to
   the path: it is now painted with it, filled in the brush colour
@@ -765,7 +770,7 @@ agents, each claim verified again by Codex) found 28 bugs; the ones fixed
 then are in "To Announce" - in `mormot.pdf`, in the report and the bridge,
 and in the Uniscribe backend (`ReduceTtf`, the bidi levels) - and `{#}` and
 `{total}` in body text are documented behaviour. These wait, each with a
-test that fails before its fix. Items 1, 4 and 5 are also in the
+test that fails before its fix. Items 1 and 4 are also in the
 trunk's `mormot.ui.pdf`.
 
 1. **Malformed fonts** (`mormot.pdf`): `TtfFontPostcriptName` reads the
@@ -781,12 +786,7 @@ trunk's `mormot.ui.pdf`.
    first column's paragraph in the tagged reading order (the renderer
    continues a block only from the command before): it needs the structure
    elements kept by block, decided with the tagging
-4. **EMF clip rectangles one unit too narrow** (`mormot.pdf.canvas`,
-   Windows): `EMR_INTERSECTCLIPRECT` and the clip rectangle of `ExtTextOut`
-   are exclusive, as GDI records them, but still go through `BoxI`, which
-   takes one logical unit off. Found with the boxes of #89; next: measure
-   them as the shapes were (`MetaFileBoxes`), then `BoxExclI` with a test
-5. **The device pixel of a box under a world scale** (`mormot.pdf.canvas`,
+4. **The device pixel of a box under a world scale** (`mormot.pdf.canvas`,
    Windows): `DevPixelX`/`DevPixelY` (#89) are not divided by the world
    factor, so a shape under a world scale grows by more than one device
    pixel; the record holds integer logical units, so what GDI rounds to has
@@ -1250,7 +1250,7 @@ chart library's bitmap is to be built only when someone asks for it.
 ### EMF/MetaFile and GDI+ Gradients — no work planned
 
 Windows-only (`TPdfDocumentGdi`), not portable. Its known bugs wait in
-"Review Findings Not Fixed Yet", items 4 and 5.
+"Review Findings Not Fixed Yet", item 4.
 
 ---
 

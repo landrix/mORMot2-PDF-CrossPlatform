@@ -115,6 +115,7 @@ type
     /// the boxes as GDI records them: one device pixel inside for the shapes,
     // exclusive for the fills, the corners of EMR_ROUNDRECT mapped
     procedure MetaFileBoxes;
+    procedure MetaFileClipBoxes;
     /// brushes and extended pens read in the layout of the EMF records
     procedure MetaFileRecordLayout;
   end;
@@ -3313,6 +3314,212 @@ begin
       CheckEqual(mapped[i], px[i], 'the same at 10 units per pixel');
 end;
 
+// a polygon on 10..50, then a clip and text or a shape, recorded at K
+// logical units per pixel, VX < 0 mirroring X - Kind:
+// 0 a region of device pixels 0..90 intersected with 10..50, then text
+// 1 the rectangle 10..50 of an ETO_CLIPPED ExtTextOut
+// 2 IntersectClipRect 10..50 alone, then a rectangle and text
+// 3 the region alone, then text
+// 4 10..70 intersected with 0..50, then a rectangle
+// 5 IntersectClipRect 10..50 between SaveDC and RestoreDC, then text
+// 6 10..20 intersected with 30..40, then a rectangle
+function ClipBoxEmf(Kind, K, VX: integer): RawUtf8;
+var
+  mf: TMetaFile;
+  mc: TMetaFileCanvas;
+  r: Windows.TRect;
+  pts: array[0..3] of Windows.TPoint;
+  i: integer;
+  dc: HDC;
+  rgn: HRGN;
+begin
+  mf := TMetaFile.Create;
+  try
+    mf.Width := 100;
+    mf.Height := 100;
+    mc := TMetaFileCanvas.Create(mf, 0);
+    try
+      dc := mc.Handle;
+      if K > 1 then
+      begin
+        SetMapMode(dc, MM_ANISOTROPIC);
+        SetWindowExtEx(dc, 100 * K, 100 * K, nil);
+        SetViewportExtEx(dc, VX, 100, nil);
+        SetViewportOrgEx(dc, 60 * ord(VX < 0), 0, nil);
+      end;
+      for i := 0 to 3 do
+      begin
+        pts[i].X := (10 + 40 * ord(i in [1, 2])) * K;
+        pts[i].Y := (10 + 40 * ord(i >= 2)) * K;
+      end;
+      Windows.Polygon(dc, pts, 4);
+      if Kind in [0, 3] then
+      begin
+        rgn := CreateRectRgn(0, 0, 90, 90); // device pixels
+        SelectClipRgn(dc, rgn);
+        DeleteObject(rgn);
+      end;
+      if Kind = 5 then
+        SaveDC(dc);
+      case Kind of
+        0, 2, 5:
+          IntersectClipRect(dc, 10 * K, 10 * K, 50 * K, 50 * K);
+        4:
+          begin
+            IntersectClipRect(dc, 10 * K, 10 * K, 70 * K, 70 * K);
+            IntersectClipRect(dc, 0, 0, 50 * K, 50 * K);
+          end;
+        6:
+          begin
+            IntersectClipRect(dc, 10 * K, 10 * K, 20 * K, 20 * K);
+            IntersectClipRect(dc, 30 * K, 30 * K, 40 * K, 40 * K);
+          end;
+      end;
+      if Kind = 5 then
+        RestoreDC(dc, -1);
+      if Kind in [2, 4, 6] then
+        Windows.Rectangle(dc, 0, 0, 90 * K, 90 * K);
+      if Kind = 1 then
+      begin
+        r.Left := 10 * K;
+        r.Top := 10 * K;
+        r.Right := 50 * K;
+        r.Bottom := 50 * K;
+        ExtTextOutW(dc, 5 * K, 5 * K, ETO_CLIPPED, @r, 'Clipped', 7, nil);
+      end
+      else if Kind in [0, 2, 3, 5] then
+        TextOutW(dc, 5 * K, 5 * K, 'Clipped', 7);
+    finally
+      mc.Free;
+    end;
+    result := RenderedEmf(mf); // tcAlwaysClip
+  finally
+    mf.Free;
+  end;
+end;
+
+// the last clip rectangle (re h W) before Before in Txt, normalized, and
+// the position of its W; false if none
+function LastClip(const Txt: RawUtf8; Before: PtrInt; out Box: TPdfBox;
+  out At: PtrInt): boolean;
+var
+  p, l: PtrInt;
+  line: RawUtf8;
+  v: array[0..3] of double;
+  i: integer;
+begin
+  result := false;
+  p := PosEx(' re'#10'h'#10'W'#10, Txt);
+  while (p > 0) and
+        (p < Before) do
+  begin
+    l := p;
+    while (l > 1) and
+          (Txt[l - 1] <> #10) do
+      dec(l);
+    line := copy(Txt, l, p - l);
+    for i := 0 to 3 do
+      v[i] := GetExtended(pointer(GetCsvItem(pointer(line), i, ' ')));
+    Box.Left := v[0];
+    Box.Width := v[2];
+    Box.Top := v[1];
+    Box.Height := v[3];
+    if Box.Width < 0 then
+    begin
+      Box.Left := Box.Left + Box.Width;
+      Box.Width := -Box.Width;
+    end;
+    if Box.Height < 0 then
+    begin
+      Box.Top := Box.Top + Box.Height;
+      Box.Height := -Box.Height;
+    end;
+    At := p + 6;
+    result := true;
+    p := PosEx(' re'#10'h'#10'W'#10, Txt, p + 1);
+  end;
+end;
+
+// the clip at At still holds at Pos: no Q between them
+function ClipHolds(const Txt: RawUtf8; At, Pos: PtrInt): boolean;
+var
+  q: PtrInt;
+begin
+  q := PosEx(#10'Q'#10, Txt, At);
+  result := (Pos > At) and
+            ((q = 0) or
+             (q > Pos));
+end;
+
+function SameBox(const A, B: TPdfBox): boolean;
+begin
+  result := (Abs(A.Left - B.Left) < 0.02) and
+            (Abs(A.Top - B.Top) < 0.02) and
+            (Abs(A.Width - B.Width) < 0.02) and
+            (Abs(A.Height - B.Height) < 0.02);
+end;
+
+procedure TPdfImageGoldenTests.MetaFileClipBoxes;
+const
+  SCALE: array[0..2] of integer = (1, 10, 10);
+  VIEW: array[0..2] of integer = (100, 100, -100);
+var
+  kind, s: integer;
+  txt: RawUtf8;
+  paths: TRawUtf8DynArray;
+  poly, clip: TPdfBox;
+  bt, paint, at: PtrInt;
+  msg: string;
+begin
+  { the clip of IntersectClipRect and of an ETO_CLIPPED ExtTextOut is the
+    exclusive rectangle, on the box of a polygon of the same points:
+    IntersectClipRect clipped nothing without a region and to an empty
+    box after one, as did any text after a region, and BoxI took a
+    logical unit off both rectangles }
+  for kind := 0 to 6 do
+    for s := 0 to high(SCALE) do
+    begin
+      if (kind in [0, 3]) and
+         (s > 0) then
+        continue; // the region is of device pixels: K = 1 only
+      msg := Utf8ToString(FormatUtf8('kind % at % units per pixel, view %',
+        [kind, SCALE[s], VIEW[s]]));
+      txt := ClipBoxEmf(kind, SCALE[s], VIEW[s]);
+      paths := PaintedPaths(txt);
+      if CheckFailed(length(paths) > 0, msg) then
+        continue;
+      poly := PathBox(paths[0]);
+      bt := PosEx(#10'BT'#10, txt);
+      paint := PosEx(#10'B'#10, txt, PosEx(#10'B'#10, txt) + 1); // the rectangle
+      case kind of
+        0, 1, 2:
+          Check(LastClip(txt, bt, clip, at) and
+                SameBox(clip, poly) and
+                ClipHolds(txt, at, bt), msg);
+        3:
+          Check(LastClip(txt, bt, clip, at) and
+                SameBox(clip, PdfBox(0, 842 - 67.5, 67.5, 67.5)) and
+                ClipHolds(txt, at, bt), msg);
+        4:
+          Check(LastClip(txt, paint, clip, at) and
+                SameBox(clip, poly) and
+                ClipHolds(txt, at, paint), msg);
+        5: // the text drawn, no clip left at it
+          Check((bt > 0) and
+                (not LastClip(txt, bt, clip, at) or
+                 not ClipHolds(txt, at, bt)), msg);
+        6:
+          Check(LastClip(txt, paint, clip, at) and
+                (clip.Width * clip.Height = 0) and
+                ClipHolds(txt, at, paint), msg);
+      end;
+      if kind = 2 then // the shape too
+        Check(LastClip(txt, paint, clip, at) and
+              SameBox(clip, poly) and
+              ClipHolds(txt, at, paint), msg);
+    end;
+end;
+
 procedure TPdfImageGoldenTests.MetaFileRecordLayout;
 var
   mf: TMetaFile;
@@ -3530,6 +3737,14 @@ var
   i: integer;
 begin
   for i := 1 to 21 do
+    Check(true, 'SKIP: metafiles are Windows only');
+end;
+
+procedure TPdfImageGoldenTests.MetaFileClipBoxes;
+var
+  i: integer;
+begin
+  for i := 1 to 37 do
     Check(true, 'SKIP: metafiles are Windows only');
 end;
 

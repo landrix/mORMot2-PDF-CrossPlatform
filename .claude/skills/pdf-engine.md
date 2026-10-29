@@ -509,24 +509,29 @@ smaller value. `BoxInclI` and `RoundRectI` add the signed pixel to the
 recorded Right/Bottom first and normalize after (`EMR_ROUNDRECT` passes the
 record as it is); #686 normalized first, which shifts a mirrored shape. A
 `FillRect` (`EMR_BITBLT` with `PATCOPY`), `FillRgn` and the opaque rectangle
-of `ExtTextOut` are stored as called: `BoxExclI`. `BoxI` takes one logical
-unit off; the EMF renderer no longer uses it for shapes and fills, but still
-for `EMR_INTERSECTCLIPRECT` and the clip rectangle of `ExtTextOut`, which are
-exclusive too - one unit too narrow there (ROADMAP "Review Findings Not
-Fixed Yet", item 4). The corners of
+of `ExtTextOut` are stored as called: `BoxExclI`, as are the exclusive
+rectangles of `EMR_INTERSECTCLIPRECT` and of an `ETO_CLIPPED` `ExtTextOut`
+(`MetaFileClipBoxes`). `BoxI` takes one logical unit off; the EMF renderer
+no longer uses it for shapes, fills and those two rectangles. The corners of
 `RoundRectI` go through the mapping as the coordinates do. The pixel is one
 of the mapping `fWinSize`/`fViewSize`; the metric map modes set that mapping
 from `fPrinterPxPerInch` (`TPdfEnum.ScaleMatrix`), not from the reference DC,
 so there it is an approximation. Under a world scale the pixel is not
 divided by the world factor: the record holds integer logical units, what GDI
-rounds to is not measured yet (ROADMAP, item 5).
+rounds to is not measured yet (ROADMAP, item 4).
 
 The clip of `EMR_EXTSELECTCLIPRGN` is a `q ... W n` of the canvas: PDF can
 only narrow a clip, so a new one needs the `Q` of the one before. `TPdfEnum`
 keeps every region as PDF boxes (`fClipRegions`), each state names its own
 (`ClipRegion`, saved and restored with the state), and `SelectClip` makes the
 canvas hold that one (`fClipActive`): from `ExtSelectClipRgn`, `RestoreDC`
-and, with 0, at the end of `RenderMetaFile`. `SetMetaRgn` keeps the `q` of the
+and, with 0, at the end of `RenderMetaFile`. `EMR_INTERSECTCLIPRECT` is such
+a region too (`IntersectClip`): each rectangle of the current region within
+the record's, or the record's alone without one, an empty box when nothing is
+left - GDI clips all output to it, shapes as well. The state's `ClipRgn` is
+the box around its region, which the text (`tcAlwaysClip`) and bitmaps clip
+to besides: it was never set for a region, so the text after
+`SelectClipRgn` clipped to an empty box. `SetMetaRgn` keeps the `q` of the
 clip as part of the meta region: a node of `fMetaClips` inside the ones kept
 before it, named by the state (`MetaClip`); a later clip opens its `q` inside,
 and `SelectClip` closes a node only when the state it restores lies outside.
