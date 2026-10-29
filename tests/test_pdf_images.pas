@@ -3475,13 +3475,11 @@ begin
     exclusive rectangle, on the box of a polygon of the same points:
     IntersectClipRect clipped nothing without a region and to an empty
     box after one, as did any text after a region, and BoxI took a
-    logical unit off both rectangles }
+    logical unit off both rectangles; the region of device pixels was
+    mapped as logical units, ten times too small at 10 units per pixel }
   for kind := 0 to 6 do
     for s := 0 to high(SCALE) do
     begin
-      if (kind in [0, 3]) and
-         (s > 0) then
-        continue; // the region is of device pixels: K = 1 only
       msg := Utf8ToString(FormatUtf8('kind % at % units per pixel, view %',
         [kind, SCALE[s], VIEW[s]]));
       txt := ClipBoxEmf(kind, SCALE[s], VIEW[s]);
@@ -3744,7 +3742,7 @@ procedure TPdfImageGoldenTests.MetaFileClipBoxes;
 var
   i: integer;
 begin
-  for i := 1 to 37 do
+  for i := 1 to 45 do
     Check(true, 'SKIP: metafiles are Windows only');
 end;
 

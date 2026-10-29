@@ -2162,6 +2162,9 @@ type
     function RegionBox(Region: integer): TPdfBox;
     // EMR_INTERSECTCLIPRECT: a new region, the current one within Rect
     procedure IntersectClip(const Rect: TRect);
+    // a rectangle of device units, as the region of EMR_EXTSELECTCLIPRGN:
+    // no window, viewport nor world transform - unnormalized, as BoxI
+    function DeviceBox(const Rect: TRect): TPdfBox;
     procedure ExtSelectClipRgn(data: PEMRExtSelectClipRgn);
     // get current clipping area
     function GetClipRect: TPdfBox;
@@ -3782,6 +3785,18 @@ begin
   result.Height := t - result.Top;
 end;
 
+function TPdfEnum.DeviceBox(const Rect: TRect): TPdfBox;
+var
+  h: single;
+begin
+  // BoxI mapped these as logical units: wrong under any other map mode
+  h := fCanvas.fPage.PageHeight - fCanvas.fOffsetYDef;
+  result.Left := fCanvas.fOffsetXDef + Rect.Left * fCanvas.fDevScaleX;
+  result.Width := (Rect.Right - Rect.Left) * fCanvas.fDevScaleX;
+  result.Top := h - Rect.Top * fCanvas.fDevScaleY;
+  result.Height := (Rect.Top - Rect.Bottom) * fCanvas.fDevScaleY;
+end;
+
 procedure TPdfEnum.IntersectClip(const Rect: TRect);
 var
   box: TPdfBox;
@@ -3824,7 +3839,6 @@ var
   i, n: integer;
   d: PRgnData;
   pr: PRect;
-  r: TRect;
 begin
   // see http://www.codeproject.com/Articles/1944/Guide-to-WIN-Regions
   if data^.iMode <> RGN_COPY then
@@ -3838,10 +3852,7 @@ begin
     SetLength(fClipRegions[n], d^.rdh.nCount);
     for i := 0 to integer(d^.rdh.nCount) - 1 do
     begin
-      r := pr^;
-      inc(r.Bottom);
-      inc(r.Right);
-      fClipRegions[n][i] := fCanvas.BoxI(r, false);
+      fClipRegions[n][i] := DeviceBox(pr^);
       inc(pr);
     end;
     fDC[fDCIndex].ClipRegion := n + 1;

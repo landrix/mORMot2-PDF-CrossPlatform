@@ -8,8 +8,8 @@ it produced in `.claude/skills/` — this file repeats neither.
 tagged output passes PAC 2024 with accepted hints only (W-1, W-2) and veraPDF
 `ua1`; PDF/A-3U with PDF/UA-1 is verified (R-17). Fonts are embedded and subset
 on all three platforms; tables carry `THead`/`TBody`/`TFoot` row groups.
-`test_runner` is green with 1669 assertions on Windows (FPC, Delphi 7,
-Delphi 2010 and Delphi 13), 1664 on macOS and 1685 on Linux (2026-10-29, pin `964874b88`). **Delphi:** layer
+`test_runner` is green with 1677 assertions on Windows (FPC, Delphi 7,
+Delphi 2010 and Delphi 13), 1664 on macOS and 1693 on Linux (2026-10-29, pin `964874b88`). **Delphi:** layer
 1, the TCanvas bridge and the `TGDIPages` core build on Delphi 7 (R-19, R-20
 steps 1–6) and on Delphi 2010, a Unicode Delphi (R-25); all six console demos
 and the `--export` of the two GUI demos give the same PDF as FPC. Delphi 13
@@ -38,7 +38,9 @@ v0.10.0 (2026-09-30).
   `SelectClipRgn` was clipped away. `IntersectClipRect` now clips all
   output to the current clip within its rectangle, as GDI does: shapes,
   text and bitmaps. The clip rectangles of `IntersectClipRect` and of
-  `ExtTextOut` with `ETO_CLIPPED` were one logical unit too narrow
+  `ExtTextOut` with `ETO_CLIPPED` were one logical unit too narrow, and the
+  region of `SelectClipRgn`, in device pixels, was mapped as logical units:
+  wrong in place and size under any map mode but `MM_TEXT`
 - **Fixed (EMF):** text between `BeginPath` and `EndPath` was drawn at
   once, in the text colour, whatever became of the path. GDI adds it to
   the path: it is now painted with it, filled in the brush colour
