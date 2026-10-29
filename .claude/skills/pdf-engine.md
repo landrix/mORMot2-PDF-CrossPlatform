@@ -574,6 +574,13 @@ is painted after the other figures, not as one union with them, so the fill
 rule does not combine them (`MetaFileTextInPath`). A world rotation turns the
 text only: `ScaleMatrix` sets `fAngle`, which no coordinate reads, so every
 shape - the rectangles of text in a path too - is drawn unturned.
+The path and its text are converted while recorded, as GDI keeps a path in
+device units: a world transform set before the painting record moves
+neither, only what follows (`MetaFileTransformAfterPath`). A layer comment
+(`GdiCommentBeginMarkContent`) within a path goes to the page, never to the
+path's streams: `EMR_GDICOMMENT` does not call `PathIn`. The path and its
+text are in the layer when its painting record is, as GDI paints them then
+(`MetaFileMarkedContentInPath`).
 
 Records `TPdfEnum` reads through its own declarations: `EMR_CREATEBRUSHINDIRECT`
 and `EMR_EXTCREATEPEN` (`TEmrCreateBrushIndirect32`, `TEmrExtCreatePen32`).

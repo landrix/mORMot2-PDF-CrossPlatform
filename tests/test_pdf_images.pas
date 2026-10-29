@@ -98,6 +98,8 @@ type
     /// text in a path is painted by the painting record, in the brush or the
     // pen of it, or dropped with the path
     procedure MetaFileTextInPath;
+    procedure MetaFileMarkedContentInPath;
+    procedure MetaFileTransformAfterPath;
     /// a scaled rotation is drawn, without ArcSin/ArcCos of a value past 1
     procedure MetaFileScaledRotation;
     /// EMR_EXTTEXTOUTA reads bytes in the code page of the font
@@ -2679,6 +2681,190 @@ begin
   end;
 end;
 
+// the content of a metafile of a path and a layer, case Kind of
+// MetaFileMarkedContentInPath
+function MarkedPathEmf(Kind: integer): RawUtf8;
+var
+  doc: TPdfDocumentGdi;
+  grp: TPdfOptionalContentGroup;
+  mf: TMetaFile;
+  mc: TMetaFileCanvas;
+  ms: TMemoryStream;
+  dc: HDC;
+  pdf: RawByteString;
+  err: RawUtf8;
+begin
+  ms := TMemoryStream.Create;
+  mf := TMetaFile.Create;
+  doc := TPdfDocumentGdi.Create;
+  try
+    doc.UseOptionalContent := true;
+    doc.ScreenLogPixels := 96;
+    doc.EmbeddedTTF := false;
+    doc.StandardFontsReplace := true;
+    doc.AddPage;
+    grp := doc.CreateOptionalContentGroup(nil, 'Layer', true);
+    mf.Width := 400;
+    mf.Height := 400;
+    mc := TMetaFileCanvas.Create(mf, 0);
+    try
+      mc.Font.Name := 'Arial';
+      mc.Font.Size := 14;
+      dc := mc.Handle;
+      SetBkMode(dc, TRANSPARENT);
+      SelectObject(dc, GetStockObject(BLACK_PEN));
+      SelectObject(dc, GetStockObject(GRAY_BRUSH));
+      if Kind in [0, 3] then
+        GdiCommentBeginMarkContent(dc, grp);
+      BeginPath(dc);
+      MoveToEx(dc, 100, 100, nil);
+      LineTo(dc, 150, 100);
+      if Kind in [1, 2] then
+        GdiCommentBeginMarkContent(dc, grp);
+      if Kind = 2 then
+        LineTo(dc, 150, 150)
+      else
+        TextOutW(dc, 20, 20, 'Path', 4);
+      if Kind in [1, 2] then
+        GdiCommentEndMarkContent(dc);
+      LineTo(dc, 100, 150);
+      EndPath(dc);
+      if Kind = 3 then
+        GdiCommentEndMarkContent(dc);
+      FillPath(dc);
+      if Kind = 0 then
+        GdiCommentEndMarkContent(dc);
+    finally
+      mc.Free;
+    end;
+    RenderMetaFile(doc.Canvas, mf, 1, 1, 0, 0, tpSetTextJustification,
+      99, 101, tcNeverClip);
+    doc.SaveToStream(ms, GOLDEN_DATE);
+    FastSetRawByteString(pdf, ms.Memory, ms.Size);
+  finally
+    doc.Free;
+    mf.Free;
+    ms.Free;
+  end;
+  result := InflatePdf(NormalizePdf(pdf, err));
+  if err <> '' then
+    result := '';
+end;
+
+procedure TPdfImageGoldenTests.MetaFileMarkedContentInPath;
+const
+  WHAT: array[0..3] of RawUtf8 = ('a layer around the path',
+    'a layer around the text of the path', 'a layer around a line of the path',
+    'a layer closed before the painting');
+var
+  k: integer;
+  txt: RawUtf8;
+  bdc, emc, path, fill, bt: PtrInt;
+begin
+  { the path and its text are kept apart until the painting record: a layer
+    comment within the path must stay on the page, never in a buffer, and
+    the path is in the layer only when painted in it, as GDI paints it then }
+  for k := 0 to high(WHAT) do
+  begin
+    txt := MarkedPathEmf(k);
+    Check(BalancedStreams(txt), Utf8ToString(WHAT[k]));
+    Check(ValidPaths(txt), Utf8ToString(WHAT[k]));
+    bdc := PosEx(' BDC'#10, txt);
+    emc := PosEx(#10'EMC'#10, txt);
+    path := PosEx(' m'#10, txt); // the path, painted on its own
+    fill := PosEx(#10'f*'#10, txt);
+    bt := PosEx(#10'BT'#10, txt);
+    if k = 0 then
+      Check(Between(bdc, 0, path) and
+            Between(fill, path, emc) and
+            Between(bt, fill, emc), Utf8ToString(WHAT[k]))
+    else
+      Check((bdc > 0) and
+            Between(emc, bdc, path) and
+            (fill > path) and
+            ((k = 2) or
+             (bt > fill)), Utf8ToString(WHAT[k]));
+  end;
+end;
+
+// the content of a metafile of a path and a world transform set between
+// EndPath and FillPath: none, a translation (Kind 1) or a scale (Kind 2)
+function TransformAfterPathEmf(Kind: integer): RawUtf8;
+var
+  mf: TMetaFile;
+  mc: TMetaFileCanvas;
+  xf: TXForm;
+  dc: HDC;
+begin
+  mf := TMetaFile.Create;
+  try
+    mf.Width := 400;
+    mf.Height := 400;
+    mc := TMetaFileCanvas.Create(mf, 0);
+    try
+      mc.Font.Name := 'Arial';
+      mc.Font.Size := 14;
+      dc := mc.Handle;
+      SetBkMode(dc, TRANSPARENT);
+      SetGraphicsMode(dc, GM_ADVANCED);
+      BeginPath(dc);
+      MoveToEx(dc, 100, 100, nil);
+      LineTo(dc, 150, 100);
+      LineTo(dc, 150, 150);
+      TextOutW(dc, 20, 20, 'Path', 4);
+      EndPath(dc);
+      FillChar(xf, SizeOf(xf), 0);
+      xf.eM11 := Kind;
+      xf.eM22 := Kind;
+      if Kind = 1 then
+        xf.eDx := 100;
+      if Kind <> 0 then
+        SetWorldTransform(dc, xf);
+      FillPath(dc);
+      MoveToEx(dc, 10, 10, nil); // a line under the new transform
+      LineTo(dc, 20, 20);
+    finally
+      mc.Free;
+    end;
+    result := RenderedEmf(mf, 0, 0, tcNeverClip);
+  finally
+    mf.Free;
+  end;
+end;
+
+procedure TPdfImageGoldenTests.MetaFileTransformAfterPath;
+var
+  k: integer;
+  txt, path, line, path0, line0: RawUtf8;
+  p, e: PtrInt;
+begin
+  { GDI keeps the points of a path in device units from its recording on:
+    a world transform set before the painting record moves neither the
+    path nor its text, only what is drawn after it }
+  for k := 0 to 2 do
+  begin
+    txt := TransformAfterPathEmf(k);
+    p := PosEx('stream'#10, txt); // any cm of the page too
+    e := PosEx(#10'ET'#10, txt);
+    path := copy(txt, p, e - p + 1);
+    line := copy(txt, e, PosEx(#10'S'#10, txt, e) - e);
+    if k = 0 then
+    begin
+      path0 := path;
+      line0 := line;
+      Check((p > 0) and
+            (PosEx(' m'#10, path) > 0) and
+            (PosEx(#10'f*'#10, path) > 0) and
+            (PosEx(' Tj'#10, path) > 0), 'the path and its text');
+    end
+    else
+    begin
+      CheckEqual(path, path0, 'the path and its text where recorded');
+      Check(line <> line0, 'the line after the painting transformed');
+    end;
+  end;
+end;
+
 procedure TPdfImageGoldenTests.MetaFileScaledRotation;
 var
   mf: TMetaFile;
@@ -3272,6 +3458,22 @@ var
   i: integer;
 begin
   for i := 1 to 74 do
+    Check(true, 'SKIP: metafiles are Windows only');
+end;
+
+procedure TPdfImageGoldenTests.MetaFileMarkedContentInPath;
+var
+  i: integer;
+begin
+  for i := 1 to 12 do
+    Check(true, 'SKIP: metafiles are Windows only');
+end;
+
+procedure TPdfImageGoldenTests.MetaFileTransformAfterPath;
+var
+  i: integer;
+begin
+  for i := 1 to 5 do
     Check(true, 'SKIP: metafiles are Windows only');
 end;
 
