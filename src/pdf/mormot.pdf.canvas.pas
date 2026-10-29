@@ -1969,7 +1969,8 @@ end;
 type
   TFontSpec = packed record
     angle: SmallInt; // -360..+360
-    ascent, descent, cell: SmallInt;
+    // logical units: a fraction for a stock font under a map mode
+    ascent, descent, cell: single;
   end;
 
   TPdfEnumStatePen = record
@@ -2138,6 +2139,9 @@ type
     procedure ScaleMatrix(Custom: PXForm; iMode: integer);
     procedure HandleComment(Kind: TPdfGdiComment; P: PAnsiChar; Len: integer);
     procedure CreateFont(ALogFont: PEMRExtCreateFontIndirect);
+    // Source as the reference DC selects it: its pitch and metrics
+    procedure MeasureFont(const Source: TLogFontW; var LogFont: TLogFontW;
+      var Spec: TFontSpec);
     // if Canvas.Doc.JPEGCompression<>0, draw not as a bitmap but jpeg encoded
     procedure DrawBitmap(xs, ys, ws, hs, xd, yd, wd, hd, usage: integer;
       Bmi: PBitmapInfo; bits: pointer; clipRect: PRect; xSrcTransform: PXForm;
@@ -2234,6 +2238,8 @@ begin
         E.InitTransformMatrix := InitTransX;
         E.ScaleMatrix(@InitTransX, MWT_SET); // keep init
         E.InitMetaRgn(TRect(PEnhMetaHeader(R)^.rclBounds));
+        // the font of a new DC: text before any selection had size 0
+        E.SelectObjectFromIndex(integer(cardinal($80000000) or SYSTEM_FONT));
       end;
     EMR_SETWINDOWEXTEX:
       st^.WinSize := PEMRSetWindowExtEx(R)^.szlExtent;
@@ -3053,33 +3059,40 @@ begin
   fDC[0].StretchBltMode := STRETCH_DELETESCANS;
 end;
 
-procedure TPdfEnum.CreateFont(aLogFont: PEMRExtCreateFontIndirect);
+procedure TPdfEnum.MeasureFont(const Source: TLogFontW;
+  var LogFont: TLogFontW; var Spec: TFontSpec);
 var
-  n: cardinal;
   hf: HFONT;
   tm: TTextMetric;
   old: HGDIOBJ;
   dest: HDC;
 begin
   dest := TPdfDocumentAccess(fCanvas.fDoc).EmfDC;
-  hf := CreateFontIndirectW(aLogFont.elfw.elfLogFont);
+  hf := CreateFontIndirectW(PLogFontW(@Source)^); // a var of FPC
   old := SelectObject(dest, hf);
   GetTextMetrics(dest, tm);
   SelectObject(dest, old);
   DeleteObject(hf);
+  MoveFast(Source, LogFont, SizeOf(LogFont));
+  LogFont.lfPitchAndFamily := tm.tmPitchAndFamily;
+  if LogFont.lfOrientation <> 0 then
+    Spec.angle := LogFont.lfOrientation div 10 // -360..+360
+  else
+    Spec.angle := LogFont.lfEscapement div 10;
+  Spec.ascent := tm.tmAscent;
+  Spec.descent := tm.tmDescent;
+  Spec.cell := tm.tmHeight - tm.tmInternalLeading;
+end;
+
+procedure TPdfEnum.CreateFont(aLogFont: PEMRExtCreateFontIndirect);
+var
+  n: cardinal;
+begin
   n := aLogFont^.ihFont - 1;
   if n < cardinal(length(fObj)) then
   begin
     fObj[n].kind := OBJ_FONT;
-    MoveFast(aLogFont^.elfw.elfLogFont, fObj[n].LogFont, SizeOf(fObj[n].LogFont));
-    fObj[n].LogFont.lfPitchAndFamily := tm.tmPitchAndFamily;
-    if fObj[n].LogFont.lfOrientation <> 0 then
-      fObj[n].FontSpec.angle := fObj[n].LogFont.lfOrientation div 10 // -360..+360
-    else
-      fObj[n].FontSpec.angle := fObj[n].LogFont.lfEscapement div 10;
-    fObj[aLogFont^.ihFont - 1].FontSpec.ascent := tm.tmAscent;
-    fObj[aLogFont^.ihFont - 1].FontSpec.descent := tm.tmDescent;
-    fObj[aLogFont^.ihFont - 1].FontSpec.cell := tm.tmHeight - tm.tmInternalLeading;
+    MeasureFont(aLogFont^.elfw.elfLogFont, fObj[n].LogFont, fObj[n].FontSpec);
   end;
 end;
 
@@ -3324,6 +3337,9 @@ begin
 end;
 
 procedure TPdfEnum.SelectObjectFromIndex(iObject: integer);
+var
+  lf: TLogFontW;
+  px: single;
 begin
   if iObject < 0 then
   begin // stock object?
@@ -3340,10 +3356,25 @@ begin
       SYSTEM_FIXED_FONT,
       DEFAULT_GUI_FONT:
         begin
-          // its LogFont is not known: EMR_EXTTEXTOUTA decodes in the code
-          // page of its charset, not in the one of the font selected before
+          // EMR_EXTTEXTOUTA decodes in the code page of its charset, not in
+          // the one of the font selected before
           fDC[fDCIndex].Font.Selected := false;
           fDC[fDCIndex].Font.StockCodePage := StockFontCodePage(iObject);
+          // the metafile does not record it: its LOGFONT on this system, or
+          // the text kept the size, face and metrics of the font before
+          if GetObjectW(GetStockObject(iObject), SizeOf(lf), @lf) <> 0 then
+          begin
+            MeasureFont(lf, fDC[fDCIndex].Font.LogFont, fDC[fDCIndex].Font.Spec);
+            // its size is of device pixels under any map mode, as in GDI;
+            // TextOut sizes its positive lfHeight by the cell
+            px := Abs(fCanvas.DevPixelY);
+            fDC[fDCIndex].Font.LogFont.lfHeight := round(lf.lfHeight * px);
+            fDC[fDCIndex].Font.LogFont.lfWidth :=
+              round(lf.lfWidth * Abs(fCanvas.DevPixelX));
+            fDC[fDCIndex].Font.Spec.ascent := fDC[fDCIndex].Font.Spec.ascent * px;
+            fDC[fDCIndex].Font.Spec.descent := fDC[fDCIndex].Font.Spec.descent * px;
+            fDC[fDCIndex].Font.Spec.cell := fDC[fDCIndex].Font.Spec.cell * px;
+          end;
         end;
       NULL_PEN:
         begin

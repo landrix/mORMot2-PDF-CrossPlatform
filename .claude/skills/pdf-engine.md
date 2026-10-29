@@ -589,6 +589,19 @@ path's streams: `EMR_GDICOMMENT` does not call `PathIn`. The path and its
 text are in the layer when its painting record is, as GDI paints them then
 (`MetaFileMarkedContentInPath`).
 
+A stock font (`GetStockObject`) is not recorded in the metafile:
+`SelectObjectFromIndex` takes its LOGFONT from this system (`GetObjectW`) and
+measures it on the reference DC as `CreateFont` does (`MeasureFont`), so its
+text does not keep the size and metrics of the font before; its size is of
+device pixels under any map mode, as in GDI, turned into logical units when
+selected (a map mode changed after that is not followed): `TFontSpec` holds
+them as `single`, as a fraction of a unit at 32 pixels per unit, and
+`TextOut` sizes the positive `lfHeight` of a stock font by the cell. `EMR_HEADER`
+selects `SYSTEM_FONT`, the font of a new DC: text before any selection had
+size 0 (`MetaFileStockFontMetrics`). `DEFAULT_GUI_FONT` is recorded as a font
+of the metafile. An `EMR_EXTTEXTOUTA` decodes in the stock font's code page
+(`StockCodePage`, `MetaFileAnsiStockFont`).
+
 Records `TPdfEnum` reads through its own declarations: `EMR_CREATEBRUSHINDIRECT`
 and `EMR_EXTCREATEPEN` (`TEmrCreateBrushIndirect32`, `TEmrExtCreatePen32`).
 The `windows` unit of FPC 3.2.2 declares them with the native `LOGBRUSH` and

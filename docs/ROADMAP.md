@@ -8,8 +8,8 @@ it produced in `.claude/skills/` — this file repeats neither.
 tagged output passes PAC 2024 with accepted hints only (W-1, W-2) and veraPDF
 `ua1`; PDF/A-3U with PDF/UA-1 is verified (R-17). Fonts are embedded and subset
 on all three platforms; tables carry `THead`/`TBody`/`TFoot` row groups.
-`test_runner` is green with 1677 assertions on Windows (FPC, Delphi 7,
-Delphi 2010 and Delphi 13), 1664 on macOS and 1693 on Linux (2026-10-29, pin `964874b88`). **Delphi:** layer
+`test_runner` is green with 1694 assertions on Windows (FPC, Delphi 7,
+Delphi 2010 and Delphi 13), 1664 on macOS and 1710 on Linux (2026-10-29, pin `964874b88`). **Delphi:** layer
 1, the TCanvas bridge and the `TGDIPages` core build on Delphi 7 (R-19, R-20
 steps 1–6) and on Delphi 2010, a Unicode Delphi (R-25); all six console demos
 and the `--export` of the two GUI demos give the same PDF as FPC. Delphi 13
@@ -34,6 +34,10 @@ here until the post is written, then the list is emptied. It is the only such
 list: the CHANGELOG entry of the next release is written from it. Emptied for
 v0.10.0 (2026-09-30).
 
+- **Fixed (EMF):** text in a stock font (`SelectObject` of
+  `GetStockObject(SYSTEM_FONT)` and the like) after a font of the metafile
+  was drawn in the size, face and position of that font, and text before
+  any font selection had size 0
 - **Fixed (EMF):** `IntersectClipRect` clipped nothing, and text after a
   `SelectClipRgn` was clipped away. `IntersectClipRect` now clips all
   output to the current clip within its rectangle, as GDI does: shapes,

@@ -106,6 +106,7 @@ type
     procedure MetaFileAnsiText;
     /// EMR_EXTTEXTOUTA after a stock font reads bytes in the system code page
     procedure MetaFileAnsiStockFont;
+    procedure MetaFileStockFontMetrics;
     /// a stock font reads its bytes in the code page of its own charset
     procedure MetaFileStockCodePages;
     /// EMR_STRETCHDIBITS under a flipped transform flips a copy of its header
@@ -3021,6 +3022,164 @@ begin
   CheckEqual(a, w, 'the A records draw as the W ones');
 end;
 
+// text in the stock font Stock after a large Arial, or (Reference) in a font
+// created from the LOGFONT of that stock font; Mapped device pixels per
+// logical unit, 1 for MM_TEXT
+function StockFontEmf(Stock: integer; Reference: boolean;
+  Mapped: integer): RawUtf8;
+var
+  mf: TMetaFile;
+  mc: TMetaFileCanvas;
+  lf: TLogFontW;
+  f, g: HFONT;
+begin
+  FillChar(lf, SizeOf(lf), 0);
+  lf.lfHeight := -40;
+  Utf8ToWideChar(@lf.lfFaceName, 'Arial');
+  f := CreateFontIndirectW(lf);
+  GetObjectW(GetStockObject(Stock), SizeOf(lf), @lf);
+  g := CreateFontIndirectW(lf);
+  mf := TMetaFile.Create;
+  try
+    mf.Width := 400;
+    mf.Height := 400;
+    mc := TMetaFileCanvas.Create(mf, 0);
+    try
+      if Mapped > 1 then
+      begin
+        SetMapMode(mc.Handle, MM_ANISOTROPIC);
+        SetWindowExtEx(mc.Handle, 100, 100, nil);
+        SetViewportExtEx(mc.Handle, 100 * Mapped, 100 * Mapped, nil);
+      end;
+      SelectObject(mc.Handle, f);
+      TextOutW(mc.Handle, 10, 10, 'Arial', 5);
+      if Reference then
+        SelectObject(mc.Handle, g)
+      else
+        SelectObject(mc.Handle, GetStockObject(Stock));
+      TextOutW(mc.Handle, 10, 100, 'Stock', 5);
+      SelectObject(mc.Handle, GetStockObject(SYSTEM_FONT));
+    finally
+      mc.Free;
+    end;
+    result := RenderedEmf(mf);
+  finally
+    mf.Free;
+    DeleteObject(f);
+    DeleteObject(g);
+  end;
+end;
+
+// text in a metafile that selects no font: the DC's own, SYSTEM_FONT
+function DefaultFontEmf: RawUtf8;
+var
+  mf: TMetaFile;
+  dc: HDC;
+begin
+  dc := CreateEnhMetaFileW(0, nil, nil, nil);
+  TextOutW(dc, 10, 100, 'Stock', 5);
+  mf := TMetaFile.Create;
+  try
+    mf.Handle := CloseEnhMetaFile(dc);
+    result := RenderedEmf(mf);
+  finally
+    mf.Free;
+  end;
+end;
+
+// the lines of Txt from the last Tf before Marker to Marker
+function LastTextState(const Txt, Marker: RawUtf8): RawUtf8;
+var
+  m, p, q: PtrInt;
+begin
+  result := '';
+  m := PosEx(Marker, Txt);
+  p := 0;
+  q := PosEx(' Tf'#10, Txt);
+  while (q > 0) and
+        (q < m) do
+  begin
+    p := q;
+    q := PosEx(' Tf'#10, Txt, q + 1);
+  end;
+  if p = 0 then
+    exit;
+  while (p > 1) and
+        (Txt[p - 1] <> #10) do
+    dec(p);
+  result := copy(Txt, p, m - p);
+end;
+
+// the size of the last Tf before Marker, 0 if none
+function LastFontSize(const Txt, Marker: RawUtf8): double;
+var
+  state: RawUtf8;
+begin
+  state := LastTextState(Txt, Marker);
+  result := GetExtended(pointer(GetCsvItem(pointer(state), 1, ' ')));
+end;
+
+// the /BaseFont names of Txt, in their order
+function BaseFonts(const Txt: RawUtf8): RawUtf8;
+var
+  p, e: PtrInt;
+begin
+  result := '';
+  p := PosEx('/BaseFont/', Txt);
+  while p > 0 do
+  begin
+    e := p + 10;
+    while (e <= length(Txt)) and
+          not (Txt[e] in ['/', '>', ' ', #10]) do
+      inc(e);
+    result := result + copy(Txt, p + 10, e - p - 10) + ' ';
+    p := PosEx('/BaseFont/', Txt, e);
+  end;
+end;
+
+procedure TPdfImageGoldenTests.MetaFileStockFontMetrics;
+const
+  STOCK: array[0..2] of integer = (SYSTEM_FONT, DEFAULT_GUI_FONT,
+    ANSI_FIXED_FONT);
+  SCALES: array[0..1] of integer = (2, 32);
+var
+  i, m: integer;
+  txt, ref, mapped: RawUtf8;
+begin
+  { a stock font selected after a font of the metafile kept that font's
+    LOGFONT and metrics: its text was drawn in the size, face and ascent
+    of the font before; as GDI, it now takes the stock font's own, in
+    device pixels under any map mode (DEFAULT_GUI_FONT is recorded as a
+    font of the metafile) - and text before any selection had size 0 }
+  for i := 0 to high(STOCK) do
+  begin
+    txt := StockFontEmf(STOCK[i], false, 1);
+    ref := StockFontEmf(STOCK[i], true, 1);
+    Check(LastTextState(ref, '(Stock) Tj') <> '', 'the reference drawn');
+    CheckEqual(LastTextState(txt, '(Stock) Tj'),
+      LastTextState(ref, '(Stock) Tj'),
+      'the stock font''s own size and position');
+    CheckEqual(BaseFonts(txt), BaseFonts(ref), 'the stock font''s own face');
+    for m := 0 to high(SCALES) do
+    begin
+      mapped := StockFontEmf(STOCK[i], false, SCALES[m]);
+      if STOCK[i] = DEFAULT_GUI_FONT then
+        Check(Abs(LastFontSize(mapped, '(Stock) Tj') -
+                  SCALES[m] * LastFontSize(txt, '(Stock) Tj')) < 0.02,
+          'a font of the metafile: of logical units')
+      else
+        Check(Abs(LastFontSize(mapped, '(Stock) Tj') -
+                  LastFontSize(txt, '(Stock) Tj')) < 0.02,
+          'of device pixels under a map mode');
+    end;
+  end;
+  txt := DefaultFontEmf;
+  Check(LastFontSize(txt, '(Stock) Tj') > 0, 'the default font drawn');
+  Check(Abs(LastFontSize(txt, '(Stock) Tj') - LastFontSize(
+    StockFontEmf(SYSTEM_FONT, false, 1), '(Stock) Tj')) < 0.01,
+    'in the size of SYSTEM_FONT');
+end;
+
 procedure TPdfImageGoldenTests.MetaFileAnsiStockFont;
 const
   ANSI: array[0..1] of byte = ($E1, $E2);
@@ -3703,6 +3862,14 @@ var
   i: integer;
 begin
   for i := 1 to 4 do
+    Check(true, 'SKIP: metafiles are Windows only');
+end;
+
+procedure TPdfImageGoldenTests.MetaFileStockFontMetrics;
+var
+  i: integer;
+begin
+  for i := 1 to 17 do
     Check(true, 'SKIP: metafiles are Windows only');
 end;
 
