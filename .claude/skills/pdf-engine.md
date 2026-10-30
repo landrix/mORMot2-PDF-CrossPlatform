@@ -497,7 +497,7 @@ BoxI(Rect, Normalize);   // TRect -> TPdfBox
 RectI(Rect, Normalize);  // TRect -> TPdfRect
 BoxInclI(Rect);          // EMR_RECTANGLE, EMR_ELLIPSE: + one device pixel
 BoxExclI(Rect);          // the fills of TPdfEnum.FillRectangle: as they are
-DevPixelX; DevPixelY;    // one device pixel in logical units: Win / View, signed
+DevPixelX; DevPixelY;    // one device pixel in logical units of the map mode: Win / View, signed
 ```
 
 How GDI records a box (measured, `MetaFileBoxes`): `Rectangle`, `Ellipse`
@@ -505,20 +505,27 @@ and `RoundRect(10, 10, 50, 50)` are stored as 10,10,49,49 - one **device**
 pixel inside, so 100,100,490,490 at 10 logical units per pixel
 (`MM_ANISOTROPIC`). With an axis mirrored (viewport extent -100) the box is
 recorded as 500,100,110,490: the recorded Right is the device-right edge, the
-smaller value. `BoxInclI` and `RoundRectI` add the signed pixel to the
-recorded Right/Bottom first and normalize after (`EMR_ROUNDRECT` passes the
-record as it is); #686 normalized first, which shifts a mirrored shape. A
+smaller value. Under `GM_ADVANCED` the box is recorded as called, 10..50,
+and GDI paints it with its right and bottom edges: 81 device pixels under a
+world scale of 2, 21 under 0.5 (measured on a memory DC, `MetaFileWorldBoxes`).
+Both ways the shape covers one device pixel more on the device's right and
+bottom: `BoxInclI` and `RoundRectI` map both corners, normalize, and add
+`fDevScaleX`/`fDevScaleY` - one device pixel in PDF points - to the device's
+right and bottom (`AddDevicePixel`): whatever the mapping, a mirrored map mode
+or the world scale, and on the page's left or top for a negative render
+scale of `RenderMetaFile`. A mirroring world transform is not applied at all
+(`ScaleMatrix` leaves the reflection out), as a rotation.
+They added a logical unit of the map mode per pixel, not divided by the world
+factor (82 and 20.5); #686 normalized before that, which shifted a mirrored
+shape. A
 `FillRect` (`EMR_BITBLT` with `PATCOPY`), `FillRgn` and the opaque rectangle
 of `ExtTextOut` are stored as called: `BoxExclI`, as are the exclusive
 rectangles of `EMR_INTERSECTCLIPRECT` and of an `ETO_CLIPPED` `ExtTextOut`
 (`MetaFileClipBoxes`). `BoxI` takes one logical unit off; the EMF renderer
 no longer uses it for shapes, fills and those two rectangles. The corners of
-`RoundRectI` go through the mapping as the coordinates do. The pixel is one
-of the mapping `fWinSize`/`fViewSize`; the metric map modes set that mapping
-from `fPrinterPxPerInch` (`TPdfEnum.ScaleMatrix`), not from the reference DC,
-so there it is an approximation. Under a world scale the pixel is not
-divided by the world factor: the record holds integer logical units, what GDI
-rounds to is not measured yet (ROADMAP, item 4).
+`RoundRectI` go through the mapping as the coordinates do. The metric map
+modes set the viewport from `fPrinterPxPerInch` (`TPdfEnum.ScaleMatrix`), not
+from the reference DC, so there the device pixel is an approximation.
 
 The clip of `EMR_EXTSELECTCLIPRGN` is a `q ... W n` of the canvas: PDF can
 only narrow a clip, so a new one needs the `Q` of the one before. `TPdfEnum`

@@ -117,6 +117,7 @@ type
     // exclusive for the fills, the corners of EMR_ROUNDRECT mapped
     procedure MetaFileBoxes;
     procedure MetaFileClipBoxes;
+    procedure MetaFileWorldBoxes;
     /// brushes and extended pens read in the layout of the EMF records
     procedure MetaFileRecordLayout;
   end;
@@ -1498,7 +1499,8 @@ end;
 
 // the metafile rendered into one page, the PDF normalized and inflated
 function RenderedEmf(Mf: TMetaFile; PxX: integer = 0; PxY: integer = 0;
-  TextClipping: TPdfCanvasRenderMetaFileTextClipping = tcAlwaysClip): RawUtf8;
+  TextClipping: TPdfCanvasRenderMetaFileTextClipping = tcAlwaysClip;
+  ScaleX: single = 1; ScaleY: single = 1): RawUtf8;
 var
   doc: TPdfDocumentGdi;
   ms: TMemoryStream;
@@ -1515,8 +1517,8 @@ begin
     TPdfDocumentGdiAccess(doc).fPrinterPxPerInch.X := PxX;
     TPdfDocumentGdiAccess(doc).fPrinterPxPerInch.Y := PxY;
     doc.AddPage;
-    RenderMetaFile(doc.Canvas, Mf, 1, 1, 0, 0, tpSetTextJustification,
-      99, 101, TextClipping);
+    RenderMetaFile(doc.Canvas, Mf, ScaleX, ScaleY, 0, 0,
+      tpSetTextJustification, 99, 101, TextClipping);
     doc.SaveToStream(ms, GOLDEN_DATE);
     FastSetRawByteString(pdf, ms.Memory, ms.Size);
   finally
@@ -3751,6 +3753,105 @@ begin
     end;
 end;
 
+// a polygon on 10..50 and four shapes on the same box under a world scale
+// World (GM_ADVANCED), at K units per pixel, rendered at the scale Render
+function WorldBoxEmf(World: single; K: integer; Render: single): RawUtf8;
+var
+  mf: TMetaFile;
+  mc: TMetaFileCanvas;
+  xf: TXForm;
+  r: Windows.TRect;
+  pts: array[0..3] of Windows.TPoint;
+  i: integer;
+  dc: HDC;
+begin
+  mf := TMetaFile.Create;
+  try
+    mf.Width := 200;
+    mf.Height := 200;
+    mc := TMetaFileCanvas.Create(mf, 0);
+    try
+      dc := mc.Handle;
+      if K > 1 then
+      begin
+        SetMapMode(dc, MM_ANISOTROPIC);
+        SetWindowExtEx(dc, 100 * K, 100 * K, nil);
+        SetViewportExtEx(dc, 100, 100, nil);
+      end;
+      SetGraphicsMode(dc, GM_ADVANCED);
+      FillChar(xf, SizeOf(xf), 0);
+      xf.eM11 := World;
+      xf.eM22 := World;
+      SetWorldTransform(dc, xf);
+      for i := 0 to 3 do
+      begin
+        pts[i].X := (10 + 40 * ord(i in [1, 2])) * K;
+        pts[i].Y := (10 + 40 * ord(i >= 2)) * K;
+      end;
+      Windows.Polygon(dc, pts, 4);
+      Windows.Rectangle(dc, 10 * K, 10 * K, 50 * K, 50 * K);
+      Windows.Ellipse(dc, 10 * K, 10 * K, 50 * K, 50 * K);
+      Windows.RoundRect(dc, 10 * K, 10 * K, 50 * K, 50 * K, 16 * K, 16 * K);
+      r.Left := 10 * K;
+      r.Top := 10 * K;
+      r.Right := 50 * K;
+      r.Bottom := 50 * K;
+      Windows.FillRect(dc, r, GetStockObject(BLACK_BRUSH));
+    finally
+      mc.Free;
+    end;
+    result := RenderedEmf(mf, 0, 0, tcAlwaysClip, Render, Render);
+  finally
+    mf.Free;
+  end;
+end;
+
+procedure TPdfImageGoldenTests.MetaFileWorldBoxes;
+const
+  WORLD: array[0..4] of single = (1, 2, 0.5, 3, 1.5);
+  RENDER: array[0..1] of single = (1, -1);
+  PX = 0.75; // one device pixel at 96 dpi
+var
+  w, k, i, s: integer;
+  paths: TRawUtf8DynArray;
+  poly, incl, b: TPdfBox;
+  msg: string;
+begin
+  { GM_ADVANCED records Rectangle, Ellipse and RoundRect as called and GDI
+    paints them with the right and bottom edges: 81 device pixels for
+    10..50 under a world scale of 2, 21 under 0.5 (measured on a memory
+    DC). BoxInclI added one logical unit per device pixel of the map mode,
+    not divided by the world factor: 82 and 20.5. FillRect stays exclusive.
+    Rendered at a negative scale, the device's right and bottom are the
+    left and top of the page }
+  for s := 0 to high(RENDER) do
+  for k := 1 to 2 do
+    for w := 0 to high(WORLD) do
+    begin
+      msg := Utf8ToString(FormatUtf8('world % at % units per pixel, scale %',
+        [WORLD[w], 1 + 9 * (k - 1), RENDER[s]]));
+      paths := PaintedPaths(WorldBoxEmf(WORLD[w], 1 + 9 * (k - 1), RENDER[s]));
+      if CheckFailed(length(paths) = 5, msg) then
+        continue;
+      poly := PathBox(paths[0]);
+      // one device pixel more, right and bottom
+      if RENDER[s] > 0 then
+        incl := PdfBox(poly.Left, poly.Top - PX, poly.Width + PX,
+          poly.Height + PX)
+      else
+        incl := PdfBox(poly.Left - PX, poly.Top, poly.Width + PX,
+          poly.Height + PX);
+      for i := 1 to 4 do
+      begin
+        b := PathBox(paths[i]);
+        if i = 4 then
+          Check(SameBox(b, poly), msg) // FillRect
+        else
+          Check(SameBox(b, incl), msg);
+      end;
+    end;
+end;
+
 procedure TPdfImageGoldenTests.MetaFileRecordLayout;
 var
   mf: TMetaFile;
@@ -3984,6 +4085,14 @@ var
   i: integer;
 begin
   for i := 1 to 45 do
+    Check(true, 'SKIP: metafiles are Windows only');
+end;
+
+procedure TPdfImageGoldenTests.MetaFileWorldBoxes;
+var
+  i: integer;
+begin
+  for i := 1 to 100 do
     Check(true, 'SKIP: metafiles are Windows only');
 end;
 
