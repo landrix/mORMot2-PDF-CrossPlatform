@@ -1971,6 +1971,8 @@ type
     angle: SmallInt; // -360..+360
     // logical units: a fraction for a stock font under a map mode
     ascent, descent, cell: single;
+    // abs(lfHeight) of the same units: the integer rounds to 0 there
+    height: single;
   end;
 
   TPdfEnumStatePen = record
@@ -2147,6 +2149,7 @@ type
       Bmi: PBitmapInfo; bits: pointer; clipRect: PRect; xSrcTransform: PXForm;
       dwRop: DWord; transparent: TPdfColorRGB = $FFFFFFFF);
     procedure FillRectangle(const Rect: TRect);
+    procedure FillBox(const Box: TPdfBox);
     // the current value set to SetRGBFillColor (rg)
     property FillColor: integer
       read fFillColor write SetFillColor;
@@ -3082,6 +3085,7 @@ begin
   Spec.ascent := tm.tmAscent;
   Spec.descent := tm.tmDescent;
   Spec.cell := tm.tmHeight - tm.tmInternalLeading;
+  Spec.height := Abs(Source.lfHeight);
 end;
 
 procedure TPdfEnum.CreateFont(aLogFont: PEMRExtCreateFontIndirect);
@@ -3307,15 +3311,17 @@ begin
 end;
 
 procedure TPdfEnum.FillRectangle(const Rect: TRect);
-var
-  box: TPdfBox;
+begin
+  FillBox(fCanvas.BoxExclI(Rect));
+end;
+
+procedure TPdfEnum.FillBox(const Box: TPdfBox);
 begin
   if fDC[fDCIndex].brush.null then
     exit;
   fCanvas.NewPath;
   FillColor := fDC[fDCIndex].brush.color;
-  box := fCanvas.BoxExclI(Rect);
-  fCanvas.Rectangle(box.Left, box.Top, box.Width, box.Height);
+  fCanvas.Rectangle(Box.Left, Box.Top, Box.Width, Box.Height);
   fCanvas.Fill;
 end;
 
@@ -3374,6 +3380,7 @@ begin
             fDC[fDCIndex].Font.Spec.ascent := fDC[fDCIndex].Font.Spec.ascent * px;
             fDC[fDCIndex].Font.Spec.descent := fDC[fDCIndex].Font.Spec.descent * px;
             fDC[fDCIndex].Font.Spec.cell := fDC[fDCIndex].Font.Spec.cell * px;
+            fDC[fDCIndex].Font.Spec.height := Abs(lf.lfHeight) * px;
           end;
         end;
       NULL_PEN:
@@ -4152,7 +4159,7 @@ var
   cp: cardinal;
   tmp2: array[0..1] of WideChar;
   clip: TPdfBox;
-  back: TRect;
+  backbox: TPdfBox;
   po: TPdfCanvasRenderMetaFileTextPositioning;
   {$ifdef USE_UNISCRIBE}
   fnt: TPdfFont;
@@ -4385,14 +4392,14 @@ begin
     // V Align mask = TA_BASELINE or TA_BOTTOM or TA_TOP = TA_BASELINE
     if (fDC[fDCIndex].Font.Align and TA_BASELINE) = TA_BASELINE then
     // always zero ?
-      h := abs(fDC[fDCIndex].Font.LogFont.lfHeight) - abs(fDC[fDCIndex].Font.spec.cell)  // center y
+      h := fDC[fDCIndex].Font.spec.height - abs(fDC[fDCIndex].Font.spec.cell)  // center y
     else if (fDC[fDCIndex].Font.Align and TA_BASELINE) = TA_BOTTOM then
       h := abs(fDC[fDCIndex].Font.spec.descent)  // bottom y
     else
       // needs - vertical coords of baseline from top
       h := -abs(fDC[fDCIndex].Font.spec.ascent); // top
     if sy < 0 then // inverted coordinates
-      h := abs(fDC[fDCIndex].Font.LogFont.lfHeight) + h;
+      h := fDC[fDCIndex].Font.spec.height + h;
     if sx < 0 then
       w := w + ww;
     if (fDC[fDCIndex].Font.align and TA_UPDATECP) = TA_UPDATECP then
@@ -4448,15 +4455,13 @@ begin
                  (fDC[fDCIndex].Font.BkColor = fDC[fDCIndex].brush.color)));
     if isopaque then
       if clipped then
-        back := TRect(R.emrtext.rcl)
+        backbox := fCanvas.BoxExclI(TRect(R.emrtext.rcl))
       else
-      begin
-        back.TopLeft := posi;
-        back.BottomRight := posi;
-        inc(back.Right, trunc(ww));
-        inc(back.Bottom, abs(fDC[fDCIndex].Font.LogFont.lfHeight));
-      end;
-    NormalizeRect(back);
+        // in single precision: a fraction of a logical unit is not lost
+        backbox := NormalizedBox(PdfBox(fCanvas.S2X(posi.X),
+          fCanvas.S2Y(posi.Y), fCanvas.S2X(posi.X + ww) -
+          fCanvas.S2X(posi.X), fCanvas.S2Y(posi.Y +
+          fDC[fDCIndex].Font.spec.height) - fCanvas.S2Y(posi.Y)));
     if clipped then
     begin
       fCanvas.GSave;
@@ -4467,7 +4472,7 @@ begin
       fCanvas.Clip;
       if isopaque then
       begin
-        FillRectangle(back);
+        FillBox(backbox);
         isopaque := false; //do not handle more
       end
       else
@@ -4477,7 +4482,7 @@ begin
     if isopaque then
       // don't handle BkMode, since global to the page, but only specific text
       // don't handle rotation here, since should not be used much
-      FillRectangle(back);
+      FillBox(backbox);
     // draw text
     if not inpath then // else the brush or the pen of the painting record
       FillColor := fDC[fDCIndex].Font.color;

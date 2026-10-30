@@ -595,8 +595,10 @@ measures it on the reference DC as `CreateFont` does (`MeasureFont`), so its
 text does not keep the size and metrics of the font before; its size is of
 device pixels under any map mode, as in GDI, turned into logical units when
 selected (a map mode changed after that is not followed): `TFontSpec` holds
-them as `single`, as a fraction of a unit at 32 pixels per unit, and
-`TextOut` sizes the positive `lfHeight` of a stock font by the cell. `EMR_HEADER`
+them as `single`, as a fraction of a unit at 32 pixels per unit, with
+`height` for `abs(lfHeight)`, whose integer rounds to 0 there; `TextOut`
+sizes the positive `lfHeight` of a stock font by the cell, aligns by
+`height` and builds an opaque background in single precision. `EMR_HEADER`
 selects `SYSTEM_FONT`, the font of a new DC: text before any selection had
 size 0 (`MetaFileStockFontMetrics`). `DEFAULT_GUI_FONT` is recorded as a font
 of the metafile. An `EMR_EXTTEXTOUTA` decodes in the stock font's code page

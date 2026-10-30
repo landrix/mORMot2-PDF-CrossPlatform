@@ -3022,6 +3022,15 @@ begin
   CheckEqual(a, w, 'the A records draw as the W ones');
 end;
 
+// two boxes the same within the rounding of the content stream
+function SameBox(const A, B: TPdfBox): boolean;
+begin
+  result := (Abs(A.Left - B.Left) < 0.02) and
+            (Abs(A.Top - B.Top) < 0.02) and
+            (Abs(A.Width - B.Width) < 0.02) and
+            (Abs(A.Height - B.Height) < 0.02);
+end;
+
 // text in the stock font Stock after a large Arial, or (Reference) in a font
 // created from the LOGFONT of that stock font; Mapped device pixels per
 // logical unit, 1 for MM_TEXT
@@ -3067,6 +3076,46 @@ begin
     mf.Free;
     DeleteObject(f);
     DeleteObject(g);
+  end;
+end;
+
+// SYSTEM_FONT text on an opaque background at device pixel 320,320, aligned
+// by Align, at Mapped device pixels per logical unit
+function StockTextEmf(Mapped, Align: integer): RawUtf8;
+var
+  mf: TMetaFile;
+  mc: TMetaFileCanvas;
+  brush: HBRUSH;
+  dc: HDC;
+begin
+  brush := CreateSolidBrush($0000FF);
+  mf := TMetaFile.Create;
+  try
+    mf.Width := 400;
+    mf.Height := 400;
+    mc := TMetaFileCanvas.Create(mf, 0);
+    try
+      dc := mc.Handle;
+      if Mapped > 1 then
+      begin
+        SetMapMode(dc, MM_ANISOTROPIC);
+        SetWindowExtEx(dc, 100, 100, nil);
+        SetViewportExtEx(dc, 100 * Mapped, 100 * Mapped, nil);
+      end;
+      SelectObject(dc, GetStockObject(SYSTEM_FONT));
+      SelectObject(dc, brush); // the background drawn in the brush's colour
+      SetBkMode(dc, OPAQUE);
+      SetBkColor(dc, $0000FF);
+      SetTextAlign(dc, Align);
+      TextOutW(dc, 320 div Mapped, 320 div Mapped, 'Stock', 5);
+      SelectObject(dc, GetStockObject(WHITE_BRUSH));
+    finally
+      mc.Free;
+    end;
+    result := RenderedEmf(mf);
+  finally
+    mf.Free;
+    DeleteObject(brush);
   end;
 end;
 
@@ -3142,9 +3191,12 @@ const
   STOCK: array[0..2] of integer = (SYSTEM_FONT, DEFAULT_GUI_FONT,
     ANSI_FIXED_FONT);
   SCALES: array[0..1] of integer = (2, 32);
+  ALIGNS: array[0..1] of integer = (TA_TOP, TA_BASELINE);
 var
-  i, m: integer;
+  i, m, a: integer;
   txt, ref, mapped: RawUtf8;
+  paths, mpaths: TRawUtf8DynArray;
+  b1, b2: TPdfBox;
 begin
   { a stock font selected after a font of the metafile kept that font's
     LOGFONT and metrics: its text was drawn in the size, face and ascent
@@ -3171,6 +3223,36 @@ begin
         Check(Abs(LastFontSize(mapped, '(Stock) Tj') -
                   LastFontSize(txt, '(Stock) Tj')) < 0.02,
           'of device pixels under a map mode');
+    end;
+  end;
+  // its position and background under a map mode: the rounded lfHeight was
+  // 0 at 32 pixels per unit
+  for a := 0 to high(ALIGNS) do
+  begin
+    txt := StockTextEmf(1, ALIGNS[a]);
+    paths := PaintedPaths(txt);
+    for m := 0 to high(SCALES) do
+    begin
+      mapped := StockTextEmf(SCALES[m], ALIGNS[a]);
+      Check((Abs(OperandAt(mapped, '(Stock) Tj', 1, 0) -
+                 OperandAt(txt, '(Stock) Tj', 1, 0)) < 0.05) and
+            (Abs(OperandAt(mapped, '(Stock) Tj', 1, 1) -
+                 OperandAt(txt, '(Stock) Tj', 1, 1)) < 0.05),
+        'the stock text where it is in device pixels');
+      // its width follows the advances, which the metafile records in
+      // whole logical units
+      mpaths := PaintedPaths(mapped);
+      if (length(paths) = 1) and
+         (length(mpaths) = 1) then
+      begin
+        b1 := PathBox(paths[0]);
+        b2 := PathBox(mpaths[0]);
+        Check((Abs(b1.Left - b2.Left) < 0.02) and
+              (Abs(b1.Top - b2.Top) < 0.02) and
+              (Abs(b1.Height - b2.Height) < 0.02), 'its background too');
+      end
+      else
+        Check(false, 'its background too');
     end;
   end;
   txt := DefaultFontEmf;
@@ -3610,14 +3692,6 @@ begin
              (q > Pos));
 end;
 
-function SameBox(const A, B: TPdfBox): boolean;
-begin
-  result := (Abs(A.Left - B.Left) < 0.02) and
-            (Abs(A.Top - B.Top) < 0.02) and
-            (Abs(A.Width - B.Width) < 0.02) and
-            (Abs(A.Height - B.Height) < 0.02);
-end;
-
 procedure TPdfImageGoldenTests.MetaFileClipBoxes;
 const
   SCALE: array[0..2] of integer = (1, 10, 10);
@@ -3869,7 +3943,7 @@ procedure TPdfImageGoldenTests.MetaFileStockFontMetrics;
 var
   i: integer;
 begin
-  for i := 1 to 17 do
+  for i := 1 to 25 do
     Check(true, 'SKIP: metafiles are Windows only');
 end;
 
