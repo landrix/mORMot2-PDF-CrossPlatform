@@ -2172,6 +2172,9 @@ type
     // a rectangle of device units, as the region of EMR_EXTSELECTCLIPRGN:
     // no window, viewport nor world transform - unnormalized, as BoxI
     function DeviceBox(const Rect: TRect): TPdfBox;
+    // the bounds of a record (rclBounds): device units, right and bottom
+    // included - normalized
+    function DeviceBoundsBox(const Rect: TRect): TPdfBox;
     procedure ExtSelectClipRgn(data: PEMRExtSelectClipRgn);
     // get current clipping area
     function GetClipRect: TPdfBox;
@@ -3715,7 +3718,7 @@ end;
 
 procedure TPdfEnum.InitMetaRgn(const ClientRect: TRect);
 begin
-  fInitMetaRgn := fCanvas.BoxI(ClientRect, true);
+  fInitMetaRgn := DeviceBoundsBox(ClientRect); // BoxI lost two pixels
   fDC[fDCIndex].ClipRgnNull := true;
   fDC[fDCIndex].MetaRgn := fInitMetaRgn;
 end;
@@ -3833,6 +3836,16 @@ begin
   result.Width := (Rect.Right - Rect.Left) * fCanvas.fDevScaleX;
   result.Top := h - Rect.Top * fCanvas.fDevScaleY;
   result.Height := (Rect.Top - Rect.Bottom) * fCanvas.fDevScaleY;
+end;
+
+function TPdfEnum.DeviceBoundsBox(const Rect: TRect): TPdfBox;
+var
+  r: TRect;
+begin
+  r := Rect;
+  inc(r.Right);
+  inc(r.Bottom);
+  result := NormalizedBox(DeviceBox(r));
 end;
 
 procedure TPdfEnum.IntersectClip(const Rect: TRect);
@@ -4419,7 +4432,7 @@ begin
           clipped := (R.rclBounds.Right > R.rclBounds.Left) and
                      (R.rclBounds.Bottom > R.rclBounds.Top);
         if clipped then
-          clip := fCanvas.BoxI(TRect(R.rclBounds), true)
+          clip := DeviceBoundsBox(TRect(R.rclBounds))
         else
         begin
           clipped := not fDC[fDCIndex].ClipRgnNull and

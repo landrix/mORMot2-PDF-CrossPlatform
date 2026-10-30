@@ -531,7 +531,10 @@ The clip of `EMR_EXTSELECTCLIPRGN` is a `q ... W n` of the canvas: PDF can
 only narrow a clip, so a new one needs the `Q` of the one before. `TPdfEnum`
 keeps every region as PDF boxes (`fClipRegions`; the rectangles of the
 record are device units, mapped by `DeviceBox` without window, viewport or
-world transform), each state names its own
+world transform - as are the bounds of a record, `rclBounds`, with the right
+and bottom pixel included: `DeviceBoundsBox` for the meta region of
+`EMR_HEADER`, which clips a bitmap without a region, and the text clip of
+`tcClipExplicit`; `MetaFileBitmapBounds`), each state names its own
 (`ClipRegion`, saved and restored with the state), and `SelectClip` makes the
 canvas hold that one (`fClipActive`): from `ExtSelectClipRgn`, `RestoreDC`
 and, with 0, at the end of `RenderMetaFile`. `EMR_INTERSECTCLIPRECT` is such

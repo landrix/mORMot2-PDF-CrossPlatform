@@ -118,6 +118,7 @@ type
     procedure MetaFileBoxes;
     procedure MetaFileClipBoxes;
     procedure MetaFileWorldBoxes;
+    procedure MetaFileBitmapBounds;
     /// brushes and extended pens read in the layout of the EMF records
     procedure MetaFileRecordLayout;
   end;
@@ -3852,6 +3853,124 @@ begin
     end;
 end;
 
+// a bitmap on 10..50 at K logical units per pixel, alone in the metafile
+function BitmapBoundsEmf(K: integer): RawUtf8;
+var
+  mf: TMetaFile;
+  mc: TMetaFileCanvas;
+  bmi: TBitmapInfo;
+  pix: array[0..15] of cardinal;
+  i: integer;
+begin
+  mf := TMetaFile.Create;
+  try
+    mf.Width := 100;
+    mf.Height := 100;
+    mc := TMetaFileCanvas.Create(mf, 0);
+    try
+      if K > 1 then
+      begin
+        SetMapMode(mc.Handle, MM_ANISOTROPIC);
+        SetWindowExtEx(mc.Handle, 100 * K, 100 * K, nil);
+        SetViewportExtEx(mc.Handle, 100, 100, nil);
+      end;
+      FillChar(bmi, SizeOf(bmi), 0);
+      bmi.bmiHeader.biSize := SizeOf(bmi.bmiHeader);
+      bmi.bmiHeader.biWidth := 4;
+      bmi.bmiHeader.biHeight := 4;
+      bmi.bmiHeader.biPlanes := 1;
+      bmi.bmiHeader.biBitCount := 32;
+      for i := 0 to high(pix) do
+        pix[i] := cardinal(i) * $00101010;
+      StretchDIBits(mc.Handle, 10 * K, 10 * K, 40 * K, 40 * K, 0, 0, 4, 4,
+        @pix, bmi, DIB_RGB_COLORS, SRCCOPY);
+    finally
+      mc.Free;
+    end;
+    result := RenderedEmf(mf);
+  finally
+    mf.Free;
+  end;
+end;
+
+// text in Arial of 20 device pixels at K logical units per pixel, rendered
+// with tcClipExplicit: clipped to the bounds of its record
+function TextBoundsEmf(K: integer): RawUtf8;
+var
+  mf: TMetaFile;
+  mc: TMetaFileCanvas;
+  lf: TLogFontW;
+  f: HFONT;
+begin
+  FillChar(lf, SizeOf(lf), 0);
+  lf.lfHeight := -20 * K;
+  Utf8ToWideChar(@lf.lfFaceName, 'Arial');
+  f := CreateFontIndirectW(lf);
+  mf := TMetaFile.Create;
+  try
+    mf.Width := 200;
+    mf.Height := 100;
+    mc := TMetaFileCanvas.Create(mf, 0);
+    try
+      if K > 1 then
+      begin
+        SetMapMode(mc.Handle, MM_ANISOTROPIC);
+        SetWindowExtEx(mc.Handle, 100 * K, 100 * K, nil);
+        SetViewportExtEx(mc.Handle, 100, 100, nil);
+      end;
+      SelectObject(mc.Handle, f);
+      SetBkMode(mc.Handle, TRANSPARENT);
+      TextOutW(mc.Handle, 10 * K, 10 * K, 'Bounds', 6);
+      SelectObject(mc.Handle, GetStockObject(SYSTEM_FONT));
+    finally
+      mc.Free;
+    end;
+    result := RenderedEmf(mf, 0, 0, tcClipExplicit);
+  finally
+    mf.Free;
+    DeleteObject(f);
+  end;
+end;
+
+// the content stream of the page: the first stream of Txt
+function FirstStream(const Txt: RawUtf8): RawUtf8;
+var
+  p: PtrInt;
+begin
+  p := PosEx('stream'#10, Txt);
+  result := copy(Txt, p, PosEx('endstream', Txt, p) - p);
+end;
+
+procedure TPdfImageGoldenTests.MetaFileBitmapBounds;
+var
+  px, mapped: RawUtf8;
+  clip, b: TPdfBox;
+  at: PtrInt;
+  k: integer;
+begin
+  { the bounds of EMR_HEADER clip a bitmap without a region: device pixels,
+    the right and bottom ones included, which BoxI took as exclusive
+    logical units less one - a bitmap at the edge lost two pixels }
+  for k := 0 to 1 do
+  begin
+    px := FirstStream(BitmapBoundsEmf(1 + 9 * k));
+    Check((PosEx(' Do'#10, px) > 0) and
+          (Abs(OperandAt(px, #10'W'#10, 0, 2) - OperandAt(px, ' cm'#10, 0, 0)) < 0.02) and
+          (Abs(OperandAt(px, #10'W'#10, 0, 3) - OperandAt(px, ' cm'#10, 0, 3)) < 0.02) and
+          (Abs(OperandAt(px, #10'W'#10, 0, 0) - OperandAt(px, ' cm'#10, 0, 4)) < 0.02) and
+          (Abs(OperandAt(px, #10'W'#10, 0, 1) - OperandAt(px, ' cm'#10, 0, 5)) < 0.02),
+      'the bitmap within its clip');
+  end;
+  { the bounds of an ExtTextOut, tcClipExplicit, are device pixels too, but
+    were mapped as logical units: ten times too small at 10 per pixel }
+  px := TextBoundsEmf(1);
+  mapped := TextBoundsEmf(10);
+  Check(LastClip(px, PosEx(#10'BT'#10, px), clip, at) and
+        (clip.Width > 20), 'the text clipped to its bounds');
+  Check(LastClip(mapped, PosEx(#10'BT'#10, mapped), b, at) and
+        SameBox(b, clip), 'the same bounds at 10 units per pixel');
+end;
+
 procedure TPdfImageGoldenTests.MetaFileRecordLayout;
 var
   mf: TMetaFile;
@@ -4093,6 +4212,14 @@ var
   i: integer;
 begin
   for i := 1 to 100 do
+    Check(true, 'SKIP: metafiles are Windows only');
+end;
+
+procedure TPdfImageGoldenTests.MetaFileBitmapBounds;
+var
+  i: integer;
+begin
+  for i := 1 to 4 do
     Check(true, 'SKIP: metafiles are Windows only');
 end;
 

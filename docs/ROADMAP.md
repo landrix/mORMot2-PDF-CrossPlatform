@@ -8,7 +8,7 @@ it produced in `.claude/skills/` — this file repeats neither.
 tagged output passes PAC 2024 with accepted hints only (W-1, W-2) and veraPDF
 `ua1`; PDF/A-3U with PDF/UA-1 is verified (R-17). Fonts are embedded and subset
 on all three platforms; tables carry `THead`/`TBody`/`TFoot` row groups.
-`test_runner` is green with 1802 assertions on Windows (FPC, Delphi 7,
+`test_runner` is green with 1806 assertions on Windows (FPC, Delphi 7,
 Delphi 2010 and Delphi 13), 1851 on macOS and 1818 on Linux (2026-10-30, pin `964874b88`). **Delphi:** layer
 1, the TCanvas bridge and the `TGDIPages` core build on Delphi 7 (R-19, R-20
 steps 1–6) and on Delphi 2010, a Unicode Delphi (R-25); all six console demos
@@ -34,6 +34,10 @@ here until the post is written, then the list is emptied. It is the only such
 list: the CHANGELOG entry of the next release is written from it. Emptied for
 v0.10.0 (2026-09-30).
 
+- **Fixed (EMF):** a bitmap at the right or bottom edge of a metafile lost
+  its last two pixels, clipped to the bounds of the metafile less two; with
+  `tcClipExplicit` a text under a map mode other than `MM_TEXT` was clipped
+  to bounds in the wrong place and size
 - **Fixed (EMF):** a rectangle, ellipse or rounded rectangle under a world
   scale (`SetWorldTransform`) was off by a fraction of a pixel, too small
   below a scale of 1 and too large above it: GDI paints one device pixel
