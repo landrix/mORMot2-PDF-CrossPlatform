@@ -4312,10 +4312,17 @@ begin
     tmp[n] := #0;
     sy := 1;
     sx := 1;
-    if (fCanvas.fWorldFactorY) < 0 then
-      sy := -1;
-    if (fCanvas.fWorldFactorX) < 0 then
-      sx := -1;
+    // one axis mirrored: upright glyphs; both: a turn by 180 degrees, the
+    // glyphs and their lines turned with it - unless the font's angle turns
+    // them, which TextOut does first, without the world's turn
+    if ((fCanvas.fWorldFactorX < 0) <> (fCanvas.fWorldFactorY < 0)) or
+       (fDC[fDCIndex].Font.spec.angle <> 0) then
+    begin
+      if fCanvas.fWorldFactorY < 0 then
+        sy := -1;
+      if fCanvas.fWorldFactorX < 0 then
+        sx := -1;
+    end;
     fscaleY := abs(fCanvas.fFactorY * fCanvas.fWorldFactorY * fCanvas.fDevScaleY);
     fscaleX := abs(fCanvas.fFactorX * fCanvas.fWorldFactorX * fCanvas.fDevScaleX);
     // guess the font size
@@ -4529,24 +4536,30 @@ begin
         fCanvas.I2X(posi.X - round(w * acos + h * asin)),
         fCanvas.I2Y(posi.Y - round(h * acos - w * asin)));
     end
-    else if (fDC[fDCIndex].WorldTransform.eM11 = fDC[fDCIndex].WorldTransform.eM22) and
-            (fDC[fDCIndex].WorldTransform.eM12 = -fDC[fDCIndex].WorldTransform.eM21) and
-            // a pure positive uniform scaling is no rotation: default branch below
-            not ((fDC[fDCIndex].WorldTransform.eM12 = 0) and
-                 (fDC[fDCIndex].WorldTransform.eM11 > 0)) and
-            // the angle by ArcTan2: ArcCos(eM11) fails for a scaled rotation
-            not SameValue(ArcTan2(fDC[fDCIndex].WorldTransform.eM12,
-              fDC[fDCIndex].WorldTransform.eM11), 0, 0.0001) then
+    else if ((fDC[fDCIndex].WorldTransform.eM11 = fDC[fDCIndex].WorldTransform.eM22) and
+             (fDC[fDCIndex].WorldTransform.eM12 = -fDC[fDCIndex].WorldTransform.eM21) and
+             // a pure positive uniform scaling is no rotation: default branch below
+             not ((fDC[fDCIndex].WorldTransform.eM12 = 0) and
+                  (fDC[fDCIndex].WorldTransform.eM11 > 0)) and
+             // the angle by ArcTan2: ArcCos(eM11) fails for a scaled rotation
+             not SameValue(ArcTan2(fDC[fDCIndex].WorldTransform.eM12,
+               fDC[fDCIndex].WorldTransform.eM11), 0, 0.0001)) or
+            // both factors negative, equal or not: a turn by 180 degrees
+            ((fDC[fDCIndex].WorldTransform.eM12 = 0) and
+             (fDC[fDCIndex].WorldTransform.eM21 = 0) and
+             (fDC[fDCIndex].WorldTransform.eM11 < 0) and
+             (fDC[fDCIndex].WorldTransform.eM22 < 0)) then
     begin
       xs := 0;
       ys := 0;
       // GDI's Y goes down, PDF's up: negating all four terms was right at
       // 90 and 270 degrees only
       if fDC[fDCIndex].WorldTransform.eM12 = 0 then
-        // a negative uniform scale: the canvas maps its factor and move, the
-        // font size has its size - the turn by 180 degrees only
-        fCanvas.SetTextMatrix(-1, 0, 0, -1, fCanvas.S2X(posi.X),
-          fCanvas.S2Y(posi.Y))
+        // both factors negative: the canvas maps them and the move, the font
+        // size has the scale - the turn by 180 degrees only, from the
+        // aligned start as DrawLine draws from it
+        fCanvas.SetTextMatrix(-1, 0, 0, -1, fCanvas.S2X(posi.X - w),
+          fCanvas.S2Y(posi.Y - h))
       else
         fCanvas.SetTextMatrix(fDC[fDCIndex].WorldTransform.eM11,
           -fDC[fDCIndex].WorldTransform.eM12, -fDC[fDCIndex].WorldTransform.eM21,

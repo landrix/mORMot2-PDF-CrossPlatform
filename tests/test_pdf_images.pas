@@ -4083,7 +4083,7 @@ var
 begin
   FillChar(lf, SizeOf(lf), 0);
   lf.lfHeight := -20;
-  lf.lfUnderline := ord(M11 <> M22);
+  lf.lfUnderline := 1;
   Utf8ToWideChar(@lf.lfFaceName, 'Arial');
   f := CreateFontIndirectW(lf);
   dx := 100 * Abs(M11) * ord(M11 < 0);
@@ -4114,7 +4114,7 @@ begin
           MaxPtrInt(x1, x2), MaxPtrInt(y1, y2));
         // mirrored on X, the text ends at the reference point; on Y, it
         // stands on it
-        if M11 <> M22 then
+        if (M11 < 0) <> (M22 < 0) then
         begin
           SetTextAlign(dc, TA_RIGHT * ord(M11 < 0) + TA_BOTTOM * ord(M22 < 0));
           TextOutW(dc, round(M11 * 40 + dx), round(M22 * 40 + dy), 'Mirror', 6);
@@ -4129,6 +4129,9 @@ begin
         xf.eDy := dy;
         SetWorldTransform(dc, xf);
         Windows.Rectangle(dc, 10, 10, 50, 50);
+        if (M11 < 0) and
+           (M22 < 0) then
+          SetTextAlign(dc, TA_BASELINE); // the glyphs' start: the point
         TextOutW(dc, 40, 40, 'Mirror', 6);
       end;
       SelectObject(dc, GetStockObject(SYSTEM_FONT));
@@ -4229,7 +4232,8 @@ end;
 
 procedure TPdfImageGoldenTests.MetaFileWorldReflection;
 const
-  M: array[0..3, 0..1] of single = ((-1, 1), (1, -1), (-1, -1), (-2, -2));
+  M: array[0..4, 0..1] of single = ((-1, 1), (1, -1), (-1, -1), (-2, -2),
+    (-1, -2));
 var
   i, k: integer;
   lo, hi: double;
@@ -4255,7 +4259,8 @@ begin
           SameBox(PathBox(a[0]), PathBox(b[0])), msg);
     Check(Abs(OperandAt(txt, ' w'#10, 0, 0) - OperandAt(ref, ' w'#10, 0, 0)) < 0.01,
       msg + ': the line width');
-    if M[i, 0] = M[i, 1] then
+    if (M[i, 0] < 0) and
+       (M[i, 1] < 0) then
     begin
       // the device point of 40,40 under the scale, at 0.75 pt per pixel
       Check((OperandAt(txt, ' Tm'#10, 0, 0) < 0) and
@@ -4266,7 +4271,32 @@ begin
               (M[i, 1] * 40 + 100 * Abs(M[i, 1]) + 10) * 0.75)) < 0.05),
         msg + ': the text turned by 180 degrees');
       Check(Abs(LastFontSize(txt, '(Mirror) Tj') * Abs(OperandAt(txt, ' Tm'#10, 0, 0)) -
-        15 * Abs(M[i, 0])) < 0.05, msg + ': in the size of the scale');
+        15 * Abs(M[i, 1])) < 0.05, msg + ': in the size of the scale');
+      // its underline turned with it: to the left, above the baseline
+      if length(a) = 2 then
+      begin
+        GlyphProjections(txt, a[1], lo, hi);
+        Check((lo > -0.5) and
+              (hi > 5) and
+              (PathBox(a[1]).Top > OperandAt(txt, ' Tm'#10, 0, 5)),
+          msg + ': its underline turned');
+      end
+      else
+        Check(false, msg + ': its underline turned');
+      // and under a font's angle, which turns the glyphs without the world
+      for k := 0 to 1 do
+      begin
+        txt := MirroredTurnedEmf(M[i, 0], M[i, 1], k = 1);
+        a := PaintedPaths(txt);
+        if length(a) = 0 then
+          Check(false, msg + ': the turned underline drawn')
+        else
+        begin
+          GlyphProjections(txt, a[0], lo, hi);
+          Check((lo > -0.5) and
+                (hi > 5), msg + ': the underline along the font''s glyphs');
+        end;
+      end;
     end
     else
     begin
@@ -4559,7 +4589,7 @@ procedure TPdfImageGoldenTests.MetaFileWorldReflection;
 var
   i: integer;
 begin
-  for i := 1 to 20 do
+  for i := 1 to 33 do
     Check(true, 'SKIP: metafiles are Windows only');
 end;
 
