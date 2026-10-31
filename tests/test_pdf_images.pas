@@ -119,6 +119,7 @@ type
     procedure MetaFileClipBoxes;
     procedure MetaFileWorldBoxes;
     procedure MetaFileBitmapBounds;
+    procedure MetaFileWorldRotation;
     /// brushes and extended pens read in the layout of the EMF records
     procedure MetaFileRecordLayout;
   end;
@@ -3971,6 +3972,89 @@ begin
         SameBox(b, clip), 'the same bounds at 10 units per pixel');
 end;
 
+// a rectangle and text under the world transform M11, M12, M21, M22 moved
+// to 300,100; Prior: after a scale by 2 and a move by 50
+function WorldRotationEmf(M11, M12, M21, M22: single; Prior: boolean): RawUtf8;
+var
+  mf: TMetaFile;
+  mc: TMetaFileCanvas;
+  xf: TXForm;
+  lf: TLogFontW;
+  f: HFONT;
+  dc: HDC;
+begin
+  FillChar(lf, SizeOf(lf), 0);
+  lf.lfHeight := -20;
+  Utf8ToWideChar(@lf.lfFaceName, 'Arial');
+  f := CreateFontIndirectW(lf);
+  mf := TMetaFile.Create;
+  try
+    mf.Width := 400;
+    mf.Height := 400;
+    mc := TMetaFileCanvas.Create(mf, 0);
+    try
+      dc := mc.Handle;
+      SetGraphicsMode(dc, GM_ADVANCED);
+      SelectObject(dc, f);
+      SetBkMode(dc, TRANSPARENT);
+      FillChar(xf, SizeOf(xf), 0);
+      if Prior then
+      begin
+        xf.eM11 := 2;
+        xf.eM22 := 2;
+        xf.eDx := 50;
+        xf.eDy := 50;
+        SetWorldTransform(dc, xf);
+      end;
+      xf.eM11 := M11;
+      xf.eM12 := M12;
+      xf.eM21 := M21;
+      xf.eM22 := M22;
+      xf.eDx := 300;
+      xf.eDy := 100;
+      SetWorldTransform(dc, xf);
+      Windows.Rectangle(dc, 10, 10, 50, 50);
+      TextOutW(dc, 40, 40, 'Turned', 6);
+      SelectObject(dc, GetStockObject(SYSTEM_FONT));
+    finally
+      mc.Free;
+    end;
+    result := RenderedEmf(mf);
+  finally
+    mf.Free;
+    DeleteObject(f);
+  end;
+end;
+
+procedure TPdfImageGoldenTests.MetaFileWorldRotation;
+const
+  // a rotation by 90 and by 30 degrees, a shear
+  M: array[0..2, 0..3] of single = ((0, 1, -1, 0),
+    (0.866025, 0.5, -0.5, 0.866025), (1, 0, 0.5, 1));
+var
+  i: integer;
+  fresh, prior: RawUtf8;
+  a, b: TRawUtf8DynArray;
+  msg: string;
+begin
+  { a rotation or a shear kept the scale and the move of the transform
+    before it: what was drawn depended on it (the turned text of emf_world
+    twice its size); without the factor and offset, the same drawing }
+  for i := 0 to high(M) do
+  begin
+    msg := Utf8ToString(FormatUtf8('matrix %', [i]));
+    fresh := WorldRotationEmf(M[i, 0], M[i, 1], M[i, 2], M[i, 3], false);
+    prior := WorldRotationEmf(M[i, 0], M[i, 1], M[i, 2], M[i, 3], true);
+    a := PaintedPaths(fresh);
+    b := PaintedPaths(prior);
+    Check((length(a) = 1) and
+          (length(b) = 1) and
+          SameBox(PathBox(a[0]), PathBox(b[0])), msg);
+    CheckEqual(LastTextState(prior, '(Turned) Tj'),
+      LastTextState(fresh, '(Turned) Tj'), msg);
+  end;
+end;
+
 procedure TPdfImageGoldenTests.MetaFileRecordLayout;
 var
   mf: TMetaFile;
@@ -4220,6 +4304,14 @@ var
   i: integer;
 begin
   for i := 1 to 4 do
+    Check(true, 'SKIP: metafiles are Windows only');
+end;
+
+procedure TPdfImageGoldenTests.MetaFileWorldRotation;
+var
+  i: integer;
+begin
+  for i := 1 to 6 do
     Check(true, 'SKIP: metafiles are Windows only');
 end;
 

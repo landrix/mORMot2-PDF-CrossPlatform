@@ -34,6 +34,9 @@ here until the post is written, then the list is emptied. It is the only such
 list: the CHANGELOG entry of the next release is written from it. Emptied for
 v0.10.0 (2026-09-30).
 
+- **Fixed (EMF):** a world rotation or shear (`SetWorldTransform`) kept the
+  scale and the move of the transform before it: text and shapes drawn
+  under it were scaled and moved by that. Shapes are still drawn unturned
 - **Fixed (EMF):** a bitmap at the right or bottom edge of a metafile lost
   its last two pixels, clipped to the bounds of the metafile less two; with
   `tcClipExplicit` a text under a map mode other than `MM_TEXT` was clipped

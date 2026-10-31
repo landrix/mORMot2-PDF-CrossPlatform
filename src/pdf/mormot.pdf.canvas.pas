@@ -3680,8 +3680,13 @@ begin
         fDC[fDCIndex].WorldTransform := Custom^;
     end;
   end;
-  // use transformation
+  // use transformation: the canvas maps a scale only; any other transform
+  // is drawn unscaled, never with the scale and move of the one before
   xf := fDC[fDCIndex].WorldTransform;
+  fCanvas.fWorldFactorX := 1;
+  fCanvas.fWorldFactorY := 1;
+  fCanvas.fWorldOffsetX := 0;
+  fCanvas.fWorldOffsetY := 0;
   if (xf.eM11 > 0) and
      (xf.eM22 > 0) and
      (xf.eM12 = 0) and

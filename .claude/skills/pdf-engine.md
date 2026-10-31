@@ -588,9 +588,15 @@ in GDI. The painting
 record writes the text after its operator, in the render mode of its brush
 and pen (`PathTextPaint`, `Tr` 0, 1 or 2); a dropped path drops it. The text
 is painted after the other figures, not as one union with them, so the fill
-rule does not combine them (`MetaFileTextInPath`). A world rotation turns the
-text only: `ScaleMatrix` sets `fAngle`, which no coordinate reads, so every
-shape - the rectangles of text in a path too - is drawn unturned.
+rule does not combine them (`MetaFileTextInPath`). A world rotation turns
+the text only: the canvas maps a world scale alone (`fWorldFactorX/Y`,
+`fWorldOffsetX/Y` from `ScaleMatrix`), any other transform with factor 1 and
+offset 0, so every shape - the rectangles of text in a path too - is drawn
+unturned and unscaled, and only a rotation's text carries the transform in
+its own matrix; a shear is not applied at all, to text neither. They
+kept the scale and move of the transform before (`MetaFileWorldRotation`: the
+turned text of `emf_world` twice its size). A full transform of the geometry
+would map each point pair, as LibreOffice's emfio does: after the freeze.
 The path and its text are converted while recorded, as GDI keeps a path in
 device units: a world transform set before the painting record moves
 neither, only what follows (`MetaFileTransformAfterPath`). A layer comment
