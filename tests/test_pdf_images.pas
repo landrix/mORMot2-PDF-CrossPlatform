@@ -4039,7 +4039,9 @@ var
 begin
   { a rotation or a shear kept the scale and the move of the transform
     before it: what was drawn depended on it (the turned text of emf_world
-    twice its size); without the factor and offset, the same drawing }
+    twice its size); without the factor and offset, the same drawing.
+    The text matrix negated all four terms: right at 90 and 270 degrees
+    only, a text at 30 degrees was drawn at 150 }
   for i := 0 to high(M) do
   begin
     msg := Utf8ToString(FormatUtf8('matrix %', [i]));
@@ -4052,6 +4054,13 @@ begin
           SameBox(PathBox(a[0]), PathBox(b[0])), msg);
     CheckEqual(LastTextState(prior, '(Turned) Tj'),
       LastTextState(fresh, '(Turned) Tj'), msg);
+    // the text matrix of a rotation: Y goes down in GDI, up in PDF
+    if i < 2 then
+      Check((Abs(OperandAt(fresh, ' Tm'#10, 0, 0) - M[i, 0]) < 0.01) and
+            (Abs(OperandAt(fresh, ' Tm'#10, 0, 1) + M[i, 1]) < 0.01) and
+            (Abs(OperandAt(fresh, ' Tm'#10, 0, 2) + M[i, 2]) < 0.01) and
+            (Abs(OperandAt(fresh, ' Tm'#10, 0, 3) - M[i, 3]) < 0.01),
+        msg + ': the text turned as GDI turns it');
   end;
 end;
 
@@ -4311,7 +4320,7 @@ procedure TPdfImageGoldenTests.MetaFileWorldRotation;
 var
   i: integer;
 begin
-  for i := 1 to 6 do
+  for i := 1 to 8 do
     Check(true, 'SKIP: metafiles are Windows only');
 end;
 

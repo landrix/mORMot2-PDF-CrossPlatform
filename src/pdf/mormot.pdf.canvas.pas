@@ -1298,7 +1298,6 @@ const
   MWT_RIGHTMULTIPLY = 3;
   MWT_SET           = 4;
   {$ifdef USE_METAFILE}
-  cPI: single = 3.141592654;
   cPIdiv180: single = 0.017453292;
   c180divPI: single = 57.29577951;
   {$endif USE_METAFILE}
@@ -4530,24 +4529,15 @@ begin
     begin
       xs := 0;
       ys := 0;
-      a := abs(ArcTan2(fDC[fDCIndex].WorldTransform.eM12,
-        fDC[fDCIndex].WorldTransform.eM11));
-      if SameValue(a, 0, 0.0001) or    // 0 grad
-         SameValue(a, cPI, 0.0001) then // 180 grad
-        fCanvas.SetTextMatrix(fDC[fDCIndex].WorldTransform.eM11, fDC[fDCIndex].WorldTransform.eM12,
-          fDC[fDCIndex].WorldTransform.eM21, fDC[fDCIndex].WorldTransform.eM22,
-          fCanvas.S2X(posi.X * fDC[fDCIndex].WorldTransform.eM11 +
-            posi.Y * fDC[fDCIndex].WorldTransform.eM21 + fDC[fDCIndex].WorldTransform.eDx),
-          fCanvas.S2Y(posi.X * fDC[fDCIndex].WorldTransform.eM12 +
-            posi.Y * fDC[fDCIndex].WorldTransform.eM22 + fDC[fDCIndex].WorldTransform.eDy))
-      else
-        fCanvas.SetTextMatrix(-fDC[fDCIndex].WorldTransform.eM11,
-          -fDC[fDCIndex].WorldTransform.eM12, -fDC[fDCIndex].WorldTransform.eM21,
-          -fDC[fDCIndex].WorldTransform.eM22,
-          fCanvas.S2X(posi.X * fDC[fDCIndex].WorldTransform.eM11 +
-            posi.Y * fDC[fDCIndex].WorldTransform.eM21 + fDC[fDCIndex].WorldTransform.eDx),
-          fCanvas.S2Y(posi.X * fDC[fDCIndex].WorldTransform.eM12 +
-            posi.Y * fDC[fDCIndex].WorldTransform.eM22 + fDC[fDCIndex].WorldTransform.eDy));
+      // GDI's Y goes down, PDF's up: negating all four terms was right at
+      // 90 and 270 degrees only
+      fCanvas.SetTextMatrix(fDC[fDCIndex].WorldTransform.eM11,
+        -fDC[fDCIndex].WorldTransform.eM12, -fDC[fDCIndex].WorldTransform.eM21,
+        fDC[fDCIndex].WorldTransform.eM22,
+        fCanvas.S2X(posi.X * fDC[fDCIndex].WorldTransform.eM11 +
+          posi.Y * fDC[fDCIndex].WorldTransform.eM21 + fDC[fDCIndex].WorldTransform.eDx),
+        fCanvas.S2Y(posi.X * fDC[fDCIndex].WorldTransform.eM12 +
+          posi.Y * fDC[fDCIndex].WorldTransform.eM22 + fDC[fDCIndex].WorldTransform.eDy));
     end
     else
     begin

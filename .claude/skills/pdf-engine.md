@@ -593,7 +593,8 @@ the text only: the canvas maps a world scale alone (`fWorldFactorX/Y`,
 `fWorldOffsetX/Y` from `ScaleMatrix`), any other transform with factor 1 and
 offset 0, so every shape - the rectangles of text in a path too - is drawn
 unturned and unscaled, and only a rotation's text carries the transform in
-its own matrix; a shear is not applied at all, to text neither. They
+its own matrix, (eM11, -eM12, -eM21, eM22) as GDI's Y goes down and PDF's up;
+a shear is not applied at all, to text neither. They
 kept the scale and move of the transform before (`MetaFileWorldRotation`: the
 turned text of `emf_world` twice its size). A full transform of the geometry
 would map each point pair, as LibreOffice's emfio does: after the freeze.

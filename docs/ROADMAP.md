@@ -34,6 +34,8 @@ here until the post is written, then the list is emptied. It is the only such
 list: the CHANGELOG entry of the next release is written from it. Emptied for
 v0.10.0 (2026-09-30).
 
+- **Fixed (EMF):** text under a world rotation other than 90, 180 or 270
+  degrees was turned the wrong way: at 30 degrees it was drawn at 150
 - **Fixed (EMF):** a world rotation or shear (`SetWorldTransform`) kept the
   scale and the move of the transform before it: text and shapes drawn
   under it were scaled and moved by that. Shapes are still drawn unturned
