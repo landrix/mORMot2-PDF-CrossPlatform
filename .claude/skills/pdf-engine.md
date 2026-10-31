@@ -513,8 +513,20 @@ bottom: `BoxInclI` and `RoundRectI` map both corners, normalize, and add
 `fDevScaleX`/`fDevScaleY` - one device pixel in PDF points - to the device's
 right and bottom (`AddDevicePixel`): whatever the mapping, a mirrored map mode
 or the world scale, and on the page's left or top for a negative render
-scale of `RenderMetaFile`. A mirroring world transform is not applied at all
-(`ScaleMatrix` leaves the reflection out), as a rotation.
+scale of `RenderMetaFile`. A mirroring world transform - a scale with a
+negative factor, no shear - is a scale of the canvas too (`fWorldFactorX/Y`
+negative): shapes and positions are mirrored, the line width taken with
+`Abs`; a glyph is not mirrored but placed upright in the box GDI's mirrored
+one takes (`TextOut`: `w - ww` for X, the ascent and descent swapped for Y;
+its underline, strike-out and path frame start where the glyphs start and go
+along and across them turned by the font's angle, then times `sx` and `sy`,
+as the upright glyphs go on the device),
+and a bitmap only on Y (the DIB flip of `EMR_STRETCHDIBITS`). Both factors
+negative and equal turn the text by 180 degrees: `TextOut` writes
+`-1 0 0 -1` as its matrix, the size and the move coming from the canvas
+(`MetaFileWorldReflection`). `I2X`/`I2Y`/`S2X`/`S2Y` apply the world scale
+and move before the window and viewport, as GDI maps world, page, device;
+they applied them after, wrong with a viewport origin or extent.
 They added a logical unit of the map mode per pixel, not divided by the world
 factor (82 and 20.5); #686 normalized before that, which shifted a mirrored
 shape. A

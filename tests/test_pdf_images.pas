@@ -120,6 +120,7 @@ type
     procedure MetaFileWorldBoxes;
     procedure MetaFileBitmapBounds;
     procedure MetaFileWorldRotation;
+    procedure MetaFileWorldReflection;
     /// brushes and extended pens read in the layout of the EMF records
     procedure MetaFileRecordLayout;
   end;
@@ -4064,6 +4065,236 @@ begin
   end;
 end;
 
+// a rectangle 10..50 with a pen 3 wide and text at 40,40 under the world
+// scale M11, M22, moved back into the picture where negative, the viewport's
+// origin at 20,10; Reference: the same rectangle and pen at the page's
+// coordinates, no transform, and the text aligned where GDI's mirrored one is
+function WorldReflectionEmf(M11, M22: single; Reference: boolean): RawUtf8;
+var
+  mf: TMetaFile;
+  mc: TMetaFileCanvas;
+  xf: TXForm;
+  lf: TLogFontW;
+  f: HFONT;
+  pen: HPEN;
+  dc: HDC;
+  dx, dy: single;
+  x1, x2, y1, y2: integer;
+begin
+  FillChar(lf, SizeOf(lf), 0);
+  lf.lfHeight := -20;
+  lf.lfUnderline := ord(M11 <> M22);
+  Utf8ToWideChar(@lf.lfFaceName, 'Arial');
+  f := CreateFontIndirectW(lf);
+  dx := 100 * Abs(M11) * ord(M11 < 0);
+  dy := 100 * Abs(M22) * ord(M22 < 0);
+  if Reference then
+    pen := CreatePen(PS_SOLID, round(3 * Abs(M11)), 0)
+  else
+    pen := CreatePen(PS_SOLID, 3, 0);
+  mf := TMetaFile.Create;
+  try
+    mf.Width := 400;
+    mf.Height := 400;
+    mc := TMetaFileCanvas.Create(mf, 0);
+    try
+      dc := mc.Handle;
+      SetGraphicsMode(dc, GM_ADVANCED);
+      SetViewportOrgEx(dc, 20, 10, nil);
+      SelectObject(dc, f);
+      SelectObject(dc, pen);
+      SetBkMode(dc, TRANSPARENT);
+      x1 := round(M11 * 10 + dx);
+      x2 := round(M11 * 50 + dx);
+      y1 := round(M22 * 10 + dy);
+      y2 := round(M22 * 50 + dy);
+      if Reference then
+      begin
+        Windows.Rectangle(dc, MinPtrInt(x1, x2), MinPtrInt(y1, y2),
+          MaxPtrInt(x1, x2), MaxPtrInt(y1, y2));
+        // mirrored on X, the text ends at the reference point; on Y, it
+        // stands on it
+        if M11 <> M22 then
+        begin
+          SetTextAlign(dc, TA_RIGHT * ord(M11 < 0) + TA_BOTTOM * ord(M22 < 0));
+          TextOutW(dc, round(M11 * 40 + dx), round(M22 * 40 + dy), 'Mirror', 6);
+        end;
+      end
+      else
+      begin
+        FillChar(xf, SizeOf(xf), 0);
+        xf.eM11 := M11;
+        xf.eM22 := M22;
+        xf.eDx := dx;
+        xf.eDy := dy;
+        SetWorldTransform(dc, xf);
+        Windows.Rectangle(dc, 10, 10, 50, 50);
+        TextOutW(dc, 40, 40, 'Mirror', 6);
+      end;
+      SelectObject(dc, GetStockObject(SYSTEM_FONT));
+      SelectObject(dc, GetStockObject(BLACK_PEN));
+    finally
+      mc.Free;
+    end;
+    result := RenderedEmf(mf);
+  finally
+    mf.Free;
+    DeleteObject(f);
+    DeleteObject(pen);
+  end;
+end;
+
+// underlined text turned by 90 degrees (lfEscapement) under the world scale
+// M11, M22, moved back into the picture; InPath: filled as a GDI path
+function MirroredTurnedEmf(M11, M22: single; InPath: boolean): RawUtf8;
+var
+  mf: TMetaFile;
+  mc: TMetaFileCanvas;
+  xf: TXForm;
+  lf: TLogFontW;
+  f: HFONT;
+  dc: HDC;
+begin
+  FillChar(lf, SizeOf(lf), 0);
+  lf.lfHeight := -20;
+  lf.lfEscapement := 900;
+  lf.lfUnderline := 1;
+  Utf8ToWideChar(@lf.lfFaceName, 'Arial');
+  f := CreateFontIndirectW(lf);
+  mf := TMetaFile.Create;
+  try
+    mf.Width := 400;
+    mf.Height := 400;
+    mc := TMetaFileCanvas.Create(mf, 0);
+    try
+      dc := mc.Handle;
+      SetGraphicsMode(dc, GM_ADVANCED);
+      SelectObject(dc, f);
+      SetBkMode(dc, TRANSPARENT);
+      FillChar(xf, SizeOf(xf), 0);
+      xf.eM11 := M11;
+      xf.eM22 := M22;
+      xf.eDx := 200 * ord(M11 < 0);
+      xf.eDy := 200 * ord(M22 < 0);
+      SetWorldTransform(dc, xf);
+      if InPath then
+        BeginPath(dc);
+      TextOutW(dc, 60, 120, 'Turned', 6);
+      if InPath then
+      begin
+        EndPath(dc);
+        FillPath(dc);
+      end;
+      SelectObject(dc, GetStockObject(SYSTEM_FONT));
+    finally
+      mc.Free;
+    end;
+    result := RenderedEmf(mf);
+  finally
+    mf.Free;
+    DeleteObject(f);
+  end;
+end;
+
+// the lowest and highest projection of the l points of Path on the line of
+// the glyphs (Tm of Txt): along it from where they start
+procedure GlyphProjections(const Txt, Path: RawUtf8; out Lo, Hi: double);
+var
+  lines: TRawUtf8DynArray;
+  i: PtrInt;
+  a, b, e, f, n, x, y, d: double;
+begin
+  a := OperandAt(Txt, ' Tm'#10, 0, 0);
+  b := OperandAt(Txt, ' Tm'#10, 0, 1);
+  e := OperandAt(Txt, ' Tm'#10, 0, 4);
+  f := OperandAt(Txt, ' Tm'#10, 0, 5);
+  n := Sqrt(a * a + b * b);
+  Lo := 1E9;
+  Hi := -1E9;
+  lines := nil;
+  CsvToRawUtf8DynArray(pointer(Path), lines, #10);
+  for i := 0 to high(lines) do
+    if (length(lines[i]) > 2) and
+       (copy(lines[i], length(lines[i]) - 1, 2) = ' l') then
+    begin
+      x := GetExtended(pointer(GetCsvItem(pointer(lines[i]), 0, ' ')));
+      y := GetExtended(pointer(GetCsvItem(pointer(lines[i]), 1, ' ')));
+      d := ((x - e) * a + (y - f) * b) / n;
+      if d < Lo then
+        Lo := d;
+      if d > Hi then
+        Hi := d;
+    end;
+end;
+
+procedure TPdfImageGoldenTests.MetaFileWorldReflection;
+const
+  M: array[0..3, 0..1] of single = ((-1, 1), (1, -1), (-1, -1), (-2, -2));
+var
+  i, k: integer;
+  lo, hi: double;
+  txt, ref: RawUtf8;
+  a, b: TRawUtf8DynArray;
+  msg: string;
+begin
+  { a reflection (a negative scale, no shear) was not applied at all: what
+    was drawn under it stayed where it was. A scale with negative factors
+    mirrors the shapes on the page, with a positive line width; a turn by
+    180 degrees (both negative) turns the text too, at the scale's size.
+    The world transform comes before the viewport's origin: it was applied
+    after it; and the upright glyphs stand where GDI's mirrored ones are }
+  for i := 0 to high(M) do
+  begin
+    msg := Utf8ToString(FormatUtf8('scale % %', [M[i, 0], M[i, 1]]));
+    txt := WorldReflectionEmf(M[i, 0], M[i, 1], false);
+    ref := WorldReflectionEmf(M[i, 0], M[i, 1], true);
+    a := PaintedPaths(txt);
+    b := PaintedPaths(ref);
+    Check((length(a) >= 1) and
+          (length(b) >= 1) and
+          SameBox(PathBox(a[0]), PathBox(b[0])), msg);
+    Check(Abs(OperandAt(txt, ' w'#10, 0, 0) - OperandAt(ref, ' w'#10, 0, 0)) < 0.01,
+      msg + ': the line width');
+    if M[i, 0] = M[i, 1] then
+    begin
+      // the device point of 40,40 under the scale, at 0.75 pt per pixel
+      Check((OperandAt(txt, ' Tm'#10, 0, 0) < 0) and
+            (OperandAt(txt, ' Tm'#10, 0, 3) < 0) and
+            (Abs(OperandAt(txt, ' Tm'#10, 0, 4) -
+              (M[i, 0] * 40 + 100 * Abs(M[i, 0]) + 20) * 0.75) < 0.05) and
+            (Abs(OperandAt(txt, ' Tm'#10, 0, 5) - (842 -
+              (M[i, 1] * 40 + 100 * Abs(M[i, 1]) + 10) * 0.75)) < 0.05),
+        msg + ': the text turned by 180 degrees');
+      Check(Abs(LastFontSize(txt, '(Mirror) Tj') * Abs(OperandAt(txt, ' Tm'#10, 0, 0)) -
+        15 * Abs(M[i, 0])) < 0.05, msg + ': in the size of the scale');
+    end
+    else
+    begin
+      Check((Abs(OperandAt(txt, ' Td'#10, 0, 0) - OperandAt(ref, ' Td'#10, 0, 0)) < 0.05) and
+            (Abs(OperandAt(txt, ' Td'#10, 0, 1) - OperandAt(ref, ' Td'#10, 0, 1)) < 0.05),
+        msg + ': the text where GDI mirrors it');
+      Check((length(a) = 2) and
+            (length(b) = 2) and
+            SameBox(PathBox(a[1]), PathBox(b[1])), msg + ': its underline');
+      // turned by the font: the underline, alone or a figure of a path,
+      // goes the way the glyphs go from their start
+      for k := 0 to 1 do
+      begin
+        txt := MirroredTurnedEmf(M[i, 0], M[i, 1], k = 1);
+        a := PaintedPaths(txt);
+        if length(a) = 0 then
+          Check(false, msg + ': the turned underline drawn')
+        else
+        begin
+          GlyphProjections(txt, a[0], lo, hi);
+          Check((lo > -0.5) and
+                (hi > 5), msg + ': the turned underline along the glyphs');
+        end;
+      end;
+    end;
+  end;
+end;
+
 procedure TPdfImageGoldenTests.MetaFileRecordLayout;
 var
   mf: TMetaFile;
@@ -4321,6 +4552,14 @@ var
   i: integer;
 begin
   for i := 1 to 8 do
+    Check(true, 'SKIP: metafiles are Windows only');
+end;
+
+procedure TPdfImageGoldenTests.MetaFileWorldReflection;
+var
+  i: integer;
+begin
+  for i := 1 to 20 do
     Check(true, 'SKIP: metafiles are Windows only');
 end;
 

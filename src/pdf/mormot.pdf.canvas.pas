@@ -2942,7 +2942,7 @@ begin
         // prepare pixel size and color
         if st^.pen.width <> 1 then
         begin
-          E.fPenWidth := E.fCanvas.fWorldFactorX * E.fCanvas.fDevScaleX;
+          E.fPenWidth := Abs(E.fCanvas.fWorldFactorX) * E.fCanvas.fDevScaleX;
           E.fCanvas.SetLineWidth(E.fPenWidth * E.fCanvas.fFactorX);
         end;
         if PEMRSetPixelV(R)^.crColor <> cardinal(st^.pen.color) then
@@ -2956,7 +2956,7 @@ begin
         // rollback pixel size and color
         if st^.pen.width <> 1 then
         begin
-          E.fPenWidth := st^.pen.width * E.fCanvas.fWorldFactorX * E.fCanvas.fDevScaleX;
+          E.fPenWidth := st^.pen.width * Abs(E.fCanvas.fWorldFactorX) * E.fCanvas.fDevScaleX;
           E.fCanvas.SetLineWidth(E.fPenWidth * E.fCanvas.fFactorX);
         end;
         if PEMRSetPixelV(R)^.crColor <> cardinal(st^.pen.color) then
@@ -3533,12 +3533,12 @@ begin
       end;
       fPenStyle := fDC[fDCIndex].pen.style;
     end;
-    if fDC[fDCIndex].pen.width * fCanvas.fWorldFactorX * fCanvas.fDevScaleX <> fPenWidth then
+    if fDC[fDCIndex].pen.width * Abs(fCanvas.fWorldFactorX) * fCanvas.fDevScaleX <> fPenWidth then
     begin
       if fDC[fDCIndex].pen.width = 0 then
-        fPenWidth := fCanvas.fWorldFactorX * fCanvas.fDevScaleX
+        fPenWidth := Abs(fCanvas.fWorldFactorX) * fCanvas.fDevScaleX
       else
-        fPenWidth := fDC[fDCIndex].pen.width * fCanvas.fWorldFactorX * fCanvas.fDevScaleX;
+        fPenWidth := fDC[fDCIndex].pen.width * Abs(fCanvas.fWorldFactorX) * fCanvas.fDevScaleX;
       fCanvas.SetLineWidth(fPenWidth * fCanvas.fFactorX);
     end;
   end
@@ -3686,11 +3686,11 @@ begin
   fCanvas.fWorldFactorY := 1;
   fCanvas.fWorldOffsetX := 0;
   fCanvas.fWorldOffsetY := 0;
-  if (xf.eM11 > 0) and
-     (xf.eM22 > 0) and
+  if (xf.eM11 <> 0) and
+     (xf.eM22 <> 0) and
      (xf.eM12 = 0) and
      (xf.eM21 = 0) then
-  begin // Scale
+  begin // Scale, a negative factor mirrors
     fCanvas.fWorldFactorX := xf.eM11;
     fCanvas.fWorldFactorY := xf.eM22;
     fCanvas.fWorldOffsetX := fDC[fDCIndex].WorldTransform.eDx;
@@ -4201,13 +4201,19 @@ var
   var
     c, s, a: single;
 
-    procedure Corner(cx, cy: single; Move: boolean);
+    // Adv along the text and Across below its baseline, from where TextOut
+    // starts the glyphs; turned, then mirrored back by sx and sy, as the
+    // upright glyphs go on the device
+    procedure Corner(Adv, Across: single; Move: boolean);
+    var
+      x, y: single;
     begin
-      cy := cy - h;
+      x := posi.X - w * c - h * s + sx * (Adv * c + Across * s);
+      y := posi.Y - h * c + w * s + sy * (Across * c - Adv * s);
       if Move then
-        fCanvas.MoveToS(posi.X + cx * c + cy * s, posi.Y + cy * c - cx * s)
+        fCanvas.MoveToS(x, y)
       else
-        fCanvas.LineToS(posi.X + cx * c + cy * s, posi.Y + cy * c - cx * s);
+        fCanvas.LineToS(x, y);
     end;
 
   begin
@@ -4220,10 +4226,10 @@ var
       s := sin(a);
     end;
     PathIn;
-    Corner(-w, Top, true);
-    Corner(-w + ww, Top, false);
-    Corner(-w + ww, Bottom, false);
-    Corner(-w, Bottom, false);
+    Corner(0, Top, true);
+    Corner(ww, Top, false);
+    Corner(ww, Bottom, false);
+    Corner(0, Bottom, false);
     fCanvas.ClosePath;
     PathOut;
   end;
@@ -4255,20 +4261,22 @@ var
       // (-w,-h) = delta to text start pos (at baseline)
       // ww = text width
       // aH = delta h for drawed line (from baseline)
-      fCanvas.MoveToS(P.X - w, (P.Y - (h - aH)));
+      // sx and sy: the line under the upright glyphs of a mirrored text
+      fCanvas.MoveToS(P.X - w, (P.Y - (h - aH * sy)));
       //  deltax := -w     deltaY := (-h+aH)
-      fCanvas.LineToS(P.X - w + ww, (P.Y - (h - aH)));
+      fCanvas.LineToS(P.X - w + ww * sx, (P.Y - (h - aH * sy)));
       //  deltax := -w+ww  deltaY := (-h+aH)
     end
     else
     begin
-      // rotation pattern:
+      // rotation pattern, from the glyphs' start (-w, -h) - the offsets
+      // along and across the text mirrored back by sx and sy, as PathFrame:
       //   rdx = deltax * acos + deltay * asin
       //   rdy = deltay * acos - deltax * asin
-      fCanvas.MoveToS(P.X + ((-w) * acos + (-h + aH) * asin),
-                     P.Y + ((-h + aH) * acos - (-w) * asin));
-      fCanvas.LineToS(P.X + ((-w + ww) * acos + (-h + aH) * asin),
-                     P.Y + ((-h + aH) * acos - (-w + ww) * asin));
+      fCanvas.MoveToS(P.X - w * acos - h * asin + sx * aH * asin,
+                     P.Y - h * acos + w * asin + sy * aH * acos);
+      fCanvas.LineToS(P.X - w * acos - h * asin + sx * (ww * acos + aH * asin),
+                     P.Y - h * acos + w * asin + sy * (aH * acos - ww * asin));
     end;
     fCanvas.Stroke;
     fDC[fDCIndex].Pen := tmp;
@@ -4415,10 +4423,13 @@ begin
     else
       // needs - vertical coords of baseline from top
       h := -abs(fDC[fDCIndex].Font.spec.ascent); // top
-    if sy < 0 then // inverted coordinates
-      h := fDC[fDCIndex].Font.spec.height + h;
+    // a world scale that mirrors: the upright glyphs where GDI's mirrored
+    // ones are, their box mirrored around the reference point
+    if sy < 0 then
+      h := h + abs(fDC[fDCIndex].Font.spec.ascent) -
+        abs(fDC[fDCIndex].Font.spec.descent);
     if sx < 0 then
-      w := w + ww;
+      w := w - ww;
     if (fDC[fDCIndex].Font.align and TA_UPDATECP) = TA_UPDATECP then
       posi := fDC[fDCIndex].position
     else
@@ -4531,13 +4542,19 @@ begin
       ys := 0;
       // GDI's Y goes down, PDF's up: negating all four terms was right at
       // 90 and 270 degrees only
-      fCanvas.SetTextMatrix(fDC[fDCIndex].WorldTransform.eM11,
-        -fDC[fDCIndex].WorldTransform.eM12, -fDC[fDCIndex].WorldTransform.eM21,
-        fDC[fDCIndex].WorldTransform.eM22,
-        fCanvas.S2X(posi.X * fDC[fDCIndex].WorldTransform.eM11 +
-          posi.Y * fDC[fDCIndex].WorldTransform.eM21 + fDC[fDCIndex].WorldTransform.eDx),
-        fCanvas.S2Y(posi.X * fDC[fDCIndex].WorldTransform.eM12 +
-          posi.Y * fDC[fDCIndex].WorldTransform.eM22 + fDC[fDCIndex].WorldTransform.eDy));
+      if fDC[fDCIndex].WorldTransform.eM12 = 0 then
+        // a negative uniform scale: the canvas maps its factor and move, the
+        // font size has its size - the turn by 180 degrees only
+        fCanvas.SetTextMatrix(-1, 0, 0, -1, fCanvas.S2X(posi.X),
+          fCanvas.S2Y(posi.Y))
+      else
+        fCanvas.SetTextMatrix(fDC[fDCIndex].WorldTransform.eM11,
+          -fDC[fDCIndex].WorldTransform.eM12, -fDC[fDCIndex].WorldTransform.eM21,
+          fDC[fDCIndex].WorldTransform.eM22,
+          fCanvas.S2X(posi.X * fDC[fDCIndex].WorldTransform.eM11 +
+            posi.Y * fDC[fDCIndex].WorldTransform.eM21 + fDC[fDCIndex].WorldTransform.eDx),
+          fCanvas.S2Y(posi.X * fDC[fDCIndex].WorldTransform.eM12 +
+            posi.Y * fDC[fDCIndex].WorldTransform.eM22 + fDC[fDCIndex].WorldTransform.eDy));
     end
     else
     begin

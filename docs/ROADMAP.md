@@ -34,6 +34,12 @@ here until the post is written, then the list is emptied. It is the only such
 list: the CHANGELOG entry of the next release is written from it. Emptied for
 v0.10.0 (2026-09-30).
 
+- **Fixed (EMF):** a world transform that mirrors (`SetWorldTransform` with a
+  negative scale) was not applied: shapes and text stayed where they were.
+  They are mirrored now, with a positive line width; glyphs are not
+  mirrored, a text under both factors negative is turned by 180 degrees.
+  A world scale or move together with a viewport origin or extent placed
+  everything wrong: the world transform was applied after the viewport
 - **Fixed (EMF):** text under a world rotation other than 90, 180 or 270
   degrees was turned the wrong way: at 30 degrees it was drawn at 150
 - **Fixed (EMF):** a world rotation or shear (`SetWorldTransform`) kept the

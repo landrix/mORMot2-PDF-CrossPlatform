@@ -12357,27 +12357,30 @@ begin
   result := ((Y - fWinOrg.Y) * fViewSize.cy / fWinSize.cy) + fViewOrg.Y
 end;
 
+// GDI maps world -> page -> device: the world scale and move first, then
+// the window and viewport (they were applied the other way round)
 function TPdfCanvas.I2X(X: integer): single;
 begin
-  result := fOffsetXDef + (fWorldOffsetX + ViewOffsetX(X) * fWorldFactorX) * fDevScaleX
+  result := fOffsetXDef +
+            ViewOffsetX(fWorldOffsetX + X * fWorldFactorX) * fDevScaleX
 end;
 
 function TPdfCanvas.I2Y(Y: integer): single;
 begin
   result := fPage.GetPageHeight - fOffsetYDef -
-            (fWorldOffsetY + ViewOffsetY(Y) * fWorldFactorY) * fDevScaleY
+            ViewOffsetY(fWorldOffsetY + Y * fWorldFactorY) * fDevScaleY
 end;
 
 function TPdfCanvas.S2X(X: single): single;
 begin
   result := fOffsetXDef +
-            (fWorldOffsetX + ViewOffsetX(X) * fWorldFactorX) * fDevScaleX;
+            ViewOffsetX(fWorldOffsetX + X * fWorldFactorX) * fDevScaleX;
 end;
 
 function TPdfCanvas.S2Y(Y: single): single;
 begin
   result := fPage.GetPageHeight - fOffsetYDef -
-            (fWorldOffsetY + ViewOffsetY(Y) * fWorldFactorY) * fDevScaleY;
+            ViewOffsetY(fWorldOffsetY + Y * fWorldFactorY) * fDevScaleY;
 end;
 
 procedure TPdfCanvas.LineToI(x, y: integer);
