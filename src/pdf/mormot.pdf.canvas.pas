@@ -2039,6 +2039,9 @@ type
       Selected: boolean;
       // the code page of the stock font while none is (StockFontCodePage)
       StockCodePage: cardinal;
+      // that stock font (GetStockObject index), measured again when the map
+      // mode changes: its size is of device pixels
+      StockFont: integer;
       LogFont: TLogFontW; // better be the last entry in TPdfEnumState record
     end;
   end;
@@ -3368,6 +3371,7 @@ begin
           // the one of the font selected before
           fDC[fDCIndex].Font.Selected := false;
           fDC[fDCIndex].Font.StockCodePage := StockFontCodePage(iObject);
+          fDC[fDCIndex].Font.StockFont := iObject;
           // the metafile does not record it: its LOGFONT on this system, or
           // the text kept the size, face and metrics of the font before
           if GetObjectW(GetStockObject(iObject), SizeOf(lf), @lf) <> 0 then
@@ -3718,6 +3722,12 @@ begin
   begin //Reflection
 
   end;
+  // a stock font in logical units of the new map mode, the default one of
+  // EMR_HEADER too
+  if not fDC[fDCIndex].Font.Selected and
+     (fDC[fDCIndex].Font.StockFont <> 0) then
+    SelectObjectFromIndex(integer(cardinal($80000000) or
+      cardinal(fDC[fDCIndex].Font.StockFont)));
 end;
 
 procedure TPdfEnum.InitMetaRgn(const ClientRect: TRect);

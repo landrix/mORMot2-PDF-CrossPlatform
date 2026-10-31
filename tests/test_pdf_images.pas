@@ -3124,13 +3124,24 @@ begin
   end;
 end;
 
-// text in a metafile that selects no font: the DC's own, SYSTEM_FONT
-function DefaultFontEmf: RawUtf8;
+// text in a metafile that selects no font: the DC's own, SYSTEM_FONT; at two
+// device pixels per logical unit, set after the start (Mapped), and after a
+// selection of SYSTEM_FONT (Selected)
+function DefaultFontEmf(Mapped: boolean = false;
+  Selected: boolean = false): RawUtf8;
 var
   mf: TMetaFile;
   dc: HDC;
 begin
   dc := CreateEnhMetaFileW(0, nil, nil, nil);
+  if Selected then
+    SelectObject(dc, GetStockObject(SYSTEM_FONT));
+  if Mapped then
+  begin
+    SetMapMode(dc, MM_ANISOTROPIC);
+    SetWindowExtEx(dc, 100, 100, nil);
+    SetViewportExtEx(dc, 200, 200, nil);
+  end;
   TextOutW(dc, 10, 100, 'Stock', 5);
   mf := TMetaFile.Create;
   try
@@ -3265,6 +3276,12 @@ begin
   Check(Abs(LastFontSize(txt, '(Stock) Tj') - LastFontSize(
     StockFontEmf(SYSTEM_FONT, false, 1), '(Stock) Tj')) < 0.01,
     'in the size of SYSTEM_FONT');
+  // a map mode set after the font: still of device pixels, the default
+  // font of the start as one selected
+  Check(Abs(LastFontSize(DefaultFontEmf(true), '(Stock) Tj') -
+    LastFontSize(txt, '(Stock) Tj')) < 0.01, 'the default font after a map mode');
+  Check(Abs(LastFontSize(DefaultFontEmf(true, true), '(Stock) Tj') -
+    LastFontSize(txt, '(Stock) Tj')) < 0.01, 'a stock font after a map mode');
 end;
 
 procedure TPdfImageGoldenTests.MetaFileAnsiStockFont;
@@ -4517,7 +4534,7 @@ procedure TPdfImageGoldenTests.MetaFileStockFontMetrics;
 var
   i: integer;
 begin
-  for i := 1 to 25 do
+  for i := 1 to 27 do
     Check(true, 'SKIP: metafiles are Windows only');
 end;
 

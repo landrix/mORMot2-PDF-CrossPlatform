@@ -624,7 +624,8 @@ A stock font (`GetStockObject`) is not recorded in the metafile:
 measures it on the reference DC as `CreateFont` does (`MeasureFont`), so its
 text does not keep the size and metrics of the font before; its size is of
 device pixels under any map mode, as in GDI, turned into logical units when
-selected (a map mode changed after that is not followed): `TFontSpec` holds
+selected and again when the map mode changes (`Font.StockFont`, from
+`ScaleMatrix`; the `SYSTEM_FONT` of `EMR_HEADER` too): `TFontSpec` holds
 them as `single`, as a fraction of a unit at 32 pixels per unit, with
 `height` for `abs(lfHeight)`, whose integer rounds to 0 there; `TextOut`
 sizes the positive `lfHeight` of a stock font by the cell, aligns by
